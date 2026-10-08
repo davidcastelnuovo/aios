@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collectCarmenUiContext, formatUiContextForPrompt, moduleLabel } from "./carmenPageContext.ts";
+import {
+  collectCarmenUiContext,
+  formatUiContextForPrompt,
+  moduleLabel,
+} from "./carmenPageContext.ts";
 
 test("collectCarmenUiContext extracts route params and module", () => {
   const ctx = collectCarmenUiContext({

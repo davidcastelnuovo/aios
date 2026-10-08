@@ -1,4 +1,10 @@
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, X } from "lucide-react";
 import {
@@ -8,13 +14,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  CoreOverviewPanel, HealthPanel, IntelFeedPanel, QuickCommandsPanel,
-  TasksPanel, TimelinePanel,
+  CoreOverviewPanel,
+  HealthPanel,
+  IntelFeedPanel,
+  QuickCommandsPanel,
+  TasksPanel,
+  TimelinePanel,
 } from "./panels";
 import { UsagePanel } from "./UsagePanel";
 import { CarmenFace, type CarmenFaceState } from "./CarmenFace";
 
-export type HudWindowId = "tasks" | "timeline" | "core" | "intel" | "commands" | "health" | "usage" | "face";
+export type HudWindowId =
+  | "tasks"
+  | "timeline"
+  | "core"
+  | "intel"
+  | "commands"
+  | "health"
+  | "usage"
+  | "face";
 
 const HUD_ITEMS: Array<{ id: HudWindowId; label: string }> = [
   { id: "tasks", label: "משימות" },
@@ -77,15 +95,33 @@ export function HudMenu({
   }, [open, measureAnchor]);
 
   let body: ReactNode = null;
-  if (open === "tasks") body = <TasksPanel tenantId={tenantId} className="max-h-[min(60dvh,28rem)]" />;
-  if (open === "timeline") body = <TimelinePanel tenantId={tenantId} className="max-h-[min(60dvh,24rem)]" />;
+  if (open === "tasks")
+    body = (
+      <TasksPanel tenantId={tenantId} className="max-h-[min(60dvh,28rem)]" />
+    );
+  if (open === "timeline")
+    body = (
+      <TimelinePanel tenantId={tenantId} className="max-h-[min(60dvh,24rem)]" />
+    );
   if (open === "core") body = <CoreOverviewPanel tenantId={tenantId} />;
-  if (open === "intel") body = <IntelFeedPanel tenantId={tenantId} className="max-h-[min(60dvh,28rem)]" />;
+  if (open === "intel")
+    body = (
+      <IntelFeedPanel
+        tenantId={tenantId}
+        className="max-h-[min(60dvh,28rem)]"
+      />
+    );
   if (open === "commands") {
     body = (
       <QuickCommandsPanel
-        onCommand={(text) => { onPrefill(text); setOpen(null); }}
-        onVoice={() => { onVoice(); setOpen(null); }}
+        onCommand={(text) => {
+          onPrefill(text);
+          setOpen(null);
+        }}
+        onVoice={() => {
+          onVoice();
+          setOpen(null);
+        }}
         onHealthCheck={onHealthCheck}
       />
     );
@@ -95,12 +131,19 @@ export function HudMenu({
   if (open === "face") {
     body = (
       <div className="relative h-[min(55dvh,22rem)] overflow-hidden rounded-lg">
-        <CarmenFace state={faceState} audioLevelRef={audioLevelRef} className="absolute inset-0 h-full w-full" />
+        <CarmenFace
+          state={faceState}
+          audioLevelRef={audioLevelRef}
+          className="absolute inset-0 h-full w-full"
+        />
       </div>
     );
   }
 
-  const panelWidth = Math.min(384, Math.max(280, (panelAnchor?.width ?? 0) * 2.8));
+  const panelWidth = Math.min(
+    384,
+    Math.max(280, (panelAnchor?.width ?? 0) * 2.8),
+  );
 
   return (
     <>
@@ -132,28 +175,43 @@ export function HudMenu({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-      {open && panelAnchor && typeof document !== "undefined" && createPortal(
-        <div
-          dir="rtl"
-          className="cc-root cc-hud-window cc-hud-window--portal"
-          role="dialog"
-          aria-label={current?.label}
-          style={{
-            top: panelAnchor.top,
-            left: Math.min(panelAnchor.left, window.innerWidth - panelWidth - 8),
-            width: panelWidth,
-          }}
-        >
-          <header className="mb-2 flex items-center justify-between gap-2 border-b border-[var(--cc-line)] pb-2">
-            <h2 className="cc-panel-title text-[var(--cc-text)]">{current?.label}</h2>
-            <button type="button" onClick={() => setOpen(null)} className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]" title="סגור">
-              <X className="h-4 w-4" />
-            </button>
-          </header>
-          <div className="cc-scroll cc-hud-window__body min-h-0 flex-1 overflow-y-auto text-[var(--cc-text)]">{body}</div>
-        </div>,
-        document.body,
-      )}
+      {open &&
+        panelAnchor &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            dir="rtl"
+            className="cc-root cc-hud-window cc-hud-window--portal"
+            role="dialog"
+            aria-label={current?.label}
+            style={{
+              top: panelAnchor.top,
+              left: Math.min(
+                panelAnchor.left,
+                window.innerWidth - panelWidth - 8,
+              ),
+              width: panelWidth,
+            }}
+          >
+            <header className="mb-2 flex items-center justify-between gap-2 border-b border-[var(--cc-line)] pb-2">
+              <h2 className="cc-panel-title text-[var(--cc-text)]">
+                {current?.label}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setOpen(null)}
+                className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
+                title="סגור"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="cc-scroll cc-hud-window__body min-h-0 flex-1 overflow-y-auto text-[var(--cc-text)]">
+              {body}
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

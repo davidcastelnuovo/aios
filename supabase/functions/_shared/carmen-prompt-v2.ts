@@ -2,18 +2,18 @@
  * Carmen V2 System Prompt Builder
  * ================================
  * New modular prompt builder for Carmen that enhances her reasoning capabilities.
- * 
+ *
  * DESIGN PRINCIPLES:
  * - This file is SELF-CONTAINED — does not modify any existing code
  * - Activated per-agent via metadata.prompt_version = 'v2' in ai_agents table
  * - Falls back silently to v1 if not activated
  * - All existing behavior preserved; new capabilities are additive
- * 
+ *
  * ACTIVATION:
  *   UPDATE ai_agents SET metadata = jsonb_set(
  *     COALESCE(metadata, '{}'), '{prompt_version}', '"v2"'
  *   ) WHERE name ILIKE '%carmen%' AND tenant_id = '<your-tenant-id>';
- * 
+ *
  * ROLLBACK:
  *   UPDATE ai_agents SET metadata = metadata - 'prompt_version'
  *   WHERE name ILIKE '%carmen%';
@@ -193,7 +193,6 @@ function buildMeetingBotCapabilities(): string {
 4. בסיום הפגישה — תמלול, הקלטה וסיכום יופיעו בהקלטות (ושיוך ללקוח אם צוין).`;
 }
 
-
 /**
  * Broadcast (דיוור) capabilities — WhatsApp mass messaging to CRM audiences or WA groups.
  */
@@ -342,7 +341,6 @@ Manus הוא סוכן AI חיצוני שיכול לבצע משימות פיתו�
 • אם המשתמש שואל "מה התקדמת?" קראי ל-get_subagent_result; אם done=true העבירי את ה-output, אם done=false — הודיעי שעוד רץ עם מספר השלבים שכבר בוצעו.`;
 }
 
-
 function buildDashboardRules(): string {
   return `
 === דשבורד CRM ===
@@ -428,7 +426,6 @@ function buildWhatsAppRules(): string {
 🚫 **אסור לטעון "אני עובדת על זה ברקע" / "התחלתי לעבוד ברקע" אלא אם באותה ריצה קראת בפועל ל-delegate_to_subagent וקיבלת sub_task_id חזרה.** אם הכלי הזה לא מופיע ברשימת הכלים שלך — סימן שהמשתמש לא ביקש ריצת רקע, וחובה לבצע את הבקשה ישירות עכשיו (כולל 3–6 קריאות כלים אם צריך) ולענות עם נתונים אמיתיים באותה הודעה. לעולם לא לכתוב הודעה "אני עובדת על זה" בלי שום נתון.
 
 ✅ **אם באמת האצלת ל-delegate_to_subagent (כי המשתמש ביקש מפורשות):** עני בקצרה "התחלתי לעבוד על זה. אשלח לך עדכון כאן בוואטסאפ ברגע שאסיים." ואל תכתבי "תוכל לסגור את החלון".`;
-
 }
 
 function buildKnowledgeBaseRules(): string {
@@ -448,16 +445,24 @@ function buildKnowledgeBaseRules(): string {
 // ─── Role-Based Access ───────────────────────────────────────────────────────
 
 function buildCallerIdentity(caller: CallerContext): string {
-  if (!caller.callerCampaignerId || !caller.callerName) return '';
+  if (!caller.callerCampaignerId || !caller.callerName) return "";
 
   const roleLabel: Record<string, string> = {
-    super_admin: 'סופר־אדמין', owner: 'בעלים', agency_owner: 'בעלים של סוכנות',
-    agency_manager: 'מנהל סוכנות', team_manager: 'מנהל צוות', campaigner: 'קמפיינר',
-    sales_person: 'איש מכירות', seo: 'SEO', viewer: 'צופה',
+    super_admin: "סופר־אדמין",
+    owner: "בעלים",
+    agency_owner: "בעלים של סוכנות",
+    agency_manager: "מנהל סוכנות",
+    team_manager: "מנהל צוות",
+    campaigner: "קמפיינר",
+    sales_person: "איש מכירות",
+    seo: "SEO",
+    viewer: "צופה",
   };
-  const roleHe = caller.callerRole ? (roleLabel[caller.callerRole] || caller.callerRole) : 'קמפיינר';
+  const roleHe = caller.callerRole
+    ? roleLabel[caller.callerRole] || caller.callerRole
+    : "קמפיינר";
 
-  let section = `\n\n=== זהות המשתמש ===\n👤 ${caller.callerName} — תפקיד: ${roleHe} (campaigner_id: ${caller.callerCampaignerId}${caller.callerRole ? `, role: ${caller.callerRole}` : ''}).
+  let section = `\n\n=== זהות המשתמש ===\n👤 ${caller.callerName} — תפקיד: ${roleHe} (campaigner_id: ${caller.callerCampaignerId}${caller.callerRole ? `, role: ${caller.callerRole}` : ""}).
 כשיוצרים משימה, שייך אותה אוטומטית ל-${caller.callerName} אלא אם המשתמש מבקש במפורש לשייך למישהו אחר.`;
 
   section += `\n📋 **שיוך לקוחות לקמפיינר:** לשאלות "אילו לקוחות משוייכים ל-X" השתמשי תמיד ב-list_clients עם campaigner_name/campaigner_id (טבלת client_team) — לא ב-list_tasks.`;
@@ -477,7 +482,12 @@ function buildCallerIdentity(caller: CallerContext): string {
 
 // ─── Contextual Sections ─────────────────────────────────────────────────────
 
-function buildDateTimeContext(date: string, time: string, todayISO: string, tomorrowISO: string): string {
+function buildDateTimeContext(
+  date: string,
+  time: string,
+  todayISO: string,
+  tomorrowISO: string,
+): string {
   return `
 === תאריך ושעה נוכחיים ===
 היום: ${date}, שעה: ${time}
@@ -500,33 +510,40 @@ function buildDateTimeContext(date: string, time: string, todayISO: string, tomo
 • action_type סטנדרטי: 'pulse_check', 'campaign_analysis', 'lead_review', 'health_check'.`;
 }
 
-
 function buildTenantContext(tenant: TenantContext): string {
   const lines = [
     `ארגון: ${tenant.tenantName} (tenant_id: ${tenant.tenantId})`,
-    tenant.ownAgencyList ? `סוכנויות שלנו: ${tenant.ownAgencyList}` : '',
-    tenant.sharedAgencyList ? `סוכנויות משותפות (יש לנו גישה לדאטה שלהן): ${tenant.sharedAgencyList}` : '',
+    tenant.ownAgencyList ? `סוכנויות שלנו: ${tenant.ownAgencyList}` : "",
+    tenant.sharedAgencyList
+      ? `סוכנויות משותפות (יש לנו גישה לדאטה שלהן): ${tenant.sharedAgencyList}`
+      : "",
     tenant.sharedAgenciesCount > 0
-      ? 'חשוב: יש לך גישה לקריאה/עדכון של לקוחות, לידים, משימות ושיחות מהסוכנויות המשותפות לעיל — גם אם הן שייכות לארגון אחר. כשמחפשים לקוח/ליד, חפשו גם בסוכנויות המשותפות.'
-      : '',
-    `לידים: ${tenant.totalLeads} (${Object.entries(tenant.leadsByStatus).map(([k, v]) => `${k}: ${v}`).join(', ')})`,
+      ? "חשוב: יש לך גישה לקריאה/עדכון של לקוחות, לידים, משימות ושיחות מהסוכנויות המשותפות לעיל — גם אם הן שייכות לארגון אחר. כשמחפשים לקוח/ליד, חפשו גם בסוכנויות המשותפות."
+      : "",
+    `לידים: ${tenant.totalLeads} (${Object.entries(tenant.leadsByStatus)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(", ")})`,
     `לקוחות פעילים: ${tenant.activeClients}`,
     `משימות פתוחות: ${tenant.openTasks}`,
   ];
 
-  return `\n=== הקשר ארגוני ===\n${lines.filter(Boolean).join('\n')}`;
+  return `\n=== הקשר ארגוני ===\n${lines.filter(Boolean).join("\n")}`;
 }
 
 function buildMemoryContext(memory: MemoryContext): string {
-  let section = '';
+  let section = "";
 
   if (memory.instructionItems.length > 0) {
-    const block = memory.instructionItems.map(m => `• ${m.key}: ${m.content}`).join('\n');
+    const block = memory.instructionItems
+      .map((m) => `• ${m.key}: ${m.content}`)
+      .join("\n");
     section += `\n\n📌 === הנחיות קבועות שנשמרו (חובה לפעול לפיהן) ===\n${block}\n⚠️ אלה הנחיות שהמשתמש ביקש שתזכרי. חובה לכבד אותן בכל תשובה. אם תשובה חדשה סותרת אותן — ההנחיות גוברות, אלא אם המשתמש ביקש לעדכן/למחוק (אז קראי ל-save_memory עם אותו key, או delete_memory).`;
   }
 
   if (memory.otherItems.length > 0) {
-    const memBlock = memory.otherItems.map(m => `[${m.category}] ${m.key}: ${m.content}`).join('\n');
+    const memBlock = memory.otherItems
+      .map((m) => `[${m.category}] ${m.key}: ${m.content}`)
+      .join("\n");
     section += `\n\n🧠 === זיכרון מתמשך ===\n${memBlock}`;
   }
 
@@ -534,43 +551,68 @@ function buildMemoryContext(memory: MemoryContext): string {
 }
 
 function buildLeadContext(leadData?: Record<string, string>): string {
-  if (!leadData) return '';
-  const parts = Object.entries(leadData).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`);
-  return parts.length ? `\n\nפרטי ליד:\n${parts.join('\n')}` : '';
+  if (!leadData) return "";
+  const parts = Object.entries(leadData)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: ${v}`);
+  return parts.length ? `\n\nפרטי ליד:\n${parts.join("\n")}` : "";
 }
 
 // ─── Modes & Skills (identical to V1 — no changes) ──────────────────────────
 
 const TASK_MODE_PROMPTS: Record<string, string> = {
-  sales: 'את מומחית מכירות. מזהה הזדמנויות בלידים, מעקבת אחרי פיפלאיים, מסייעת בסגירת עסקאות ויוצרת הצעות מותאמות אישית.',
-  support: 'את מומחית שירות לקוחות. אמפתית, סבלנית ופותרת בעיות.',
-  copywriting: 'את מומחית קופיראיטינג. כותבת בצורה משכנעת, יצירתית ומותאמת לקהל יעד.',
-  analyst: 'את מנתחת נתונים. שולפת נתונים מהמערכת, מזהה דפוסים ומסיקה תובנות עסקיות ברורות.',
-  scheduler: 'את מומחית ניהול לוח זמנים. מתאמת פגישות, יוצרת תזכורות ומנהלת משימות זמניות בצורה יעילה.',
-  onboarding: 'את מומחית קליטת לקוחות. מדריכה לקוחות חדשים בצורה חמה ומקצועית.',
+  sales:
+    "את מומחית מכירות. מזהה הזדמנויות בלידים, מעקבת אחרי פיפלאיים, מסייעת בסגירת עסקאות ויוצרת הצעות מותאמות אישית.",
+  support: "את מומחית שירות לקוחות. אמפתית, סבלנית ופותרת בעיות.",
+  copywriting:
+    "את מומחית קופיראיטינג. כותבת בצורה משכנעת, יצירתית ומותאמת לקהל יעד.",
+  analyst:
+    "את מנתחת נתונים. שולפת נתונים מהמערכת, מזהה דפוסים ומסיקה תובנות עסקיות ברורות.",
+  scheduler:
+    "את מומחית ניהול לוח זמנים. מתאמת פגישות, יוצרת תזכורות ומנהלת משימות זמניות בצורה יעילה.",
+  onboarding: "את מומחית קליטת לקוחות. מדריכה לקוחות חדשים בצורה חמה ומקצועית.",
 };
 
 const SKILLS_PROMPTS: Record<string, string> = {
-  'lead-qualifier': 'כשמתבקשת להעריך ליד, תשאלי על תקציב, גודל עסק, צורך ולוח זמנים. דרגי 0-10 וספקי הסבר.',
-  'follow-up': 'כשמתבקשת לעקוב אחרי ליד או לקוח, צרי משימות מעקב בזמנים אסטרטגיים (3 ימים, שבוע, חודש).',
-  'proposal-writer': 'כשמתבקשת לכתוב הצעה, שאלי על צרכי הלקוח, תקציב ודדליין. צרי הצעה מותאמת אישית עם הדגשת הערך ללקוח.',
-  'meeting-prep': 'לפני פגישה, שלוף את היסטוריית הלקוח/ליד, הצע נקודות דיון ושאלות רלוונטיות.',
-  'objection-handler': 'כשלקוח מתנגד, הביני את החשש האמיתי מאחוריו ועני בצורה אמפתית ומשכנעת. אל תוויתרי אותומטית במחיר.',
-  'task-manager': 'כשמתבקשת לנהל משימות, תמיד חפשי קודם אם המשימה קיימת. צרי משימות עם תאריך יעד ושייוך לאדם הנכון.',
-  'whatsapp-responder': 'כשעונה להודעות WhatsApp, כתוב בסגנון קצר, ישיר וחברותי. הימנע מטקסט ארוך מדי.',
-  'data-enricher': 'כשנתקלת על ליד/לקוח עם פרטים חסרים, שאלי שאלות משלימות באופן טבעי ועדכני את הפרופיל.',
-  'report-generator': 'כשמתבקשת דוח, שלוף נתונים מהמערכת, זהה דפוסים והצג תובנות ברורות עם מסקנות עסקיות.',
-  'email-drafter': 'כשמתבקשת לכתוב אימייל, שאלי על הנמען, הטון והמטרה. צרי אימייל מקצועי עם שורת נושא משכנעת.',
-  'social-planner': 'כשמתבקשת תוכן לסושיאל: 1) התייחסי בדיוק לנושא שנתבקש בפקודת המשימה 2) צרי תמונה עם generate_ad_image עם תיאור מפורט באנגלית 3) כתבי קופי מותאם לפלטפורמה עם קריאה לפעולה 4) שמרי עם create_social_post כולל ה-image_url. חובה ליצור תמונה.',
-  'price-calculator': 'כשמתבקשת מחיר, שאלי על השירות/מוצר, כמות ופרטי לקוח. הצג מחיר סופי עם פירוט ואפשרות הנחה.',
-  'competitor-analyzer': 'כשמתבקשת ניתוח מתחרים, שלוף נתונים מהמערכת, זהה דפוסים והצג השוואה מול מתחרים.',
-  'sentiment-analyzer': 'בכל הודעה שמקבלת, נתחי את הטון הרגשי (חיובי/שלילי/נייטרלי) והתאם את התגובה בהתאם.',
-  'faq-responder': 'כשעונה לשאלות, שלוף קודם את הנתונים הקיימים במערכת וענה לפי המידע הקיים.',
-  'upsell-advisor': 'כשמתבקשת לנתח לקוח, זהה הזדמנויות לאפסליינג וקרוס-סלינג לפי היסטוריית הקניות.',
-  'churn-predictor': 'קראי get_client_retention_scan ודווחי act_now ואז watch. אל תשלחי הודעה ללקוח. עדכני בריאות רק אם ביקשו במפורש.',
-  'campaign-optimizer': 'נתח נתוני קמפיינים מהמערכת, זהה מה עובד ומה לא, והצע שיפורים קונקרטיים.',
-  'smart-summarizer': 'כשמתבקשת סיכום, שלוף את כל המידע הרלוונטי והצג את העיקריות בצורה קצרה וברורה.',
-  'crm-health-monitor': `את מנהלת דשבורד CRM לסוכנות שיווק. תפקידך לנתח כל לקוח ולעדכן את המצב שלו בדיוק לפי הכללים הבאים:
+  "lead-qualifier":
+    "כשמתבקשת להעריך ליד, תשאלי על תקציב, גודל עסק, צורך ולוח זמנים. דרגי 0-10 וספקי הסבר.",
+  "follow-up":
+    "כשמתבקשת לעקוב אחרי ליד או לקוח, צרי משימות מעקב בזמנים אסטרטגיים (3 ימים, שבוע, חודש).",
+  "proposal-writer":
+    "כשמתבקשת לכתוב הצעה, שאלי על צרכי הלקוח, תקציב ודדליין. צרי הצעה מותאמת אישית עם הדגשת הערך ללקוח.",
+  "meeting-prep":
+    "לפני פגישה, שלוף את היסטוריית הלקוח/ליד, הצע נקודות דיון ושאלות רלוונטיות.",
+  "objection-handler":
+    "כשלקוח מתנגד, הביני את החשש האמיתי מאחוריו ועני בצורה אמפתית ומשכנעת. אל תוויתרי אותומטית במחיר.",
+  "task-manager":
+    "כשמתבקשת לנהל משימות, תמיד חפשי קודם אם המשימה קיימת. צרי משימות עם תאריך יעד ושייוך לאדם הנכון.",
+  "whatsapp-responder":
+    "כשעונה להודעות WhatsApp, כתוב בסגנון קצר, ישיר וחברותי. הימנע מטקסט ארוך מדי.",
+  "data-enricher":
+    "כשנתקלת על ליד/לקוח עם פרטים חסרים, שאלי שאלות משלימות באופן טבעי ועדכני את הפרופיל.",
+  "report-generator":
+    "כשמתבקשת דוח, שלוף נתונים מהמערכת, זהה דפוסים והצג תובנות ברורות עם מסקנות עסקיות.",
+  "email-drafter":
+    "כשמתבקשת לכתוב אימייל, שאלי על הנמען, הטון והמטרה. צרי אימייל מקצועי עם שורת נושא משכנעת.",
+  "social-planner":
+    "כשמתבקשת תוכן לסושיאל: 1) התייחסי בדיוק לנושא שנתבקש בפקודת המשימה 2) צרי תמונה עם generate_ad_image עם תיאור מפורט באנגלית 3) כתבי קופי מותאם לפלטפורמה עם קריאה לפעולה 4) שמרי עם create_social_post כולל ה-image_url. חובה ליצור תמונה.",
+  "price-calculator":
+    "כשמתבקשת מחיר, שאלי על השירות/מוצר, כמות ופרטי לקוח. הצג מחיר סופי עם פירוט ואפשרות הנחה.",
+  "competitor-analyzer":
+    "כשמתבקשת ניתוח מתחרים, שלוף נתונים מהמערכת, זהה דפוסים והצג השוואה מול מתחרים.",
+  "sentiment-analyzer":
+    "בכל הודעה שמקבלת, נתחי את הטון הרגשי (חיובי/שלילי/נייטרלי) והתאם את התגובה בהתאם.",
+  "faq-responder":
+    "כשעונה לשאלות, שלוף קודם את הנתונים הקיימים במערכת וענה לפי המידע הקיים.",
+  "upsell-advisor":
+    "כשמתבקשת לנתח לקוח, זהה הזדמנויות לאפסליינג וקרוס-סלינג לפי היסטוריית הקניות.",
+  "churn-predictor":
+    "קראי get_client_retention_scan ודווחי act_now ואז watch. אל תשלחי הודעה ללקוח. עדכני בריאות רק אם ביקשו במפורש.",
+  "campaign-optimizer":
+    "נתח נתוני קמפיינים מהמערכת, זהה מה עובד ומה לא, והצע שיפורים קונקרטיים.",
+  "smart-summarizer":
+    "כשמתבקשת סיכום, שלוף את כל המידע הרלוונטי והצג את העיקריות בצורה קצרה וברורה.",
+  "crm-health-monitor": `את מנהלת דשבורד CRM לסוכנות שיווק. תפקידך לנתח כל לקוח ולעדכן את המצב שלו בדיוק לפי הכללים הבאים:
 
 === שירותים ===
 לכל לקוח יש שדה services (מערך): performance, seo, social.
@@ -615,7 +657,7 @@ const SKILLS_PROMPTS: Record<string, string> = {
    - note: תמיד צייני סיבה מדויקת (ירידה ב-X%, אין תקשורת Y ימים, SEO ירד)
 4. בשילוב שירותים — בדקי כל שירות בנפרד, דווחי על הגרוע
 5. גם אם מצב לא משתנה — עדכני תאריך תקשורת (חובה)`,
-  'facebook-account-setup': `את מומחית חיבור חשבונות מודעות פייסבוק ללקוחות. בצעי את השלבים הבאים:
+  "facebook-account-setup": `את מומחית חיבור חשבונות מודעות פייסבוק ללקוחות. בצעי את השלבים הבאים:
 1. הריצי list_unconnected_clients כדי לראות אילו לקוחות פעילים עדיין לא מחוברים לפייסבוק.
 2. הריצי list_facebook_ad_accounts כדי לשלוף את כל חשבונות המודעות הזמינים.
 3. נסי להתאים לפי שם — השוואת שם הלקוח לשם חשבון המודעות (fuzzy match, התעלמי מרווחים ותווים מיוחדים).
@@ -624,8 +666,13 @@ const SKILLS_PROMPTS: Record<string, string> = {
 6. דווחי סיכום: כמה חוברו אוטומטית, כמה דורשים חיבור ידני.`,
 };
 
-function buildModesAndSkills(taskMode?: string, taskSkills?: string[], activeModes?: string[], activeSkills?: string[]): string {
-  let section = '';
+function buildModesAndSkills(
+  taskMode?: string,
+  taskSkills?: string[],
+  activeModes?: string[],
+  activeSkills?: string[],
+): string {
+  let section = "";
 
   // Task-level mode override
   if (taskMode && TASK_MODE_PROMPTS[taskMode]) {
@@ -634,48 +681,55 @@ function buildModesAndSkills(taskMode?: string, taskSkills?: string[], activeMod
 
   // Task-level skills
   if (taskSkills && taskSkills.length > 0) {
-    const prompts = taskSkills.map(s => SKILLS_PROMPTS[s]).filter(Boolean);
+    const prompts = taskSkills.map((s) => SKILLS_PROMPTS[s]).filter(Boolean);
     if (prompts.length > 0) {
-      section += `\n\n=== סקילז למשימה זו ===\n${prompts.join('\n')}`;
+      section += `\n\n=== סקילז למשימה זו ===\n${prompts.join("\n")}`;
     }
   }
 
   // Active modes
   if (activeModes && activeModes.length > 0) {
-    const modePrompts = activeModes.map(m => TASK_MODE_PROMPTS[m]).filter(Boolean);
+    const modePrompts = activeModes
+      .map((m) => TASK_MODE_PROMPTS[m])
+      .filter(Boolean);
     if (modePrompts.length > 0) {
-      section += `\n\n=== מצבי פעולה פעילים ===\n${modePrompts.join('\n')}`;
+      section += `\n\n=== מצבי פעולה פעילים ===\n${modePrompts.join("\n")}`;
     }
   }
 
   // Active skills
   if (activeSkills && activeSkills.length > 0) {
-    const skillPrompts = activeSkills.map(s => SKILLS_PROMPTS[s]).filter(Boolean);
+    const skillPrompts = activeSkills
+      .map((s) => SKILLS_PROMPTS[s])
+      .filter(Boolean);
     if (skillPrompts.length > 0) {
-      section += `\n\n=== סקילז פעילים ===\n${skillPrompts.join('\n')}`;
+      section += `\n\n=== סקילז פעילים ===\n${skillPrompts.join("\n")}`;
     }
   }
 
   return section;
 }
 
-function buildWritingStyle(style?: string | null, length?: string | null): string {
-  let section = '';
+function buildWritingStyle(
+  style?: string | null,
+  length?: string | null,
+): string {
+  let section = "";
 
-  if (style && style !== 'professional') {
+  if (style && style !== "professional") {
     const styleMap: Record<string, string> = {
-      friendly: 'כתוב בסגנון חברותי וחמול.',
-      formal: 'כתוב בסגנון פורמלי ועסקי.',
-      casual: 'כתוב בסגנון קזואלי ונגיש.',
-      empathetic: 'כתוב בסגנון אמפתי ומבין.',
+      friendly: "כתוב בסגנון חברותי וחמול.",
+      formal: "כתוב בסגנון פורמלי ועסקי.",
+      casual: "כתוב בסגנון קזואלי ונגיש.",
+      empathetic: "כתוב בסגנון אמפתי ומבין.",
     };
     if (styleMap[style]) section += `\n${styleMap[style]}`;
   }
 
   if (length) {
     const lengthMap: Record<string, string> = {
-      short: 'הגבל תשובות ל-2-3 משפטים מקסימום.',
-      detailed: 'תן תשובות מפורטות ומקיפות.',
+      short: "הגבל תשובות ל-2-3 משפטים מקסימום.",
+      detailed: "תן תשובות מפורטות ומקיפות.",
     };
     if (lengthMap[length]) section += `\n${lengthMap[length]}`;
   }
@@ -687,7 +741,7 @@ function buildWritingStyle(style?: string | null, length?: string | null): strin
 
 /**
  * Build the complete V2 system prompt for Carmen.
- * 
+ *
  * Key differences from V1:
  * 1. Structured reasoning framework (think → plan → execute → verify)
  * 2. Explicit error recovery instructions
@@ -735,18 +789,29 @@ export function buildCarmenV2SystemPrompt(ctx: PromptBuildContext): string {
   sections.push(buildResponseStyle(ctx.isWhatsApp));
 
   // 9. Modes & Skills (identical to V1)
-  sections.push(buildModesAndSkills(
-    ctx.taskMode,
-    ctx.taskSkills,
-    ctx.agent.active_modes || [],
-    ctx.agent.active_skills || [],
-  ));
+  sections.push(
+    buildModesAndSkills(
+      ctx.taskMode,
+      ctx.taskSkills,
+      ctx.agent.active_modes || [],
+      ctx.agent.active_skills || [],
+    ),
+  );
 
   // 10. Writing style
-  sections.push(buildWritingStyle(ctx.agent.writing_style, ctx.agent.response_length));
+  sections.push(
+    buildWritingStyle(ctx.agent.writing_style, ctx.agent.response_length),
+  );
 
   // 11. Date/Time context
-  sections.push(buildDateTimeContext(ctx.currentDate, ctx.currentTime, ctx.todayISO, ctx.tomorrowISO));
+  sections.push(
+    buildDateTimeContext(
+      ctx.currentDate,
+      ctx.currentTime,
+      ctx.todayISO,
+      ctx.tomorrowISO,
+    ),
+  );
 
   // 12. Tenant context
   sections.push(buildTenantContext(ctx.tenant));
@@ -768,7 +833,7 @@ export function buildCarmenV2SystemPrompt(ctx: PromptBuildContext): string {
     sections.push(buildCallerIdentity(ctx.caller));
   }
 
-  return sections.filter(Boolean).join('\n');
+  return sections.filter(Boolean).join("\n");
 }
 
 /**
@@ -776,5 +841,5 @@ export function buildCarmenV2SystemPrompt(ctx: PromptBuildContext): string {
  * Looks for metadata.prompt_version === 'v2' in the agent config.
  */
 export function shouldUseV2Prompt(agent: AgentConfig): boolean {
-  return agent.metadata?.prompt_version === 'v2';
+  return agent.metadata?.prompt_version === "v2";
 }

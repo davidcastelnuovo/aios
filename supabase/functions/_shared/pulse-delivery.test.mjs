@@ -16,7 +16,12 @@ import {
 const SNAPSHOTS = [
   { client_id: "c1", agency_id: "a1", client_name: "Alpha", status: "healthy" },
   { client_id: "c2", agency_id: "a1", client_name: "Beta", status: "warning" },
-  { client_id: "c3", agency_id: "a2", client_name: "Gamma", status: "critical" },
+  {
+    client_id: "c3",
+    agency_id: "a2",
+    client_name: "Gamma",
+    status: "critical",
+  },
 ];
 
 test("planCampaignerPulseDeliveries scopes to client_team with pulse rows only", () => {
@@ -35,8 +40,13 @@ test("planCampaignerPulseDeliveries scopes to client_team with pulse rows only",
     ],
   );
   assert.equal(plans.length, 2);
-  assert.deepEqual(plans.find((p) => p.key === "campaigner:cam1")?.clientIds.sort(), ["c1", "c2"]);
-  assert.deepEqual(plans.find((p) => p.key === "campaigner:cam2")?.clientIds, ["c3"]);
+  assert.deepEqual(
+    plans.find((p) => p.key === "campaigner:cam1")?.clientIds.sort(),
+    ["c1", "c2"],
+  );
+  assert.deepEqual(plans.find((p) => p.key === "campaigner:cam2")?.clientIds, [
+    "c3",
+  ]);
 });
 
 test("planTeamManagerPulseDeliveries scopes by managed agencies", () => {
@@ -126,7 +136,10 @@ test("preview message wraps scoped digest for campaigner", () => {
     phone: "972549757611",
     clientIds: ["c1", "c2"],
   });
-  const digest = buildPulseWhatsAppDigest(scoped, "https://aios.co.il/t/dmm/dmm-dashboard");
+  const digest = buildPulseWhatsAppDigest(
+    scoped,
+    "https://aios.co.il/t/dmm/dmm-dashboard",
+  );
   const preview = buildPulsePreviewMessage("אביעד", digest);
   assert.match(preview, /תצוגה מקדימה — בדיקת דופק לאביעד/);
   assert.match(preview, /נבדקו 2 יעדי קמפיין/);
@@ -166,8 +179,20 @@ test("buildPulseMissingPhoneAlert asks manager to add campaigner phone", () => {
 test("filterPulsePlansByCampaignerName keeps only matching campaigner plans", () => {
   const filtered = filterPulsePlansByCampaignerName(
     [
-      { key: "campaigner:a", role: "campaigner", name: "שנאיה", phone: "972500000001", clientIds: ["c1"] },
-      { key: "campaigner:b", role: "campaigner", name: "אביעד", phone: "972549757611", clientIds: ["c2"] },
+      {
+        key: "campaigner:a",
+        role: "campaigner",
+        name: "שנאיה",
+        phone: "972500000001",
+        clientIds: ["c1"],
+      },
+      {
+        key: "campaigner:b",
+        role: "campaigner",
+        name: "אביעד",
+        phone: "972549757611",
+        clientIds: ["c2"],
+      },
     ],
     "שנאיה",
   );

@@ -4,8 +4,22 @@ import { TriggerTestPanel } from "./TriggerTestPanel";
 import { TestTube } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SelectGroup,
+  SelectLabel,
+  SelectSeparator,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,9 +28,29 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, Facebook, CheckCircle2, Search, Bot, Plus, Sparkles, Copy, FileText, Phone, Scissors, Languages, RotateCcw, ChevronDown, ClipboardCopy } from "lucide-react";
+import {
+  Loader2,
+  Facebook,
+  CheckCircle2,
+  Search,
+  Bot,
+  Plus,
+  Sparkles,
+  Copy,
+  FileText,
+  Phone,
+  Scissors,
+  Languages,
+  RotateCcw,
+  ChevronDown,
+  ClipboardCopy,
+} from "lucide-react";
 import { NodeIconDisplay } from "./nodeIcons";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +63,10 @@ import { FlowNodeData } from "./FlowNode";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useToast } from "@/hooks/use-toast";
-import { RecipientsListEditor, migrateLegacyRecipients } from "./RecipientsListEditor";
+import {
+  RecipientsListEditor,
+  migrateLegacyRecipients,
+} from "./RecipientsListEditor";
 import { EmailActionConfig } from "./EmailActionConfig";
 import SendSignatureActionConfig from "./SendSignatureActionConfig";
 import StatusFilterTriggerConfig from "./StatusFilterTriggerConfig";
@@ -39,90 +76,106 @@ export const TRIGGER_CATEGORIES = [
   {
     label: "👤 לידים",
     options: [
-      { value: "lead_created",        label: "ליד נוצר" },
-      { value: "lead_updated",         label: "ליד עודכן" },
-      { value: "lead_status_changed",  label: "סטאטוס ליד השתנה" },
-      { value: "lead_note_added",      label: "הערה נוספה לליד" },
-      { value: "lead_inactive_days",   label: "ליד לא פעיל X ימים" },
+      { value: "lead_created", label: "ליד נוצר" },
+      { value: "lead_updated", label: "ליד עודכן" },
+      { value: "lead_status_changed", label: "סטאטוס ליד השתנה" },
+      { value: "lead_note_added", label: "הערה נוספה לליד" },
+      { value: "lead_inactive_days", label: "ליד לא פעיל X ימים" },
     ],
   },
   {
     label: "🏢 לקוחות",
     options: [
-      { value: "client_created",        label: "לקוח נוצר" },
+      { value: "client_created", label: "לקוח נוצר" },
       { value: "client_status_changed", label: "סטאטוס לקוח השתנה" },
-      { value: "client_note_added",     label: "הערה נוספה ללקוח" },
+      { value: "client_note_added", label: "הערה נוספה ללקוח" },
     ],
   },
   {
     label: "✅ משימות",
     options: [
-      { value: "task_created",       label: "משימה נוצרה" },
-      { value: "task_status_changed",label: "סטאטוס משימה השתנה" },
-      { value: "task_completed",     label: "משימה הושלמה" },
-      { value: "task_assigned",      label: "משימה שוייכה" },
+      { value: "task_created", label: "משימה נוצרה" },
+      { value: "task_status_changed", label: "סטאטוס משימה השתנה" },
+      { value: "task_completed", label: "משימה הושלמה" },
+      { value: "task_assigned", label: "משימה שוייכה" },
       { value: "task_collaborator_added", label: "קמפיינר נוסף למשימה" },
-      { value: "task_update_added",  label: "עדכון נוסף למשימה" },
-      { value: "task_overdue",       label: "משימה באיחור" },
+      { value: "task_update_added", label: "עדכון נוסף למשימה" },
+      { value: "task_overdue", label: "משימה באיחור" },
     ],
   },
   {
     label: "📅 פגישות",
     options: [
-      { value: "meeting_created",   label: "פגישה נוצרה" },
-      { value: "meeting_updated",   label: "פגישה עודכנה" },
+      { value: "meeting_created", label: "פגישה נוצרה" },
+      { value: "meeting_updated", label: "פגישה עודכנה" },
       { value: "meeting_cancelled", label: "פגישה בוטלה" },
     ],
   },
   {
     label: "💬 הודעות",
     options: [
-      { value: "whatsapp_message_received", label: "הודעת WhatsApp נכנסת (Green API)" },
-      { value: "carmen_whatsapp_session",   label: "שיחת כרמן ב-WhatsApp" },
+      {
+        value: "whatsapp_message_received",
+        label: "הודעת WhatsApp נכנסת (Green API)",
+      },
+      { value: "carmen_whatsapp_session", label: "שיחת כרמן ב-WhatsApp" },
       { value: "telegram_message_received", label: "הודעת טלגרם נכנסת" },
-      { value: "email_received",            label: "אימייל נכנס(Gmail)" },
+      { value: "email_received", label: "אימייל נכנס(Gmail)" },
     ],
   },
   {
     label: "📈 Google Workspace",
     options: [
-      { value: "google_sheet_new_row",          label: "שורה חדשה ב-Google Sheets" },
-      { value: "google_sheet_row_updated",      label: "שורה עודכנה ב-Google Sheets" },
-      { value: "google_calendar_event_created", label: "אירוע חדש ב-Google Calendar" },
-      { value: "google_form_submitted",         label: "טופס Google Forms נשלח" },
+      { value: "google_sheet_new_row", label: "שורה חדשה ב-Google Sheets" },
+      {
+        value: "google_sheet_row_updated",
+        label: "שורה עודכנה ב-Google Sheets",
+      },
+      {
+        value: "google_calendar_event_created",
+        label: "אירוע חדש ב-Google Calendar",
+      },
+      { value: "google_form_submitted", label: "טופס Google Forms נשלח" },
     ],
   },
   {
     label: "⏰ לוח זמנים",
     options: [
-      { value: "scheduled_daily",   label: "טריגר יומי בשעה קבועה" },
-      { value: "scheduled_weekly",  label: "טריגר שבועי" },
+      { value: "scheduled_daily", label: "טריגר יומי בשעה קבועה" },
+      { value: "scheduled_weekly", label: "טריגר שבועי" },
       { value: "scheduled_monthly", label: "טריגר חודשי" },
     ],
   },
   {
     label: "🔗 אינטגרציות",
     options: [
-      { value: "inbound_webhook_task",     label: "Webhook נכנס (ספציפי לאוטומציה)" },
-      { value: "inbound_webhook_lead",     label: "Webhook ליד (ללא יצירה ב-CRM)" },
-      { value: "facebook_lead_form",       label: "טופס ליד פייסבוק" },
-      { value: "instagram_message",        label: "הודעת אינסטגרם" },
-      { value: "typeform_submitted",       label: "Typeform נשלח" },
-      { value: "stripe_payment",           label: "תשלום Stripe" },
-      { value: "integration_disconnected", label: "⚠️ חיבור התנתק / דורש חיבור מחדש" },
-      { value: "ad_account_blocked",       label: "🚫 חשבון מודעות נחסם (אשראי / מדיניות)" },
+      {
+        value: "inbound_webhook_task",
+        label: "Webhook נכנס (ספציפי לאוטומציה)",
+      },
+      { value: "inbound_webhook_lead", label: "Webhook ליד (ללא יצירה ב-CRM)" },
+      { value: "facebook_lead_form", label: "טופס ליד פייסבוק" },
+      { value: "instagram_message", label: "הודעת אינסטגרם" },
+      { value: "typeform_submitted", label: "Typeform נשלח" },
+      { value: "stripe_payment", label: "תשלום Stripe" },
+      {
+        value: "integration_disconnected",
+        label: "⚠️ חיבור התנתק / דורש חיבור מחדש",
+      },
+      {
+        value: "ad_account_blocked",
+        label: "🚫 חשבון מודעות נחסם (אשראי / מדיניות)",
+      },
     ],
   },
   {
     label: "💬 צ'אט ופקודות",
-    options: [
-      { value: "manual_command", label: "פקודה ידנית (צ'אט)" },
-    ],
+    options: [{ value: "manual_command", label: "פקודה ידנית (צ'אט)" }],
   },
 ];
 
 // Flat list for backward compat
-const TRIGGER_OPTIONS = TRIGGER_CATEGORIES.flatMap(c => c.options);
+const TRIGGER_OPTIONS = TRIGGER_CATEGORIES.flatMap((c) => c.options);
 
 const ACTION_OPTIONS = [
   { value: "send_whatsapp", label: "שלח WhatsApp (ManyChat)" },
@@ -143,7 +196,6 @@ const ACTION_OPTIONS = [
   { value: "send_manus_direct", label: "💬 שלח הודעה ישירה ל-Manus" },
 ];
 
-
 const DELAY_UNITS = [
   { value: "minutes", label: "דקות" },
   { value: "hours", label: "שעות" },
@@ -156,7 +208,10 @@ const LEAD_SOURCE_OPTIONS = [
 ];
 
 // Available fields by trigger type
-function getAvailableFields(triggerType: string | undefined, triggerConfig?: Record<string, any>): { key: string; label: string }[] {
+function getAvailableFields(
+  triggerType: string | undefined,
+  triggerConfig?: Record<string, any>,
+): { key: string; label: string }[] {
   let fields: { key: string; label: string }[] = [];
   switch (triggerType) {
     case "lead_created":
@@ -280,16 +335,22 @@ function getAvailableFields(triggerType: string | undefined, triggerConfig?: Rec
       break;
   }
 
-
   // Add Facebook form fields if trigger is lead_created with facebook_form source
-  if (triggerType === "lead_created" && triggerConfig?.lead_source === "facebook_form") {
-    const fbFields = triggerConfig?.facebook_form_fields as Array<{ key: string; label: string; type?: string }> | undefined;
+  if (
+    triggerType === "lead_created" &&
+    triggerConfig?.lead_source === "facebook_form"
+  ) {
+    const fbFields = triggerConfig?.facebook_form_fields as
+      Array<{ key: string; label: string; type?: string }> | undefined;
     if (fbFields && Array.isArray(fbFields)) {
-      const existingKeys = new Set(fields.map(f => f.key));
+      const existingKeys = new Set(fields.map((f) => f.key));
       for (const fbField of fbFields) {
         const fieldKey = `fb_${fbField.key}`;
         if (!existingKeys.has(fieldKey)) {
-          fields.push({ key: fieldKey, label: `📋 ${fbField.label || fbField.key}` });
+          fields.push({
+            key: fieldKey,
+            label: `📋 ${fbField.label || fbField.key}`,
+          });
         }
       }
     }
@@ -327,7 +388,15 @@ interface FacebookForm {
   fields?: FacebookFormField[];
 }
 
-export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], automationId, automationName }: StepConfigPanelProps) {
+export function StepConfigPanel({
+  node,
+  open,
+  onClose,
+  onUpdate,
+  allNodes = [],
+  automationId,
+  automationName,
+}: StepConfigPanelProps) {
   const { tenant } = useCurrentTenant();
   const { toast } = useToast();
   const tenantId = tenant?.id;
@@ -354,7 +423,8 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
   const triggerConfig = triggerNode?.configuration;
   const availableFields = getAvailableFields(triggerType, triggerConfig);
 
-  const isLeadCreatedTrigger = node.step_type === "trigger" && node.action_type === "lead_created";
+  const isLeadCreatedTrigger =
+    node.step_type === "trigger" && node.action_type === "lead_created";
   const leadSource = node.configuration?.lead_source || "any";
 
   const handleActionTypeChange = (value: string) => {
@@ -380,398 +450,526 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
     });
   };
 
-  const options = node.step_type === "trigger" ? TRIGGER_OPTIONS : ACTION_OPTIONS;
+  const options =
+    node.step_type === "trigger" ? TRIGGER_OPTIONS : ACTION_OPTIONS;
 
   return (
     <>
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="left" className="w-[360px] sm:w-[400px] overflow-y-auto">
-        <SheetHeader>
-          <div className="flex items-center gap-3" dir="rtl">
-            <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0 border">
-              <NodeIconDisplay
-                stepType={node.step_type}
-                actionType={node.action_type}
-                size={20}
+      <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+        <SheetContent
+          side="left"
+          className="w-[360px] sm:w-[400px] overflow-y-auto"
+        >
+          <SheetHeader>
+            <div className="flex items-center gap-3" dir="rtl">
+              <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0 border">
+                <NodeIconDisplay
+                  stepType={node.step_type}
+                  actionType={node.action_type}
+                  size={20}
+                />
+              </div>
+              <SheetTitle className="text-right text-base">
+                {node.step_type === "trigger"
+                  ? "הגדרת טריגר"
+                  : node.step_type === "action"
+                    ? "הגדרת פעולה"
+                    : node.step_type === "condition"
+                      ? "הגדרת תנאי (IF)"
+                      : node.step_type === "switch"
+                        ? "הגדרת מיתוג (Switch)"
+                        : node.step_type === "merge"
+                          ? "הגדרת מיזוג (Merge)"
+                          : node.step_type === "loop"
+                            ? "הגדרת לולאה (Loop)"
+                            : node.step_type === "code"
+                              ? "הגדרת קוד (Code)"
+                              : node.step_type === "error_branch"
+                                ? "הגדרת טיפול בשגיאה"
+                                : node.step_type === "agent"
+                                  ? "הגדרת סוכן AI"
+                                  : "הגדרת השהייה"}
+              </SheetTitle>
+            </div>
+          </SheetHeader>
+
+          <div className="space-y-4 mt-6">
+            {/* Label */}
+            <div className="space-y-2">
+              <Label className="text-right block">שם הצעד</Label>
+              <Input
+                value={node.label || ""}
+                onChange={(e) => handleLabelChange(e.target.value)}
+                placeholder="שם מותאם אישית (אופציונלי)"
+                className="text-right"
               />
             </div>
-            <SheetTitle className="text-right text-base">
-              {node.step_type === "trigger" ? "הגדרת טריגר" :
-               node.step_type === "action" ? "הגדרת פעולה" :
-               node.step_type === "condition" ? "הגדרת תנאי (IF)" :
-               node.step_type === "switch" ? "הגדרת מיתוג (Switch)" :
-               node.step_type === "merge" ? "הגדרת מיזוג (Merge)" :
-               node.step_type === "loop" ? "הגדרת לולאה (Loop)" :
-               node.step_type === "code" ? "הגדרת קוד (Code)" :
-               node.step_type === "error_branch" ? "הגדרת טיפול בשגיאה" :
-               node.step_type === "agent" ? "הגדרת סוכן AI" :
-               "הגדרת השהייה"}
-            </SheetTitle>
-          </div>
-        </SheetHeader>
 
-        <div className="space-y-4 mt-6">
-          {/* Label */}
-          <div className="space-y-2">
-            <Label className="text-right block">שם הצעד</Label>
-            <Input
-              value={node.label || ""}
-              onChange={(e) => handleLabelChange(e.target.value)}
-              placeholder="שם מותאם אישית (אופציונלי)"
-              className="text-right"
-            />
-          </div>
+            {/* Action type selector */}
+            {(node.step_type === "trigger" || node.step_type === "action") && (
+              <div className="space-y-2">
+                <Label className="text-right block">
+                  {node.step_type === "trigger" ? "סוג טריגר" : "סוג פעולה"}
+                </Label>
+                {node.step_type === "trigger" ? (
+                  <Select
+                    value={node.action_type || ""}
+                    onValueChange={handleActionTypeChange}
+                  >
+                    <SelectTrigger className="text-right">
+                      <SelectValue placeholder="בחר טריגר..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[400px]">
+                      {TRIGGER_CATEGORIES.map((cat) => (
+                        <SelectGroup key={cat.label}>
+                          <SelectLabel className="text-right text-xs font-bold text-muted-foreground py-1">
+                            {cat.label}
+                          </SelectLabel>
+                          {cat.options.map((opt) => (
+                            <SelectItem
+                              key={opt.value}
+                              value={opt.value}
+                              className="text-right"
+                            >
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                          <SelectSeparator />
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select
+                    value={node.action_type || ""}
+                    onValueChange={handleActionTypeChange}
+                  >
+                    <SelectTrigger className="text-right">
+                      <SelectValue placeholder="בחר פעולה..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACTION_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
 
-          {/* Action type selector */}
-          {(node.step_type === "trigger" || node.step_type === "action") && (
-            <div className="space-y-2">
-              <Label className="text-right block">
-                {node.step_type === "trigger" ? "סוג טריגר" : "סוג פעולה"}
-              </Label>
-              {node.step_type === "trigger" ? (
-                <Select value={node.action_type || ""} onValueChange={handleActionTypeChange}>
-                  <SelectTrigger className="text-right">
-                    <SelectValue placeholder="בחר טריגר..." />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[400px]">
-                    {TRIGGER_CATEGORIES.map((cat) => (
-                      <SelectGroup key={cat.label}>
-                        <SelectLabel className="text-right text-xs font-bold text-muted-foreground py-1">
-                          {cat.label}
-                        </SelectLabel>
-                        {cat.options.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value} className="text-right">
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                        <SelectSeparator />
-                      </SelectGroup>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Select value={node.action_type || ""} onValueChange={handleActionTypeChange}>
-                  <SelectTrigger className="text-right">
-                    <SelectValue placeholder="בחר פעולה..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ACTION_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* Lead source sub-config when lead_created trigger */}
+            {isLeadCreatedTrigger && (
+              <LeadSourceConfig
+                tenantId={tenantId}
+                leadSource={leadSource}
+                configuration={node.configuration}
+                onConfigChange={handleConfigChange}
+                onBulkConfigChange={handleBulkConfigChange}
+              />
+            )}
+
+            {/* WhatsApp message received trigger config */}
+            {node.step_type === "trigger" &&
+              node.action_type === "whatsapp_message_received" && (
+                <WhatsAppTriggerConfig
+                  tenantId={tenantId}
+                  configuration={node.configuration}
+                  onConfigChange={handleConfigChange}
+                />
               )}
-            </div>
-          )}
 
-          {/* Lead source sub-config when lead_created trigger */}
-          {isLeadCreatedTrigger && (
-            <LeadSourceConfig
-              tenantId={tenantId}
-              leadSource={leadSource}
-              configuration={node.configuration}
-              onConfigChange={handleConfigChange}
-              onBulkConfigChange={handleBulkConfigChange}
-            />
-          )}
-
-          {/* WhatsApp message received trigger config */}
-          {node.step_type === "trigger" && node.action_type === "whatsapp_message_received" && (
-            <WhatsAppTriggerConfig
-              tenantId={tenantId}
-              configuration={node.configuration}
-              onConfigChange={handleConfigChange}
-            />
-          )}
-
-          {/* Carmen WhatsApp Session trigger config */}
-          {node.step_type === "trigger" && node.action_type === "carmen_whatsapp_session" && (
-            <CarmenSessionConfig
-              tenantId={tenantId}
-              configuration={node.configuration}
-              onConfigChange={handleConfigChange}
-            />
-          )}
-
-          {node.step_type === "trigger" && (node.action_type === "lead_status_changed" || node.action_type === "task_status_changed") && (
-            <StatusFilterTriggerConfig
-              triggerType={node.action_type || ""}
-              tenantId={tenantId}
-              configuration={node.configuration}
-              onConfigChange={handleConfigChange}
-            />
-          )}
-
-          {/* ── טלגרם ── */}
-          {node.step_type === "trigger" && node.action_type === "telegram_message_received" && (
-            <div className="space-y-3 bg-sky-500/10 border border-sky-500/30 rounded-lg p-3">
-              <p className="text-xs font-semibold text-sky-600">הגדרת Telegram Bot</p>
-              <div className="space-y-2">
-                <Label className="text-right block">Bot Token</Label>
-                <Input
-                  value={node.configuration?.telegram_bot_token || ""}
-                  onChange={(e) => handleConfigChange("telegram_bot_token", e.target.value)}
-                  placeholder="123456:ABC-DEF..."
-                  dir="ltr"
-                  className="font-mono text-xs"
+            {/* Carmen WhatsApp Session trigger config */}
+            {node.step_type === "trigger" &&
+              node.action_type === "carmen_whatsapp_session" && (
+                <CarmenSessionConfig
+                  tenantId={tenantId}
+                  configuration={node.configuration}
+                  onConfigChange={handleConfigChange}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">סנן הפעלה (אופציונלי)</Label>
-                <Input
-                  value={node.configuration?.telegram_keyword || ""}
-                  onChange={(e) => handleConfigChange("telegram_keyword", e.target.value)}
-                  placeholder="למשל: /start"
-                  className="text-right"
-                />
-              </div>
-            </div>
-          )}
+              )}
 
-          {/* ── אימייל נכנס (Gmail) ── */}
-          {node.step_type === "trigger" && node.action_type === "email_received" && (
-            <div className="space-y-3 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-              <p className="text-xs font-semibold text-red-600">סינון Gmail</p>
-              <div className="space-y-2">
-                <Label className="text-right block">סנן בשורת הנושא (אופציונלי)</Label>
-                <Input
-                  value={node.configuration?.email_subject_filter || ""}
-                  onChange={(e) => handleConfigChange("email_subject_filter", e.target.value)}
-                  placeholder="למשל: הזמנה"
-                  className="text-right"
+            {node.step_type === "trigger" &&
+              (node.action_type === "lead_status_changed" ||
+                node.action_type === "task_status_changed") && (
+                <StatusFilterTriggerConfig
+                  triggerType={node.action_type || ""}
+                  tenantId={tenantId}
+                  configuration={node.configuration}
+                  onConfigChange={handleConfigChange}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">סנן בשולח (אופציונלי)</Label>
-                <Input
-                  value={node.configuration?.email_sender_filter || ""}
-                  onChange={(e) => handleConfigChange("email_sender_filter", e.target.value)}
-                  placeholder="example@gmail.com"
-                  dir="ltr"
-                />
-              </div>
-            </div>
-          )}
+              )}
 
-          {/* ── Google Sheets ── */}
-          {node.step_type === "trigger" && (node.action_type === "google_sheet_new_row" || node.action_type === "google_sheet_row_updated") && (
-            <div className="space-y-3 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-              <p className="text-xs font-semibold text-green-600">הגדרת Google Sheets</p>
-              <div className="space-y-2">
-                <Label className="text-right block">Spreadsheet ID</Label>
-                <Input
-                  value={node.configuration?.sheet_id || ""}
-                  onChange={(e) => handleConfigChange("sheet_id", e.target.value)}
-                  placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
-                  dir="ltr"
-                  className="font-mono text-xs"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">שם הגיליון (Sheet Name)</Label>
-                <Input
-                  value={node.configuration?.sheet_name || ""}
-                  onChange={(e) => handleConfigChange("sheet_name", e.target.value)}
-                  placeholder="Sheet1"
-                  dir="ltr"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ── Google Calendar ── */}
-          {node.step_type === "trigger" && node.action_type === "google_calendar_event_created" && (
-            <div className="space-y-3 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-              <p className="text-xs font-semibold text-blue-600">הגדרת Google Calendar</p>
-              <div className="space-y-2">
-                <Label className="text-right block">סנן בכותרת האירוע (אופציונלי)</Label>
-                <Input
-                  value={node.configuration?.calendar_title_filter || ""}
-                  onChange={(e) => handleConfigChange("calendar_title_filter", e.target.value)}
-                  placeholder="למשל: פגישה"
-                  className="text-right"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ── לוח זמנים – יומי ── */}
-          {node.step_type === "trigger" && node.action_type === "scheduled_daily" && (
-            <div className="space-y-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-              <p className="text-xs font-semibold text-amber-600">הגדרת טריגר יומי</p>
-              <div className="space-y-2">
-                <Label className="text-right block">שעת הפעלה</Label>
-                <Input
-                  type="time"
-                  value={node.configuration?.schedule_time || "08:00"}
-                  onChange={(e) => handleConfigChange("schedule_time", e.target.value)}
-                  dir="ltr"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ── לוח זמנים – שבועי ── */}
-          {node.step_type === "trigger" && node.action_type === "scheduled_weekly" && (
-            <div className="space-y-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-              <p className="text-xs font-semibold text-amber-600">הגדרת טריגר שבועי</p>
-              <div className="space-y-2">
-                <Label className="text-right block">יום בשבוע</Label>
-                <Select
-                  value={node.configuration?.schedule_day || "1"}
-                  onValueChange={(v) => handleConfigChange("schedule_day", v)}
-                >
-                  <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">אחד</SelectItem>
-                    <SelectItem value="1">שני</SelectItem>
-                    <SelectItem value="2">שלישי</SelectItem>
-                    <SelectItem value="3">רביעי</SelectItem>
-                    <SelectItem value="4">חמישי</SelectItem>
-                    <SelectItem value="5">שישי</SelectItem>
-                    <SelectItem value="6">שבת</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">שעת הפעלה</Label>
-                <Input
-                  type="time"
-                  value={node.configuration?.schedule_time || "08:00"}
-                  onChange={(e) => handleConfigChange("schedule_time", e.target.value)}
-                  dir="ltr"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ── לוח זמנים – חודשי ── */}
-          {node.step_type === "trigger" && node.action_type === "scheduled_monthly" && (
-            <div className="space-y-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-              <p className="text-xs font-semibold text-amber-600">הגדרת טריגר חודשי</p>
-              <div className="space-y-2">
-                <Label className="text-right block">יום בחודש (1-28)</Label>
-                <Input
-                  type="number" min={1} max={28}
-                  value={node.configuration?.schedule_day_of_month || 1}
-                  onChange={(e) => handleConfigChange("schedule_day_of_month", parseInt(e.target.value) || 1)}
-                  className="text-right"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">שעת הפעלה</Label>
-                <Input
-                  type="time"
-                  value={node.configuration?.schedule_time || "08:00"}
-                  onChange={(e) => handleConfigChange("schedule_time", e.target.value)}
-                  dir="ltr"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ── ליד לא פעיל ── */}
-          {node.step_type === "trigger" && node.action_type === "lead_inactive_days" && (
-            <div className="space-y-3 bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
-              <p className="text-xs font-semibold text-orange-600">הגדרת ליד לא פעיל</p>
-              <div className="space-y-2">
-                <Label className="text-right block">מספר ימים ללא פעילות</Label>
-                <Input
-                  type="number" min={1}
-                  value={node.configuration?.inactive_days || 7}
-                  onChange={(e) => handleConfigChange("inactive_days", parseInt(e.target.value) || 7)}
-                  className="text-right"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground text-right">
-                יופעל בדיקה יומית אוטומטית.
-              </p>
-            </div>
-          )}
-
-          {/* ── Webhook נכנס (per-automation, no CRM side effects) ── */}
-          {node.step_type === "trigger" && node.action_type === "inbound_webhook_task" && (
-            <div className="space-y-4 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3">
-              <div>
-                <p className="text-right text-xs font-semibold text-sky-700">
-                  Webhook ייעודי לאוטומציה זו
-                </p>
-                <p className="text-right text-xs text-muted-foreground">
-                  כל שדות ה-JSON יהיו זמינים בצעדים הבאים. לא נוצר ליד, משימה או רשומה אחרת ב-CRM.
-                </p>
-              </div>
-
-              {!node.configuration?.webhook_secret ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    const bytes = crypto.getRandomValues(new Uint8Array(24));
-                    const secret = Array.from(bytes)
-                      .map((byte) => byte.toString(16).padStart(2, "0"))
-                      .join("");
-                    handleConfigChange("webhook_secret", secret);
-                  }}
-                >
-                  יצירת כתובת Webhook מאובטחת
-                </Button>
-              ) : (
-                <div className="space-y-2">
-                  <Label className="block text-right">Webhook URL</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      readOnly
-                      dir="ltr"
-                      className="font-mono text-[10px]"
-                      value={`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-flow-webhook?automation_id=${automationId || ""}`}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={async () => {
-                        const webhookUrl = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-flow-webhook?automation_id=${automationId || ""}`;
-                        await navigator.clipboard.writeText(webhookUrl);
-                        toast({ title: "הועתק", description: "כתובת ה-Webhook הועתקה" });
-                      }}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Label className="block text-right">Header: x-webhook-secret</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      readOnly
-                      dir="ltr"
-                      type="password"
-                      className="font-mono text-[10px]"
-                      value={node.configuration.webhook_secret}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(node.configuration.webhook_secret);
-                        toast({ title: "הועתק", description: "סוד ה-Webhook הועתק" });
-                      }}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-right text-[11px] text-muted-foreground">
-                    שלח POST עם JSON חופשי. הסוד חייב להגיע ב-header `x-webhook-secret`, לא ב-URL.
-                    כל מפתח ב-JSON זמין כ-{'{{field_name}}'} בצעדים הבאים.
+            {/* ── טלגרם ── */}
+            {node.step_type === "trigger" &&
+              node.action_type === "telegram_message_received" && (
+                <div className="space-y-3 bg-sky-500/10 border border-sky-500/30 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-sky-600">
+                    הגדרת Telegram Bot
                   </p>
-                  <details className="rounded-md border bg-background/70 p-2">
-                    <summary className="cursor-pointer text-right text-xs font-medium">
-                      הצג JSON לדוגמה
-                    </summary>
-                    <pre dir="ltr" className="mt-2 overflow-x-auto text-left text-[10px]">
-{`{
+                  <div className="space-y-2">
+                    <Label className="text-right block">Bot Token</Label>
+                    <Input
+                      value={node.configuration?.telegram_bot_token || ""}
+                      onChange={(e) =>
+                        handleConfigChange("telegram_bot_token", e.target.value)
+                      }
+                      placeholder="123456:ABC-DEF..."
+                      dir="ltr"
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-right block">
+                      סנן הפעלה (אופציונלי)
+                    </Label>
+                    <Input
+                      value={node.configuration?.telegram_keyword || ""}
+                      onChange={(e) =>
+                        handleConfigChange("telegram_keyword", e.target.value)
+                      }
+                      placeholder="למשל: /start"
+                      className="text-right"
+                    />
+                  </div>
+                </div>
+              )}
+
+            {/* ── אימייל נכנס (Gmail) ── */}
+            {node.step_type === "trigger" &&
+              node.action_type === "email_received" && (
+                <div className="space-y-3 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-red-600">
+                    סינון Gmail
+                  </p>
+                  <div className="space-y-2">
+                    <Label className="text-right block">
+                      סנן בשורת הנושא (אופציונלי)
+                    </Label>
+                    <Input
+                      value={node.configuration?.email_subject_filter || ""}
+                      onChange={(e) =>
+                        handleConfigChange(
+                          "email_subject_filter",
+                          e.target.value,
+                        )
+                      }
+                      placeholder="למשל: הזמנה"
+                      className="text-right"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-right block">
+                      סנן בשולח (אופציונלי)
+                    </Label>
+                    <Input
+                      value={node.configuration?.email_sender_filter || ""}
+                      onChange={(e) =>
+                        handleConfigChange(
+                          "email_sender_filter",
+                          e.target.value,
+                        )
+                      }
+                      placeholder="example@gmail.com"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+              )}
+
+            {/* ── Google Sheets ── */}
+            {node.step_type === "trigger" &&
+              (node.action_type === "google_sheet_new_row" ||
+                node.action_type === "google_sheet_row_updated") && (
+                <div className="space-y-3 bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-green-600">
+                    הגדרת Google Sheets
+                  </p>
+                  <div className="space-y-2">
+                    <Label className="text-right block">Spreadsheet ID</Label>
+                    <Input
+                      value={node.configuration?.sheet_id || ""}
+                      onChange={(e) =>
+                        handleConfigChange("sheet_id", e.target.value)
+                      }
+                      placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+                      dir="ltr"
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-right block">
+                      שם הגיליון (Sheet Name)
+                    </Label>
+                    <Input
+                      value={node.configuration?.sheet_name || ""}
+                      onChange={(e) =>
+                        handleConfigChange("sheet_name", e.target.value)
+                      }
+                      placeholder="Sheet1"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+              )}
+
+            {/* ── Google Calendar ── */}
+            {node.step_type === "trigger" &&
+              node.action_type === "google_calendar_event_created" && (
+                <div className="space-y-3 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-blue-600">
+                    הגדרת Google Calendar
+                  </p>
+                  <div className="space-y-2">
+                    <Label className="text-right block">
+                      סנן בכותרת האירוע (אופציונלי)
+                    </Label>
+                    <Input
+                      value={node.configuration?.calendar_title_filter || ""}
+                      onChange={(e) =>
+                        handleConfigChange(
+                          "calendar_title_filter",
+                          e.target.value,
+                        )
+                      }
+                      placeholder="למשל: פגישה"
+                      className="text-right"
+                    />
+                  </div>
+                </div>
+              )}
+
+            {/* ── לוח זמנים – יומי ── */}
+            {node.step_type === "trigger" &&
+              node.action_type === "scheduled_daily" && (
+                <div className="space-y-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-amber-600">
+                    הגדרת טריגר יומי
+                  </p>
+                  <div className="space-y-2">
+                    <Label className="text-right block">שעת הפעלה</Label>
+                    <Input
+                      type="time"
+                      value={node.configuration?.schedule_time || "08:00"}
+                      onChange={(e) =>
+                        handleConfigChange("schedule_time", e.target.value)
+                      }
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+              )}
+
+            {/* ── לוח זמנים – שבועי ── */}
+            {node.step_type === "trigger" &&
+              node.action_type === "scheduled_weekly" && (
+                <div className="space-y-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-amber-600">
+                    הגדרת טריגר שבועי
+                  </p>
+                  <div className="space-y-2">
+                    <Label className="text-right block">יום בשבוע</Label>
+                    <Select
+                      value={node.configuration?.schedule_day || "1"}
+                      onValueChange={(v) =>
+                        handleConfigChange("schedule_day", v)
+                      }
+                    >
+                      <SelectTrigger className="text-right">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">אחד</SelectItem>
+                        <SelectItem value="1">שני</SelectItem>
+                        <SelectItem value="2">שלישי</SelectItem>
+                        <SelectItem value="3">רביעי</SelectItem>
+                        <SelectItem value="4">חמישי</SelectItem>
+                        <SelectItem value="5">שישי</SelectItem>
+                        <SelectItem value="6">שבת</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-right block">שעת הפעלה</Label>
+                    <Input
+                      type="time"
+                      value={node.configuration?.schedule_time || "08:00"}
+                      onChange={(e) =>
+                        handleConfigChange("schedule_time", e.target.value)
+                      }
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+              )}
+
+            {/* ── לוח זמנים – חודשי ── */}
+            {node.step_type === "trigger" &&
+              node.action_type === "scheduled_monthly" && (
+                <div className="space-y-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-amber-600">
+                    הגדרת טריגר חודשי
+                  </p>
+                  <div className="space-y-2">
+                    <Label className="text-right block">יום בחודש (1-28)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={28}
+                      value={node.configuration?.schedule_day_of_month || 1}
+                      onChange={(e) =>
+                        handleConfigChange(
+                          "schedule_day_of_month",
+                          parseInt(e.target.value) || 1,
+                        )
+                      }
+                      className="text-right"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-right block">שעת הפעלה</Label>
+                    <Input
+                      type="time"
+                      value={node.configuration?.schedule_time || "08:00"}
+                      onChange={(e) =>
+                        handleConfigChange("schedule_time", e.target.value)
+                      }
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+              )}
+
+            {/* ── ליד לא פעיל ── */}
+            {node.step_type === "trigger" &&
+              node.action_type === "lead_inactive_days" && (
+                <div className="space-y-3 bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-orange-600">
+                    הגדרת ליד לא פעיל
+                  </p>
+                  <div className="space-y-2">
+                    <Label className="text-right block">
+                      מספר ימים ללא פעילות
+                    </Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={node.configuration?.inactive_days || 7}
+                      onChange={(e) =>
+                        handleConfigChange(
+                          "inactive_days",
+                          parseInt(e.target.value) || 7,
+                        )
+                      }
+                      className="text-right"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground text-right">
+                    יופעל בדיקה יומית אוטומטית.
+                  </p>
+                </div>
+              )}
+
+            {/* ── Webhook נכנס (per-automation, no CRM side effects) ── */}
+            {node.step_type === "trigger" &&
+              node.action_type === "inbound_webhook_task" && (
+                <div className="space-y-4 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3">
+                  <div>
+                    <p className="text-right text-xs font-semibold text-sky-700">
+                      Webhook ייעודי לאוטומציה זו
+                    </p>
+                    <p className="text-right text-xs text-muted-foreground">
+                      כל שדות ה-JSON יהיו זמינים בצעדים הבאים. לא נוצר ליד,
+                      משימה או רשומה אחרת ב-CRM.
+                    </p>
+                  </div>
+
+                  {!node.configuration?.webhook_secret ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        const bytes = crypto.getRandomValues(
+                          new Uint8Array(24),
+                        );
+                        const secret = Array.from(bytes)
+                          .map((byte) => byte.toString(16).padStart(2, "0"))
+                          .join("");
+                        handleConfigChange("webhook_secret", secret);
+                      }}
+                    >
+                      יצירת כתובת Webhook מאובטחת
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label className="block text-right">Webhook URL</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          readOnly
+                          dir="ltr"
+                          className="font-mono text-[10px]"
+                          value={`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-flow-webhook?automation_id=${automationId || ""}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={async () => {
+                            const webhookUrl = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-flow-webhook?automation_id=${automationId || ""}`;
+                            await navigator.clipboard.writeText(webhookUrl);
+                            toast({
+                              title: "הועתק",
+                              description: "כתובת ה-Webhook הועתקה",
+                            });
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <Label className="block text-right">
+                        Header: x-webhook-secret
+                      </Label>
+                      <div className="flex gap-2">
+                        <Input
+                          readOnly
+                          dir="ltr"
+                          type="password"
+                          className="font-mono text-[10px]"
+                          value={node.configuration.webhook_secret}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(
+                              node.configuration.webhook_secret,
+                            );
+                            toast({
+                              title: "הועתק",
+                              description: "סוד ה-Webhook הועתק",
+                            });
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-right text-[11px] text-muted-foreground">
+                        שלח POST עם JSON חופשי. הסוד חייב להגיע ב-header
+                        `x-webhook-secret`, לא ב-URL. כל מפתח ב-JSON זמין כ-
+                        {"{{field_name}}"} בצעדים הבאים.
+                      </p>
+                      <details className="rounded-md border bg-background/70 p-2">
+                        <summary className="cursor-pointer text-right text-xs font-medium">
+                          הצג JSON לדוגמה
+                        </summary>
+                        <pre
+                          dir="ltr"
+                          className="mt-2 overflow-x-auto text-left text-[10px]"
+                        >
+                          {`{
   "external_id": "evt-123",
   "title": "כותרת לדוגמה",
   "notes": "תיאור חופשי",
@@ -780,128 +978,154 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
   "email": "user@example.com",
   "custom_field": "כל שדה נוסף עובר לפלוו"
 }`}
-                    </pre>
-                  </details>
+                        </pre>
+                      </details>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* ── Flow-only lead webhook (never creates a CRM lead) ── */}
-          {node.step_type === "trigger" && node.action_type === "inbound_webhook_lead" && (
-            <div className="space-y-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
-              <div>
-                <p className="text-right text-xs font-semibold text-emerald-700">
-                  Webhook ליד ישיר לאוטומציה
-                </p>
-                <p className="text-right text-xs text-muted-foreground">
-                  כל שדות ה-JSON זמינים בצעדים הבאים. האירוע לא יוצר ליד ב-CRM.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="block text-right">הלקוח שיקבל את הלידים</Label>
-                <Select
-                  value={node.configuration?.client_id || "none"}
-                  onValueChange={(value) => handleConfigChange("client_id", value === "none" ? null : value)}
-                >
-                  <SelectTrigger className="text-right">
-                    <SelectValue placeholder="בחר לקוח" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">ללא ניתוב ללקוח</SelectItem>
-                    {webhookClients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name || client.contact_name || client.id}
-                        {client.phone ? ` — ${client.phone}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {!node.configuration?.webhook_secret ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    const bytes = crypto.getRandomValues(new Uint8Array(24));
-                    const secret = Array.from(bytes)
-                      .map((byte) => byte.toString(16).padStart(2, "0"))
-                      .join("");
-                    handleConfigChange("webhook_secret", secret);
-                  }}
-                >
-                  יצירת כתובת Webhook מאובטחת
-                </Button>
-              ) : (
-                <div className="space-y-2">
-                  <Label className="block text-right">Webhook URL</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      readOnly
-                      dir="ltr"
-                      className="font-mono text-[10px]"
-                      value={`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-lead-webhook?automation_id=${automationId || ""}`}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={async () => {
-                        const webhookUrl = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-lead-webhook?automation_id=${automationId || ""}`;
-                        await navigator.clipboard.writeText(webhookUrl);
-                        toast({ title: "הועתק", description: "כתובת ה-Webhook הועתקה" });
-                      }}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Label className="block text-right">Header: x-webhook-secret</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      readOnly
-                      dir="ltr"
-                      type="password"
-                      className="font-mono text-[10px]"
-                      value={node.configuration.webhook_secret}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(node.configuration.webhook_secret);
-                        toast({ title: "הועתק", description: "סוד ה-Webhook הועתק" });
-                      }}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-right text-[11px] text-muted-foreground">
-                    אפשר לשלוח `form_data`, `answers`, `questions_and_answers`, או כל JSON שטוח.
-                    יש לשלוח את הסוד ב-header ולא ב-URL. היעד באקשן WhatsApp צריך להיות
-                    `client_phone`. אם לא נבחר לקוח קבוע, אפשר לשלוח `client_id` ב-payload
-                    כדי לנתב 100 לקוחות דרך אותה אוטומציה.
-                  </p>
-                  <details className="rounded-md border bg-background/70 p-2">
-                    <summary className="cursor-pointer text-right text-xs font-medium">
-                      הצג JSON לדוגמה
-                    </summary>
-                    <p className="mt-2 text-right text-[11px] text-muted-foreground">
-                      תיקון Flow ב-ManyChat (שדות ישנים על איש קשר קיים):{" "}
-                      <a
-                        href="https://github.com/davidcastelnuovo/aios/blob/main/docs/manychat-flow-remap-guide.md"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline"
-                      >
-                        מדריך צעד-אחר-צעד
-                      </a>
+            {/* ── Flow-only lead webhook (never creates a CRM lead) ── */}
+            {node.step_type === "trigger" &&
+              node.action_type === "inbound_webhook_lead" && (
+                <div className="space-y-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+                  <div>
+                    <p className="text-right text-xs font-semibold text-emerald-700">
+                      Webhook ליד ישיר לאוטומציה
                     </p>
-                    <pre dir="ltr" className="mt-2 overflow-x-auto text-left text-[10px]">
-{`{
+                    <p className="text-right text-xs text-muted-foreground">
+                      כל שדות ה-JSON זמינים בצעדים הבאים. האירוע לא יוצר ליד
+                      ב-CRM.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="block text-right">
+                      הלקוח שיקבל את הלידים
+                    </Label>
+                    <Select
+                      value={node.configuration?.client_id || "none"}
+                      onValueChange={(value) =>
+                        handleConfigChange(
+                          "client_id",
+                          value === "none" ? null : value,
+                        )
+                      }
+                    >
+                      <SelectTrigger className="text-right">
+                        <SelectValue placeholder="בחר לקוח" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">ללא ניתוב ללקוח</SelectItem>
+                        {webhookClients.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.name || client.contact_name || client.id}
+                            {client.phone ? ` — ${client.phone}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {!node.configuration?.webhook_secret ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        const bytes = crypto.getRandomValues(
+                          new Uint8Array(24),
+                        );
+                        const secret = Array.from(bytes)
+                          .map((byte) => byte.toString(16).padStart(2, "0"))
+                          .join("");
+                        handleConfigChange("webhook_secret", secret);
+                      }}
+                    >
+                      יצירת כתובת Webhook מאובטחת
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label className="block text-right">Webhook URL</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          readOnly
+                          dir="ltr"
+                          className="font-mono text-[10px]"
+                          value={`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-lead-webhook?automation_id=${automationId || ""}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={async () => {
+                            const webhookUrl = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-lead-webhook?automation_id=${automationId || ""}`;
+                            await navigator.clipboard.writeText(webhookUrl);
+                            toast({
+                              title: "הועתק",
+                              description: "כתובת ה-Webhook הועתקה",
+                            });
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <Label className="block text-right">
+                        Header: x-webhook-secret
+                      </Label>
+                      <div className="flex gap-2">
+                        <Input
+                          readOnly
+                          dir="ltr"
+                          type="password"
+                          className="font-mono text-[10px]"
+                          value={node.configuration.webhook_secret}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(
+                              node.configuration.webhook_secret,
+                            );
+                            toast({
+                              title: "הועתק",
+                              description: "סוד ה-Webhook הועתק",
+                            });
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-right text-[11px] text-muted-foreground">
+                        אפשר לשלוח `form_data`, `answers`,
+                        `questions_and_answers`, או כל JSON שטוח. יש לשלוח את
+                        הסוד ב-header ולא ב-URL. היעד באקשן WhatsApp צריך להיות
+                        `client_phone`. אם לא נבחר לקוח קבוע, אפשר לשלוח
+                        `client_id` ב-payload כדי לנתב 100 לקוחות דרך אותה
+                        אוטומציה.
+                      </p>
+                      <details className="rounded-md border bg-background/70 p-2">
+                        <summary className="cursor-pointer text-right text-xs font-medium">
+                          הצג JSON לדוגמה
+                        </summary>
+                        <p className="mt-2 text-right text-[11px] text-muted-foreground">
+                          תיקון Flow ב-ManyChat (שדות ישנים על איש קשר קיים):{" "}
+                          <a
+                            href="https://github.com/davidcastelnuovo/aios/blob/main/docs/manychat-flow-remap-guide.md"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline"
+                          >
+                            מדריך צעד-אחר-צעד
+                          </a>
+                        </p>
+                        <pre
+                          dir="ltr"
+                          className="mt-2 overflow-x-auto text-left text-[10px]"
+                        >
+                          {`{
   "external_id": "UNIQUE-LEAD-ID",
   "client_name": "שם הלקוח",
   "client_phone": "0500000000",
@@ -913,529 +1137,678 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
     "מה התקציב?": "5,000 ש״ח"
   }
 }`}
-                    </pre>
-                  </details>
+                        </pre>
+                      </details>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* ── Stripe ── */}
-          {node.step_type === "trigger" && node.action_type === "stripe_payment" && (
-            <div className="space-y-3 bg-violet-500/10 border border-violet-500/30 rounded-lg p-3">
-              <p className="text-xs font-semibold text-violet-600">הגדרת Stripe Webhook</p>
-              <div className="space-y-2">
-                <Label className="text-right block">סוג אירוע</Label>
-                <Select
-                  value={node.configuration?.stripe_event || "payment_intent.succeeded"}
-                  onValueChange={(v) => handleConfigChange("stripe_event", v)}
-                >
-                  <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="payment_intent.succeeded">תשלום הצליח</SelectItem>
-                    <SelectItem value="payment_intent.payment_failed">תשלום נכשל</SelectItem>
-                    <SelectItem value="customer.subscription.created">מנוי נוצר</SelectItem>
-                    <SelectItem value="customer.subscription.deleted">מנוי בוטל</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
+            {/* ── Stripe ── */}
+            {node.step_type === "trigger" &&
+              node.action_type === "stripe_payment" && (
+                <div className="space-y-3 bg-violet-500/10 border border-violet-500/30 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-violet-600">
+                    הגדרת Stripe Webhook
+                  </p>
+                  <div className="space-y-2">
+                    <Label className="text-right block">סוג אירוע</Label>
+                    <Select
+                      value={
+                        node.configuration?.stripe_event ||
+                        "payment_intent.succeeded"
+                      }
+                      onValueChange={(v) =>
+                        handleConfigChange("stripe_event", v)
+                      }
+                    >
+                      <SelectTrigger className="text-right">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="payment_intent.succeeded">
+                          תשלום הצליח
+                        </SelectItem>
+                        <SelectItem value="payment_intent.payment_failed">
+                          תשלום נכשל
+                        </SelectItem>
+                        <SelectItem value="customer.subscription.created">
+                          מנוי נוצר
+                        </SelectItem>
+                        <SelectItem value="customer.subscription.deleted">
+                          מנוי בוטל
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
 
-          {/* Delay config */}
-          {node.step_type === "delay" && (
-            <>
-              <div className="space-y-2">
-                <Label className="text-right block">זמן המתנה</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={node.configuration?.delay_value || ""}
-                  onChange={(e) => handleConfigChange("delay_value", parseInt(e.target.value) || 0)}
-                  placeholder="כמות"
-                  className="text-right"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">יחידה</Label>
-                <Select
-                  value={node.configuration?.delay_unit || "minutes"}
-                  onValueChange={(v) => handleConfigChange("delay_unit", v)}
-                >
-                  <SelectTrigger className="text-right">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DELAY_UNITS.map((u) => (
-                      <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </>
-          )}
-
-          {/* ── CONDITION (IF) config ── */}
-          {node.step_type === "condition" && (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label className="text-right block">שדה לבדיקה</Label>
-                <Select
-                  value={node.configuration?.condition_field || ""}
-                  onValueChange={(v) => handleConfigChange("condition_field", v)}
-                >
-                  <SelectTrigger className="text-right">
-                    <SelectValue placeholder="בחר שדה..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableFields.map((f) => (
-                      <SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>
-                    ))}
-                    <SelectItem value="status">סטאטוס</SelectItem>
-                    <SelectItem value="source">מקור</SelectItem>
-                    <SelectItem value="message_text">טקסט הודעה</SelectItem>
-                    <SelectItem value="previous_step_output">פלט צעד קודם</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">אופרטור</Label>
-                <Select
-                  value={node.configuration?.condition_operator || "equals"}
-                  onValueChange={(v) => handleConfigChange("condition_operator", v)}
-                >
-                  <SelectTrigger className="text-right">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="equals">שווה ל</SelectItem>
-                    <SelectItem value="not_equals">לא שווה ל</SelectItem>
-                    <SelectItem value="contains">מכיל</SelectItem>
-                    <SelectItem value="not_contains">לא מכיל</SelectItem>
-                    <SelectItem value="starts_with">מתחיל ב</SelectItem>
-                    <SelectItem value="greater_than">גדול מ</SelectItem>
-                    <SelectItem value="less_than">קטן מ</SelectItem>
-                    <SelectItem value="is_empty">ריק</SelectItem>
-                    <SelectItem value="is_not_empty">לא ריק</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {!["is_empty", "is_not_empty"].includes(node.configuration?.condition_operator || "") && (
+            {/* Delay config */}
+            {node.step_type === "delay" && (
+              <>
                 <div className="space-y-2">
-                  <Label className="text-right block">ערך לבדיקה</Label>
+                  <Label className="text-right block">זמן המתנה</Label>
                   <Input
-                    value={node.configuration?.condition_value || ""}
-                    onChange={(e) => handleConfigChange("condition_value", e.target.value)}
-                    placeholder="הזן ערך..."
+                    type="number"
+                    min={1}
+                    value={node.configuration?.delay_value || ""}
+                    onChange={(e) =>
+                      handleConfigChange(
+                        "delay_value",
+                        parseInt(e.target.value) || 0,
+                      )
+                    }
+                    placeholder="כמות"
                     className="text-right"
                   />
                 </div>
-              )}
-              <p className="text-xs text-muted-foreground text-right bg-muted/50 p-2 rounded">
-                כן → נתיב ירוק &nbsp;|  לא → נתיב אדום
-              </p>
-            </div>
-          )}
-
-          {/* ── SWITCH config ── */}
-          {node.step_type === "switch" && (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label className="text-right block">שדה למיתוג</Label>
-                <Input
-                  value={node.configuration?.switch_field || ""}
-                  onChange={(e) => handleConfigChange("switch_field", e.target.value)}
-                  placeholder="למשל: status, source..."
-                  className="text-right"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">ערכי סניף (שורה אחת לכל ערך)</Label>
-                <Textarea
-                  value={(node.configuration?.switch_branches || ["ברירת מחדל"]).join("\n")}
-                  onChange={(e) => {
-                    const branches = e.target.value.split("\n").map(s => s.trim()).filter(Boolean)
-                    handleConfigChange("switch_branches", branches)
-                    onUpdate(node.id, { switch_branches: branches })
-                  }}
-                  placeholder="ערך1&#10;ערך2&#10;ברירת מחדל"
-                  className="text-right font-mono text-xs"
-                  rows={4}
-                />
-                <p className="text-xs text-muted-foreground text-right">
-                  הערך האחרון ישמש כברירת מחדל (אם אין התאמה)
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* ── MERGE config ── */}
-          {node.step_type === "merge" && (
-            <div className="space-y-2">
-              <Label className="text-right block">מספר נתיבי קלט</Label>
-              <Input
-                type="number"
-                min={2}
-                max={10}
-                value={node.configuration?.input_count || 2}
-                onChange={(e) => handleConfigChange("input_count", parseInt(e.target.value) || 2)}
-                className="text-right"
-              />
-              <p className="text-xs text-muted-foreground text-right">
-                הצומת ממתין עד שכל הנתיבים התחברו, אז ממזג את הנתונים.
-              </p>
-            </div>
-          )}
-
-          {/* ── LOOP config ── */}
-          {node.step_type === "loop" && (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label className="text-right block">שדה לריצה (מערך או רשימה)</Label>
-                <Input
-                  value={node.configuration?.loop_field || ""}
-                  onChange={(e) => handleConfigChange("loop_field", e.target.value)}
-                  placeholder="למשל: leads, items..."
-                  className="text-right"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground text-right bg-muted/50 p-2 rounded">
-                נתיב איטראציה → מריץ על כל פריט | נתיב סיום → אחרי הלולאה
-              </p>
-            </div>
-          )}
-
-          {/* ── CODE config ── */}
-          {node.step_type === "code" && (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label className="text-right block">קוד JavaScript</Label>
-                <Textarea
-                  value={node.configuration?.code || ""}
-                  onChange={(e) => handleConfigChange("code", e.target.value)}
-                  placeholder={`// קבל נתונים בתוך $input\n// החזר אובייקט עם שדות חדשים\nconst name = $input.contact_name || 'Unknown';\nreturn { full_greeting: 'Hello ' + name };`}
-                  className="text-right font-mono text-xs"
-                  rows={10}
-                  dir="ltr"
-                />
-              </div>
-              <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded space-y-1">
-                <p className="font-semibold">שדות זמינים ב-$input:</p>
-                <p className="font-mono">{availableFields.slice(0, 4).map(f => `$input.${f.key}`).join(", ")}</p>
-                <p>הערך המוחזר מה-return יוזן לצעדים הבאים.</p>
-              </div>
-            </div>
-          )}
-
-          {/* ── ERROR BRANCH config ── */}
-          {node.step_type === "error_branch" && (
-            <div className="space-y-2 bg-muted/50 p-3 rounded">
-              <p className="text-sm text-right">
-                צומת זה בודק את הצעד הקודם ומפצל לשני נתיבים:
-              </p>
-              <ul className="text-xs text-muted-foreground text-right space-y-1 list-disc list-inside">
-                <li>נתיב ירוק = הצעד הקודם הצליח</li>
-                <li>נתיב אדום = הצעד הקודם נכשל</li>
-              </ul>
-            </div>
-          )}
-
-          {/* Agent config */}
-          {node.step_type === "agent" && (
-            <AgentStepConfig
-              tenantId={tenantId}
-              configuration={node.configuration}
-              onConfigChange={handleConfigChange}
-              availableFields={availableFields}
-            />
-          )}
-
-          {/* Email action config */}
-          {node.action_type === "email" && (
-            <EmailActionConfig
-              tenantId={tenantId}
-              configuration={node.configuration}
-              availableFields={availableFields}
-              triggerType={triggerType}
-              automationId={automationId}
-              onConfigChange={handleConfigChange}
-            />
-          )}
-
-          {/* Webhook URL for webhook action */}
-          {node.action_type === "webhook" && (
-            <div className="space-y-2">
-              <Label className="text-right block">כתובת URL</Label>
-              <Input
-                value={node.configuration?.url || ""}
-                onChange={(e) => handleConfigChange("url", e.target.value)}
-                placeholder="https://..."
-                dir="ltr"
-              />
-            </div>
-          )}
-
-          {/* ManyChat WhatsApp (tag → Flow) */}
-          {node.action_type === "send_whatsapp" && (
-            <ManyChatWhatsAppActionConfig
-              tenantId={tenantId}
-              configuration={node.configuration}
-              availableFields={availableFields}
-              onConfigChange={handleConfigChange}
-            />
-          )}
-
-          {/* Green API WhatsApp config with connection selector + field mapping */}
-          {(node.action_type === "send_greenapi_message" || node.action_type === "send_manus_message") && (
-            <GreenAPIActionConfig
-              tenantId={tenantId}
-              configuration={node.configuration}
-              availableFields={availableFields}
-              onConfigChange={handleConfigChange}
-              providerFilter={node.action_type === "send_manus_message" ? "manus_wa" : undefined}
-            />
-          )}
-
-          {node.action_type === "send_meta_whatsapp_message" && (
-            <MetaWhatsAppActionConfig
-              tenantId={tenantId}
-              configuration={node.configuration}
-              availableFields={availableFields}
-              onConfigChange={handleConfigChange}
-            />
-          )}
-
-          {/* Telegram send config */}
-          {node.action_type === "send_telegram" && (
-            <div className="space-y-3 bg-sky-500/10 border border-sky-500/30 rounded-lg p-3">
-              <p className="text-xs font-semibold text-sky-600">הגדרת שליחת Telegram</p>
-              <div className="space-y-2">
-                <Label className="text-right block">Chat ID (מספר טלגרם של היעד)</Label>
-                <Input
-                  value={node.configuration?.telegram_chat_id || ""}
-                  onChange={(e) => handleConfigChange("telegram_chat_id", e.target.value)}
-                  placeholder="למשל: 123456789 או {{chat_id}}"
-                  dir="ltr"
-                  className="font-mono text-xs"
-                />
-                <p className="text-xs text-muted-foreground text-right">
-                  ניתן להשתמש ב-{'{{chat_id}}'} כדי לשלוח לאותו צ'אט שהטריגר הגיע ממנו
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">תבנית הודעה</Label>
-                <textarea
-                  value={node.configuration?.message_template || ""}
-                  onChange={(e) => handleConfigChange("message_template", e.target.value)}
-                  placeholder="שלום {{contact_name}}, ..."
-                  className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm text-right"
-                  dir="rtl"
-                />
-                <div className="text-xs text-muted-foreground text-right space-y-1">
-                  <p className="font-semibold">משתנים זמינים:</p>
-                  <p>שדות ליד: {'{{contact_name}}'}, {'{{phone}}'}, {'{{email}}'}, {'{{company_name}}'}, {'{{source}}'}, {'{{status}}'}, {'{{lead_id}}'}</p>
-                  <p>שדות צ'אט: {'{{sender_name}}'}, {'{{sender_phone}}'}, {'{{message_text}}'}, {'{{chat_id}}'}</p>
-                  <p>פלטים: {'{{agent_output}}'}, {'{{previous_step_output}}'}</p>
-                  <p className="text-[10px] opacity-70">טיפ: ניתן להשתמש בכל שדה שמגיע מהטריגר בפורמט {'{{field_name}}'}</p>
+                <div className="space-y-2">
+                  <Label className="text-right block">יחידה</Label>
+                  <Select
+                    value={node.configuration?.delay_unit || "minutes"}
+                    onValueChange={(v) => handleConfigChange("delay_unit", v)}
+                  >
+                    <SelectTrigger className="text-right">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DELAY_UNITS.map((u) => (
+                        <SelectItem key={u.value} value={u.value}>
+                          {u.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {['contact_name', 'phone', 'email', 'company_name', 'source', 'status', 'lead_id'].map((field) => (
-                    <button
-                      key={field}
-                      type="button"
-                      onClick={() => {
-                        const current = node.configuration?.message_template || '';
-                        handleConfigChange("message_template", current + `{{${field}}}`);
-                      }}
-                      className="text-xs px-2 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-700 dark:text-sky-300 transition-colors"
-                    >
-                      + {field}
-                    </button>
-                  ))}
+              </>
+            )}
+
+            {/* ── CONDITION (IF) config ── */}
+            {node.step_type === "condition" && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-right block">שדה לבדיקה</Label>
+                  <Select
+                    value={node.configuration?.condition_field || ""}
+                    onValueChange={(v) =>
+                      handleConfigChange("condition_field", v)
+                    }
+                  >
+                    <SelectTrigger className="text-right">
+                      <SelectValue placeholder="בחר שדה..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableFields.map((f) => (
+                        <SelectItem key={f.key} value={f.key}>
+                          {f.label}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="status">סטאטוס</SelectItem>
+                      <SelectItem value="source">מקור</SelectItem>
+                      <SelectItem value="message_text">טקסט הודעה</SelectItem>
+                      <SelectItem value="previous_step_output">
+                        פלט צעד קודם
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-right block">אופרטור</Label>
+                  <Select
+                    value={node.configuration?.condition_operator || "equals"}
+                    onValueChange={(v) =>
+                      handleConfigChange("condition_operator", v)
+                    }
+                  >
+                    <SelectTrigger className="text-right">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="equals">שווה ל</SelectItem>
+                      <SelectItem value="not_equals">לא שווה ל</SelectItem>
+                      <SelectItem value="contains">מכיל</SelectItem>
+                      <SelectItem value="not_contains">לא מכיל</SelectItem>
+                      <SelectItem value="starts_with">מתחיל ב</SelectItem>
+                      <SelectItem value="greater_than">גדול מ</SelectItem>
+                      <SelectItem value="less_than">קטן מ</SelectItem>
+                      <SelectItem value="is_empty">ריק</SelectItem>
+                      <SelectItem value="is_not_empty">לא ריק</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {!["is_empty", "is_not_empty"].includes(
+                  node.configuration?.condition_operator || "",
+                ) && (
+                  <div className="space-y-2">
+                    <Label className="text-right block">ערך לבדיקה</Label>
+                    <Input
+                      value={node.configuration?.condition_value || ""}
+                      onChange={(e) =>
+                        handleConfigChange("condition_value", e.target.value)
+                      }
+                      placeholder="הזן ערך..."
+                      className="text-right"
+                    />
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground text-right bg-muted/50 p-2 rounded">
+                  כן → נתיב ירוק &nbsp;|  לא → נתיב אדום
+                </p>
+              </div>
+            )}
+
+            {/* ── SWITCH config ── */}
+            {node.step_type === "switch" && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-right block">שדה למיתוג</Label>
+                  <Input
+                    value={node.configuration?.switch_field || ""}
+                    onChange={(e) =>
+                      handleConfigChange("switch_field", e.target.value)
+                    }
+                    placeholder="למשל: status, source..."
+                    className="text-right"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-right block">
+                    ערכי סניף (שורה אחת לכל ערך)
+                  </Label>
+                  <Textarea
+                    value={(
+                      node.configuration?.switch_branches || ["ברירת מחדל"]
+                    ).join("\n")}
+                    onChange={(e) => {
+                      const branches = e.target.value
+                        .split("\n")
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                      handleConfigChange("switch_branches", branches);
+                      onUpdate(node.id, { switch_branches: branches });
+                    }}
+                    placeholder="ערך1&#10;ערך2&#10;ברירת מחדל"
+                    className="text-right font-mono text-xs"
+                    rows={4}
+                  />
+                  <p className="text-xs text-muted-foreground text-right">
+                    הערך האחרון ישמש כברירת מחדל (אם אין התאמה)
+                  </p>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-right block">Parse Mode</Label>
-                <Select
-                  value={node.configuration?.telegram_parse_mode || "HTML"}
-                  onValueChange={(v) => handleConfigChange("telegram_parse_mode", v)}
-                >
-                  <SelectTrigger className="text-left" dir="ltr">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="HTML">HTML</SelectItem>
-                    <SelectItem value="Markdown">Markdown</SelectItem>
-                    <SelectItem value="MarkdownV2">MarkdownV2</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
+            )}
 
-          {node.action_type === "create_task" && (
-            <CreateTaskActionConfig
-              tenantId={tenantId}
-              configuration={node.configuration}
-              availableFields={availableFields}
-              onConfigChange={handleConfigChange}
-            />
-          )}
-
-          {node.action_type === "send_signature" && (
-            <SendSignatureActionConfig
-              tenantId={tenantId}
-              configuration={node.configuration}
-              onConfigChange={handleConfigChange}
-            />
-          )}
-
-          {/* Manus Task config */}
-          {node.action_type === "run_manus_task" && (
-            <div className="space-y-4" dir="rtl">
-              <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3 text-right">
-                <p className="text-xs text-blue-700 font-medium">🤖 Manus יצור משימה חדשה ברקע ויחזיר task_id. התוצאה תישמר ב-manus_tasks.
-                </p>
-              </div>
+            {/* ── MERGE config ── */}
+            {node.step_type === "merge" && (
               <div className="space-y-2">
-                <Label className="text-right block">פרומפט למשימה *</Label>
-                <Textarea
-                  value={node.configuration?.prompt_template || ""}
-                  onChange={(e) => handleConfigChange("prompt_template", e.target.value)}
-                  placeholder="תאר את המשימה... ניתן להשתמש ב-{{contact_name}}, {{company_name}} וכו'"
-                  className="text-right min-h-[100px]"
-                  rows={4}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">פרופיל סוכן</Label>
-                <Select
-                  value={node.configuration?.agent_profile || "manus-1.6"}
-                  onValueChange={(v) => handleConfigChange("agent_profile", v)}
-                >
-                  <SelectTrigger className="text-right">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="manus-1.6">Manus 1.6 (סטנדרט)</SelectItem>
-                    <SelectItem value="manus-lite">Manus Lite (מהיר)</SelectItem>
-                    <SelectItem value="manus-max">Manus Max (עוצמתי)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2 justify-end">
-                <Checkbox
-                  id="include_context"
-                  checked={node.configuration?.include_context ?? false}
-                  onCheckedChange={(v) => handleConfigChange("include_context", !!v)}
-                />
-                <Label htmlFor="include_context" className="text-sm cursor-pointer">צרף נתוני הטריגר לפרומפט</Label>
-              </div>
-            </div>
-          )}
-
-          {/* Manus Direct Message config */}
-          {node.action_type === "send_manus_direct" && (
-            <div className="space-y-4" dir="rtl">
-              <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-3 text-right">
-                <p className="text-xs text-purple-700 font-medium">💬 שליחת הודעה ישירה ל-Manus agent-default. אם לא מוגדר task_id ישתמש ב-agent-default-main_task.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">הודעה *</Label>
-                <Textarea
-                  value={node.configuration?.message_template || ""}
-                  onChange={(e) => handleConfigChange("message_template", e.target.value)}
-                  placeholder="תוכן ההודעה... ניתן להשתמש ב-{{contact_name}}, {{company_name}} וכו'"
-                  className="text-right min-h-[80px]"
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">Task ID (אופציונלי)</Label>
+                <Label className="text-right block">מספר נתיבי קלט</Label>
                 <Input
-                  value={node.configuration?.task_id || ""}
-                  onChange={(e) => handleConfigChange("task_id", e.target.value)}
-                  placeholder="agent-default-main_task (ברירת מחדל)"
-                  className="text-right font-mono text-sm"
+                  type="number"
+                  min={2}
+                  max={10}
+                  value={node.configuration?.input_count || 2}
+                  onChange={(e) =>
+                    handleConfigChange(
+                      "input_count",
+                      parseInt(e.target.value) || 2,
+                    )
+                  }
+                  className="text-right"
+                />
+                <p className="text-xs text-muted-foreground text-right">
+                  הצומת ממתין עד שכל הנתיבים התחברו, אז ממזג את הנתונים.
+                </p>
+              </div>
+            )}
+
+            {/* ── LOOP config ── */}
+            {node.step_type === "loop" && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-right block">
+                    שדה לריצה (מערך או רשימה)
+                  </Label>
+                  <Input
+                    value={node.configuration?.loop_field || ""}
+                    onChange={(e) =>
+                      handleConfigChange("loop_field", e.target.value)
+                    }
+                    placeholder="למשל: leads, items..."
+                    className="text-right"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground text-right bg-muted/50 p-2 rounded">
+                  נתיב איטראציה → מריץ על כל פריט | נתיב סיום → אחרי הלולאה
+                </p>
+              </div>
+            )}
+
+            {/* ── CODE config ── */}
+            {node.step_type === "code" && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-right block">קוד JavaScript</Label>
+                  <Textarea
+                    value={node.configuration?.code || ""}
+                    onChange={(e) => handleConfigChange("code", e.target.value)}
+                    placeholder={`// קבל נתונים בתוך $input\n// החזר אובייקט עם שדות חדשים\nconst name = $input.contact_name || 'Unknown';\nreturn { full_greeting: 'Hello ' + name };`}
+                    className="text-right font-mono text-xs"
+                    rows={10}
+                    dir="ltr"
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded space-y-1">
+                  <p className="font-semibold">שדות זמינים ב-$input:</p>
+                  <p className="font-mono">
+                    {availableFields
+                      .slice(0, 4)
+                      .map((f) => `$input.${f.key}`)
+                      .join(", ")}
+                  </p>
+                  <p>הערך המוחזר מה-return יוזן לצעדים הבאים.</p>
+                </div>
+              </div>
+            )}
+
+            {/* ── ERROR BRANCH config ── */}
+            {node.step_type === "error_branch" && (
+              <div className="space-y-2 bg-muted/50 p-3 rounded">
+                <p className="text-sm text-right">
+                  צומת זה בודק את הצעד הקודם ומפצל לשני נתיבים:
+                </p>
+                <ul className="text-xs text-muted-foreground text-right space-y-1 list-disc list-inside">
+                  <li>נתיב ירוק = הצעד הקודם הצליח</li>
+                  <li>נתיב אדום = הצעד הקודם נכשל</li>
+                </ul>
+              </div>
+            )}
+
+            {/* Agent config */}
+            {node.step_type === "agent" && (
+              <AgentStepConfig
+                tenantId={tenantId}
+                configuration={node.configuration}
+                onConfigChange={handleConfigChange}
+                availableFields={availableFields}
+              />
+            )}
+
+            {/* Email action config */}
+            {node.action_type === "email" && (
+              <EmailActionConfig
+                tenantId={tenantId}
+                configuration={node.configuration}
+                availableFields={availableFields}
+                triggerType={triggerType}
+                automationId={automationId}
+                onConfigChange={handleConfigChange}
+              />
+            )}
+
+            {/* Webhook URL for webhook action */}
+            {node.action_type === "webhook" && (
+              <div className="space-y-2">
+                <Label className="text-right block">כתובת URL</Label>
+                <Input
+                  value={node.configuration?.url || ""}
+                  onChange={(e) => handleConfigChange("url", e.target.value)}
+                  placeholder="https://..."
                   dir="ltr"
                 />
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Status update config */}
-          {node.action_type === "update_status" && (
-            <>
-              <div className="space-y-2">
-                <Label className="text-right block">סוג ישות</Label>
-                <Select
-                  value={node.configuration?.entity || ""}
-                  onValueChange={(v) => handleConfigChange("entity", v)}
-                >
-                  <SelectTrigger className="text-right">
-                    <SelectValue placeholder="בחר..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="lead">ליד</SelectItem>
-                    <SelectItem value="task">משימה</SelectItem>
-                    <SelectItem value="client">לקוח</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-right block">סטטוס חדש</Label>
-                <Input
-                  value={node.configuration?.status || ""}
-                  onChange={(e) => handleConfigChange("status", e.target.value)}
-                  placeholder="הסטטוס החדש"
-                  className="text-right"
-                />
-              </div>
-            </>
-          )}
-        </div>
+            {/* ManyChat WhatsApp (tag → Flow) */}
+            {node.action_type === "send_whatsapp" && (
+              <ManyChatWhatsAppActionConfig
+                tenantId={tenantId}
+                configuration={node.configuration}
+                availableFields={availableFields}
+                onConfigChange={handleConfigChange}
+              />
+            )}
 
-        {/* ── Per-trigger test button ── */}
-        {node.step_type === "trigger" && automationId && (
-          <div className="border-t pt-4">
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full gap-2 border-dashed hover:border-primary hover:text-primary"
-              onClick={() => setShowTriggerTest(true)}
-            >
-              <TestTube className="h-4 w-4" />
-              בדוק טריגר זה
-            </Button>
+            {/* Green API WhatsApp config with connection selector + field mapping */}
+            {(node.action_type === "send_greenapi_message" ||
+              node.action_type === "send_manus_message") && (
+              <GreenAPIActionConfig
+                tenantId={tenantId}
+                configuration={node.configuration}
+                availableFields={availableFields}
+                onConfigChange={handleConfigChange}
+                providerFilter={
+                  node.action_type === "send_manus_message"
+                    ? "manus_wa"
+                    : undefined
+                }
+              />
+            )}
+
+            {node.action_type === "send_meta_whatsapp_message" && (
+              <MetaWhatsAppActionConfig
+                tenantId={tenantId}
+                configuration={node.configuration}
+                availableFields={availableFields}
+                onConfigChange={handleConfigChange}
+              />
+            )}
+
+            {/* Telegram send config */}
+            {node.action_type === "send_telegram" && (
+              <div className="space-y-3 bg-sky-500/10 border border-sky-500/30 rounded-lg p-3">
+                <p className="text-xs font-semibold text-sky-600">
+                  הגדרת שליחת Telegram
+                </p>
+                <div className="space-y-2">
+                  <Label className="text-right block">
+                    Chat ID (מספר טלגרם של היעד)
+                  </Label>
+                  <Input
+                    value={node.configuration?.telegram_chat_id || ""}
+                    onChange={(e) =>
+                      handleConfigChange("telegram_chat_id", e.target.value)
+                    }
+                    placeholder="למשל: 123456789 או {{chat_id}}"
+                    dir="ltr"
+                    className="font-mono text-xs"
+                  />
+                  <p className="text-xs text-muted-foreground text-right">
+                    ניתן להשתמש ב-{"{{chat_id}}"} כדי לשלוח לאותו צ'אט שהטריגר
+                    הגיע ממנו
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-right block">תבנית הודעה</Label>
+                  <textarea
+                    value={node.configuration?.message_template || ""}
+                    onChange={(e) =>
+                      handleConfigChange("message_template", e.target.value)
+                    }
+                    placeholder="שלום {{contact_name}}, ..."
+                    className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm text-right"
+                    dir="rtl"
+                  />
+                  <div className="text-xs text-muted-foreground text-right space-y-1">
+                    <p className="font-semibold">משתנים זמינים:</p>
+                    <p>
+                      שדות ליד: {"{{contact_name}}"}, {"{{phone}}"},{" "}
+                      {"{{email}}"}, {"{{company_name}}"}, {"{{source}}"},{" "}
+                      {"{{status}}"}, {"{{lead_id}}"}
+                    </p>
+                    <p>
+                      שדות צ'אט: {"{{sender_name}}"}, {"{{sender_phone}}"},{" "}
+                      {"{{message_text}}"}, {"{{chat_id}}"}
+                    </p>
+                    <p>
+                      פלטים: {"{{agent_output}}"}, {"{{previous_step_output}}"}
+                    </p>
+                    <p className="text-[10px] opacity-70">
+                      טיפ: ניתן להשתמש בכל שדה שמגיע מהטריגר בפורמט{" "}
+                      {"{{field_name}}"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {[
+                      "contact_name",
+                      "phone",
+                      "email",
+                      "company_name",
+                      "source",
+                      "status",
+                      "lead_id",
+                    ].map((field) => (
+                      <button
+                        key={field}
+                        type="button"
+                        onClick={() => {
+                          const current =
+                            node.configuration?.message_template || "";
+                          handleConfigChange(
+                            "message_template",
+                            current + `{{${field}}}`,
+                          );
+                        }}
+                        className="text-xs px-2 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-700 dark:text-sky-300 transition-colors"
+                      >
+                        + {field}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-right block">Parse Mode</Label>
+                  <Select
+                    value={node.configuration?.telegram_parse_mode || "HTML"}
+                    onValueChange={(v) =>
+                      handleConfigChange("telegram_parse_mode", v)
+                    }
+                  >
+                    <SelectTrigger className="text-left" dir="ltr">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="HTML">HTML</SelectItem>
+                      <SelectItem value="Markdown">Markdown</SelectItem>
+                      <SelectItem value="MarkdownV2">MarkdownV2</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {node.action_type === "create_task" && (
+              <CreateTaskActionConfig
+                tenantId={tenantId}
+                configuration={node.configuration}
+                availableFields={availableFields}
+                onConfigChange={handleConfigChange}
+              />
+            )}
+
+            {node.action_type === "send_signature" && (
+              <SendSignatureActionConfig
+                tenantId={tenantId}
+                configuration={node.configuration}
+                onConfigChange={handleConfigChange}
+              />
+            )}
+
+            {/* Manus Task config */}
+            {node.action_type === "run_manus_task" && (
+              <div className="space-y-4" dir="rtl">
+                <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3 text-right">
+                  <p className="text-xs text-blue-700 font-medium">
+                    🤖 Manus יצור משימה חדשה ברקע ויחזיר task_id. התוצאה תישמר
+                    ב-manus_tasks.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-right block">פרומפט למשימה *</Label>
+                  <Textarea
+                    value={node.configuration?.prompt_template || ""}
+                    onChange={(e) =>
+                      handleConfigChange("prompt_template", e.target.value)
+                    }
+                    placeholder="תאר את המשימה... ניתן להשתמש ב-{{contact_name}}, {{company_name}} וכו'"
+                    className="text-right min-h-[100px]"
+                    rows={4}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-right block">פרופיל סוכן</Label>
+                  <Select
+                    value={node.configuration?.agent_profile || "manus-1.6"}
+                    onValueChange={(v) =>
+                      handleConfigChange("agent_profile", v)
+                    }
+                  >
+                    <SelectTrigger className="text-right">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manus-1.6">
+                        Manus 1.6 (סטנדרט)
+                      </SelectItem>
+                      <SelectItem value="manus-lite">
+                        Manus Lite (מהיר)
+                      </SelectItem>
+                      <SelectItem value="manus-max">
+                        Manus Max (עוצמתי)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2 justify-end">
+                  <Checkbox
+                    id="include_context"
+                    checked={node.configuration?.include_context ?? false}
+                    onCheckedChange={(v) =>
+                      handleConfigChange("include_context", !!v)
+                    }
+                  />
+                  <Label
+                    htmlFor="include_context"
+                    className="text-sm cursor-pointer"
+                  >
+                    צרף נתוני הטריגר לפרומפט
+                  </Label>
+                </div>
+              </div>
+            )}
+
+            {/* Manus Direct Message config */}
+            {node.action_type === "send_manus_direct" && (
+              <div className="space-y-4" dir="rtl">
+                <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-3 text-right">
+                  <p className="text-xs text-purple-700 font-medium">
+                    💬 שליחת הודעה ישירה ל-Manus agent-default. אם לא מוגדר
+                    task_id ישתמש ב-agent-default-main_task.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-right block">הודעה *</Label>
+                  <Textarea
+                    value={node.configuration?.message_template || ""}
+                    onChange={(e) =>
+                      handleConfigChange("message_template", e.target.value)
+                    }
+                    placeholder="תוכן ההודעה... ניתן להשתמש ב-{{contact_name}}, {{company_name}} וכו'"
+                    className="text-right min-h-[80px]"
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-right block">
+                    Task ID (אופציונלי)
+                  </Label>
+                  <Input
+                    value={node.configuration?.task_id || ""}
+                    onChange={(e) =>
+                      handleConfigChange("task_id", e.target.value)
+                    }
+                    placeholder="agent-default-main_task (ברירת מחדל)"
+                    className="text-right font-mono text-sm"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Status update config */}
+            {node.action_type === "update_status" && (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-right block">סוג ישות</Label>
+                  <Select
+                    value={node.configuration?.entity || ""}
+                    onValueChange={(v) => handleConfigChange("entity", v)}
+                  >
+                    <SelectTrigger className="text-right">
+                      <SelectValue placeholder="בחר..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lead">ליד</SelectItem>
+                      <SelectItem value="task">משימה</SelectItem>
+                      <SelectItem value="client">לקוח</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-right block">סטטוס חדש</Label>
+                  <Input
+                    value={node.configuration?.status || ""}
+                    onChange={(e) =>
+                      handleConfigChange("status", e.target.value)
+                    }
+                    placeholder="הסטטוס החדש"
+                    className="text-right"
+                  />
+                </div>
+              </>
+            )}
           </div>
-        )}
-      </SheetContent>
-    </Sheet>
 
-    {/* Trigger test panel */}
-    {node.step_type === "trigger" && automationId && (
-      <TriggerTestPanel
-        open={showTriggerTest}
-        onOpenChange={setShowTriggerTest}
-        automationId={automationId}
-        automationName={automationName || "אוטומציה"}
-        triggerType={node.action_type || ""}
-        triggerConfig={node.configuration}
-      />
-    )}
+          {/* ── Per-trigger test button ── */}
+          {node.step_type === "trigger" && automationId && (
+            <div className="border-t pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2 border-dashed hover:border-primary hover:text-primary"
+                onClick={() => setShowTriggerTest(true)}
+              >
+                <TestTube className="h-4 w-4" />
+                בדוק טריגר זה
+              </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Trigger test panel */}
+      {node.step_type === "trigger" && automationId && (
+        <TriggerTestPanel
+          open={showTriggerTest}
+          onOpenChange={setShowTriggerTest}
+          automationId={automationId}
+          automationName={automationName || "אוטומציה"}
+          triggerType={node.action_type || ""}
+          triggerConfig={node.configuration}
+        />
+      )}
     </>
   );
 }
 
-const LEAD_ALERT_MANYCHAT_FLOW_NS = 'content20260805211918_552368'
+const LEAD_ALERT_MANYCHAT_FLOW_NS = "content20260805211918_552368";
 
 const LEAD_ALERT_MANYCHAT_FIELDS = [
-  { field_id: 14845212, field_name: "client_name", value_template: "{{client_name}}" },
-  { field_id: 14845211, field_name: "lead_name", value_template: "{{lead_name}}" },
-  { field_id: 14845213, field_name: "lead_phone", value_template: "{{lead_phone}}" },
-  { field_id: 14845214, field_name: "lead_email", value_template: "{{lead_email}}" },
-  { field_id: 14845215, field_name: "form_qa_summary", value_template: "{{form_qa_summary}}" },
+  {
+    field_id: 14845212,
+    field_name: "client_name",
+    value_template: "{{client_name}}",
+  },
+  {
+    field_id: 14845211,
+    field_name: "lead_name",
+    value_template: "{{lead_name}}",
+  },
+  {
+    field_id: 14845213,
+    field_name: "lead_phone",
+    value_template: "{{lead_phone}}",
+  },
+  {
+    field_id: 14845214,
+    field_name: "lead_email",
+    value_template: "{{lead_email}}",
+  },
+  {
+    field_id: 14845215,
+    field_name: "form_qa_summary",
+    value_template: "{{form_qa_summary}}",
+  },
 ] as const;
 
 /** ManyChat send = set custom fields + apply tag (Flow in ManyChat UI sends the WA template). */
@@ -1451,17 +1824,27 @@ function ManyChatWhatsAppActionConfig({
   onConfigChange: (key: string, value: any) => void;
 }) {
   const { buildPath } = useTenantPath();
-  const phoneMode = configuration?.phone_mode || (configuration?.phone_field ? "field" : "contact");
-  const customFields: Array<{ field_id?: number; field_name?: string; value_template?: string }> =
-    Array.isArray(configuration?.custom_fields) ? configuration.custom_fields : [];
+  const phoneMode =
+    configuration?.phone_mode ||
+    (configuration?.phone_field ? "field" : "contact");
+  const customFields: Array<{
+    field_id?: number;
+    field_name?: string;
+    value_template?: string;
+  }> = Array.isArray(configuration?.custom_fields)
+    ? configuration.custom_fields
+    : [];
 
   const { data: tags = [], isLoading: loadingTags } = useQuery({
     queryKey: ["manychat-tags-for-flow", tenantId],
     enabled: Boolean(tenantId),
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("get-manychat-tags", {
-        body: { tenantId },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "get-manychat-tags",
+        {
+          body: { tenantId },
+        },
+      );
       if (error) throw error;
       return Array.isArray(data?.tags) ? data.tags : [];
     },
@@ -1478,7 +1861,13 @@ function ManyChatWhatsAppActionConfig({
           type="button"
           size="sm"
           variant="outline"
-          onClick={() => window.open(buildPath("/manychat-settings"), "_blank", "noopener,noreferrer")}
+          onClick={() =>
+            window.open(
+              buildPath("/manychat-settings"),
+              "_blank",
+              "noopener,noreferrer",
+            )
+          }
         >
           הגדרות ManyChat
         </Button>
@@ -1487,8 +1876,9 @@ function ManyChatWhatsAppActionConfig({
         </p>
       </div>
       <p className="text-right text-[11px] text-muted-foreground">
-        AIOS ממלא Custom Fields, מאמת, ואז מוסיף טאג `aios_lead_alert` (לא sendFlow ישיר).
-        ב-Flow של ManyChat חייבים שלבי Set Custom Field + Delay לפני התבנית — אחרת אנשי קשר קיימים מקבלים פרמטרים ישנים.
+        AIOS ממלא Custom Fields, מאמת, ואז מוסיף טאג `aios_lead_alert` (לא
+        sendFlow ישיר). ב-Flow של ManyChat חייבים שלבי Set Custom Field + Delay
+        לפני התבנית — אחרת אנשי קשר קיימים מקבלים פרמטרים ישנים.
       </p>
 
       <div className="space-y-2">
@@ -1497,7 +1887,11 @@ function ManyChatWhatsAppActionConfig({
           <p className="text-xs text-muted-foreground">טוען טאגים...</p>
         ) : (
           <Select
-            value={configuration?.manychat_tag_id ? String(configuration.manychat_tag_id) : ""}
+            value={
+              configuration?.manychat_tag_id
+                ? String(configuration.manychat_tag_id)
+                : ""
+            }
             onValueChange={(v) => onConfigChange("manychat_tag_id", v)}
           >
             <SelectTrigger className="text-right">
@@ -1522,7 +1916,10 @@ function ManyChatWhatsAppActionConfig({
             onConfigChange("phone_mode", v);
             if (v === "contact") onConfigChange("phone_field", undefined);
             if (v === "field" && !configuration?.phone_field) {
-              onConfigChange("phone_field", phoneFields[0]?.key || "client_phone");
+              onConfigChange(
+                "phone_field",
+                phoneFields[0]?.key || "client_phone",
+              );
             }
           }}
           className="grid gap-2"
@@ -1545,10 +1942,13 @@ function ManyChatWhatsAppActionConfig({
               <SelectValue placeholder="בחר שדה טלפון" />
             </SelectTrigger>
             <SelectContent>
-              {(phoneFields.length ? phoneFields : [
-                { key: "client_phone", label: "client_phone" },
-                { key: "phone", label: "phone" },
-              ]).map((field) => (
+              {(phoneFields.length
+                ? phoneFields
+                : [
+                    { key: "client_phone", label: "client_phone" },
+                    { key: "phone", label: "phone" },
+                  ]
+              ).map((field) => (
                 <SelectItem key={field.key} value={field.key}>
                   {field.label || field.key}
                 </SelectItem>
@@ -1566,7 +1966,10 @@ function ManyChatWhatsAppActionConfig({
             variant="secondary"
             onClick={() => {
               onConfigChange("custom_fields", [...LEAD_ALERT_MANYCHAT_FIELDS]);
-              onConfigChange("manychat_tag_id", configuration?.manychat_tag_id || "93553458");
+              onConfigChange(
+                "manychat_tag_id",
+                configuration?.manychat_tag_id || "93553458",
+              );
               onConfigChange("manychat_flow_ns", LEAD_ALERT_MANYCHAT_FLOW_NS);
               onConfigChange("manychat_delivery", "tag");
               onConfigChange("phone_mode", "field");
@@ -1581,10 +1984,18 @@ function ManyChatWhatsAppActionConfig({
           ממולאים לפני הוספת הטאג. הכפתור ממלא את שדות AIOS ל־aios_lead_alert.
         </p>
         {customFields.length > 0 ? (
-          <div className="space-y-1 rounded border bg-background/60 p-2 text-[11px]" dir="ltr">
+          <div
+            className="space-y-1 rounded border bg-background/60 p-2 text-[11px]"
+            dir="ltr"
+          >
             {customFields.map((field, idx) => (
-              <div key={`${field.field_id || field.field_name}-${idx}`} className="flex justify-between gap-2">
-                <span className="text-muted-foreground truncate">{field.value_template}</span>
+              <div
+                key={`${field.field_id || field.field_name}-${idx}`}
+                className="flex justify-between gap-2"
+              >
+                <span className="text-muted-foreground truncate">
+                  {field.value_template}
+                </span>
                 <span className="font-medium shrink-0">
                   {field.field_name || field.field_id}
                 </span>
@@ -1592,7 +2003,9 @@ function ManyChatWhatsAppActionConfig({
             ))}
           </div>
         ) : (
-          <p className="text-right text-xs text-muted-foreground">אין מיפוי שדות — רק הטאג יופעל.</p>
+          <p className="text-right text-xs text-muted-foreground">
+            אין מיפוי שדות — רק הטאג יופעל.
+          </p>
         )}
       </div>
 
@@ -1623,14 +2036,18 @@ function MetaWhatsAppActionConfig({
   onConfigChange: (key: string, value: any) => void;
 }) {
   const { buildPath } = useTenantPath();
-  const sendMode = configuration?.send_mode === "template" ? "template" : "text";
+  const sendMode =
+    configuration?.send_mode === "template" ? "template" : "text";
   const phoneMode = configuration?.phone_mode || "field";
 
   const { data: integrations = [], isLoading } = useQuery({
     queryKey: ["meta-whatsapp-integrations-for-flow", tenantId],
     enabled: Boolean(tenantId),
     queryFn: async () => {
-      const [{ data: own, error: ownError }, { data: grants, error: grantsError }] = await Promise.all([
+      const [
+        { data: own, error: ownError },
+        { data: grants, error: grantsError },
+      ] = await Promise.all([
         supabase
           .from("tenant_integrations")
           .select("id, tenant_id, display_name, settings, is_active")
@@ -1658,30 +2075,47 @@ function MetaWhatsAppActionConfig({
     },
   });
 
-  const selectedIntegrationId = configuration?.meta_whatsapp_integration_id || "";
+  const selectedIntegrationId =
+    configuration?.meta_whatsapp_integration_id || "";
 
   const { data: templates = [], isFetching: loadingTemplates } = useQuery({
-    queryKey: ["meta-whatsapp-templates-for-flow", tenantId, selectedIntegrationId],
-    enabled: Boolean(tenantId && selectedIntegrationId && sendMode === "template"),
+    queryKey: [
+      "meta-whatsapp-templates-for-flow",
+      tenantId,
+      selectedIntegrationId,
+    ],
+    enabled: Boolean(
+      tenantId && selectedIntegrationId && sendMode === "template",
+    ),
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("meta-whatsapp-templates", {
-        body: {
-          action: "list",
-          tenant_id: tenantId,
-          integration_id: selectedIntegrationId,
+      const { data, error } = await supabase.functions.invoke(
+        "meta-whatsapp-templates",
+        {
+          body: {
+            action: "list",
+            tenant_id: tenantId,
+            integration_id: selectedIntegrationId,
+          },
         },
-      });
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      const rows = Array.isArray(data?.templates) ? data.templates : Array.isArray(data?.data) ? data.data : [];
-      return rows.filter((row: any) => String(row?.status || "").toUpperCase() === "APPROVED");
+      const rows = Array.isArray(data?.templates)
+        ? data.templates
+        : Array.isArray(data?.data)
+          ? data.data
+          : [];
+      return rows.filter(
+        (row: any) => String(row?.status || "").toUpperCase() === "APPROVED",
+      );
     },
   });
 
   useEffect(() => {
     if (!integrations.length) return;
     const current = configuration?.meta_whatsapp_integration_id;
-    const stillValid = current && integrations.some((row) => row.id === current);
+    const stillValid =
+      current && integrations.some((row) => row.id === current);
     if (!stillValid && integrations.length === 1) {
       onConfigChange("meta_whatsapp_integration_id", integrations[0].id);
     }
@@ -1702,7 +2136,13 @@ function MetaWhatsAppActionConfig({
           type="button"
           size="sm"
           variant="outline"
-          onClick={() => window.open(buildPath("/meta-whatsapp-settings"), "_blank", "noopener,noreferrer")}
+          onClick={() =>
+            window.open(
+              buildPath("/meta-whatsapp-settings"),
+              "_blank",
+              "noopener,noreferrer",
+            )
+          }
         >
           ניהול ויצירת תבניות
         </Button>
@@ -1711,7 +2151,8 @@ function MetaWhatsAppActionConfig({
         </p>
       </div>
       <p className="text-right text-[11px] text-muted-foreground">
-        מחוץ לחלון 24 שעות חובה לשלוח תבנית מאושרת. קבוצות אינן נתמכות ב-Cloud API.
+        מחוץ לחלון 24 שעות חובה לשלוח תבנית מאושרת. קבוצות אינן נתמכות ב-Cloud
+        API.
       </p>
 
       <div className="space-y-2">
@@ -1719,11 +2160,15 @@ function MetaWhatsAppActionConfig({
         {isLoading ? (
           <p className="text-xs text-muted-foreground">טוען חיבורים...</p>
         ) : integrations.length === 0 ? (
-          <p className="text-xs text-destructive">אין חיבור Meta WhatsApp פעיל בארגון</p>
+          <p className="text-xs text-destructive">
+            אין חיבור Meta WhatsApp פעיל בארגון
+          </p>
         ) : (
           <Select
             value={selectedIntegrationId}
-            onValueChange={(value) => onConfigChange("meta_whatsapp_integration_id", value)}
+            onValueChange={(value) =>
+              onConfigChange("meta_whatsapp_integration_id", value)
+            }
           >
             <SelectTrigger dir="rtl">
               <SelectValue placeholder="בחרו מספר" />
@@ -1731,7 +2176,9 @@ function MetaWhatsAppActionConfig({
             <SelectContent>
               {integrations.map((row: any) => (
                 <SelectItem key={row.id} value={row.id}>
-                  {row.settings?.display_phone_number || row.display_name || row.id}
+                  {row.settings?.display_phone_number ||
+                    row.display_name ||
+                    row.id}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1749,11 +2196,18 @@ function MetaWhatsAppActionConfig({
         >
           <div className="flex items-center gap-2">
             <RadioGroupItem value="text" id="meta-send-text" />
-            <Label htmlFor="meta-send-text" className="cursor-pointer text-sm">טקסט (חלון 24 שעות)</Label>
+            <Label htmlFor="meta-send-text" className="cursor-pointer text-sm">
+              טקסט (חלון 24 שעות)
+            </Label>
           </div>
           <div className="flex items-center gap-2">
             <RadioGroupItem value="template" id="meta-send-template" />
-            <Label htmlFor="meta-send-template" className="cursor-pointer text-sm">תבנית מאושרת</Label>
+            <Label
+              htmlFor="meta-send-template"
+              className="cursor-pointer text-sm"
+            >
+              תבנית מאושרת
+            </Label>
           </div>
         </RadioGroup>
       </div>
@@ -1763,7 +2217,9 @@ function MetaWhatsAppActionConfig({
           <Label className="block text-right">תוכן ההודעה</Label>
           <Textarea
             value={configuration?.message_template || ""}
-            onChange={(event) => onConfigChange("message_template", event.target.value)}
+            onChange={(event) =>
+              onConfigChange("message_template", event.target.value)
+            }
             placeholder="שלום {{contact_name}}, ..."
             className="min-h-24 text-right"
             dir="rtl"
@@ -1799,16 +2255,26 @@ function MetaWhatsAppActionConfig({
                 value={configuration?.template_name || ""}
                 onValueChange={(value) => {
                   onConfigChange("template_name", value);
-                  const selected = templates.find((row: any) => row.name === value);
-                  if (selected?.language) onConfigChange("template_language", selected.language);
+                  const selected = templates.find(
+                    (row: any) => row.name === value,
+                  );
+                  if (selected?.language)
+                    onConfigChange("template_language", selected.language);
                 }}
               >
                 <SelectTrigger dir="rtl">
-                  <SelectValue placeholder={templates.length ? "בחרו תבנית" : "אין תבניות מאושרות"} />
+                  <SelectValue
+                    placeholder={
+                      templates.length ? "בחרו תבנית" : "אין תבניות מאושרות"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {templates.map((row: any) => (
-                    <SelectItem key={`${row.name}-${row.language || "he"}`} value={row.name}>
+                    <SelectItem
+                      key={`${row.name}-${row.language || "he"}`}
+                      value={row.name}
+                    >
                       {row.name}
                       {row.language ? ` (${row.language})` : ""}
                     </SelectItem>
@@ -1821,7 +2287,9 @@ function MetaWhatsAppActionConfig({
             <Label className="block text-right">שפת התבנית</Label>
             <Input
               value={configuration?.template_language || "he"}
-              onChange={(event) => onConfigChange("template_language", event.target.value)}
+              onChange={(event) =>
+                onConfigChange("template_language", event.target.value)
+              }
               dir="ltr"
               className="max-w-32"
             />
@@ -1832,11 +2300,15 @@ function MetaWhatsAppActionConfig({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => onConfigChange("template_variables", [...variables, ""])}
+                onClick={() =>
+                  onConfigChange("template_variables", [...variables, ""])
+                }
               >
                 הוסף משתנה {"{{n}}"}
               </Button>
-              <Label className="text-right">משתני BODY לפי סדר (אופציונלי)</Label>
+              <Label className="text-right">
+                משתני BODY לפי סדר (אופציונלי)
+              </Label>
             </div>
             {variables.map((value, index) => (
               <Input
@@ -1866,11 +2338,21 @@ function MetaWhatsAppActionConfig({
         >
           <div className="flex items-center gap-2">
             <RadioGroupItem value="field" id="meta-phone-field" />
-            <Label htmlFor="meta-phone-field" className="cursor-pointer text-sm">משדה</Label>
+            <Label
+              htmlFor="meta-phone-field"
+              className="cursor-pointer text-sm"
+            >
+              משדה
+            </Label>
           </div>
           <div className="flex items-center gap-2">
             <RadioGroupItem value="manual" id="meta-phone-manual" />
-            <Label htmlFor="meta-phone-manual" className="cursor-pointer text-sm">ידני</Label>
+            <Label
+              htmlFor="meta-phone-manual"
+              className="cursor-pointer text-sm"
+            >
+              ידני
+            </Label>
           </div>
         </RadioGroup>
       </div>
@@ -1878,7 +2360,9 @@ function MetaWhatsAppActionConfig({
       {phoneMode === "manual" ? (
         <Input
           value={configuration?.manual_phone || ""}
-          onChange={(event) => onConfigChange("manual_phone", event.target.value)}
+          onChange={(event) =>
+            onConfigChange("manual_phone", event.target.value)
+          }
           placeholder="9725..."
           dir="ltr"
         />
@@ -1891,7 +2375,10 @@ function MetaWhatsAppActionConfig({
             <SelectValue placeholder="בחרו שדה טלפון" />
           </SelectTrigger>
           <SelectContent>
-            {(phoneFields.length ? phoneFields : [{ key: "phone", label: "טלפון" }]).map((field) => (
+            {(phoneFields.length
+              ? phoneFields
+              : [{ key: "phone", label: "טלפון" }]
+            ).map((field) => (
               <SelectItem key={field.key} value={field.key}>
                 {field.label}
               </SelectItem>
@@ -1924,7 +2411,9 @@ function GreenAPIActionConfig({
     queryKey: ["wa-integrations-for-flow", tenantId, providerFilter || "all"],
     queryFn: async () => {
       if (!tenantId) return [];
-      const types = providerFilter ? [providerFilter] : ["green_api", "manus_wa"];
+      const types = providerFilter
+        ? [providerFilter]
+        : ["green_api", "manus_wa"];
       const { data, error } = await supabase
         .from("tenant_integrations")
         .select("id, integration_type, settings, is_active, user_id")
@@ -1937,29 +2426,38 @@ function GreenAPIActionConfig({
     enabled: !!tenantId,
   });
 
-  const phoneFields = availableFields.filter((f) =>
-    ["phone", "email"].includes(f.key) || f.key.includes("phone")
+  const phoneFields = availableFields.filter(
+    (f) => ["phone", "email"].includes(f.key) || f.key.includes("phone"),
   );
 
   const insertVariable = (fieldKey: string) => {
     const variable = `{{${fieldKey}}}`;
     const currentValue = configuration?.message_template || "";
     const pos = cursorPos ?? currentValue.length;
-    const newValue = currentValue.slice(0, pos) + variable + currentValue.slice(pos);
+    const newValue =
+      currentValue.slice(0, pos) + variable + currentValue.slice(pos);
     onConfigChange("message_template", newValue);
   };
 
-  const greenApiMode = providerFilter === "manus_wa" ? "tenant" : (configuration?.green_api_mode || "tenant");
+  const greenApiMode =
+    providerFilter === "manus_wa"
+      ? "tenant"
+      : configuration?.green_api_mode || "tenant";
   const phoneMode = configuration?.phone_mode || "field";
   const isManus = providerFilter === "manus_wa";
 
   // Provider selection (Green API vs Manus). Locked when invoked via legacy send_manus_message action.
   const selectedProvider: "green_api" | "manus_wa" =
-    providerFilter || (configuration?.wa_provider as "green_api" | "manus_wa") || "green_api";
+    providerFilter ||
+    (configuration?.wa_provider as "green_api" | "manus_wa") ||
+    "green_api";
 
   // Filter integrations by selected provider
   const filteredIntegrations = useMemo(
-    () => (greenApiIntegrations || []).filter((i) => i.integration_type === selectedProvider),
+    () =>
+      (greenApiIntegrations || []).filter(
+        (i) => i.integration_type === selectedProvider,
+      ),
     [greenApiIntegrations, selectedProvider],
   );
 
@@ -1968,7 +2466,8 @@ function GreenAPIActionConfig({
     if (greenApiMode !== "tenant") return;
     if (!filteredIntegrations || filteredIntegrations.length === 0) return;
     const current = configuration?.green_api_integration_id;
-    const stillValid = current && filteredIntegrations.some((i) => i.id === current);
+    const stillValid =
+      current && filteredIntegrations.some((i) => i.id === current);
     if (!stillValid) {
       // Pick the only integration, or clear if multiple available and current invalid
       if (filteredIntegrations.length === 1) {
@@ -1998,11 +2497,15 @@ function GreenAPIActionConfig({
           >
             <div className="flex items-center gap-2">
               <RadioGroupItem value="green_api" id="wa-prov-green" />
-              <Label htmlFor="wa-prov-green" className="cursor-pointer text-sm">Green API</Label>
+              <Label htmlFor="wa-prov-green" className="cursor-pointer text-sm">
+                Green API
+              </Label>
             </div>
             <div className="flex items-center gap-2">
               <RadioGroupItem value="manus_wa" id="wa-prov-manus" />
-              <Label htmlFor="wa-prov-manus" className="cursor-pointer text-sm">Manus WA</Label>
+              <Label htmlFor="wa-prov-manus" className="cursor-pointer text-sm">
+                Manus WA
+              </Label>
             </div>
           </RadioGroup>
         </div>
@@ -2020,11 +2523,15 @@ function GreenAPIActionConfig({
           >
             <div className="flex items-center gap-2">
               <RadioGroupItem value="tenant" id="gapi-tenant" />
-              <Label htmlFor="gapi-tenant" className="cursor-pointer text-sm">מהארגון</Label>
+              <Label htmlFor="gapi-tenant" className="cursor-pointer text-sm">
+                מהארגון
+              </Label>
             </div>
             <div className="flex items-center gap-2">
               <RadioGroupItem value="external" id="gapi-external" />
-              <Label htmlFor="gapi-external" className="cursor-pointer text-sm">חיבור חיצוני</Label>
+              <Label htmlFor="gapi-external" className="cursor-pointer text-sm">
+                חיבור חיצוני
+              </Label>
             </div>
           </RadioGroup>
         </div>
@@ -2033,7 +2540,9 @@ function GreenAPIActionConfig({
       {greenApiMode === "tenant" ? (
         <div className="space-y-2">
           <Label className="text-right block">
-            {selectedProvider === "manus_wa" ? "חיבור Manus" : "חיבור Green API"}
+            {selectedProvider === "manus_wa"
+              ? "חיבור Manus"
+              : "חיבור Green API"}
           </Label>
           {isLoading ? (
             <div className="flex items-center justify-center py-2">
@@ -2042,16 +2551,28 @@ function GreenAPIActionConfig({
           ) : filteredIntegrations && filteredIntegrations.length > 0 ? (
             <Select
               value={configuration?.green_api_integration_id || ""}
-              onValueChange={(v) => onConfigChange("green_api_integration_id", v)}
+              onValueChange={(v) =>
+                onConfigChange("green_api_integration_id", v)
+              }
             >
               <SelectTrigger className="text-right">
                 <SelectValue placeholder="בחר חיבור..." />
               </SelectTrigger>
               <SelectContent>
                 {filteredIntegrations.map((integration) => {
-                  const settings = integration.settings as Record<string, any> | null;
-                  const providerLabel = integration.integration_type === 'manus_wa' ? 'Manus WA' : 'Green API';
-                  const name = (integration as any).display_name || settings?.instance_name || settings?.connection_name || providerLabel;
+                  const settings = integration.settings as Record<
+                    string,
+                    any
+                  > | null;
+                  const providerLabel =
+                    integration.integration_type === "manus_wa"
+                      ? "Manus WA"
+                      : "Green API";
+                  const name =
+                    (integration as any).display_name ||
+                    settings?.instance_name ||
+                    settings?.connection_name ||
+                    providerLabel;
                   return (
                     <SelectItem key={integration.id} value={integration.id}>
                       {name} · {providerLabel}
@@ -2063,21 +2584,27 @@ function GreenAPIActionConfig({
           ) : (
             <div className="rounded-lg border border-dashed p-3 text-center">
               <p className="text-sm text-muted-foreground">
-                אין חיבור {selectedProvider === "manus_wa" ? "Manus" : "Green API"} פעיל.
+                אין חיבור{" "}
+                {selectedProvider === "manus_wa" ? "Manus" : "Green API"} פעיל.
               </p>
-              <p className="text-xs text-muted-foreground mt-1">הגדר חיבור בעמוד האינטגרציות.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                הגדר חיבור בעמוד האינטגרציות.
+              </p>
             </div>
           )}
         </div>
       ) : (
-
         <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-          <p className="text-xs text-muted-foreground text-right">הזן פרטי חיבור Green API חיצוני:</p>
+          <p className="text-xs text-muted-foreground text-right">
+            הזן פרטי חיבור Green API חיצוני:
+          </p>
           <div className="space-y-2">
             <Label className="text-right block text-xs">Instance ID</Label>
             <Input
               value={configuration?.external_instance_id || ""}
-              onChange={(e) => onConfigChange("external_instance_id", e.target.value)}
+              onChange={(e) =>
+                onConfigChange("external_instance_id", e.target.value)
+              }
               placeholder="למשל: 7103..."
               dir="ltr"
               className="text-right"
@@ -2087,7 +2614,9 @@ function GreenAPIActionConfig({
             <Label className="text-right block text-xs">API Token</Label>
             <Input
               value={configuration?.external_api_token || ""}
-              onChange={(e) => onConfigChange("external_api_token", e.target.value)}
+              onChange={(e) =>
+                onConfigChange("external_api_token", e.target.value)
+              }
               placeholder="למשל: abc123..."
               dir="ltr"
               className="text-right"
@@ -2105,14 +2634,18 @@ function GreenAPIActionConfig({
         onChange={(next) => {
           // Save new recipients list and clear legacy single-recipient fields
           onConfigChange("recipients", next);
-          if (configuration?.phone_mode) onConfigChange("phone_mode", undefined);
-          if (configuration?.phone_field) onConfigChange("phone_field", undefined);
-          if (configuration?.manual_phone) onConfigChange("manual_phone", undefined);
-          if (configuration?.group_id_field) onConfigChange("group_id_field", undefined);
-          if (configuration?.manual_group_id) onConfigChange("manual_group_id", undefined);
+          if (configuration?.phone_mode)
+            onConfigChange("phone_mode", undefined);
+          if (configuration?.phone_field)
+            onConfigChange("phone_field", undefined);
+          if (configuration?.manual_phone)
+            onConfigChange("manual_phone", undefined);
+          if (configuration?.group_id_field)
+            onConfigChange("group_id_field", undefined);
+          if (configuration?.manual_group_id)
+            onConfigChange("manual_group_id", undefined);
         }}
       />
-
 
       {/* Message template with dynamic variables */}
       <div className="space-y-2">
@@ -2121,21 +2654,31 @@ function GreenAPIActionConfig({
           ref={textareaRef}
           value={configuration?.message_template || ""}
           onChange={(e) => onConfigChange("message_template", e.target.value)}
-          onSelect={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
+          onSelect={(e) =>
+            setCursorPos((e.target as HTMLTextAreaElement).selectionStart)
+          }
           placeholder="שלום {{contact_name}}..."
           className="text-right"
           rows={4}
         />
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground text-right">הכנס משתנה:</p>
+          <p className="text-xs text-muted-foreground text-right">
+            הכנס משתנה:
+          </p>
           {(() => {
-            const systemFields = availableFields.filter((f) => !f.key.startsWith("fb_"));
-            const fbFields = availableFields.filter((f) => f.key.startsWith("fb_"));
+            const systemFields = availableFields.filter(
+              (f) => !f.key.startsWith("fb_"),
+            );
+            const fbFields = availableFields.filter((f) =>
+              f.key.startsWith("fb_"),
+            );
             return (
               <>
                 {systemFields.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[10px] font-medium text-muted-foreground text-right">שדות מערכת</p>
+                    <p className="text-[10px] font-medium text-muted-foreground text-right">
+                      שדות מערכת
+                    </p>
                     <div className="flex flex-wrap gap-1 justify-end">
                       {systemFields.map((field) => (
                         <Button
@@ -2154,7 +2697,9 @@ function GreenAPIActionConfig({
                 )}
                 {fbFields.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[10px] font-medium text-blue-500 text-right">שדות פייסבוק</p>
+                    <p className="text-[10px] font-medium text-blue-500 text-right">
+                      שדות פייסבוק
+                    </p>
                     <div className="flex flex-wrap gap-1 justify-end">
                       {fbFields.map((field) => (
                         <Button
@@ -2171,7 +2716,7 @@ function GreenAPIActionConfig({
                     </div>
                   </div>
                 )}
-        <Button
+                <Button
                   type="button"
                   variant="outline"
                   size="sm"
@@ -2197,19 +2742,26 @@ function GreenAPIActionConfig({
         >
           <div className="flex items-center gap-2">
             <RadioGroupItem value="none" id="media-none" />
-            <Label htmlFor="media-none" className="cursor-pointer text-sm">ללא</Label>
+            <Label htmlFor="media-none" className="cursor-pointer text-sm">
+              ללא
+            </Label>
           </div>
           <div className="flex items-center gap-2">
             <RadioGroupItem value="link" id="media-link" />
-            <Label htmlFor="media-link" className="cursor-pointer text-sm">קישור בהודעה</Label>
+            <Label htmlFor="media-link" className="cursor-pointer text-sm">
+              קישור בהודעה
+            </Label>
           </div>
           <div className="flex items-center gap-2">
             <RadioGroupItem value="file" id="media-file" />
-            <Label htmlFor="media-file" className="cursor-pointer text-sm">קובץ / וידאו</Label>
+            <Label htmlFor="media-file" className="cursor-pointer text-sm">
+              קובץ / וידאו
+            </Label>
           </div>
         </RadioGroup>
 
-        {(configuration?.media_type === "link" || configuration?.media_type === "file") && (
+        {(configuration?.media_type === "link" ||
+          configuration?.media_type === "file") && (
           <div className="space-y-2">
             <Input
               value={configuration?.media_url || ""}
@@ -2225,10 +2777,14 @@ function GreenAPIActionConfig({
             </p>
             {configuration?.media_type === "file" && (
               <div className="space-y-1">
-                <Label className="text-right block text-xs">שם קובץ (אופציונלי)</Label>
+                <Label className="text-right block text-xs">
+                  שם קובץ (אופציונלי)
+                </Label>
                 <Input
                   value={configuration?.media_filename || ""}
-                  onChange={(e) => onConfigChange("media_filename", e.target.value)}
+                  onChange={(e) =>
+                    onConfigChange("media_filename", e.target.value)
+                  }
                   placeholder="video.mp4"
                   dir="ltr"
                   className="text-right"
@@ -2259,11 +2815,31 @@ const AI_ENGINES = [
 ];
 
 const QUICK_TEMPLATES = [
-  { icon: Phone, label: "📱 פרמוט טלפון", text: "פרמט את מספר הטלפון {{phone}} לפורמט בינלאומי +972XXXXXXXXX. החזר רק את המספר המפורמט." },
-  { icon: Scissors, label: "✂️ הפרדת שם", text: "הפרד את {{contact_name}} לשם פרטי ושם משפחה. החזר JSON בפורמט: {\"first_name\": \"...\", \"last_name\": \"...\"}" },
-  { icon: Languages, label: "🌐 תרגום לעברית", text: "תרגם את {{contact_name}} לעברית. החזר רק את השם המתורגם." },
-  { icon: FileText, label: "📝 סיכום טקסט", text: "סכם את הטקסט הבא בצורה תמציתית:\n{{notes}}" },
-  { icon: RotateCcw, label: "🔄 המרת פורמט", text: "המר את הנתונים הבאים לפורמט JSON מובנה:\n{{notes}}" },
+  {
+    icon: Phone,
+    label: "📱 פרמוט טלפון",
+    text: "פרמט את מספר הטלפון {{phone}} לפורמט בינלאומי +972XXXXXXXXX. החזר רק את המספר המפורמט.",
+  },
+  {
+    icon: Scissors,
+    label: "✂️ הפרדת שם",
+    text: 'הפרד את {{contact_name}} לשם פרטי ושם משפחה. החזר JSON בפורמט: {"first_name": "...", "last_name": "..."}',
+  },
+  {
+    icon: Languages,
+    label: "🌐 תרגום לעברית",
+    text: "תרגם את {{contact_name}} לעברית. החזר רק את השם המתורגם.",
+  },
+  {
+    icon: FileText,
+    label: "📝 סיכום טקסט",
+    text: "סכם את הטקסט הבא בצורה תמציתית:\n{{notes}}",
+  },
+  {
+    icon: RotateCcw,
+    label: "🔄 המרת פורמט",
+    text: "המר את הנתונים הבאים לפורמט JSON מובנה:\n{{notes}}",
+  },
 ];
 
 const OUTPUT_FORMATS = [
@@ -2306,7 +2882,9 @@ function AgentStepConfig({
     enabled: !!tenantId,
   });
 
-  const selectedAgent = agents?.find((a: any) => a.id === configuration?.agent_id);
+  const selectedAgent = agents?.find(
+    (a: any) => a.id === configuration?.agent_id,
+  );
 
   // Skin catalog (ai_skills): global skins + this tenant's overrides. Pinning a
   // skin on the node forces that persona for this step (campaigner/seo/...).
@@ -2317,7 +2895,11 @@ function AgentStepConfig({
         .from("ai_skills" as any)
         .select("slug,name,scope")
         .eq("is_active", true)
-        .or(tenantId ? `scope.eq.global,and(scope.eq.tenant,tenant_id.eq.${tenantId})` : "scope.eq.global");
+        .or(
+          tenantId
+            ? `scope.eq.global,and(scope.eq.tenant,tenant_id.eq.${tenantId})`
+            : "scope.eq.global",
+        );
       if (error) return [];
       // De-dupe by slug, tenant override wins.
       const bySlug = new Map<string, any>();
@@ -2326,12 +2908,16 @@ function AgentStepConfig({
         const existing = bySlug.get(row.slug);
         if (!existing || row.scope === "tenant") bySlug.set(row.slug, row);
       }
-      return Array.from(bySlug.values()).sort((a, b) => a.name.localeCompare(b.name, "he"));
+      return Array.from(bySlug.values()).sort((a, b) =>
+        a.name.localeCompare(b.name, "he"),
+      );
     },
     enabled: true,
   });
 
-  const pinnedSkins: string[] = Array.isArray(configuration?.skin_slugs) ? configuration.skin_slugs : [];
+  const pinnedSkins: string[] = Array.isArray(configuration?.skin_slugs)
+    ? configuration.skin_slugs
+    : [];
   const toggleSkin = (slug: string) => {
     const next = pinnedSkins.includes(slug)
       ? pinnedSkins.filter((s) => s !== slug)
@@ -2344,7 +2930,8 @@ function AgentStepConfig({
     const currentValue = configuration?.step_instruction || "";
     const textarea = instructionRef.current;
     const pos = textarea?.selectionStart ?? currentValue.length;
-    const newValue = currentValue.slice(0, pos) + variable + currentValue.slice(pos);
+    const newValue =
+      currentValue.slice(0, pos) + variable + currentValue.slice(pos);
     onConfigChange("step_instruction", newValue);
     // Restore cursor position after variable
     setTimeout(() => {
@@ -2393,7 +2980,9 @@ function AgentStepConfig({
           <div className="rounded-lg border border-dashed p-3 text-center">
             <Bot className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
             <p className="text-sm text-muted-foreground">אין סוכנים עדיין.</p>
-            <p className="text-xs text-muted-foreground mt-1">צור סוכן AI חדש כדי להתחיל.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              צור סוכן AI חדש כדי להתחיל.
+            </p>
           </div>
         )}
       </div>
@@ -2415,9 +3004,17 @@ function AgentStepConfig({
             <span className="text-sm font-medium">{selectedAgent.name}</span>
           </div>
           <div className="text-xs text-muted-foreground space-y-1 text-right">
-            <p>מנוע: {AI_ENGINES.find(e => e.value === selectedAgent.engine)?.label || selectedAgent.engine}</p>
-            {selectedAgent.personality && <p>אופי: {selectedAgent.personality.slice(0, 60)}...</p>}
-            {selectedAgent.talent && <p>טלנט: {selectedAgent.talent.slice(0, 60)}...</p>}
+            <p>
+              מנוע:{" "}
+              {AI_ENGINES.find((e) => e.value === selectedAgent.engine)
+                ?.label || selectedAgent.engine}
+            </p>
+            {selectedAgent.personality && (
+              <p>אופי: {selectedAgent.personality.slice(0, 60)}...</p>
+            )}
+            {selectedAgent.talent && (
+              <p>טלנט: {selectedAgent.talent.slice(0, 60)}...</p>
+            )}
           </div>
         </div>
       )}
@@ -2425,9 +3022,12 @@ function AgentStepConfig({
       {/* Skin picker — pin a persona/skill for this step */}
       {selectedAgent && skins && skins.length > 0 && (
         <div className="space-y-2 border-t pt-4">
-          <Label className="text-right block font-medium">סקין לשלב זה (אופציונלי)</Label>
+          <Label className="text-right block font-medium">
+            סקין לשלב זה (אופציונלי)
+          </Label>
           <p className="text-[11px] text-muted-foreground text-right">
-            כפה תפקיד ספציפי על הסוכן בשלב זה. צמתים מקבילים יכולים כל אחד לטעון סקין אחר.
+            כפה תפקיד ספציפי על הסוכן בשלב זה. צמתים מקבילים יכולים כל אחד לטעון
+            סקין אחר.
           </p>
           <div className="flex flex-wrap gap-1.5 justify-end">
             {skins.map((skin: any) => {
@@ -2453,7 +3053,9 @@ function AgentStepConfig({
       {/* Step Instruction */}
       {selectedAgent && (
         <div className="space-y-2 border-t pt-4">
-          <Label className="text-right block font-medium">הוראה / משימה לשלב זה</Label>
+          <Label className="text-right block font-medium">
+            הוראה / משימה לשלב זה
+          </Label>
           <Textarea
             ref={instructionRef}
             value={configuration?.step_instruction || ""}
@@ -2465,15 +3067,23 @@ function AgentStepConfig({
 
           {/* Insert variable buttons */}
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground text-right">הכנס משתנה:</p>
+            <p className="text-xs text-muted-foreground text-right">
+              הכנס משתנה:
+            </p>
             {(() => {
-              const systemFields = availableFields.filter((f) => !f.key.startsWith("fb_"));
-              const fbFields = availableFields.filter((f) => f.key.startsWith("fb_"));
+              const systemFields = availableFields.filter(
+                (f) => !f.key.startsWith("fb_"),
+              );
+              const fbFields = availableFields.filter((f) =>
+                f.key.startsWith("fb_"),
+              );
               return (
                 <>
                   {systemFields.length > 0 && (
                     <div className="space-y-1">
-                      <p className="text-[10px] font-medium text-muted-foreground text-right">שדות מערכת</p>
+                      <p className="text-[10px] font-medium text-muted-foreground text-right">
+                        שדות מערכת
+                      </p>
                       <div className="flex flex-wrap gap-1 justify-end">
                         {systemFields.map((field) => (
                           <Button
@@ -2482,7 +3092,9 @@ function AgentStepConfig({
                             variant="outline"
                             size="sm"
                             className="text-xs h-6 px-2"
-                            onClick={() => insertVariableToInstruction(field.key)}
+                            onClick={() =>
+                              insertVariableToInstruction(field.key)
+                            }
                           >
                             {field.label}
                           </Button>
@@ -2492,7 +3104,9 @@ function AgentStepConfig({
                   )}
                   {fbFields.length > 0 && (
                     <div className="space-y-1">
-                      <p className="text-[10px] font-medium text-blue-500 text-right">שדות פייסבוק</p>
+                      <p className="text-[10px] font-medium text-blue-500 text-right">
+                        שדות פייסבוק
+                      </p>
                       <div className="flex flex-wrap gap-1 justify-end">
                         {fbFields.map((field) => (
                           <Button
@@ -2501,7 +3115,9 @@ function AgentStepConfig({
                             variant="outline"
                             size="sm"
                             className="text-xs h-6 px-2 border-blue-400 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-950/50"
-                            onClick={() => insertVariableToInstruction(field.key)}
+                            onClick={() =>
+                              insertVariableToInstruction(field.key)
+                            }
                           >
                             {field.label}
                           </Button>
@@ -2563,10 +3179,15 @@ function AgentStepConfig({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground text-right">
-              {configuration?.output_format === "json" && "הסוכן יתבקש להחזיר תשובה בפורמט JSON בלבד"}
-              {configuration?.output_format === "single_value" && "הסוכן יתבקש להחזיר ערך בודד ללא הסברים"}
-              {configuration?.output_format === "single_reply" && "הסוכן יחזיר תשובה אחת קצרה וישירה, ללא חלופות/בדיחות"}
-              {(!configuration?.output_format || configuration?.output_format === "text") && "הסוכן יחזיר טקסט חופשי"}
+              {configuration?.output_format === "json" &&
+                "הסוכן יתבקש להחזיר תשובה בפורמט JSON בלבד"}
+              {configuration?.output_format === "single_value" &&
+                "הסוכן יתבקש להחזיר ערך בודד ללא הסברים"}
+              {configuration?.output_format === "single_reply" &&
+                "הסוכן יחזיר תשובה אחת קצרה וישירה, ללא חלופות/בדיחות"}
+              {(!configuration?.output_format ||
+                configuration?.output_format === "text") &&
+                "הסוכן יחזיר טקסט חופשי"}
             </p>
           </div>
         </div>
@@ -2782,10 +3403,15 @@ function CarmenSessionConfig({
     queryKey: ["wa-connections-for-carmen", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const [{ data: own, error: ownError }, { data: grants, error: grantsError }] = await Promise.all([
+      const [
+        { data: own, error: ownError },
+        { data: grants, error: grantsError },
+      ] = await Promise.all([
         supabase
           .from("tenant_integrations")
-          .select("id, tenant_id, integration_type, settings, user_id, instance_id, display_name")
+          .select(
+            "id, tenant_id, integration_type, settings, user_id, instance_id, display_name",
+          )
           .eq("tenant_id", tenantId)
           .in("integration_type", ["green_api", "manus_wa", "meta_whatsapp"])
           .eq("is_active", true),
@@ -2802,7 +3428,9 @@ function CarmenSessionConfig({
       if (sharedIds.length > 0) {
         const { data, error } = await supabase
           .from("tenant_integrations")
-          .select("id, tenant_id, integration_type, settings, user_id, instance_id, display_name")
+          .select(
+            "id, tenant_id, integration_type, settings, user_id, instance_id, display_name",
+          )
           .in("id", sharedIds)
           .in("integration_type", ["green_api", "manus_wa", "meta_whatsapp"])
           .eq("is_active", true);
@@ -2810,7 +3438,9 @@ function CarmenSessionConfig({
         shared = data || [];
       }
 
-      const ownerTenantIds = [...new Set(shared.map((connection) => connection.tenant_id))];
+      const ownerTenantIds = [
+        ...new Set(shared.map((connection) => connection.tenant_id)),
+      ];
       let tenantNames = new Map<string, string>();
       if (ownerTenantIds.length > 0) {
         const { data: owners, error } = await supabase
@@ -2818,16 +3448,24 @@ function CarmenSessionConfig({
           .select("id, name")
           .in("id", ownerTenantIds);
         if (error) throw error;
-        tenantNames = new Map((owners || []).map((owner) => [owner.id, owner.name]));
+        tenantNames = new Map(
+          (owners || []).map((owner) => [owner.id, owner.name]),
+        );
       }
 
       return [
-        ...(own || []).map((connection) => ({ ...connection, shared_from_tenant_name: null })),
+        ...(own || []).map((connection) => ({
+          ...connection,
+          shared_from_tenant_name: null,
+        })),
         ...shared.map((connection) => ({
           ...connection,
-          shared_from_tenant_name: tenantNames.get(connection.tenant_id) || "ארגון אחר",
+          shared_from_tenant_name:
+            tenantNames.get(connection.tenant_id) || "ארגון אחר",
         })),
-      ].sort((a, b) => String(b.integration_type).localeCompare(String(a.integration_type)));
+      ].sort((a, b) =>
+        String(b.integration_type).localeCompare(String(a.integration_type)),
+      );
     },
     enabled: !!tenantId,
   });
@@ -2837,7 +3475,9 @@ function CarmenSessionConfig({
     if (!waConnections || waConnections.length === 0) return;
     const hasIntegrationId = configuration?.carmen_integration_id;
     if (!hasIntegrationId) {
-      const manusConn = waConnections.find((c: any) => c.integration_type === "manus_wa");
+      const manusConn = waConnections.find(
+        (c: any) => c.integration_type === "manus_wa",
+      );
       if (manusConn) {
         onConfigChange("carmen_integration_id", manusConn.id);
       }
@@ -2852,13 +3492,19 @@ function CarmenSessionConfig({
   // Helper label for connection
   const getConnectionLabel = (c: any) => {
     const settings = c.settings as any;
-    const displayName = c.display_name || settings?.display_name || settings?.phone_number
-      || settings?.display_phone_number || settings?.instance_id || c.instance_id;
-    const providerLabel = c.integration_type === "manus_wa"
-      ? "מאנוס"
-      : c.integration_type === "meta_whatsapp"
-        ? "Meta WhatsApp API"
-        : "Green API";
+    const displayName =
+      c.display_name ||
+      settings?.display_name ||
+      settings?.phone_number ||
+      settings?.display_phone_number ||
+      settings?.instance_id ||
+      c.instance_id;
+    const providerLabel =
+      c.integration_type === "manus_wa"
+        ? "מאנוס"
+        : c.integration_type === "meta_whatsapp"
+          ? "Meta WhatsApp API"
+          : "Green API";
     const sharedLabel = c.shared_from_tenant_name
       ? ` · משותף מ־${c.shared_from_tenant_name}`
       : "";
@@ -2869,9 +3515,12 @@ function CarmenSessionConfig({
     <div className="space-y-4">
       {/* Info banner */}
       <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 space-y-1">
-        <p className="text-sm font-semibold text-purple-400 text-right">שיחת סוכן AI ב-WhatsApp</p>
+        <p className="text-sm font-semibold text-purple-400 text-right">
+          שיחת סוכן AI ב-WhatsApp
+        </p>
         <p className="text-xs text-muted-foreground text-right">
-          כשמשתמש שולח את מילת ההפעלה, הסוכן יפתח שיחה אינטראקטיבית ויזכור את כל השיחה עד שהמשתמש כותב את מילת הסיום.
+          כשמשתמש שולח את מילת ההפעלה, הסוכן יפתח שיחה אינטראקטיבית ויזכור את כל
+          השיחה עד שהמשתמש כותב את מילת הסיום.
         </p>
       </div>
 
@@ -2906,12 +3555,16 @@ function CarmenSessionConfig({
         <Label className="text-right block font-semibold">מילות הפעלה</Label>
         <Input
           value={
-            Array.isArray(configuration?.trigger_keywords) && configuration.trigger_keywords.length
+            Array.isArray(configuration?.trigger_keywords) &&
+            configuration.trigger_keywords.length
               ? configuration.trigger_keywords.join(", ")
-              : (configuration?.trigger_keyword || "כרמן")
+              : configuration?.trigger_keyword || "כרמן"
           }
           onChange={(e) => {
-            const list = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+            const list = e.target.value
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
             onConfigChange("trigger_keywords", list);
             onConfigChange("trigger_keyword", list[0] || ""); // keep legacy field in sync
           }}
@@ -2920,7 +3573,8 @@ function CarmenSessionConfig({
           dir="rtl"
         />
         <p className="text-xs text-muted-foreground text-right">
-          כשהודעה מכילה אחת מהמילים האלה — הסוכן יפעל. אפשר כמה מילים מופרדות בפסיק (למשל: כרמן, קרמן).
+          כשהודעה מכילה אחת מהמילים האלה — הסוכן יפעל. אפשר כמה מילים מופרדות
+          בפסיק (למשל: כרמן, קרמן).
         </p>
       </div>
 
@@ -2941,17 +3595,26 @@ function CarmenSessionConfig({
 
       {/* ── Timeout ── */}
       <div className="space-y-2">
-        <Label className="text-right block font-semibold">סגירת שיחה אוטומטית לאחר X דקות דומייה</Label>
+        <Label className="text-right block font-semibold">
+          סגירת שיחה אוטומטית לאחר X דקות דומייה
+        </Label>
         <div className="flex items-center gap-2">
           <Input
             type="number"
             min={0}
             max={1440}
             value={configuration?.session_timeout_minutes ?? 60}
-            onChange={(e) => onConfigChange("session_timeout_minutes", parseInt(e.target.value) || 0)}
+            onChange={(e) =>
+              onConfigChange(
+                "session_timeout_minutes",
+                parseInt(e.target.value) || 0,
+              )
+            }
             className="w-24 text-center"
           />
-          <span className="text-sm text-muted-foreground">דקות (0 = ללא הגבלה)</span>
+          <span className="text-sm text-muted-foreground">
+            דקות (0 = ללא הגבלה)
+          </span>
         </div>
         <p className="text-xs text-muted-foreground text-right">
           אם אין פעילות בשיחה לאחר מספר הדקות הזה, השיחה תיסגר אוטומטית
@@ -2961,11 +3624,14 @@ function CarmenSessionConfig({
       {/* ── נעילת מקור – חשוב מאוד! ── */}
       <div className="space-y-3 bg-red-500/10 border-2 border-red-500/40 rounded-lg p-3">
         <div className="flex items-center gap-2 justify-end">
-          <p className="text-sm font-bold text-red-500">נעילת מקור – מאין הסוכן יגיב</p>
+          <p className="text-sm font-bold text-red-500">
+            נעילת מקור – מאין הסוכן יגיב
+          </p>
           <span className="text-lg">🔒</span>
         </div>
         <p className="text-xs text-muted-foreground text-right">
-          הסוכן יגיב אך ורק להודעות מהמקור שנבחר כאן. כל הודעה ממקור אחר תידחף אוטומטית.
+          הסוכן יגיב אך ורק להודעות מהמקור שנבחר כאן. כל הודעה ממקור אחר תידחף
+          אוטומטית.
         </p>
         <div className="space-y-2">
           <Label className="text-right block">הגבל למקור</Label>
@@ -2978,9 +3644,15 @@ function CarmenSessionConfig({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">כל ההודעות (ללא הגבלה)</SelectItem>
-              <SelectItem value="specific_group">קבוצות ספציפיות בלבד</SelectItem>
-              <SelectItem value="specific_phone">מספר טלפון ספציפי בלבד</SelectItem>
-              <SelectItem value="private_only">שיחות פרטיות בלבד (לא קבוצות)</SelectItem>
+              <SelectItem value="specific_group">
+                קבוצות ספציפיות בלבד
+              </SelectItem>
+              <SelectItem value="specific_phone">
+                מספר טלפון ספציפי בלבד
+              </SelectItem>
+              <SelectItem value="private_only">
+                שיחות פרטיות בלבד (לא קבוצות)
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -2990,13 +3662,17 @@ function CarmenSessionConfig({
           <div className="space-y-2 border-t border-red-500/30 pt-3">
             <div className="flex items-start gap-2 justify-end">
               <div className="text-right">
-                <Label htmlFor="carmen-open-member-groups" className="font-semibold cursor-pointer">
+                <Label
+                  htmlFor="carmen-open-member-groups"
+                  className="font-semibold cursor-pointer"
+                >
                   מענה בכל קבוצה שהסוכן חבר בה
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  כשזה כבוי, הסוכן לא יגיב בשום קבוצה אלא אם בחרת "קבוצות ספציפיות בלבד" למעלה. כשזה
-                  דלוק, הוספת מספר הסוכן לקבוצה היא עצמה האישור, והוא יגיב בכל קבוצה שהוא חבר בה. בכל
-                  מקרה הסוכן מגיב רק כשפונים אליו בשמו במפורש.
+                  כשזה כבוי, הסוכן לא יגיב בשום קבוצה אלא אם בחרת "קבוצות
+                  ספציפיות בלבד" למעלה. כשזה דלוק, הוספת מספר הסוכן לקבוצה היא
+                  עצמה האישור, והוא יגיב בכל קבוצה שהוא חבר בה. בכל מקרה הסוכן
+                  מגיב רק כשפונים אליו בשמו במפורש.
                 </p>
               </div>
               <Checkbox
@@ -3012,116 +3688,140 @@ function CarmenSessionConfig({
         )}
 
         {/* קבוצות ספציפיות (Multi-select) */}
-        {scopeMode === "specific_group" && (() => {
-          const selectedIds: string[] = (configuration?.carmen_allowed_group_ids && configuration.carmen_allowed_group_ids.length > 0)
-            ? configuration.carmen_allowed_group_ids
-            : (configuration?.carmen_allowed_group_id ? [configuration.carmen_allowed_group_id] : []);
-          const toggleGroup = (gid: string) => {
-            const next = selectedIds.includes(gid)
-              ? selectedIds.filter((x) => x !== gid)
-              : [...selectedIds, gid];
-            onConfigChange("carmen_allowed_group_ids", next);
-          };
-          const groupNameById = (gid: string) => {
-            const g = (groups || []).find((g: any) => (g.group_chat_id || g.id) === gid);
-            return g?.group_name || gid;
-          };
-          return (
-            <div className="space-y-2">
-              <Label className="text-right block">בחר קבוצות</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between text-right">
-                    <ChevronDown className="h-4 w-4 opacity-50" />
-                    <span className="flex-1 text-right">
-                      {selectedIds.length > 0 ? `${selectedIds.length} קבוצות נבחרו` : "בחר קבוצות..."}
-                    </span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="end">
-                  <div className="p-2 border-b">
-                    <Input
-                      value={groupSearch}
-                      onChange={(e) => setGroupSearch(e.target.value)}
-                      placeholder="חיפוש קבוצה לפי שם..."
-                      className="text-right h-8"
-                      dir="rtl"
-                    />
-                  </div>
-                  <ScrollArea className="h-72">
-                    <div className="p-2 space-y-1">
-                      {(() => {
-                        const q = groupSearch.trim().toLowerCase();
-                        const filtered = (groups || []).filter((g: any) =>
-                          !q || (g.group_name || "").toLowerCase().includes(q)
-                        );
-                        if (filtered.length === 0) {
-                          return (
-                            <p className="text-xs text-muted-foreground text-center py-4">
-                              {(groups || []).length === 0 ? "אין קבוצות זמינות" : "לא נמצאו קבוצות"}
-                            </p>
-                          );
-                        }
-                        return filtered.map((g: any) => {
-                          const gid = g.group_chat_id || g.id;
-                          const checked = selectedIds.includes(gid);
-                          return (
-                            <label
-                              key={g.id}
-                              className="flex items-center gap-2 p-2 hover:bg-accent rounded cursor-pointer text-right"
-                            >
-                              <Checkbox checked={checked} onCheckedChange={() => toggleGroup(gid)} />
-                              <span className="flex-1 text-sm">{g.group_name}</span>
-                            </label>
-                          );
-                        });
-                      })()}
+        {scopeMode === "specific_group" &&
+          (() => {
+            const selectedIds: string[] =
+              configuration?.carmen_allowed_group_ids &&
+              configuration.carmen_allowed_group_ids.length > 0
+                ? configuration.carmen_allowed_group_ids
+                : configuration?.carmen_allowed_group_id
+                  ? [configuration.carmen_allowed_group_id]
+                  : [];
+            const toggleGroup = (gid: string) => {
+              const next = selectedIds.includes(gid)
+                ? selectedIds.filter((x) => x !== gid)
+                : [...selectedIds, gid];
+              onConfigChange("carmen_allowed_group_ids", next);
+            };
+            const groupNameById = (gid: string) => {
+              const g = (groups || []).find(
+                (g: any) => (g.group_chat_id || g.id) === gid,
+              );
+              return g?.group_name || gid;
+            };
+            return (
+              <div className="space-y-2">
+                <Label className="text-right block">בחר קבוצות</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between text-right"
+                    >
+                      <ChevronDown className="h-4 w-4 opacity-50" />
+                      <span className="flex-1 text-right">
+                        {selectedIds.length > 0
+                          ? `${selectedIds.length} קבוצות נבחרו`
+                          : "בחר קבוצות..."}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[--radix-popover-trigger-width] p-0"
+                    align="end"
+                  >
+                    <div className="p-2 border-b">
+                      <Input
+                        value={groupSearch}
+                        onChange={(e) => setGroupSearch(e.target.value)}
+                        placeholder="חיפוש קבוצה לפי שם..."
+                        className="text-right h-8"
+                        dir="rtl"
+                      />
                     </div>
-                  </ScrollArea>
-                </PopoverContent>
+                    <ScrollArea className="h-72">
+                      <div className="p-2 space-y-1">
+                        {(() => {
+                          const q = groupSearch.trim().toLowerCase();
+                          const filtered = (groups || []).filter(
+                            (g: any) =>
+                              !q ||
+                              (g.group_name || "").toLowerCase().includes(q),
+                          );
+                          if (filtered.length === 0) {
+                            return (
+                              <p className="text-xs text-muted-foreground text-center py-4">
+                                {(groups || []).length === 0
+                                  ? "אין קבוצות זמינות"
+                                  : "לא נמצאו קבוצות"}
+                              </p>
+                            );
+                          }
+                          return filtered.map((g: any) => {
+                            const gid = g.group_chat_id || g.id;
+                            const checked = selectedIds.includes(gid);
+                            return (
+                              <label
+                                key={g.id}
+                                className="flex items-center gap-2 p-2 hover:bg-accent rounded cursor-pointer text-right"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={() => toggleGroup(gid)}
+                                />
+                                <span className="flex-1 text-sm">
+                                  {g.group_name}
+                                </span>
+                              </label>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
 
-              </Popover>
+                {selectedIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1 justify-end">
+                    {selectedIds.map((gid) => (
+                      <Badge key={gid} variant="secondary" className="gap-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(gid)}
+                          className="hover:text-destructive"
+                          aria-label="הסר"
+                        >
+                          ×
+                        </button>
+                        {groupNameById(gid)}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
 
-              {selectedIds.length > 0 && (
-                <div className="flex flex-wrap gap-1 justify-end">
-                  {selectedIds.map((gid) => (
-                    <Badge key={gid} variant="secondary" className="gap-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleGroup(gid)}
-                        className="hover:text-destructive"
-                        aria-label="הסר"
-                      >
-                        ×
-                      </button>
-                      {groupNameById(gid)}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-
-              {selectedIds.length > 0 && (
-                <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/30 rounded p-2">
-                  <span className="text-xs text-green-600 text-right flex-1">
-                    ✅ הסוכן יגיב ל-{selectedIds.length} קבוצות בלבד
-                  </span>
-                </div>
-              )}
-            </div>
-          );
-        })()}
+                {selectedIds.length > 0 && (
+                  <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/30 rounded p-2">
+                    <span className="text-xs text-green-600 text-right flex-1">
+                      ✅ הסוכן יגיב ל-{selectedIds.length} קבוצות בלבד
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
         {/* מספר טלפון ספציפי */}
         {scopeMode === "specific_phone" && (
           <div className="space-y-2">
             <Label className="text-right block">מספרי טלפון מורשים</Label>
             {(() => {
-              const phones: string[] = configuration?.carmen_allowed_phones || [];
+              const phones: string[] =
+                configuration?.carmen_allowed_phones || [];
               const updatePhones = (next: string[]) =>
                 onConfigChange("carmen_allowed_phones", next);
               const addFromInput = () => {
                 const input = document.getElementById(
-                  "carmen-phone-input"
+                  "carmen-phone-input",
                 ) as HTMLInputElement | null;
                 const val = input?.value.trim();
                 if (val && !phones.includes(val)) {
@@ -3169,7 +3869,11 @@ function CarmenSessionConfig({
                         }
                       }}
                     />
-                    <Button type="button" variant="outline" onClick={addFromInput}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addFromInput}
+                    >
                       הוסף
                     </Button>
                   </div>
@@ -3200,17 +3904,23 @@ function CarmenSessionConfig({
 
         {/* בחירת חיבור WhatsApp (Green API / Manus) */}
         <div className="space-y-2 pt-2 border-t border-red-500/20">
-          <Label className="text-right block font-semibold">חיבור WhatsApp לכרמן</Label>
+          <Label className="text-right block font-semibold">
+            חיבור WhatsApp לכרמן
+          </Label>
           {waConnections && waConnections.length > 0 ? (
             <Select
               value={configuration?.carmen_integration_id || "all"}
-              onValueChange={(v) => onConfigChange("carmen_integration_id", v === "all" ? "" : v)}
+              onValueChange={(v) =>
+                onConfigChange("carmen_integration_id", v === "all" ? "" : v)
+              }
             >
               <SelectTrigger className="text-right">
                 <SelectValue placeholder="כל החיבורים" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">כל החיבורים (Green API + מאנוס)</SelectItem>
+                <SelectItem value="all">
+                  כל החיבורים (Green API + מאנוס)
+                </SelectItem>
                 {waConnections.map((c: any) => (
                   <SelectItem key={c.id} value={c.id}>
                     {getConnectionLabel(c)}
@@ -3233,21 +3943,23 @@ function CarmenSessionConfig({
           {selectedCarmenConnection?.integration_type === "meta_whatsapp" && (
             <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2">
               <p className="text-xs text-blue-600 text-right">
-                ℹ️ Meta WhatsApp API אינו תומך בקבוצות כלל — בחיבור זה כרמן תגיב בשיחות פרטיות בלבד,
-                ולא תוכל לשלוח לקבוצות גם אם יוגדרו כאן.
+                ℹ️ Meta WhatsApp API אינו תומך בקבוצות כלל — בחיבור זה כרמן תגיב
+                בשיחות פרטיות בלבד, ולא תוכל לשלוח לקבוצות גם אם יוגדרו כאן.
               </p>
             </div>
           )}
         </div>
 
         {/* Legacy backward compat warning */}
-        {configuration?.carmen_connection_user_id && !configuration?.carmen_integration_id && (
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-2">
-            <p className="text-xs text-yellow-600 text-right">
-              ⚠️ יש לבחור חיבור WhatsApp מחדש מהרשימה למעלה (הגדרה קודמת מיושנת)
-            </p>
-          </div>
-        )}
+        {configuration?.carmen_connection_user_id &&
+          !configuration?.carmen_integration_id && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-2">
+              <p className="text-xs text-yellow-600 text-right">
+                ⚠️ יש לבחור חיבור WhatsApp מחדש מהרשימה למעלה (הגדרה קודמת
+                מיושנת)
+              </p>
+            </div>
+          )}
       </div>
 
       {/* ── סיכום ── */}
@@ -3339,10 +4051,14 @@ function WhatsAppTriggerConfig({
           <SelectContent>
             <SelectItem value="all">כל ההודעות</SelectItem>
             <SelectItem value="all_groups">כל הקבוצות</SelectItem>
-            <SelectItem value="all_groups_except">כל הקבוצות חוץ מ...</SelectItem>
+            <SelectItem value="all_groups_except">
+              כל הקבוצות חוץ מ...
+            </SelectItem>
             <SelectItem value="multiple_groups">קבוצות מרובות</SelectItem>
             <SelectItem value="group">קבוצה ספציפית</SelectItem>
-            <SelectItem value="specific_phones">מספרי טלפון ספציפיים</SelectItem>
+            <SelectItem value="specific_phones">
+              מספרי טלפון ספציפיים
+            </SelectItem>
             <SelectItem value="private">שיחות פרטיות בלבד</SelectItem>
             <SelectItem value="tagged_contact">איש קשר מתויג</SelectItem>
           </SelectContent>
@@ -3377,10 +4093,14 @@ function WhatsAppTriggerConfig({
           <Label className="text-right block">בחר קבוצות</Label>
           <div className="border rounded-md p-2 max-h-48 overflow-y-auto space-y-1">
             {(groups || []).map((g) => {
-              const selectedIds: string[] = configuration?.selected_group_ids || [];
+              const selectedIds: string[] =
+                configuration?.selected_group_ids || [];
               const isSelected = selectedIds.includes(g.id);
               return (
-                <label key={g.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded p-1 justify-end">
+                <label
+                  key={g.id}
+                  className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded p-1 justify-end"
+                >
                   <span className="text-sm">{g.group_name}</span>
                   <Checkbox
                     checked={isSelected}
@@ -3395,7 +4115,9 @@ function WhatsAppTriggerConfig({
               );
             })}
             {(!groups || groups.length === 0) && (
-              <p className="text-xs text-muted-foreground text-center py-2">אין קבוצות</p>
+              <p className="text-xs text-muted-foreground text-center py-2">
+                אין קבוצות
+              </p>
             )}
           </div>
           {(configuration?.selected_group_ids?.length || 0) > 0 && (
@@ -3412,10 +4134,14 @@ function WhatsAppTriggerConfig({
           <Label className="text-right block">קבוצות להחרגה</Label>
           <div className="border rounded-md p-2 max-h-48 overflow-y-auto space-y-1">
             {(groups || []).map((g) => {
-              const excludedIds: string[] = configuration?.excluded_group_ids || [];
+              const excludedIds: string[] =
+                configuration?.excluded_group_ids || [];
               const isExcluded = excludedIds.includes(g.id);
               return (
-                <label key={g.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded p-1 justify-end">
+                <label
+                  key={g.id}
+                  className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded p-1 justify-end"
+                >
                   <span className="text-sm">{g.group_name}</span>
                   <Checkbox
                     checked={isExcluded}
@@ -3430,7 +4156,9 @@ function WhatsAppTriggerConfig({
               );
             })}
             {(!groups || groups.length === 0) && (
-              <p className="text-xs text-muted-foreground text-center py-2">אין קבוצות</p>
+              <p className="text-xs text-muted-foreground text-center py-2">
+                אין קבוצות
+              </p>
             )}
           </div>
           {(configuration?.excluded_group_ids?.length || 0) > 0 && (
@@ -3474,7 +4202,8 @@ function WhatsAppTriggerConfig({
         <div className="space-y-2">
           <Label className="text-right block">מספרי טלפון מאושרים</Label>
           <p className="text-xs text-muted-foreground text-right">
-            הכנס מספר אחד בכל שורה, בפורמט בינלאומי ללא + (לדוגמא: 972501234567). האוטומציה תגיב רק למספרים אלו.
+            הכנס מספר אחד בכל שורה, בפורמט בינלאומי ללא + (לדוגמא:
+            972501234567). האוטומציה תגיב רק למספרים אלו.
           </p>
           <textarea
             className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm text-right resize-y font-mono"
@@ -3484,13 +4213,14 @@ function WhatsAppTriggerConfig({
               const phones = e.target.value
                 .split("\n")
                 .map((p: string) => p.trim())
-                .filter(Boolean)
-              onConfigChange("allowed_phones", phones)
+                .filter(Boolean);
+              onConfigChange("allowed_phones", phones);
             }}
           />
           {(configuration?.allowed_phones || []).length > 0 && (
             <p className="text-xs text-green-600 text-right font-medium">
-              ✓ {(configuration?.allowed_phones || []).length} מספרים מוגדרים — האוטומציה תגיב רק להם
+              ✓ {(configuration?.allowed_phones || []).length} מספרים מוגדרים —
+              האוטומציה תגיב רק להם
             </p>
           )}
         </div>
@@ -3516,7 +4246,9 @@ function WhatsAppTriggerConfig({
           <Label className="text-right block">חיבור Green API</Label>
           <Select
             value={configuration?.connection_user_id || "all"}
-            onValueChange={(v) => onConfigChange("connection_user_id", v === "all" ? "" : v)}
+            onValueChange={(v) =>
+              onConfigChange("connection_user_id", v === "all" ? "" : v)
+            }
           >
             <SelectTrigger className="text-right">
               <SelectValue placeholder="כל החיבורים" />
@@ -3525,7 +4257,8 @@ function WhatsAppTriggerConfig({
               <SelectItem value="all">כל החיבורים</SelectItem>
               {greenApiIntegrations.map((int) => (
                 <SelectItem key={int.id} value={int.user_id}>
-                  {(int.settings as any)?.display_name || `חיבור ${int.instance_id}`}
+                  {(int.settings as any)?.display_name ||
+                    `חיבור ${int.instance_id}`}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -3535,7 +4268,6 @@ function WhatsAppTriggerConfig({
     </div>
   );
 }
-
 
 function LeadSourceConfig({
   tenantId,
@@ -3553,7 +4285,14 @@ function LeadSourceConfig({
   const { toast } = useToast();
   const [showFbDialog, setShowFbDialog] = useState(false);
   const [fetchingLead, setFetchingLead] = useState(false);
-  const [pulledLeads, setPulledLeads] = useState<Array<{ fields: Record<string, string>; name: string; date: string; id: string }>>([]);
+  const [pulledLeads, setPulledLeads] = useState<
+    Array<{
+      fields: Record<string, string>;
+      name: string;
+      date: string;
+      id: string;
+    }>
+  >([]);
   const [pulledLeadIndex, setPulledLeadIndex] = useState(0);
   const [pullDateRange, setPullDateRange] = useState<string>("last_week");
   const isFacebookForm = leadSource === "facebook_form";
@@ -3572,36 +4311,58 @@ function LeadSourceConfig({
   });
 
   // Display current selection summary
-  const hasSelection = configuration?.facebook_form_id && configuration?.facebook_page_name;
+  const hasSelection =
+    configuration?.facebook_form_id && configuration?.facebook_page_name;
 
-  const pulledLead = pulledLeads.length > 0 ? pulledLeads[pulledLeadIndex]?.fields : null;
+  const pulledLead =
+    pulledLeads.length > 0 ? pulledLeads[pulledLeadIndex]?.fields : null;
 
   const handlePullLead = async () => {
-    if (!tenantId || !configuration?.facebook_form_id || !configuration?.facebook_integration_id) {
-      toast({ title: "חסרים נתונים", description: "יש לבחור טופס ואינטגרציה קודם", variant: "destructive" });
+    if (
+      !tenantId ||
+      !configuration?.facebook_form_id ||
+      !configuration?.facebook_integration_id
+    ) {
+      toast({
+        title: "חסרים נתונים",
+        description: "יש לבחור טופס ואינטגרציה קודם",
+        variant: "destructive",
+      });
       return;
     }
-    
+
     setFetchingLead(true);
     setPulledLeads([]);
     setPulledLeadIndex(0);
-    
+
     try {
       const formId = configuration.facebook_form_id;
       const integrationId = configuration.facebook_integration_id;
       const now = new Date();
       let fromDate: string | undefined;
-      
+
       if (pullDateRange === "today") {
-        fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        fromDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+        ).toISOString();
       } else if (pullDateRange === "yesterday") {
         const y = new Date(now);
         y.setDate(y.getDate() - 1);
-        fromDate = new Date(y.getFullYear(), y.getMonth(), y.getDate()).toISOString();
+        fromDate = new Date(
+          y.getFullYear(),
+          y.getMonth(),
+          y.getDate(),
+        ).toISOString();
       } else if (pullDateRange === "last_week") {
         const w = new Date(now);
         w.setDate(w.getDate() - 7);
-        fromDate = new Date(w.getFullYear(), w.getMonth(), w.getDate()).toISOString();
+        fromDate = new Date(
+          w.getFullYear(),
+          w.getMonth(),
+          w.getDate(),
+        ).toISOString();
       }
 
       // First, trigger a sync from Facebook for this specific form so the local DB is up to date.
@@ -3616,7 +4377,10 @@ function LeadSourceConfig({
           },
         });
       } catch (syncErr) {
-        console.warn("sync-facebook-leads invoke failed (continuing with local query):", syncErr);
+        console.warn(
+          "sync-facebook-leads invoke failed (continuing with local query):",
+          syncErr,
+        );
       }
 
       let query = supabase
@@ -3625,11 +4389,11 @@ function LeadSourceConfig({
         .eq("tenant_id", tenantId)
         .ilike("notes", `%${formId}%`)
         .order("created_at", { ascending: false });
-      
+
       if (fromDate) query = query.gte("created_at", fromDate);
-      
+
       const { data: recentLeads } = await query.limit(50);
-      
+
       if (recentLeads && recentLeads.length > 0) {
         const parsed = recentLeads.map((lead) => {
           const fields: Record<string, string> = {};
@@ -3639,7 +4403,7 @@ function LeadSourceConfig({
           if (lead.email) fields["email"] = lead.email;
           if (lead.source) fields["source"] = lead.source;
           if (lead.status) fields["status"] = lead.status;
-          
+
           const notes = lead.notes || "";
           const fbFieldSection = notes.split("--- שדות טופס פייסבוק ---")[1];
           if (fbFieldSection) {
@@ -3653,7 +4417,7 @@ function LeadSourceConfig({
               }
             }
           }
-          
+
           return {
             fields,
             name: lead.company_name || lead.contact_name || "ליד",
@@ -3661,15 +4425,26 @@ function LeadSourceConfig({
             id: lead.id,
           };
         });
-        
+
         setPulledLeads(parsed);
-        toast({ title: `${parsed.length} לידים נמשכו`, description: `מציג ליד 1 מתוך ${parsed.length}` });
+        toast({
+          title: `${parsed.length} לידים נמשכו`,
+          description: `מציג ליד 1 מתוך ${parsed.length}`,
+        });
       } else {
-        toast({ title: "לא נמצאו לידים", description: "אין לידים מטופס זה בטווח הנבחר", variant: "destructive" });
+        toast({
+          title: "לא נמצאו לידים",
+          description: "אין לידים מטופס זה בטווח הנבחר",
+          variant: "destructive",
+        });
       }
     } catch (err) {
       console.error("Error pulling lead:", err);
-      toast({ title: "שגיאה", description: "לא ניתן למשוך לידים", variant: "destructive" });
+      toast({
+        title: "שגיאה",
+        description: "לא ניתן למשוך לידים",
+        variant: "destructive",
+      });
     } finally {
       setFetchingLead(false);
     }
@@ -3711,57 +4486,77 @@ function LeadSourceConfig({
           <div className="text-right space-y-1">
             <p className="text-xs text-muted-foreground">
               <span className="font-semibold text-foreground">עמוד:</span>{" "}
-              {configuration?.facebook_page_name || configuration?.facebook_page_id}
+              {configuration?.facebook_page_name ||
+                configuration?.facebook_page_id}
             </p>
             <p className="text-xs text-muted-foreground">
               <span className="font-semibold text-foreground">טופס:</span>{" "}
-              {configuration?.facebook_form_name || configuration?.facebook_form_id}
+              {configuration?.facebook_form_name ||
+                configuration?.facebook_form_id}
             </p>
           </div>
 
-          {configuration?.facebook_form_fields && Array.isArray(configuration.facebook_form_fields) && configuration.facebook_form_fields.length > 0 && (
-            <div className="pt-2 border-t border-border/50">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="w-full justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <ClipboardCopy className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>שדות הטופס למיפוי</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                        {configuration.facebook_form_fields.length}
-                      </Badge>
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                    </div>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-72 p-0" align="start" dir="rtl">
-                  <div className="px-3 py-2 border-b border-border bg-muted/50">
-                    <p className="text-xs font-medium text-muted-foreground">לחץ על שדה כדי להעתיק</p>
-                  </div>
-                  <ScrollArea className="max-h-48">
-                    <div className="p-1">
-                      {configuration.facebook_form_fields.map((f: FacebookFormField) => (
-                        <button
-                          key={f.key}
-                          type="button"
-                          className="w-full flex items-center justify-between px-2.5 py-2 rounded-md text-xs hover:bg-accent transition-colors group"
-                          onClick={() => {
-                            navigator.clipboard.writeText(`{{fb_${f.key}}}`);
-                            toast({ title: "הועתק!", description: `{{fb_${f.key}}}` });
-                          }}
+          {configuration?.facebook_form_fields &&
+            Array.isArray(configuration.facebook_form_fields) &&
+            configuration.facebook_form_fields.length > 0 && (
+              <div className="pt-2 border-t border-border/50">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-between gap-2 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <ClipboardCopy className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>שדות הטופס למיפוי</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1.5 py-0"
                         >
-                          <code className="font-mono text-[11px] text-foreground">{`{{fb_${f.key}}}`}</code>
-                          <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </button>
-                      ))}
+                          {configuration.facebook_form_fields.length}
+                        </Badge>
+                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-0" align="start" dir="rtl">
+                    <div className="px-3 py-2 border-b border-border bg-muted/50">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        לחץ על שדה כדי להעתיק
+                      </p>
                     </div>
-                  </ScrollArea>
-                </PopoverContent>
-              </Popover>
-            </div>
-          )}
+                    <ScrollArea className="max-h-48">
+                      <div className="p-1">
+                        {configuration.facebook_form_fields.map(
+                          (f: FacebookFormField) => (
+                            <button
+                              key={f.key}
+                              type="button"
+                              className="w-full flex items-center justify-between px-2.5 py-2 rounded-md text-xs hover:bg-accent transition-colors group"
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  `{{fb_${f.key}}}`,
+                                );
+                                toast({
+                                  title: "הועתק!",
+                                  description: `{{fb_${f.key}}}`,
+                                });
+                              }}
+                            >
+                              <code className="font-mono text-[11px] text-foreground">{`{{fb_${f.key}}}`}</code>
+                              <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
 
           {/* Delivery mode: Pull (default) vs Webhook */}
           <FacebookDeliveryModeSection
@@ -3773,11 +4568,15 @@ function LeadSourceConfig({
 
           {/* Sync since date */}
           <div className="space-y-1">
-            <Label className="text-right block text-xs">משוך לידים החל מתאריך (אופציונלי)</Label>
+            <Label className="text-right block text-xs">
+              משוך לידים החל מתאריך (אופציונלי)
+            </Label>
             <Input
               type="date"
               value={configuration?.sync_since_date || ""}
-              onChange={(e) => onConfigChange("sync_since_date", e.target.value || null)}
+              onChange={(e) =>
+                onConfigChange("sync_since_date", e.target.value || null)
+              }
               className="text-right text-sm"
             />
             <p className="text-[10px] text-muted-foreground text-right">
@@ -3845,27 +4644,38 @@ function LeadSourceConfig({
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                {pulledLeads[pulledLeadIndex]?.name} · {pulledLeads[pulledLeadIndex]?.date}
+                {pulledLeads[pulledLeadIndex]?.name} ·{" "}
+                {pulledLeads[pulledLeadIndex]?.date}
               </p>
               <ScrollArea className="max-h-40">
                 <div className="space-y-1">
-                  {pulledLead && Object.entries(pulledLead).map(([key, value]) => (
-                    <div key={key} className="flex items-center justify-between gap-2 text-xs px-1 py-0.5 rounded hover:bg-muted/50">
-                      <button
-                        type="button"
-                        className="font-mono text-[11px] text-primary hover:underline cursor-pointer"
-                        onClick={() => {
-                          navigator.clipboard.writeText(`{{${key}}}`);
-                          toast({ title: "הועתק!", description: `{{${key}}}` });
-                        }}
+                  {pulledLead &&
+                    Object.entries(pulledLead).map(([key, value]) => (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between gap-2 text-xs px-1 py-0.5 rounded hover:bg-muted/50"
                       >
-                        {`{{${key}}}`}
-                      </button>
-                      <span className="text-muted-foreground truncate max-w-[160px] text-right" title={value}>
-                        {value}
-                      </span>
-                    </div>
-                  ))}
+                        <button
+                          type="button"
+                          className="font-mono text-[11px] text-primary hover:underline cursor-pointer"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`{{${key}}}`);
+                            toast({
+                              title: "הועתק!",
+                              description: `{{${key}}}`,
+                            });
+                          }}
+                        >
+                          {`{{${key}}}`}
+                        </button>
+                        <span
+                          className="text-muted-foreground truncate max-w-[160px] text-right"
+                          title={value}
+                        >
+                          {value}
+                        </span>
+                      </div>
+                    ))}
                 </div>
               </ScrollArea>
             </div>
@@ -3888,7 +4698,9 @@ function LeadSourceConfig({
           <Label className="block text-right">הלקוח שיקבל לידים מהטופס</Label>
           <Select
             value={configuration?.client_id || "none"}
-            onValueChange={(value) => onConfigChange("client_id", value === "none" ? null : value)}
+            onValueChange={(value) =>
+              onConfigChange("client_id", value === "none" ? null : value)
+            }
           >
             <SelectTrigger className="text-right">
               <SelectValue placeholder="בחר לקוח" />
@@ -3961,19 +4773,26 @@ function LeadSourceConfig({
                 };
                 await supabase
                   .from("tenant_integrations")
-                  .update({ settings: { ...currentSettings, form_mappings: formMappings } })
+                  .update({
+                    settings: {
+                      ...currentSettings,
+                      form_mappings: formMappings,
+                    },
+                  })
                   .eq("id", selected.integrationId);
               }
             }
             // Kick off an initial sync (fire-and-forget)
-            supabase.functions.invoke("sync-facebook-leads", {
-              body: {
-                tenant_id: tenantId,
-                integration_id: selected.integrationId,
-                form_id: selected.formId,
-                days: 30,
-              },
-            }).catch((e) => console.warn("Initial FB sync failed:", e));
+            supabase.functions
+              .invoke("sync-facebook-leads", {
+                body: {
+                  tenant_id: tenantId,
+                  integration_id: selected.integrationId,
+                  form_id: selected.formId,
+                  days: 30,
+                },
+              })
+              .catch((e) => console.warn("Initial FB sync failed:", e));
           } catch (e) {
             console.warn("Failed to register form mapping:", e);
           }
@@ -4004,9 +4823,15 @@ function FacebookFormSelectionDialog({
     formFields: FacebookFormField[];
   }) => void;
 }) {
-  const [selectedIntegrationId, setSelectedIntegrationId] = useState(configuration?.facebook_integration_id || "");
-  const [selectedPageId, setSelectedPageId] = useState(configuration?.facebook_page_id || "");
-  const [selectedFormId, setSelectedFormId] = useState(configuration?.facebook_form_id || "");
+  const [selectedIntegrationId, setSelectedIntegrationId] = useState(
+    configuration?.facebook_integration_id || "",
+  );
+  const [selectedPageId, setSelectedPageId] = useState(
+    configuration?.facebook_page_id || "",
+  );
+  const [selectedFormId, setSelectedFormId] = useState(
+    configuration?.facebook_form_id || "",
+  );
   const [pageSearchQuery, setPageSearchQuery] = useState("");
 
   // Reset state when dialog opens
@@ -4036,7 +4861,9 @@ function FacebookFormSelectionDialog({
     enabled: !!tenantId && open,
   });
 
-  const selectedIntegration = fbIntegrations?.find((i) => i.id === selectedIntegrationId);
+  const selectedIntegration = fbIntegrations?.find(
+    (i) => i.id === selectedIntegrationId,
+  );
   const accessToken = selectedIntegration?.api_key || null;
 
   // Fetch pages
@@ -4044,9 +4871,12 @@ function FacebookFormSelectionDialog({
     queryKey: ["fb-pages-for-flow", selectedIntegrationId, accessToken],
     queryFn: async () => {
       if (!accessToken || !tenantId) return [];
-      const { data, error } = await supabase.functions.invoke("get-facebook-forms", {
-        body: { tenant_id: tenantId, access_token: accessToken },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "get-facebook-forms",
+        {
+          body: { tenant_id: tenantId, access_token: accessToken },
+        },
+      );
       if (error || data?.error) return [];
       return (data?.pages as FacebookPage[]) || [];
     },
@@ -4054,34 +4884,46 @@ function FacebookFormSelectionDialog({
   });
 
   // Fetch forms
-  const pageToken = pagesData?.find((p: FacebookPage) => p.id === selectedPageId)?.access_token || null;
+  const pageToken =
+    pagesData?.find((p: FacebookPage) => p.id === selectedPageId)
+      ?.access_token || null;
   const { data: formsData, isLoading: loadingForms } = useQuery({
     queryKey: ["fb-forms-for-flow", selectedPageId, accessToken, pageToken],
     queryFn: async () => {
       if (!accessToken || !selectedPageId || !tenantId) return [];
-      const { data, error } = await supabase.functions.invoke("get-facebook-forms", {
-        body: {
-          tenant_id: tenantId,
-          page_id: selectedPageId,
-          access_token: accessToken,
-          page_access_token: pageToken,
+      const { data, error } = await supabase.functions.invoke(
+        "get-facebook-forms",
+        {
+          body: {
+            tenant_id: tenantId,
+            page_id: selectedPageId,
+            access_token: accessToken,
+            page_access_token: pageToken,
+          },
         },
-      });
+      );
       if (error || data?.error) return [];
       return (data?.forms as FacebookForm[]) || [];
     },
     enabled: !!accessToken && !!selectedPageId && !!tenantId && open,
   });
 
-  const selectedPage = pagesData?.find((p: FacebookPage) => p.id === selectedPageId);
-  const selectedForm = formsData?.find((f: FacebookForm) => f.id === selectedFormId);
-  const canSave = !!selectedIntegrationId && !!selectedPageId && !!selectedFormId;
+  const selectedPage = pagesData?.find(
+    (p: FacebookPage) => p.id === selectedPageId,
+  );
+  const selectedForm = formsData?.find(
+    (f: FacebookForm) => f.id === selectedFormId,
+  );
+  const canSave =
+    !!selectedIntegrationId && !!selectedPageId && !!selectedFormId;
 
   const filteredPages = useMemo(() => {
     if (!pagesData || pagesData.length === 0) return [];
     if (!pageSearchQuery.trim()) return pagesData;
     const q = pageSearchQuery.trim().toLowerCase();
-    return pagesData.filter((p: FacebookPage) => p.name.toLowerCase().includes(q));
+    return pagesData.filter((p: FacebookPage) =>
+      p.name.toLowerCase().includes(q),
+    );
   }, [pagesData, pageSearchQuery]);
 
   return (
@@ -4095,7 +4937,9 @@ function FacebookFormSelectionDialog({
           <DialogDescription className="text-right">
             בחר את חיבור הפייסבוק, העמוד והטופס שממנו יגיעו הלידים לאוטומציה זו.
             <br />
-            <span className="text-xs text-amber-600">* חיבור הטופס כאן לא ישפיע על הגדרות הלידים של הארגון</span>
+            <span className="text-xs text-amber-600">
+              * חיבור הטופס כאן לא ישפיע על הגדרות הלידים של הארגון
+            </span>
           </DialogDescription>
         </DialogHeader>
 
@@ -4104,7 +4948,12 @@ function FacebookFormSelectionDialog({
           <div className="space-y-2">
             <Label className="text-right block font-medium">
               <span className="inline-flex items-center gap-2">
-                <Badge variant="outline" className="rounded-full h-5 w-5 p-0 flex items-center justify-center text-xs">1</Badge>
+                <Badge
+                  variant="outline"
+                  className="rounded-full h-5 w-5 p-0 flex items-center justify-center text-xs"
+                >
+                  1
+                </Badge>
                 חיבור Facebook
               </span>
             </Label>
@@ -4126,8 +4975,12 @@ function FacebookFormSelectionDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {fbIntegrations.map((integration) => {
-                    const settings = integration.settings as Record<string, any> | null;
-                    const name = settings?.connection_name || "Facebook Lead Ads";
+                    const settings = integration.settings as Record<
+                      string,
+                      any
+                    > | null;
+                    const name =
+                      settings?.connection_name || "Facebook Lead Ads";
                     return (
                       <SelectItem key={integration.id} value={integration.id}>
                         {name}
@@ -4153,7 +5006,12 @@ function FacebookFormSelectionDialog({
             <div className="space-y-2">
               <Label className="text-right block font-medium">
                 <span className="inline-flex items-center gap-2">
-                  <Badge variant="outline" className="rounded-full h-5 w-5 p-0 flex items-center justify-center text-xs">2</Badge>
+                  <Badge
+                    variant="outline"
+                    className="rounded-full h-5 w-5 p-0 flex items-center justify-center text-xs"
+                  >
+                    2
+                  </Badge>
                   דף פייסבוק
                 </span>
               </Label>
@@ -4220,7 +5078,12 @@ function FacebookFormSelectionDialog({
             <div className="space-y-2">
               <Label className="text-right block font-medium">
                 <span className="inline-flex items-center gap-2">
-                  <Badge variant="outline" className="rounded-full h-5 w-5 p-0 flex items-center justify-center text-xs">3</Badge>
+                  <Badge
+                    variant="outline"
+                    className="rounded-full h-5 w-5 p-0 flex items-center justify-center text-xs"
+                  >
+                    3
+                  </Badge>
                   טופס ליד
                 </span>
               </Label>
@@ -4333,13 +5196,15 @@ function CreateTaskActionConfig({
       const el = titleRef.current;
       const currentValue = configuration?.task_title_template || "";
       const pos = el?.selectionStart ?? currentValue.length;
-      const newValue = currentValue.slice(0, pos) + variable + currentValue.slice(pos);
+      const newValue =
+        currentValue.slice(0, pos) + variable + currentValue.slice(pos);
       onConfigChange("task_title_template", newValue);
     } else {
       const el = notesRef.current;
       const currentValue = configuration?.task_notes_template || "";
       const pos = el?.selectionStart ?? currentValue.length;
-      const newValue = currentValue.slice(0, pos) + variable + currentValue.slice(pos);
+      const newValue =
+        currentValue.slice(0, pos) + variable + currentValue.slice(pos);
       onConfigChange("task_notes_template", newValue);
     }
   };
@@ -4348,31 +5213,39 @@ function CreateTaskActionConfig({
     <div className="space-y-4">
       {availableFields.length > 0 && (
         <div className="space-y-2">
-          <Label className="text-right block text-xs text-muted-foreground">הכנס משתנה מהטריגר:</Label>
+          <Label className="text-right block text-xs text-muted-foreground">
+            הכנס משתנה מהטריגר:
+          </Label>
           <div className="flex flex-wrap gap-1 justify-end">
-            {availableFields.filter(f => !f.key.startsWith("fb_")).map((field) => (
-              <Badge
-                key={field.key}
-                variant="outline"
-                className="cursor-pointer hover:bg-accent text-xs"
-                onClick={() => insertVariable(field.key)}
-              >
-                {field.label}
-              </Badge>
-            ))}
-            {availableFields.some(f => f.key.startsWith("fb_")) && (
+            {availableFields
+              .filter((f) => !f.key.startsWith("fb_"))
+              .map((field) => (
+                <Badge
+                  key={field.key}
+                  variant="outline"
+                  className="cursor-pointer hover:bg-accent text-xs"
+                  onClick={() => insertVariable(field.key)}
+                >
+                  {field.label}
+                </Badge>
+              ))}
+            {availableFields.some((f) => f.key.startsWith("fb_")) && (
               <>
-                <span className="text-[10px] text-blue-600 font-semibold self-center mx-1">|</span>
-                {availableFields.filter(f => f.key.startsWith("fb_")).map((field) => (
-                  <Badge
-                    key={field.key}
-                    variant="outline"
-                    className="cursor-pointer hover:bg-blue-100 text-xs bg-blue-50 text-blue-700 border-blue-200"
-                    onClick={() => insertVariable(field.key)}
-                  >
-                    {field.label}
-                  </Badge>
-                ))}
+                <span className="text-[10px] text-blue-600 font-semibold self-center mx-1">
+                  |
+                </span>
+                {availableFields
+                  .filter((f) => f.key.startsWith("fb_"))
+                  .map((field) => (
+                    <Badge
+                      key={field.key}
+                      variant="outline"
+                      className="cursor-pointer hover:bg-blue-100 text-xs bg-blue-50 text-blue-700 border-blue-200"
+                      onClick={() => insertVariable(field.key)}
+                    >
+                      {field.label}
+                    </Badge>
+                  ))}
               </>
             )}
           </div>
@@ -4384,7 +5257,9 @@ function CreateTaskActionConfig({
         <Input
           ref={titleRef}
           value={configuration?.task_title_template || ""}
-          onChange={(e) => onConfigChange("task_title_template", e.target.value)}
+          onChange={(e) =>
+            onConfigChange("task_title_template", e.target.value)
+          }
           onFocus={() => setActiveField("title")}
           placeholder="למשל: טיפול בליד {{contact_name}}"
           className="text-right"
@@ -4396,7 +5271,9 @@ function CreateTaskActionConfig({
         <Textarea
           ref={notesRef}
           value={configuration?.task_notes_template || ""}
-          onChange={(e) => onConfigChange("task_notes_template", e.target.value)}
+          onChange={(e) =>
+            onConfigChange("task_notes_template", e.target.value)
+          }
           onFocus={() => setActiveField("notes")}
           placeholder="למשל: ליצור קשר עם {{contact_name}} בטלפון {{phone}}"
           className="text-right min-h-[80px]"
@@ -4414,7 +5291,9 @@ function CreateTaskActionConfig({
           </SelectTrigger>
           <SelectContent>
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-              <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+              <SelectItem key={n} value={String(n)}>
+                {n}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -4426,7 +5305,12 @@ function CreateTaskActionConfig({
           type="number"
           min={0}
           value={configuration?.task_due_days ?? ""}
-          onChange={(e) => onConfigChange("task_due_days", e.target.value ? Number(e.target.value) : null)}
+          onChange={(e) =>
+            onConfigChange(
+              "task_due_days",
+              e.target.value ? Number(e.target.value) : null,
+            )
+          }
           placeholder="למשל: 3 (ימים מרגע היצירה)"
           className="text-right"
         />
@@ -4443,7 +5327,9 @@ function CreateTaskActionConfig({
           </SelectTrigger>
           <SelectContent>
             {agencies?.map((a) => (
-              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+              <SelectItem key={a.id} value={a.id}>
+                {a.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -4460,7 +5346,9 @@ function CreateTaskActionConfig({
           </SelectTrigger>
           <SelectContent>
             {campaigners?.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+              <SelectItem key={c.id} value={c.id}>
+                {c.full_name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -4468,7 +5356,8 @@ function CreateTaskActionConfig({
 
       <div className="rounded-lg border border-dashed p-3 text-right">
         <p className="text-xs text-muted-foreground">
-          💡 שיוך ליד/לקוח מתבצע אוטומטית מנתוני הטריגר. אם הטריגר מכיל ליד או לקוח, המשימה תשויך אליו.
+          💡 שיוך ליד/לקוח מתבצע אוטומטית מנתוני הטריגר. אם הטריגר מכיל ליד או
+          לקוח, המשימה תשויך אליו.
         </p>
       </div>
     </div>

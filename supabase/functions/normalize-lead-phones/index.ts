@@ -1,8 +1,9 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 // Check if phone is international (non-Israeli)
@@ -10,15 +11,35 @@ function isInternationalPhone(phone: string): boolean {
   if (!phone) return false;
   const trimmed = phone.trim();
   // Starts with + and NOT +972
-  if (trimmed.startsWith('+') && !trimmed.startsWith('+972')) return true;
+  if (trimmed.startsWith("+") && !trimmed.startsWith("+972")) return true;
   // Starts with 00 and NOT 00972
-  if (trimmed.startsWith('00') && !trimmed.startsWith('00972')) return true;
+  if (trimmed.startsWith("00") && !trimmed.startsWith("00972")) return true;
   // Check for common international country codes
-  const digits = trimmed.replace(/\D/g, '');
-  if (digits.length >= 10 && !digits.startsWith('972') && !digits.startsWith('0')) {
-    const intlPrefixes = ['1', '44', '49', '43', '33', '39', '34', '31', '32', '41', '61', '81', '86', '91'];
+  const digits = trimmed.replace(/\D/g, "");
+  if (
+    digits.length >= 10 &&
+    !digits.startsWith("972") &&
+    !digits.startsWith("0")
+  ) {
+    const intlPrefixes = [
+      "1",
+      "44",
+      "49",
+      "43",
+      "33",
+      "39",
+      "34",
+      "31",
+      "32",
+      "41",
+      "61",
+      "81",
+      "86",
+      "91",
+    ];
     for (const prefix of intlPrefixes) {
-      if (digits.startsWith(prefix) && digits.length >= prefix.length + 8) return true;
+      if (digits.startsWith(prefix) && digits.length >= prefix.length + 8)
+        return true;
     }
   }
   return false;
@@ -32,43 +53,43 @@ function normalizePhoneIsraelToE164(phoneRaw: string): string | null {
 
   // Check if international - keep original country code
   if (isInternationalPhone(trimmed)) {
-    if (trimmed.startsWith('+')) {
-      const digits = trimmed.replace(/\D/g, '');
+    if (trimmed.startsWith("+")) {
+      const digits = trimmed.replace(/\D/g, "");
       return digits ? `+${digits}` : null;
     }
-    if (trimmed.startsWith('00')) {
-      const digits = trimmed.replace(/\D/g, '');
-      const without00 = digits.startsWith('00') ? digits.slice(2) : digits;
+    if (trimmed.startsWith("00")) {
+      const digits = trimmed.replace(/\D/g, "");
+      const without00 = digits.startsWith("00") ? digits.slice(2) : digits;
       return without00 ? `+${without00}` : null;
     }
     // Already starts with country code digits
-    const digits = trimmed.replace(/\D/g, '');
+    const digits = trimmed.replace(/\D/g, "");
     return digits ? `+${digits}` : null;
   }
 
   // Keep +972 numbers as-is (already normalized Israeli)
-  if (trimmed.startsWith('+972')) {
-    const digits = trimmed.replace(/\D/g, '');
+  if (trimmed.startsWith("+972")) {
+    const digits = trimmed.replace(/\D/g, "");
     return digits ? `+${digits}` : null;
   }
 
   // 00972 prefix -> +972
-  if (trimmed.startsWith('00972')) {
-    const digits = trimmed.replace(/\D/g, '');
+  if (trimmed.startsWith("00972")) {
+    const digits = trimmed.replace(/\D/g, "");
     const without00 = digits.slice(2); // Remove the 00
     return without00 ? `+${without00}` : null;
   }
 
   // Israel heuristics for local numbers
-  let digits = trimmed.replace(/\D/g, '');
+  let digits = trimmed.replace(/\D/g, "");
   if (!digits) return null;
 
   // Remove leading country code 972 if present
-  if (digits.startsWith('972')) {
+  if (digits.startsWith("972")) {
     digits = digits.slice(3);
   }
   // Remove leading 0 if present
-  if (digits.startsWith('0')) {
+  if (digits.startsWith("0")) {
     digits = digits.slice(1);
   }
 
@@ -81,27 +102,34 @@ function normalizePhoneIsraelToE164(phoneRaw: string): string | null {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const authHeader = req.headers.get('Authorization');
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Verify user
-    const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    const userClient = createClient(
+      supabaseUrl,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      {
+        global: { headers: { Authorization: authHeader } },
+      },
+    );
 
     const {
       data: { user },
@@ -109,41 +137,51 @@ Deno.serve(async (req) => {
     } = await userClient.auth.getUser();
 
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const { tenantId, limit = 2000, dryRun = false } = await req.json();
     if (!tenantId) {
-      return new Response(JSON.stringify({ error: 'Missing tenantId' }), {
+      return new Response(JSON.stringify({ error: "Missing tenantId" }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Fetch leads with a phone
     const { data: leads, error: leadsError } = await supabase
-      .from('leads')
-      .select('id, phone')
-      .eq('tenant_id', tenantId)
-      .not('phone', 'is', null)
+      .from("leads")
+      .select("id, phone")
+      .eq("tenant_id", tenantId)
+      .not("phone", "is", null)
       .limit(limit);
 
     if (leadsError) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch leads', details: leadsError }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "Failed to fetch leads", details: leadsError }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const updates: Array<{ id: string; phone: string | null; original: string | null; normalized: string | null; changed: boolean; reason?: string }> = [];
+    const updates: Array<{
+      id: string;
+      phone: string | null;
+      original: string | null;
+      normalized: string | null;
+      changed: boolean;
+      reason?: string;
+    }> = [];
     let changedCount = 0;
     let invalidCount = 0;
 
     for (const lead of leads || []) {
-      const original = (lead.phone ?? '').toString();
+      const original = (lead.phone ?? "").toString();
       const normalized = normalizePhoneIsraelToE164(original);
       const changed = normalized !== null && normalized !== original;
 
@@ -156,7 +194,7 @@ Deno.serve(async (req) => {
         original: original || null,
         normalized,
         changed,
-        reason: normalized ? undefined : 'unrecognized_format',
+        reason: normalized ? undefined : "unrecognized_format",
       });
     }
 
@@ -164,14 +202,14 @@ Deno.serve(async (req) => {
       for (const u of updates) {
         if (!u.changed) continue;
         const { error: updateError } = await supabase
-          .from('leads')
+          .from("leads")
           .update({ phone: u.phone })
-          .eq('id', u.id)
-          .eq('tenant_id', tenantId);
+          .eq("id", u.id)
+          .eq("tenant_id", tenantId);
 
         if (updateError) {
           // continue but record failure
-          console.error('Failed updating lead phone:', u.id, updateError);
+          console.error("Failed updating lead phone:", u.id, updateError);
         }
       }
     }
@@ -186,13 +224,18 @@ Deno.serve(async (req) => {
         dryRun,
         sample: updates.slice(0, 25),
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    console.error('normalize-lead-phones error:', error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error("normalize-lead-phones error:", error);
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

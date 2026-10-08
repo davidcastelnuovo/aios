@@ -1,12 +1,29 @@
-import { useState, useRef, useCallback, useEffect, type ReactNode } from "react";
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  type ReactNode,
+} from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { toast } from "sonner";
-import { Paperclip, X, Loader2, FileText, Image as ImageIcon, MessageSquare } from "lucide-react";
+import {
+  Paperclip,
+  X,
+  Loader2,
+  FileText,
+  Image as ImageIcon,
+  MessageSquare,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { claimClipboardPaste, filesFromClipboardData, shouldUploadClipboardPaste } from "@/lib/clipboardFiles";
+import {
+  claimClipboardPaste,
+  filesFromClipboardData,
+  shouldUploadClipboardPaste,
+} from "@/lib/clipboardFiles";
 
 export interface TaskAttachment {
   name: string;
@@ -118,11 +135,14 @@ export function NotesWithAttachments({
         if (fileRef.current) fileRef.current.value = "";
       }
     },
-    [attachments, onAttachmentsChange, taskId, tenantId]
+    [attachments, onAttachmentsChange, taskId, tenantId],
   );
 
   const takeClipboardFiles = useCallback(
-    (clipboardData: DataTransfer | null | undefined, preventDefault: () => void) => {
+    (
+      clipboardData: DataTransfer | null | undefined,
+      preventDefault: () => void,
+    ) => {
       const files = filesFromClipboardData(clipboardData ?? null);
       if (!files.length) return false;
       if (!claimClipboardPaste()) return true;
@@ -140,7 +160,8 @@ export function NotesWithAttachments({
     [takeClipboardFiles],
   );
 
-  const listenForPagePaste = variant === "files" || variant === "cubes" || variant === "stacked";
+  const listenForPagePaste =
+    variant === "files" || variant === "cubes" || variant === "stacked";
   useEffect(() => {
     if (!listenForPagePaste) return;
     const onPaste = (event: ClipboardEvent) => {
@@ -208,7 +229,10 @@ export function NotesWithAttachments({
                 <img
                   src={signed[a.path]}
                   alt={a.name}
-                  className={cn("object-cover", largeThumbs ? "h-36 w-36" : "h-20 w-20")}
+                  className={cn(
+                    "object-cover",
+                    largeThumbs ? "h-36 w-36" : "h-20 w-20",
+                  )}
                 />
               </button>
             ) : (
@@ -217,17 +241,31 @@ export function NotesWithAttachments({
                 onClick={() => open(a)}
                 className={cn(
                   "flex flex-col items-start justify-center px-2 py-2 text-xs gap-1 text-right",
-                  largeThumbs ? "min-h-[9rem] w-[10.5rem]" : "min-h-[5rem] w-[8.5rem]",
+                  largeThumbs
+                    ? "min-h-[9rem] w-[10.5rem]"
+                    : "min-h-[5rem] w-[8.5rem]",
                 )}
               >
                 {isImg ? (
-                  <ImageIcon className={cn(largeThumbs ? "h-8 w-8" : "h-6 w-6", "text-muted-foreground")} />
+                  <ImageIcon
+                    className={cn(
+                      largeThumbs ? "h-8 w-8" : "h-6 w-6",
+                      "text-muted-foreground",
+                    )}
+                  />
                 ) : (
-                  <FileText className={cn(largeThumbs ? "h-8 w-8" : "h-6 w-6", "text-red-500")} />
+                  <FileText
+                    className={cn(
+                      largeThumbs ? "h-8 w-8" : "h-6 w-6",
+                      "text-red-500",
+                    )}
+                  />
                 )}
                 <span className="truncate w-full font-medium">{a.name}</span>
                 {a.size ? (
-                  <span className="text-[10px] text-muted-foreground">{formatSize(a.size)}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {formatSize(a.size)}
+                  </span>
                 ) : null}
               </button>
             )}
@@ -276,7 +314,9 @@ export function NotesWithAttachments({
       {notesLayout === "updates-first" ? (
         <>
           {notesFooter ? (
-            <div className="flex flex-col flex-1 min-h-0 space-y-2 pb-3">{notesFooter}</div>
+            <div className="flex flex-col flex-1 min-h-0 space-y-2 pb-3">
+              {notesFooter}
+            </div>
           ) : null}
           <div className="shrink-0 pt-3 border-t space-y-1">
             <p className="text-[11px] text-muted-foreground">הערות קבועות</p>
@@ -345,7 +385,11 @@ export function NotesWithAttachments({
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
         >
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+          {uploading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Paperclip className="h-4 w-4" />
+          )}
           צרף
         </Button>
       </div>

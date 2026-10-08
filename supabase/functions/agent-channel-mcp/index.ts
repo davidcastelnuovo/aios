@@ -3,7 +3,10 @@ import { ingestChannelReply } from "../_shared/agent-channel/ingest.ts";
 import { resolveCallbackOrigin } from "../_shared/agent-channel/logic.ts";
 import { mcpBearer } from "../_shared/agent-channel/hmac.ts";
 import { loadSession, serviceClient } from "../_shared/agent-channel/store.ts";
-import type { CallbackPayload, ChannelProvider } from "../_shared/agent-channel/types.ts";
+import type {
+  CallbackPayload,
+  ChannelProvider,
+} from "../_shared/agent-channel/types.ts";
 
 const SERVER_INFO = { name: "agent-channel-mcp", version: "1.0.0" };
 const PROTOCOL_VERSION = "2024-11-05";
@@ -20,8 +23,14 @@ const TOOLS = [
         conversation_id: { type: "string" },
         session_id: { type: "string" },
         tenant_id: { type: "string" },
-        origin: { type: "string", description: "cursor | grok | codex | claude | chatgpt | parliament" },
-        content: { type: "string", description: "Full answer to show David in Carmen's chat." },
+        origin: {
+          type: "string",
+          description: "cursor | grok | codex | claude | chatgpt | parliament",
+        },
+        content: {
+          type: "string",
+          description: "Full answer to show David in Carmen's chat.",
+        },
         idempotency_key: { type: "string" },
         parliament_round: { type: "number" },
       },
@@ -30,7 +39,8 @@ const TOOLS = [
   },
   {
     name: "publish_aios_progress",
-    description: "Post a short progress note into the AIOS conversation without closing the turn.",
+    description:
+      "Post a short progress note into the AIOS conversation without closing the turn.",
     inputSchema: {
       type: "object",
       properties: {
@@ -54,7 +64,10 @@ const TOOLS = [
         session_id: { type: "string" },
         tenant_id: { type: "string" },
         origin: { type: "string" },
-        content: { type: "string", description: "What needs approval and why." },
+        content: {
+          type: "string",
+          description: "What needs approval and why.",
+        },
       },
       required: ["conversation_id", "content"],
     },
@@ -62,40 +75,67 @@ const TOOLS = [
 ];
 
 function rpcResult(id: unknown, result: unknown) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
-function rpcError(id: unknown, code: number, message: string, httpStatus = 200) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }), {
-    status: httpStatus,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+function rpcError(
+  id: unknown,
+  code: number,
+  message: string,
+  httpStatus = 200,
+) {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: id ?? null,
+      error: { code, message },
+    }),
+    {
+      status: httpStatus,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
 function bearerFrom(req: Request): string | undefined {
-  const h = req.headers.get("authorization") || req.headers.get("Authorization");
+  const h =
+    req.headers.get("authorization") || req.headers.get("Authorization");
   if (!h) return undefined;
   const m = h.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : undefined;
 }
 
-async function handleTool(name: string, args: Record<string, any>): Promise<string> {
-  const conversationId = String(args?.conversation_id ?? args?.conversationId ?? "").trim();
+async function handleTool(
+  name: string,
+  args: Record<string, any>,
+): Promise<string> {
+  const conversationId = String(
+    args?.conversation_id ?? args?.conversationId ?? "",
+  ).trim();
   const content = String(args?.content ?? args?.message ?? "").trim();
-  if (!conversationId || !content) throw new Error("conversation_id and content are required");
+  if (!conversationId || !content)
+    throw new Error("conversation_id and content are required");
 
   const sb = serviceClient();
   const sessionId = String(args?.session_id ?? args?.sessionId ?? "").trim();
   const session = sessionId ? await loadSession(sb, sessionId) : null;
-  const tenantId = String(args?.tenant_id ?? args?.tenantId ?? "").trim() || session?.tenant_id;
+  const tenantId =
+    String(args?.tenant_id ?? args?.tenantId ?? "").trim() ||
+    session?.tenant_id;
   const origin = resolveCallbackOrigin(args?.origin, session?.provider);
 
   const eventType =
-    name === "publish_aios_progress" ? "progress" :
-    name === "request_aios_approval" ? "approval_request" : "message";
+    name === "publish_aios_progress"
+      ? "progress"
+      : name === "request_aios_approval"
+        ? "approval_request"
+        : "message";
 
   const payload: CallbackPayload = {
     tenant_id: tenantId,
@@ -104,39 +144,68 @@ async function handleTool(name: string, args: Record<string, any>): Promise<stri
     origin,
     content,
     event_type: eventType,
-    idempotency_key: args?.idempotency_key ? String(args.idempotency_key) : undefined,
-    parliament_round: args?.parliament_round != null ? Number(args.parliament_round) : undefined,
+    idempotency_key: args?.idempotency_key
+      ? String(args.idempotency_key)
+      : undefined,
+    parliament_round:
+      args?.parliament_round != null
+        ? Number(args.parliament_round)
+        : undefined,
   };
   const result = await ingestChannelReply(payload);
-  if (result.duplicate) return "Already delivered (idempotent). No duplicate message was created.";
-  if (eventType === "approval_request") return "Approval request posted to the AIOS conversation. Wait for David.";
-  if (eventType === "progress") return "Progress note posted to the AIOS conversation.";
+  if (result.duplicate)
+    return "Already delivered (idempotent). No duplicate message was created.";
+  if (eventType === "approval_request")
+    return "Approval request posted to the AIOS conversation. Wait for David.";
+  if (eventType === "progress")
+    return "Progress note posted to the AIOS conversation.";
   return "Answer delivered to the AIOS Carmen conversation.";
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   if (req.method === "GET") {
-    return new Response(JSON.stringify({ ok: true, server: SERVER_INFO, tools: TOOLS.map((t) => t.name) }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        server: SERVER_INFO,
+        tools: TOOLS.map((t) => t.name),
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 
   let msg: any;
-  try { msg = await req.json(); } catch { return rpcError(null, -32700, "Parse error"); }
+  try {
+    msg = await req.json();
+  } catch {
+    return rpcError(null, -32700, "Parse error");
+  }
   const { id, method, params } = msg ?? {};
 
   const gate = mcpBearer();
   if (gate && bearerFrom(req) !== gate) {
-    return rpcError(id, -32001, "Unauthorized: invalid or missing bearer token", 401);
+    return rpcError(
+      id,
+      -32001,
+      "Unauthorized: invalid or missing bearer token",
+      401,
+    );
   }
 
   try {
     switch (method) {
       case "initialize":
-        return rpcResult(id, { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} }, serverInfo: SERVER_INFO });
+        return rpcResult(id, {
+          protocolVersion: PROTOCOL_VERSION,
+          capabilities: { tools: {} },
+          serverInfo: SERVER_INFO,
+        });
       case "notifications/initialized":
       case "initialized":
         return new Response("", { status: 202, headers: corsHeaders });

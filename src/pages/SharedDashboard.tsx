@@ -6,8 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  ResponsiveTabsList,
+  type ResponsiveTabItem,
+} from "@/components/ui/responsive-tabs-list";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -15,7 +25,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, ShoppingCart, Search, FileText } from "lucide-react";
+import {
+  Facebook,
+  FileSpreadsheet,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  BarChart3,
+  RefreshCw,
+  ShoppingCart,
+  Search,
+  FileText,
+} from "lucide-react";
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
 import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyooCallsCard";
@@ -40,28 +61,57 @@ import {
   isFacebookLeadsOnlyTable,
   summarizeFacebookCampaignGroup,
 } from "@/lib/adsMetrics";
-import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, getCurrencySymbol, resolveDashboardCurrency } from "@/lib/currency";
+import {
+  formatCurrency as formatCurrencyAmount,
+  formatUnitCost as formatUnitCostAmount,
+  getCurrencySymbol,
+  resolveDashboardCurrency,
+} from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import {
-  LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  ComposedChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
 } from "recharts";
 
 import { SHARED_COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
-import { shouldUseGoogleWooAttributionOverlay, summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
-import { filterWooOrdersForRevenue, sumWooRevenue } from "@/lib/wooOrderRevenue";
+import {
+  shouldUseGoogleWooAttributionOverlay,
+  summarizeGoogleAttributedWooOrders,
+} from "@/lib/wooAttribution";
+import {
+  filterWooOrdersForRevenue,
+  sumWooRevenue,
+} from "@/lib/wooOrderRevenue";
 import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
 
 const DATE_FILTERS = SHARED_COMBINED_DASHBOARD_DATE_FILTERS;
 
 const PLATFORM_CONFIG: Record<string, { name: string; color: string }> = {
-  facebook_insights: { name: 'Facebook', color: 'text-blue-600' },
-  facebook_ecommerce: { name: 'Facebook', color: 'text-blue-600' },
-  google_ads: { name: 'Google Ads', color: 'text-red-500' },
-  google_analytics: { name: 'Analytics', color: 'text-orange-500' },
+  facebook_insights: { name: "Facebook", color: "text-blue-600" },
+  facebook_ecommerce: { name: "Facebook", color: "text-blue-600" },
+  google_ads: { name: "Google Ads", color: "text-red-500" },
+  google_analytics: { name: "Analytics", color: "text-orange-500" },
 };
 
-type PlatformFilter = 'all' | 'weekly' | 'facebook' | 'google_ads' | 'google_analytics' | 'woocommerce' | 'seo';
-type CampaignType = 'leads' | 'ecommerce';
+type PlatformFilter =
+  | "all"
+  | "weekly"
+  | "facebook"
+  | "google_ads"
+  | "google_analytics"
+  | "woocommerce"
+  | "seo";
+type CampaignType = "leads" | "ecommerce";
 
 const hasMeaningfulAnalyticsMetrics = (data: any) =>
   getSessionsFromData(data) > 0 ||
@@ -69,50 +119,70 @@ const hasMeaningfulAnalyticsMetrics = (data: any) =>
   getPurchasesFromData(data) > 0 ||
   getRevenueFromData(data) > 0 ||
   getAddToCartFromData(data) > 0;
-const isAdsPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(s);
-const isAnalyticsPlatform = (s: string) => s === 'google_analytics';
-const isFacebookPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce'].includes(s);
-const normalizePlatformKey = (s: string) => isFacebookPlatform(s) ? 'facebook_insights' : s;
+const isAdsPlatform = (s: string) =>
+  ["facebook_insights", "facebook_ecommerce", "google_ads"].includes(s);
+const isAnalyticsPlatform = (s: string) => s === "google_analytics";
+const isFacebookPlatform = (s: string) =>
+  ["facebook_insights", "facebook_ecommerce"].includes(s);
+const normalizePlatformKey = (s: string) =>
+  isFacebookPlatform(s) ? "facebook_insights" : s;
 
-const matchesPlatformFilter = (integrationType: string, filter: PlatformFilter): boolean => {
-  if (filter === 'all') return true;
-  if (filter === 'facebook') return isFacebookPlatform(integrationType);
-  if (filter === 'google_ads') return integrationType === 'google_ads';
-  if (filter === 'google_analytics') return isAnalyticsPlatform(integrationType);
+const matchesPlatformFilter = (
+  integrationType: string,
+  filter: PlatformFilter,
+): boolean => {
+  if (filter === "all") return true;
+  if (filter === "facebook") return isFacebookPlatform(integrationType);
+  if (filter === "google_ads") return integrationType === "google_ads";
+  if (filter === "google_analytics")
+    return isAnalyticsPlatform(integrationType);
   return true;
 };
 
 const getCampaignType = (type?: string, settings?: any): CampaignType => {
-  if (type === 'facebook_ecommerce') return 'ecommerce';
-  if (type === 'google_ads') return settings?.campaign_type === 'ecommerce' ? 'ecommerce' : 'leads';
-  return 'leads';
+  if (type === "facebook_ecommerce") return "ecommerce";
+  if (type === "google_ads")
+    return settings?.campaign_type === "ecommerce" ? "ecommerce" : "leads";
+  return "leads";
 };
 
 const formatNumber = (num: number) => {
-  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+  if (num >= 1000) return (num / 1000).toFixed(1) + "K";
   return Math.round(num).toString();
 };
 
 const getIntegrationIcon = (type: string | null) => {
   switch (type) {
-    case 'facebook_insights':
-    case 'facebook_ecommerce':
+    case "facebook_insights":
+    case "facebook_ecommerce":
       return <Facebook className="h-5 w-5 text-blue-600" />;
-    case 'google_ads':
+    case "google_ads":
       return (
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
-          <path d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z" fill="#FBBC04"/>
-          <path d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z" fill="#4285F4"/>
-          <circle cx="6" cy="18" r="3.5" fill="#34A853"/>
+          <path
+            d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z"
+            fill="#FBBC04"
+          />
+          <path
+            d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z"
+            fill="#4285F4"
+          />
+          <circle cx="6" cy="18" r="3.5" fill="#34A853" />
         </svg>
       );
-    case 'google_analytics':
+    case "google_analytics":
       return (
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
-          <path d="M20.5 18.5v-13c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v13c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#F9AB00"/>
-          <path d="M13.5 18.5v-7c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#E37400"/>
-          <circle cx="5" cy="18.5" r="2.5" fill="#E37400"/>
+          <path
+            d="M20.5 18.5v-13c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v13c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z"
+            fill="#F9AB00"
+          />
+          <path
+            d="M13.5 18.5v-7c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z"
+            fill="#E37400"
+          />
+          <circle cx="5" cy="18.5" r="2.5" fill="#E37400" />
         </svg>
       );
     default:
@@ -130,29 +200,34 @@ interface SharedDashboardProps {
 
 export default function SharedDashboard({
   shareTokenOverride,
-  initialDateFilter = 'last_30_days',
+  initialDateFilter = "last_30_days",
   snapshotMode = false,
 }: SharedDashboardProps = {}) {
   const params = useParams();
   const shareToken = shareTokenOverride ?? params.shareToken;
   const queryClient = useQueryClient();
   const [dateFilter, setDateFilter] = useState(initialDateFilter);
-  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
   const [seoActiveTab, setSeoActiveTab] = useState("seo");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['shared-dashboard', shareToken, dateFilter],
+    queryKey: ["shared-dashboard", shareToken, dateFilter],
     queryFn: async () => {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       if (!supabaseUrl || !apiKey) {
-        throw new Error('חסרה הגדרת Supabase בסביבת הפיתוח (VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY)');
+        throw new Error(
+          "חסרה הגדרת Supabase בסביבת הפיתוח (VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY)",
+        );
       }
-      const params = new URLSearchParams({ token: shareToken!, date_filter: dateFilter });
+      const params = new URLSearchParams({
+        token: shareToken!,
+        date_filter: dateFilter,
+      });
       const baseUrl = `${supabaseUrl}/functions/v1/public-dashboard`;
       const res = await fetch(`${baseUrl}?${params.toString()}`, {
-        method: 'GET',
+        method: "GET",
         headers: {
           apikey: apiKey,
           Authorization: `Bearer ${apiKey}`,
@@ -175,42 +250,61 @@ export default function SharedDashboard({
   const rawRecords = data?.records || [];
 
   const { data: weeklyData, isPending: weeklyPending } = useQuery({
-    queryKey: ['shared-dashboard', shareToken, 'last_365_days', 'weekly'],
+    queryKey: ["shared-dashboard", shareToken, "last_365_days", "weekly"],
     queryFn: async () => {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const query = new URLSearchParams({ token: shareToken!, date_filter: 'last_365_days' });
-      const res = await fetch(`${supabaseUrl}/functions/v1/public-dashboard?${query}`, {
-        headers: { apikey: apiKey, Authorization: `Bearer ${apiKey}` },
+      const query = new URLSearchParams({
+        token: shareToken!,
+        date_filter: "last_365_days",
       });
+      const res = await fetch(
+        `${supabaseUrl}/functions/v1/public-dashboard?${query}`,
+        {
+          headers: { apikey: apiKey, Authorization: `Bearer ${apiKey}` },
+        },
+      );
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: !!shareToken && platformFilter === 'weekly',
+    enabled: !!shareToken && platformFilter === "weekly",
     staleTime: 5 * 60_000,
     retry: false,
   });
-  const dashboardCurrency = useMemo(() => resolveDashboardCurrency(tables), [tables]);
-  const formatCurrency = (num: number) => formatCurrencyAmount(num, dashboardCurrency);
-  const formatUnitCost = (num: number) => formatUnitCostAmount(num, dashboardCurrency);
+  const dashboardCurrency = useMemo(
+    () => resolveDashboardCurrency(tables),
+    [tables],
+  );
+  const formatCurrency = (num: number) =>
+    formatCurrencyAmount(num, dashboardCurrency);
+  const formatUnitCost = (num: number) =>
+    formatUnitCostAmount(num, dashboardCurrency);
 
   // Deduplicate Facebook: if both facebook_insights AND facebook_ecommerce exist,
   // skip facebook_insights records to avoid double-counting spend/impressions/clicks
   const records = useMemo(() => {
-    const hasFbEcommerce = tables.some((t: any) => t.integration_type === 'facebook_ecommerce');
-    const hasFbInsights = tables.some((t: any) => t.integration_type === 'facebook_insights');
+    const hasFbEcommerce = tables.some(
+      (t: any) => t.integration_type === "facebook_ecommerce",
+    );
+    const hasFbInsights = tables.some(
+      (t: any) => t.integration_type === "facebook_insights",
+    );
     if (hasFbEcommerce && hasFbInsights) {
-      return rawRecords.filter((r: any) => r._source !== 'facebook_insights');
+      return rawRecords.filter((r: any) => r._source !== "facebook_insights");
     }
     return rawRecords;
   }, [rawRecords, tables]);
 
   const weeklyRecords = useMemo(() => {
     const source = weeklyData?.records || [];
-    const hasFbEcommerce = tables.some((t: any) => t.integration_type === 'facebook_ecommerce');
-    const hasFbInsights = tables.some((t: any) => t.integration_type === 'facebook_insights');
+    const hasFbEcommerce = tables.some(
+      (t: any) => t.integration_type === "facebook_ecommerce",
+    );
+    const hasFbInsights = tables.some(
+      (t: any) => t.integration_type === "facebook_insights",
+    );
     return hasFbEcommerce && hasFbInsights
-      ? source.filter((record: any) => record._source !== 'facebook_insights')
+      ? source.filter((record: any) => record._source !== "facebook_insights")
       : source;
   }, [weeklyData?.records, tables]);
 
@@ -224,18 +318,42 @@ export default function SharedDashboard({
   const gscMultiPeriod = data?.gsc_multi_period || null;
   const maskyooSnapshots = data?.maskyoo_snapshots || [];
   const maskyooPeriod = data?.maskyoo_period || null;
-  const maskyooPeriodLabel = maskyooPeriod ? `${maskyooPeriod.start} – ${maskyooPeriod.end}` : undefined;
+  const maskyooPeriodLabel = maskyooPeriod
+    ? `${maskyooPeriod.start} – ${maskyooPeriod.end}`
+    : undefined;
   const hasSeoMaskyoo = maskyooSnapshots.length > 0;
   const hasSeoGsc = seoGscRecords.length > 0;
   const hasSeoGa = seoGaRecords.length > 0;
   const seoMonthly = (data as any)?.seo_monthly || null;
-  const hasMonthlyWork = Array.isArray(seoMonthly?.months) && seoMonthly.months.length > 0;
-  console.log('[SharedDashboard] wooSites:', wooSites.length, 'wooOrders:', wooOrders.length, 'seoReports:', ahrefsReports.length, 'seoGA:', seoGaRecords.length, 'seoGSC:', seoGscRecords.length);
+  const hasMonthlyWork =
+    Array.isArray(seoMonthly?.months) && seoMonthly.months.length > 0;
+  console.log(
+    "[SharedDashboard] wooSites:",
+    wooSites.length,
+    "wooOrders:",
+    wooOrders.length,
+    "seoReports:",
+    ahrefsReports.length,
+    "seoGA:",
+    seoGaRecords.length,
+    "seoGSC:",
+    seoGscRecords.length,
+  );
 
   // Aggregate GSC records per keyword (sum clicks/impressions, weighted-avg position)
   const seoGscAggregated = useMemo(() => {
-    if (seoGscRecords.length === 0) return [] as { keyword: string; clicks: number; impressions: number; ctr: number; position: number }[];
-    const acc = new Map<string, { clicks: number; impressions: number; positionWeighted: number }>();
+    if (seoGscRecords.length === 0)
+      return [] as {
+        keyword: string;
+        clicks: number;
+        impressions: number;
+        ctr: number;
+        position: number;
+      }[];
+    const acc = new Map<
+      string,
+      { clicks: number; impressions: number; positionWeighted: number }
+    >();
     for (const rec of seoGscRecords) {
       const d = (rec as any).data || rec;
       const kw = String(d.query || d.keyword || "").trim();
@@ -243,7 +361,11 @@ export default function SharedDashboard({
       const clicks = Number(d.clicks) || 0;
       const impressions = Number(d.impressions) || 0;
       const position = Number(d.position) || 0;
-      const cur = acc.get(kw) || { clicks: 0, impressions: 0, positionWeighted: 0 };
+      const cur = acc.get(kw) || {
+        clicks: 0,
+        impressions: 0,
+        positionWeighted: 0,
+      };
       cur.clicks += clicks;
       cur.impressions += impressions;
       cur.positionWeighted += position * impressions;
@@ -253,17 +375,29 @@ export default function SharedDashboard({
       keyword,
       clicks: v.clicks,
       impressions: v.impressions,
-      ctr: v.impressions > 0 ? Math.round((v.clicks / v.impressions) * 10000) / 100 : 0,
-      position: v.impressions > 0 ? Math.round((v.positionWeighted / v.impressions) * 10) / 10 : 0,
+      ctr:
+        v.impressions > 0
+          ? Math.round((v.clicks / v.impressions) * 10000) / 100
+          : 0,
+      position:
+        v.impressions > 0
+          ? Math.round((v.positionWeighted / v.impressions) * 10) / 10
+          : 0,
     }));
   }, [seoGscRecords]);
 
   // Compute GA monthly non-paid sessions for the SEO traffic chart (mirrors SeoDashboardView).
   const seoGaOrganicByMonth = useMemo(() => {
-    if (seoGaRecords.length === 0) return [] as { month: string; sessions: number }[];
+    if (seoGaRecords.length === 0)
+      return [] as { month: string; sessions: number }[];
     const isPaidChannel = (cg: string) => {
       const v = cg.toLowerCase();
-      return v.startsWith('paid') || v === 'cross-network' || v === 'display' || v.includes('paid');
+      return (
+        v.startsWith("paid") ||
+        v === "cross-network" ||
+        v === "display" ||
+        v.includes("paid")
+      );
     };
     const isPaidMedium = (sm: string) => {
       const v = sm.toLowerCase();
@@ -271,69 +405,97 @@ export default function SharedDashboard({
     };
 
     // Prefer monthly_channel records
-    const monthlyChannelRows = seoGaRecords.filter((r: any) => r.data?.report_type === 'monthly_channel');
+    const monthlyChannelRows = seoGaRecords.filter(
+      (r: any) => r.data?.report_type === "monthly_channel",
+    );
     if (monthlyChannelRows.length > 0) {
       const monthMap = new Map<string, number>();
       for (const r of monthlyChannelRows) {
-        const cg = String(r.data?.channel_group || '');
+        const cg = String(r.data?.channel_group || "");
         if (isPaidChannel(cg)) continue;
         const month = r.data?.month as string;
         if (!month) continue;
-        monthMap.set(month, (monthMap.get(month) || 0) + (Number(r.data?.sessions) || 0));
+        monthMap.set(
+          month,
+          (monthMap.get(month) || 0) + (Number(r.data?.sessions) || 0),
+        );
       }
       if (monthMap.size > 0) {
-        return Array.from(monthMap.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([month, sessions]) => ({ month, sessions }));
+        return Array.from(monthMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([month, sessions]) => ({ month, sessions }));
       }
     }
 
     // Fallback: daily_source (exclude paid mediums)
-    const dailySourceRows = seoGaRecords.filter((r: any) => r.data?.report_type === 'daily_source');
+    const dailySourceRows = seoGaRecords.filter(
+      (r: any) => r.data?.report_type === "daily_source",
+    );
     if (dailySourceRows.length > 0) {
       const monthMap = new Map<string, number>();
       for (const r of dailySourceRows) {
-        const sm = String(r.data?.source_medium || '');
+        const sm = String(r.data?.source_medium || "");
         if (isPaidMedium(sm)) continue;
         const date = r.data?.date;
         if (!date) continue;
         const monthKey = String(date).substring(0, 7);
-        monthMap.set(monthKey, (monthMap.get(monthKey) || 0) + (Number(r.data?.sessions) || 0));
+        monthMap.set(
+          monthKey,
+          (monthMap.get(monthKey) || 0) + (Number(r.data?.sessions) || 0),
+        );
       }
       if (monthMap.size > 0) {
-        return Array.from(monthMap.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([month, sessions]) => ({ month, sessions }));
+        return Array.from(monthMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([month, sessions]) => ({ month, sessions }));
       }
     }
 
     // Last fallback: monthly_organic
     return seoGaRecords
-      .filter((r: any) => r.data?.report_type === 'monthly_organic')
-      .map((r: any) => ({ month: r.data.month as string, sessions: Number(r.data.sessions) || 0 }))
+      .filter((r: any) => r.data?.report_type === "monthly_organic")
+      .map((r: any) => ({
+        month: r.data.month as string,
+        sessions: Number(r.data.sessions) || 0,
+      }))
       .sort((a, b) => a.month.localeCompare(b.month));
   }, [seoGaRecords]);
 
   const hasVisibleAnalyticsData = useMemo(() => {
     return records.some((record: any) => {
-      const source = record._source || '';
+      const source = record._source || "";
       const recordData = record.data || {};
-      return isAnalyticsPlatform(source) && recordData.report_type === 'daily' && hasMeaningfulAnalyticsMetrics(recordData);
+      return (
+        isAnalyticsPlatform(source) &&
+        recordData.report_type === "daily" &&
+        hasMeaningfulAnalyticsMetrics(recordData)
+      );
     });
   }, [records]);
 
   // Available platforms
   const availablePlatforms = useMemo(() => {
     const set = new Set<string>();
-    tables.forEach((t: any) => { if (t?.integration_type) set.add(t.integration_type); });
+    tables.forEach((t: any) => {
+      if (t?.integration_type) set.add(t.integration_type);
+    });
     const platforms: PlatformFilter[] = [];
-    if (set.has('facebook_insights') || set.has('facebook_ecommerce')) platforms.push('facebook');
-    if (set.has('google_ads')) platforms.push('google_ads');
-    if (set.has('google_analytics') && hasVisibleAnalyticsData) platforms.push('google_analytics');
-    if (hasWooCommerce) platforms.push('woocommerce');
-    if (hasSeo) platforms.push('seo');
+    if (set.has("facebook_insights") || set.has("facebook_ecommerce"))
+      platforms.push("facebook");
+    if (set.has("google_ads")) platforms.push("google_ads");
+    if (set.has("google_analytics") && hasVisibleAnalyticsData)
+      platforms.push("google_analytics");
+    if (hasWooCommerce) platforms.push("woocommerce");
+    if (hasSeo) platforms.push("seo");
     return platforms;
   }, [tables, hasWooCommerce, hasSeo, hasVisibleAnalyticsData]);
 
   const platformTabItems = useMemo((): ResponsiveTabItem[] => {
     const items: ResponsiveTabItem[] = [{ value: "all", label: "📊 הכל" }];
-    if (availablePlatforms.includes("facebook") || availablePlatforms.includes("google_ads")) {
+    if (
+      availablePlatforms.includes("facebook") ||
+      availablePlatforms.includes("google_ads")
+    ) {
       items.push({
         value: "weekly",
         label: "השוואה שבועית",
@@ -388,7 +550,11 @@ export default function SharedDashboard({
     if (hasSeoGa) {
       items.push({ value: "ga", label: "Analytics", icon: BarChart3 });
     }
-    items.push({ value: "monthly-work", label: "עבודה שבוצעה", icon: FileText });
+    items.push({
+      value: "monthly-work",
+      label: "עבודה שבוצעה",
+      icon: FileText,
+    });
     return items;
   }, [hasSeoGsc, hasSeoGa]);
 
@@ -401,14 +567,18 @@ export default function SharedDashboard({
   // Filter records: platform filter + only use 'daily' aggregate records for Analytics
   const filteredRecords = useMemo(() => {
     return records.filter((record: any) => {
-      const source = record._source || 'unknown';
+      const source = record._source || "unknown";
       if (!matchesPlatformFilter(source, platformFilter)) return false;
       if (isAnalyticsPlatform(source)) {
         if (!hasVisibleAnalyticsData) return false;
         const data = record.data || {};
-        if (data.report_type !== 'daily') return false;
+        if (data.report_type !== "daily") return false;
       }
-      if (isAdsPlatform(source) && !shouldIncludeInAdsDashboardAggregate(record.data, source)) return false;
+      if (
+        isAdsPlatform(source) &&
+        !shouldIncludeInAdsDashboardAggregate(record.data, source)
+      )
+        return false;
       return true;
     });
   }, [records, platformFilter, hasVisibleAnalyticsData]);
@@ -417,7 +587,7 @@ export default function SharedDashboard({
   const allAnalyticsRecords = useMemo(() => {
     if (!hasVisibleAnalyticsData) return [];
     return records
-      .filter((r: any) => isAnalyticsPlatform(r._source || ''))
+      .filter((r: any) => isAnalyticsPlatform(r._source || ""))
       .map((r: any) => ({ id: r.id, data: r.data }));
   }, [records, hasVisibleAnalyticsData]);
 
@@ -425,63 +595,84 @@ export default function SharedDashboard({
     const map: Record<string, CampaignType> = {};
     const explicitlySet = new Set<string>();
     tables.forEach((t: any) => {
-      const key = t?.integration_type || 'unknown';
+      const key = t?.integration_type || "unknown";
       const explicitType = t?.integration_settings?.campaign_type;
-      if (explicitType === 'leads' || explicitType === 'ecommerce') {
+      if (explicitType === "leads" || explicitType === "ecommerce") {
         map[key] = explicitType;
         explicitlySet.add(key);
         return;
       }
       const ct = getCampaignType(t?.integration_type, t?.integration_settings);
-      if (ct === 'ecommerce') map[key] = 'ecommerce';
+      if (ct === "ecommerce") map[key] = "ecommerce";
     });
     // Lock google_ads to leads when unset — noisy pixel events must not flip GA ecommerce tables.
     // facebook_insights stays unlocked unless integration_settings.campaign_type is explicit;
     // mixed FB accounts classify each campaign row (see classifyFacebookRecord).
-    ['google_ads'].forEach((key) => {
+    ["google_ads"].forEach((key) => {
       if (!map[key] && tables.some((t: any) => t.integration_type === key)) {
-        map[key] = 'leads';
+        map[key] = "leads";
         explicitlySet.add(key);
       }
     });
     // Scan data for ecommerce signals — only for platforms NOT locked above
     records.forEach((record: any) => {
-      const source = record._source || 'unknown';
+      const source = record._source || "unknown";
       if (explicitlySet.has(source)) return;
-      if (map[source] === 'ecommerce') return;
+      if (map[source] === "ecommerce") return;
       const d = record.data || {};
-      if (Number(d.purchases) > 0 || Number(d.purchase_value) > 0 || Number(d.add_to_cart) > 0 ||
-          String(d.campaign_type || '').toLowerCase() === 'ecommerce') {
-        map[source] = 'ecommerce';
+      if (
+        Number(d.purchases) > 0 ||
+        Number(d.purchase_value) > 0 ||
+        Number(d.add_to_cart) > 0 ||
+        String(d.campaign_type || "").toLowerCase() === "ecommerce"
+      ) {
+        map[source] = "ecommerce";
       }
     });
     tables.forEach((t: any) => {
-      const key = t?.integration_type || 'unknown';
-      if (!map[key]) map[key] = 'leads';
+      const key = t?.integration_type || "unknown";
+      if (!map[key]) map[key] = "leads";
     });
     return map;
   }, [tables, records]);
 
   const facebookMixedMode = useMemo(
-    () => tables.some((t: any) => facebookTableUsesMixedRows(t.integration_type, t.integration_settings)),
+    () =>
+      tables.some((t: any) =>
+        facebookTableUsesMixedRows(t.integration_type, t.integration_settings),
+      ),
     [tables],
   );
 
   const dashboardCampaignType: CampaignType = useMemo(() => {
     const types = Object.values(campaignTypeByPlatform);
-    const hasEcom = types.some((t) => t === 'ecommerce');
-    const hasLeads = types.some((t) => t === 'leads') || facebookMixedMode;
-    if (hasEcom && hasLeads) return 'ecommerce'; // show ecom KPI row + leads cards when mixed
-    return hasEcom ? 'ecommerce' : 'leads';
+    const hasEcom = types.some((t) => t === "ecommerce");
+    const hasLeads = types.some((t) => t === "leads") || facebookMixedMode;
+    if (hasEcom && hasLeads) return "ecommerce"; // show ecom KPI row + leads cards when mixed
+    return hasEcom ? "ecommerce" : "leads";
   }, [campaignTypeByPlatform, facebookMixedMode]);
 
   const summaryByPlatform = useMemo(() => {
     const platforms: Record<string, any> = {};
     filteredRecords.forEach((record: any) => {
-      const rawSource = record._source || 'unknown';
+      const rawSource = record._source || "unknown";
       const source = normalizePlatformKey(rawSource);
       if (!platforms[source]) {
-        platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, leads: 0, purchases: 0, revenue: 0, addToCart: 0, addToCartTracked: false, roas: 0, cpl: 0 };
+        platforms[source] = {
+          spend: 0,
+          impressions: 0,
+          clicks: 0,
+          sessions: 0,
+          users: 0,
+          results: 0,
+          leads: 0,
+          purchases: 0,
+          revenue: 0,
+          addToCart: 0,
+          addToCartTracked: false,
+          roas: 0,
+          cpl: 0,
+        };
       }
       const d = record.data || {};
       if (isAnalyticsPlatform(source)) {
@@ -495,16 +686,19 @@ export default function SharedDashboard({
         platforms[source].spend += getSpendFromData(d);
         platforms[source].impressions += Number(d.impressions) || 0;
         platforms[source].clicks += Number(d.clicks) || 0;
-        const ct = campaignTypeByPlatform[rawSource] || campaignTypeByPlatform[source] || 'leads';
+        const ct =
+          campaignTypeByPlatform[rawSource] ||
+          campaignTypeByPlatform[source] ||
+          "leads";
         const useMixedFacebook =
           isFacebookPlatform(rawSource) &&
           facebookTableUsesMixedRows(rawSource, record._integrationSettings);
 
         if (useMixedFacebook) {
           const kind = classifyFacebookRecord(d);
-          if (kind === 'traffic') return;
+          if (kind === "traffic") return;
           platforms[source].leads += getLeadsFromData(d);
-          if (kind === 'ecommerce') {
+          if (kind === "ecommerce") {
             const purchases = getAdsPurchasesFromData(d);
             platforms[source].purchases += purchases;
             platforms[source].results += purchases;
@@ -515,7 +709,7 @@ export default function SharedDashboard({
             const leads = getLeadsFromData(d);
             platforms[source].results += leads;
           }
-        } else if (ct === 'ecommerce') {
+        } else if (ct === "ecommerce") {
           platforms[source].results += getAdsPurchasesFromData(d);
           platforms[source].purchases += getAdsPurchasesFromData(d);
           platforms[source].revenue += getRevenueFromData(d);
@@ -528,16 +722,25 @@ export default function SharedDashboard({
         }
       }
     });
-    Object.keys(platforms).forEach(key => {
+    Object.keys(platforms).forEach((key) => {
       if (isAnalyticsPlatform(key)) return;
       // For merged Facebook platform, check if any Facebook type was ecommerce
-      const ct = isFacebookPlatform(key) 
-        ? (campaignTypeByPlatform['facebook_insights'] === 'ecommerce' || campaignTypeByPlatform['facebook_ecommerce'] === 'ecommerce' ? 'ecommerce' : 'leads')
-        : (campaignTypeByPlatform[key] || 'leads');
-      if (ct === 'ecommerce') {
-        platforms[key].roas = platforms[key].spend > 0 ? platforms[key].revenue / platforms[key].spend : 0;
+      const ct = isFacebookPlatform(key)
+        ? campaignTypeByPlatform["facebook_insights"] === "ecommerce" ||
+          campaignTypeByPlatform["facebook_ecommerce"] === "ecommerce"
+          ? "ecommerce"
+          : "leads"
+        : campaignTypeByPlatform[key] || "leads";
+      if (ct === "ecommerce") {
+        platforms[key].roas =
+          platforms[key].spend > 0
+            ? platforms[key].revenue / platforms[key].spend
+            : 0;
       } else {
-        platforms[key].cpl = platforms[key].results > 0 ? platforms[key].spend / platforms[key].results : 0;
+        platforms[key].cpl =
+          platforms[key].results > 0
+            ? platforms[key].spend / platforms[key].results
+            : 0;
       }
     });
     return platforms;
@@ -545,12 +748,13 @@ export default function SharedDashboard({
 
   // Global ads metrics (regardless of platform filter) for Analytics tab ROAS
   const globalAdsMetrics = useMemo(() => {
-    let spend = 0, impressions = 0;
+    let spend = 0,
+      impressions = 0;
     records.forEach((record: any) => {
-      const source = record._source || 'unknown';
+      const source = record._source || "unknown";
       if (isAdsPlatform(source)) {
         const data = record.data || {};
-        if (data.report_type && data.report_type !== 'daily') return;
+        if (data.report_type && data.report_type !== "daily") return;
         if (!shouldIncludeInAdsDashboardAggregate(data, source)) return;
         spend += getSpendFromData(data);
         impressions += Number(data.impressions) || 0;
@@ -560,39 +764,63 @@ export default function SharedDashboard({
   }, [records]);
 
   const totalSummary = useMemo(() => {
-    let totalSpend = 0, totalImpressions = 0, totalClicks = 0, totalResults = 0, totalLeads = 0;
-    let adsSpend = 0, adsPurchases = 0, adsRevenue = 0;
-    let analyticsRevenue = 0, analyticsPurchases = 0, analyticsAddToCart = 0, analyticsSessions = 0, analyticsUsers = 0;
-    Object.entries(summaryByPlatform).forEach(([platform, d]: [string, any]) => {
-      if (isAnalyticsPlatform(platform)) {
-        analyticsRevenue += d.revenue;
-        analyticsPurchases += d.results;
-        analyticsAddToCart += d.addToCart;
-        analyticsSessions += d.sessions;
-        analyticsUsers += d.users || 0;
-      } else if (isAdsPlatform(platform)) {
-        totalSpend += d.spend;
-        totalImpressions += d.impressions;
-        totalClicks += d.clicks;
-        totalResults += d.results;
-        totalLeads += d.leads || 0;
-        adsPurchases += d.purchases || 0;
-        adsRevenue += d.revenue || 0;
-        adsSpend += d.spend;
-      }
-    });
+    let totalSpend = 0,
+      totalImpressions = 0,
+      totalClicks = 0,
+      totalResults = 0,
+      totalLeads = 0;
+    let adsSpend = 0,
+      adsPurchases = 0,
+      adsRevenue = 0;
+    let analyticsRevenue = 0,
+      analyticsPurchases = 0,
+      analyticsAddToCart = 0,
+      analyticsSessions = 0,
+      analyticsUsers = 0;
+    Object.entries(summaryByPlatform).forEach(
+      ([platform, d]: [string, any]) => {
+        if (isAnalyticsPlatform(platform)) {
+          analyticsRevenue += d.revenue;
+          analyticsPurchases += d.results;
+          analyticsAddToCart += d.addToCart;
+          analyticsSessions += d.sessions;
+          analyticsUsers += d.users || 0;
+        } else if (isAdsPlatform(platform)) {
+          totalSpend += d.spend;
+          totalImpressions += d.impressions;
+          totalClicks += d.clicks;
+          totalResults += d.results;
+          totalLeads += d.leads || 0;
+          adsPurchases += d.purchases || 0;
+          adsRevenue += d.revenue || 0;
+          adsSpend += d.spend;
+        }
+      },
+    );
     const effectiveSpend = totalSpend > 0 ? totalSpend : globalAdsMetrics.spend;
     const effectiveAdsSpend = adsSpend > 0 ? adsSpend : globalAdsMetrics.spend;
-    const effectiveImpressions = totalImpressions > 0 ? totalImpressions : globalAdsMetrics.impressions;
+    const effectiveImpressions =
+      totalImpressions > 0 ? totalImpressions : globalAdsMetrics.impressions;
     return {
-      spend: effectiveSpend, impressions: effectiveImpressions, clicks: totalClicks, results: totalResults, leads: totalLeads,
-      adsPurchases, adsRevenue,
-      revenue: analyticsRevenue, roas_spend: effectiveAdsSpend, roas_value: analyticsRevenue,
-      analyticsPurchases, analyticsAddToCart, analyticsSessions, analyticsUsers,
+      spend: effectiveSpend,
+      impressions: effectiveImpressions,
+      clicks: totalClicks,
+      results: totalResults,
+      leads: totalLeads,
+      adsPurchases,
+      adsRevenue,
+      revenue: analyticsRevenue,
+      roas_spend: effectiveAdsSpend,
+      roas_value: analyticsRevenue,
+      analyticsPurchases,
+      analyticsAddToCart,
+      analyticsSessions,
+      analyticsUsers,
     };
   }, [summaryByPlatform, globalAdsMetrics]);
 
-  const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
+  const combinedCpl =
+    totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
 
   // WooCommerce summary — aligns with PublicWooCommerceView so the "All" tab
   // KPI cards match the WooCommerce tab exactly.
@@ -604,48 +832,82 @@ export default function SharedDashboard({
     return { revenue, orderCount, googlePaid };
   }, [wooOrders]);
 
-  const hasWooData = hasWooCommerce && (wooSummary.revenue > 0 || wooSummary.orderCount > 0);
+  const hasWooData =
+    hasWooCommerce && (wooSummary.revenue > 0 || wooSummary.orderCount > 0);
 
   // ROAS is computed from WooCommerce revenue when available (real store revenue),
   // falling back to Analytics revenue when there's no WooCommerce data.
   const roasRevenue = hasWooData ? wooSummary.revenue : totalSummary.revenue;
-  const combinedRoas = totalSummary.roas_spend > 0 ? roasRevenue / totalSummary.roas_spend : 0;
+  const combinedRoas =
+    totalSummary.roas_spend > 0 ? roasRevenue / totalSummary.roas_spend : 0;
 
   // Analytics source breakdown
   const analyticsSourceBreakdown = useMemo(() => {
     if (!hasVisibleAnalyticsData) return [];
     const categorize = (sourceMedium: string): string => {
       const sm = sourceMedium.toLowerCase();
-      if (sm.includes('facebook') || sm.includes('fb')) {
-        if (sm.includes('paid') || sm.includes('cpc') || sm.includes('cpm')) return 'Facebook ממומן';
-        return 'Facebook אורגני';
+      if (sm.includes("facebook") || sm.includes("fb")) {
+        if (sm.includes("paid") || sm.includes("cpc") || sm.includes("cpm"))
+          return "Facebook ממומן";
+        return "Facebook אורגני";
       }
-      if (sm.includes('instagram') || sm.includes('ig')) {
-        if (sm.includes('paid') || sm.includes('cpc') || sm.includes('cpm')) return 'Instagram ממומן';
-        return 'Instagram אורגני';
+      if (sm.includes("instagram") || sm.includes("ig")) {
+        if (sm.includes("paid") || sm.includes("cpc") || sm.includes("cpm"))
+          return "Instagram ממומן";
+        return "Instagram אורגני";
       }
-      if (sm.includes('google') || sm.includes('googleads')) {
-        if (sm.includes('organic')) return 'Google אורגני';
-        if (sm.includes('cpc') || sm.includes('paid') || sm.includes('ads')) return 'Google ממומן';
-        return 'Google';
+      if (sm.includes("google") || sm.includes("googleads")) {
+        if (sm.includes("organic")) return "Google אורגני";
+        if (sm.includes("cpc") || sm.includes("paid") || sm.includes("ads"))
+          return "Google ממומן";
+        return "Google";
       }
-      if (sm.includes('email') || sm.includes('newsletter') || sm.includes('mailchimp') || sm.includes('klaviyo') || sm.includes('activetrail')) return 'דיוור';
-      if (sm.includes('whatsapp') || sm.includes('wa.me')) return 'WhatsApp';
-      if (sm.includes('organic') || sm.includes('seo')) return 'אורגני';
-      if (sm === '(direct) / (none)' || sm === 'direct' || sm.includes('(direct)') || sm.includes('(none)')) return 'ישיר (Direct)';
-      if (sm.includes('referral')) return 'הפניות (Referral)';
-      return 'אחר';
+      if (
+        sm.includes("email") ||
+        sm.includes("newsletter") ||
+        sm.includes("mailchimp") ||
+        sm.includes("klaviyo") ||
+        sm.includes("activetrail")
+      )
+        return "דיוור";
+      if (sm.includes("whatsapp") || sm.includes("wa.me")) return "WhatsApp";
+      if (sm.includes("organic") || sm.includes("seo")) return "אורגני";
+      if (
+        sm === "(direct) / (none)" ||
+        sm === "direct" ||
+        sm.includes("(direct)") ||
+        sm.includes("(none)")
+      )
+        return "ישיר (Direct)";
+      if (sm.includes("referral")) return "הפניות (Referral)";
+      return "אחר";
     };
 
-    const sources: Record<string, { sessions: number; users: number; purchases: number; revenue: number; addToCart: number }> = {};
+    const sources: Record<
+      string,
+      {
+        sessions: number;
+        users: number;
+        purchases: number;
+        revenue: number;
+        addToCart: number;
+      }
+    > = {};
     records.forEach((record: any) => {
-      const source = record._source || 'unknown';
+      const source = record._source || "unknown";
       if (!isAnalyticsPlatform(source)) return;
       const data = record.data || {};
-      if (data.report_type !== 'daily_source') return;
-      const sm = data.source_medium || 'Unknown';
+      if (data.report_type !== "daily_source") return;
+      const sm = data.source_medium || "Unknown";
       const category = categorize(sm);
-      if (!sources[category]) sources[category] = { sessions: 0, users: 0, purchases: 0, revenue: 0, addToCart: 0 };
+      if (!sources[category])
+        sources[category] = {
+          sessions: 0,
+          users: 0,
+          purchases: 0,
+          revenue: 0,
+          addToCart: 0,
+        };
       sources[category].sessions += Number(data.sessions) || 0;
       sources[category].users += Number(data.users) || 0;
       sources[category].purchases += getPurchasesFromData(data);
@@ -660,14 +922,38 @@ export default function SharedDashboard({
   // Traffic Acquisition by Channel Group
   const channelGroupBreakdown = useMemo(() => {
     if (!hasVisibleAnalyticsData) return [];
-    const channels: Record<string, { sessions: number; engagedSessions: number; users: number; purchases: number; revenue: number; rateSum: number; durationSum: number; eventsSum: number; count: number }> = {};
+    const channels: Record<
+      string,
+      {
+        sessions: number;
+        engagedSessions: number;
+        users: number;
+        purchases: number;
+        revenue: number;
+        rateSum: number;
+        durationSum: number;
+        eventsSum: number;
+        count: number;
+      }
+    > = {};
     records.forEach((record: any) => {
-      const source = record._source || 'unknown';
+      const source = record._source || "unknown";
       if (!isAnalyticsPlatform(source)) return;
       const data = record.data || {};
-      if (data.report_type !== 'channel_group') return;
-      const ch = data.channel_group || 'Unknown';
-      if (!channels[ch]) channels[ch] = { sessions: 0, engagedSessions: 0, users: 0, purchases: 0, revenue: 0, rateSum: 0, durationSum: 0, eventsSum: 0, count: 0 };
+      if (data.report_type !== "channel_group") return;
+      const ch = data.channel_group || "Unknown";
+      if (!channels[ch])
+        channels[ch] = {
+          sessions: 0,
+          engagedSessions: 0,
+          users: 0,
+          purchases: 0,
+          revenue: 0,
+          rateSum: 0,
+          durationSum: 0,
+          eventsSum: 0,
+          count: 0,
+        };
       channels[ch].sessions += Number(data.sessions) || 0;
       channels[ch].engagedSessions += Number(data.engaged_sessions) || 0;
       channels[ch].users += Number(data.users) || 0;
@@ -699,10 +985,20 @@ export default function SharedDashboard({
     filteredRecords.forEach((record: any) => {
       const date = record.data?.date;
       if (!date) return;
-      const source = record._source || 'unknown';
+      const source = record._source || "unknown";
       const data = record.data || {};
       if (!byDate[date]) {
-        byDate[date] = { date, spend: 0, revenue: 0, purchases: 0, addToCart: 0, sessions: 0, clicks: 0, impressions: 0, leads: 0 };
+        byDate[date] = {
+          date,
+          spend: 0,
+          revenue: 0,
+          purchases: 0,
+          addToCart: 0,
+          sessions: 0,
+          clicks: 0,
+          impressions: 0,
+          leads: 0,
+        };
       }
       if (isAnalyticsPlatform(source)) {
         byDate[date].revenue += getRevenueFromData(data);
@@ -717,28 +1013,46 @@ export default function SharedDashboard({
       }
     });
     return Object.values(byDate)
-      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .sort(
+        (a: any, b: any) =>
+          new Date(a.date).getTime() - new Date(b.date).getTime(),
+      )
       .map((d: any) => ({
         ...d,
-        dateLabel: new Date(d.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
+        dateLabel: new Date(d.date).toLocaleDateString("he-IL", {
+          day: "2-digit",
+          month: "2-digit",
+        }),
         roas: d.spend > 0 ? d.revenue / d.spend : 0,
       }));
   }, [filteredRecords]);
 
   // Facebook campaign summary — split ecom / leads / traffic when table is mixed (like DynamicTableView).
   const facebookCampaignGroups = useMemo(() => {
-    const empty = { ecommerce: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, leads: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, traffic: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, all: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords> };
-    const fbRecords = filteredRecords.filter((r: any) => isFacebookPlatform(r._source || ''));
+    const empty = {
+      ecommerce: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>,
+      leads: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>,
+      traffic: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>,
+      all: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>,
+    };
+    const fbRecords = filteredRecords.filter((r: any) =>
+      isFacebookPlatform(r._source || ""),
+    );
     const all = aggregateFacebookCampaignsFromRecords(fbRecords);
 
-    const fbTables = (tables || []).filter((t: any) => isFacebookPlatform(t.integration_type));
-    const forceLeadsOnly = fbTables.some((t: any) => isFacebookLeadsOnlyTable(t.integration_settings));
+    const fbTables = (tables || []).filter((t: any) =>
+      isFacebookPlatform(t.integration_type),
+    );
+    const forceLeadsOnly = fbTables.some((t: any) =>
+      isFacebookLeadsOnlyTable(t.integration_settings),
+    );
 
     if (!facebookMixedMode) {
-      const isEcom = campaignTypeByPlatform['facebook_ecommerce'] === 'ecommerce'
-        || campaignTypeByPlatform['facebook_insights'] === 'ecommerce';
+      const isEcom =
+        campaignTypeByPlatform["facebook_ecommerce"] === "ecommerce" ||
+        campaignTypeByPlatform["facebook_insights"] === "ecommerce";
       const grouped = groupFacebookCampaigns(all, {
-        singleTableMode: isEcom ? 'ecommerce' : 'leads',
+        singleTableMode: isEcom ? "ecommerce" : "leads",
       });
       return { ...grouped, all };
     }
@@ -747,10 +1061,10 @@ export default function SharedDashboard({
     return { ...grouped, all };
   }, [filteredRecords, tables, facebookMixedMode, campaignTypeByPlatform]);
 
-  type PlatformBreakdownRowKind = 'ecommerce' | 'leads' | 'standard';
+  type PlatformBreakdownRowKind = "ecommerce" | "leads" | "standard";
 
   const platformBreakdownRows = useMemo(() => {
-    if (platformFilter !== 'all') return [];
+    if (platformFilter !== "all") return [];
 
     const rows: Array<{
       key: string;
@@ -773,16 +1087,23 @@ export default function SharedDashboard({
     }> = [];
 
     Object.entries(summaryByPlatform)
-      .filter(([platform]) => platform !== 'ahrefs' && platform !== 'seo' && !isAnalyticsPlatform(platform))
+      .filter(
+        ([platform]) =>
+          platform !== "ahrefs" &&
+          platform !== "seo" &&
+          !isAnalyticsPlatform(platform),
+      )
       .forEach(([platform, metrics]: [string, any]) => {
-        if (platform === 'facebook_insights' && facebookMixedMode) {
+        if (platform === "facebook_insights" && facebookMixedMode) {
           if (facebookCampaignGroups.ecommerce.length > 0) {
-            const s = summarizeFacebookCampaignGroup(facebookCampaignGroups.ecommerce);
+            const s = summarizeFacebookCampaignGroup(
+              facebookCampaignGroups.ecommerce,
+            );
             rows.push({
-              key: 'facebook_ecommerce',
+              key: "facebook_ecommerce",
               platform,
-              label: 'Facebook - קמפיינים איקומרס',
-              rowKind: 'ecommerce',
+              label: "Facebook - קמפיינים איקומרס",
+              rowKind: "ecommerce",
               metrics: {
                 spend: s.spend,
                 impressions: s.impressions,
@@ -799,12 +1120,14 @@ export default function SharedDashboard({
             });
           }
           if (facebookCampaignGroups.leads.length > 0) {
-            const s = summarizeFacebookCampaignGroup(facebookCampaignGroups.leads);
+            const s = summarizeFacebookCampaignGroup(
+              facebookCampaignGroups.leads,
+            );
             rows.push({
-              key: 'facebook_leads',
+              key: "facebook_leads",
               platform,
-              label: 'Facebook - קמפיינים לידים',
-              rowKind: 'leads',
+              label: "Facebook - קמפיינים לידים",
+              rowKind: "leads",
               metrics: {
                 spend: s.spend,
                 impressions: s.impressions,
@@ -833,7 +1156,7 @@ export default function SharedDashboard({
           key: platform,
           platform,
           label: config.name,
-          rowKind: 'standard',
+          rowKind: "standard",
           metrics: {
             spend: metrics.spend,
             impressions: metrics.impressions,
@@ -851,25 +1174,41 @@ export default function SharedDashboard({
       });
 
     return rows;
-  }, [platformFilter, summaryByPlatform, facebookMixedMode, facebookCampaignGroups]);
+  }, [
+    platformFilter,
+    summaryByPlatform,
+    facebookMixedMode,
+    facebookCampaignGroups,
+  ]);
 
   const googleAdsRecords = useMemo(
-    () => records.filter((r: any) => (r._source || '') === 'google_ads'),
-    [records]
+    () => records.filter((r: any) => (r._source || "") === "google_ads"),
+    [records],
   );
 
   // Google Ads campaign summary - mirrors DashboardView (uses conversions / conversions_value)
   const googleAdsCampaignSummary = useMemo(() => {
-    const map: Record<string, { name: string; campaign_id: string; impressions: number; clicks: number; spend: number; conversions: number; conversions_value: number }> = {};
+    const map: Record<
+      string,
+      {
+        name: string;
+        campaign_id: string;
+        impressions: number;
+        clicks: number;
+        spend: number;
+        conversions: number;
+        conversions_value: number;
+      }
+    > = {};
 
     googleAdsRecords.forEach((r: any) => {
       const d = r.data || {};
-      const name = d.campaign_name || d.campaign || 'ללא שם';
+      const name = d.campaign_name || d.campaign || "ללא שם";
       const key = String(d.campaign_id || name);
       if (!map[key]) {
         map[key] = {
           name,
-          campaign_id: String(d.campaign_id || ''),
+          campaign_id: String(d.campaign_id || ""),
           impressions: 0,
           clicks: 0,
           spend: 0,
@@ -896,39 +1235,70 @@ export default function SharedDashboard({
         conversions: acc.conversions + c.conversions,
         conversions_value: acc.conversions_value + c.conversions_value,
       }),
-      { impressions: 0, clicks: 0, spend: 0, conversions: 0, conversions_value: 0 }
+      {
+        impressions: 0,
+        clicks: 0,
+        spend: 0,
+        conversions: 0,
+        conversions_value: 0,
+      },
     );
   }, [googleAdsCampaignSummary]);
 
   // Google Ads campaign type — driven strictly by table integration_settings.campaign_type.
-  const googleAdsCampaignType: 'leads' | 'ecommerce' = useMemo(() => {
-    const gaTables = (tables || []).filter((t: any) => t.integration_type === 'google_ads');
-    if (gaTables.some((t: any) => t.integration_settings?.campaign_type === 'ecommerce')) {
-      return 'ecommerce';
+  const googleAdsCampaignType: "leads" | "ecommerce" = useMemo(() => {
+    const gaTables = (tables || []).filter(
+      (t: any) => t.integration_type === "google_ads",
+    );
+    if (
+      gaTables.some(
+        (t: any) => t.integration_settings?.campaign_type === "ecommerce",
+      )
+    ) {
+      return "ecommerce";
     }
-    return 'leads';
+    return "leads";
   }, [tables]);
 
   const googleAdsTableSettings = useMemo(() => {
-    const gaTables = (tables || []).filter((t: any) => t.integration_type === 'google_ads');
-    return gaTables.find((t: any) => t.integration_settings?.use_woo_google_attribution != null)?.integration_settings
-      ?? gaTables[0]?.integration_settings;
+    const gaTables = (tables || []).filter(
+      (t: any) => t.integration_type === "google_ads",
+    );
+    return (
+      gaTables.find(
+        (t: any) => t.integration_settings?.use_woo_google_attribution != null,
+      )?.integration_settings ?? gaTables[0]?.integration_settings
+    );
   }, [tables]);
 
   const googleWooAttribution = wooSummary.googlePaid;
-  const useGoogleWooOverlay = hasWooCommerce
-    && googleAdsCampaignType === 'ecommerce'
-    && shouldUseGoogleWooAttributionOverlay(data?.dashboard?.client_id, googleAdsTableSettings);
-  const googleAdsStorePurchases = useGoogleWooOverlay ? googleWooAttribution.paidOrders : googleAdsTotals.conversions;
-  const googleAdsStoreRevenue = useGoogleWooOverlay ? googleWooAttribution.paidRevenue : googleAdsTotals.conversions_value;
-  const googleAdsStoreRoas = googleAdsTotals.spend > 0 ? googleAdsStoreRevenue / googleAdsTotals.spend : 0;
-  const googleAdsGaDiffersFromWoo = useGoogleWooOverlay && (
-    googleAdsStorePurchases !== googleAdsTotals.conversions
-    || Math.abs(googleAdsStoreRevenue - googleAdsTotals.conversions_value) > 1
-  );
+  const useGoogleWooOverlay =
+    hasWooCommerce &&
+    googleAdsCampaignType === "ecommerce" &&
+    shouldUseGoogleWooAttributionOverlay(
+      data?.dashboard?.client_id,
+      googleAdsTableSettings,
+    );
+  const googleAdsStorePurchases = useGoogleWooOverlay
+    ? googleWooAttribution.paidOrders
+    : googleAdsTotals.conversions;
+  const googleAdsStoreRevenue = useGoogleWooOverlay
+    ? googleWooAttribution.paidRevenue
+    : googleAdsTotals.conversions_value;
+  const googleAdsStoreRoas =
+    googleAdsTotals.spend > 0
+      ? googleAdsStoreRevenue / googleAdsTotals.spend
+      : 0;
+  const googleAdsGaDiffersFromWoo =
+    useGoogleWooOverlay &&
+    (googleAdsStorePurchases !== googleAdsTotals.conversions ||
+      Math.abs(googleAdsStoreRevenue - googleAdsTotals.conversions_value) > 1);
 
   const analyticsTableIds = useMemo(
-    () => (tables || []).filter((t: any) => t.integration_type === 'google_analytics').map((t: any) => t.id as string),
+    () =>
+      (tables || [])
+        .filter((t: any) => t.integration_type === "google_analytics")
+        .map((t: any) => t.id as string),
     [tables],
   );
 
@@ -946,21 +1316,27 @@ export default function SharedDashboard({
       <div className="container mx-auto py-8 px-4 space-y-6" dir="rtl">
         <Skeleton className="h-8 w-64" />
         <div className="grid gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
         </div>
       </div>
     );
   }
 
   if (error || !data?.dashboard) {
-    const detail = error instanceof Error ? error.message : '';
+    const detail = error instanceof Error ? error.message : "";
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl" data-snapshot-error={detail || 'load_failed'}>
+      <div
+        className="min-h-screen flex items-center justify-center bg-background"
+        dir="rtl"
+        data-snapshot-error={detail || "load_failed"}
+      >
         <Card className="max-w-md w-full">
           <CardContent className="p-8 text-center">
             <h2 className="text-xl font-bold mb-2">לא ניתן לטעון את הדוח</h2>
             <p className="text-muted-foreground">
-              {detail || 'קישור השיתוף אינו פעיל או שפג תוקפו.'}
+              {detail || "קישור השיתוף אינו פעיל או שפג תוקפו."}
             </p>
           </CardContent>
         </Card>
@@ -969,16 +1345,31 @@ export default function SharedDashboard({
   }
 
   const dashboard = data.dashboard;
-  const showAnalyticsCards = (platformFilter === 'all' || platformFilter === 'google_analytics') && hasVisibleAnalyticsData && totalSummary.analyticsSessions > 0;
-  const showAdsCards = platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads';
+  const showAnalyticsCards =
+    (platformFilter === "all" || platformFilter === "google_analytics") &&
+    hasVisibleAnalyticsData &&
+    totalSummary.analyticsSessions > 0;
+  const showAdsCards =
+    platformFilter === "all" ||
+    platformFilter === "facebook" ||
+    platformFilter === "google_ads";
   // Revenue cubes should appear with WooCommerce alone (no GA required)
-  const showRevenueCards = (platformFilter === 'all' || platformFilter === 'google_analytics' || platformFilter === 'woocommerce')
-    && (showAnalyticsCards || hasWooData);
+  const showRevenueCards =
+    (platformFilter === "all" ||
+      platformFilter === "google_analytics" ||
+      platformFilter === "woocommerce") &&
+    (showAnalyticsCards || hasWooData);
 
-  const isSnapshotReady = !isLoading && !!data?.dashboard && Array.isArray(tables);
+  const isSnapshotReady =
+    !isLoading && !!data?.dashboard && Array.isArray(tables);
 
   return (
-    <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4 space-y-6" dir="rtl" data-snapshot-ready={isSnapshotReady ? "true" : "false"} data-snapshot-frame="true">
+    <div
+      className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4 space-y-6"
+      dir="rtl"
+      data-snapshot-ready={isSnapshotReady ? "true" : "false"}
+      data-snapshot-frame="true"
+    >
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -997,40 +1388,49 @@ export default function SharedDashboard({
           </div>
         </div>
         {!snapshotMode && (
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              setIsRefreshing(true);
-              try {
-                await queryClient.invalidateQueries({ queryKey: ['shared-dashboard', shareToken] });
-              } finally {
-                setIsRefreshing(false);
-              }
-            }}
-            disabled={isRefreshing}
-          >
-            <RefreshCw className={`ml-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            רענן נתונים
-          </Button>
-          <Select value={dateFilter} onValueChange={setDateFilter}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {DATE_FILTERS.map(f => (
-                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                setIsRefreshing(true);
+                try {
+                  await queryClient.invalidateQueries({
+                    queryKey: ["shared-dashboard", shareToken],
+                  });
+                } finally {
+                  setIsRefreshing(false);
+                }
+              }}
+              disabled={isRefreshing}
+            >
+              <RefreshCw
+                className={`ml-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+              />
+              רענן נתונים
+            </Button>
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DATE_FILTERS.map((f) => (
+                  <SelectItem key={f.value} value={f.value}>
+                    {f.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         )}
       </div>
 
       {/* Platform Tabs */}
       {availablePlatforms.length > 0 && (
-        <Tabs value={platformFilter} onValueChange={(v) => setPlatformFilter(v as PlatformFilter)}>
+        <Tabs
+          value={platformFilter}
+          onValueChange={(v) => setPlatformFilter(v as PlatformFilter)}
+        >
           <ResponsiveTabsList
             items={platformTabItems}
             value={platformFilter}
@@ -1041,7 +1441,7 @@ export default function SharedDashboard({
       )}
 
       {/* Analytics Tab → Full GoogleAnalyticsDashboard */}
-      {platformFilter === 'weekly' ? (
+      {platformFilter === "weekly" ? (
         <WeeklyCampaignComparison
           records={weeklyRecords}
           currency={getCurrencySymbol(dashboardCurrency)}
@@ -1052,7 +1452,7 @@ export default function SharedDashboard({
             google_ads: campaignTypeByPlatform.google_ads,
           }}
         />
-      ) : platformFilter === 'google_analytics' ? (
+      ) : platformFilter === "google_analytics" ? (
         <GoogleAnalyticsDashboard
           records={allAnalyticsRecords}
           externalDateFilter={dateFilter}
@@ -1060,10 +1460,14 @@ export default function SharedDashboard({
           relatedTableIds={analyticsTableIds.slice(1)}
           defaultReportMode={analyticsReportMode}
         />
-      ) : platformFilter === 'woocommerce' ? (
+      ) : platformFilter === "woocommerce" ? (
         <PublicWooCommerceView sites={wooSites} orders={wooOrders} />
-      ) : platformFilter === 'seo' ? (
-        <Tabs value={seoActiveTab} onValueChange={setSeoActiveTab} className="w-full">
+      ) : platformFilter === "seo" ? (
+        <Tabs
+          value={seoActiveTab}
+          onValueChange={setSeoActiveTab}
+          className="w-full"
+        >
           <ResponsiveTabsList
             items={seoTabItems}
             value={seoActiveTab}
@@ -1072,16 +1476,23 @@ export default function SharedDashboard({
           />
           <TabsContent value="seo" className="space-y-4">
             <PublicSeoView
-              tableName={dashboard?.client_name || 'SEO'}
+              tableName={dashboard?.client_name || "SEO"}
               reports={ahrefsReports}
               gscData={seoGscAggregated}
               gscMultiPeriod={gscMultiPeriod}
               gaOrganicByMonth={seoGaOrganicByMonth}
               clientId={dashboard?.client_id || null}
-              forceRelevant={(data as any)?.seo_keyword_relevance?.force_relevant || []}
-              forceIrrelevant={(data as any)?.seo_keyword_relevance?.force_irrelevant || []}
+              forceRelevant={
+                (data as any)?.seo_keyword_relevance?.force_relevant || []
+              }
+              forceIrrelevant={
+                (data as any)?.seo_keyword_relevance?.force_irrelevant || []
+              }
             />
-            <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
+            <PublicMaskyooCallsCard
+              snapshots={maskyooSnapshots}
+              periodLabel={maskyooPeriodLabel}
+            />
           </TabsContent>
           {hasSeoGsc && (
             <TabsContent value="gsc">
@@ -1098,105 +1509,171 @@ export default function SharedDashboard({
           )}
           <TabsContent value="monthly-work">
             <PublicSeoMonthlyWorkView
-              clientName={seoMonthly?.client_name || dashboard?.client_name || dashboard?.name}
+              clientName={
+                seoMonthly?.client_name ||
+                dashboard?.client_name ||
+                dashboard?.name
+              }
               domain={seoMonthly?.domain || null}
               months={hasMonthlyWork ? seoMonthly.months : []}
               shareToken={seoMonthly?.share_token || null}
               ahrefsReports={ahrefsReports}
-              forceRelevant={(data as any)?.seo_keyword_relevance?.force_relevant || []}
-              forceIrrelevant={(data as any)?.seo_keyword_relevance?.force_irrelevant || []}
+              forceRelevant={
+                (data as any)?.seo_keyword_relevance?.force_relevant || []
+              }
+              forceIrrelevant={
+                (data as any)?.seo_keyword_relevance?.force_irrelevant || []
+              }
             />
           </TabsContent>
         </Tabs>
       ) : (
         <>
           {/* Summary Cards - "All" tab: 7 KPI cards like DashboardView */}
-          {platformFilter === 'all' && (
+          {platformFilter === "all" && (
             <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 auto-rows-fr">
               {(showAdsCards || showAnalyticsCards) && (
                 <Card className="h-full bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
                   <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                     <p className="text-sm text-muted-foreground">הוצאה כוללת</p>
-                    <p className="text-3xl font-bold mt-2">{formatCurrency(totalSummary.spend)}</p>
+                    <p className="text-3xl font-bold mt-2">
+                      {formatCurrency(totalSummary.spend)}
+                    </p>
                   </CardContent>
                 </Card>
               )}
 
-              {dashboardCampaignType === 'ecommerce' ? (
+              {dashboardCampaignType === "ecommerce" ? (
                 <>
                   {showAdsCards && (
                     <Card className="h-full bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-950 dark:to-indigo-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">סה״כ חשיפות</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.impressions)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          סה״כ חשיפות
+                        </p>
+                        <p className="text-3xl font-bold mt-2">
+                          {formatNumber(totalSummary.impressions)}
+                        </p>
                       </CardContent>
                     </Card>
                   )}
                   {showAdsCards && (
                     <Card className="h-full bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-950 dark:to-violet-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">סה״כ קליקים</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.clicks)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          סה״כ קליקים
+                        </p>
+                        <p className="text-3xl font-bold mt-2">
+                          {formatNumber(totalSummary.clicks)}
+                        </p>
                       </CardContent>
                     </Card>
                   )}
-                  {showAdsCards && facebookMixedMode && totalSummary.leads > 0 && (
-                    <Card className="h-full bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
-                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">לידים</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.leads)}</p>
-                      </CardContent>
-                    </Card>
-                  )}
-                  {showAdsCards && facebookMixedMode && totalSummary.leads > 0 && (
-                    <Card className="h-full bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900">
-                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
-                        <p className="text-3xl font-bold mt-2">{formatCurrency(totalSummary.leads > 0 ? totalSummary.spend / totalSummary.leads : 0)}</p>
-                      </CardContent>
-                    </Card>
-                  )}
+                  {showAdsCards &&
+                    facebookMixedMode &&
+                    totalSummary.leads > 0 && (
+                      <Card className="h-full bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                          <p className="text-sm text-muted-foreground">לידים</p>
+                          <p className="text-3xl font-bold mt-2">
+                            {formatNumber(totalSummary.leads)}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  {showAdsCards &&
+                    facebookMixedMode &&
+                    totalSummary.leads > 0 && (
+                      <Card className="h-full bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                          <p className="text-sm text-muted-foreground">
+                            עלות לליד (CPL)
+                          </p>
+                          <p className="text-3xl font-bold mt-2">
+                            {formatCurrency(
+                              totalSummary.leads > 0
+                                ? totalSummary.spend / totalSummary.leads
+                                : 0,
+                            )}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )}
                   {showRevenueCards && (
                     <Card className="h-full bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                         <p className="text-sm text-muted-foreground">
-                          {hasWooData ? "סה״כ הכנסות (WooCommerce)" : "סה״כ הכנסות"}
+                          {hasWooData
+                            ? "סה״כ הכנסות (WooCommerce)"
+                            : "סה״כ הכנסות"}
                         </p>
                         <p className="text-3xl font-bold mt-2">
-                          {formatCurrency(hasWooData ? wooSummary.revenue : totalSummary.revenue)}
+                          {formatCurrency(
+                            hasWooData
+                              ? wooSummary.revenue
+                              : totalSummary.revenue,
+                          )}
                         </p>
                       </CardContent>
                     </Card>
                   )}
-                  {showRevenueCards && ((hasWooData && wooSummary.orderCount > 0) || totalSummary.analyticsPurchases > 0 || totalSummary.results > 0) && (
-                    <Card className="h-full bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
+                  {showRevenueCards &&
+                    ((hasWooData && wooSummary.orderCount > 0) ||
+                      totalSummary.analyticsPurchases > 0 ||
+                      totalSummary.results > 0) && (
+                      <Card className="h-full bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                          <p className="text-sm text-muted-foreground">
+                            {hasWooData
+                              ? "רכישות (WooCommerce)"
+                              : "רכישות (Analytics)"}
+                          </p>
+                          <p className="text-3xl font-bold mt-2">
+                            {formatNumber(
+                              hasWooData
+                                ? wooSummary.orderCount
+                                : totalSummary.analyticsPurchases ||
+                                    totalSummary.adsPurchases ||
+                                    totalSummary.results,
+                            )}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  {showAnalyticsCards &&
+                    totalSummary.analyticsAddToCart > 0 && (
+                      <Card className="h-full bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
+                        <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                          <p className="text-sm text-muted-foreground">
+                            הוספה לעגלה (ATC)
+                          </p>
+                          <p className="text-3xl font-bold mt-2">
+                            {formatNumber(totalSummary.analyticsAddToCart)}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  {(platformFilter === "all" ||
+                    platformFilter === "google_analytics" ||
+                    platformFilter === "woocommerce") && (
+                    <Card
+                      className={`h-full bg-gradient-to-br ${combinedRoas >= 1 ? "from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900" : "from-red-50 to-red-100 dark:from-red-950 dark:to-red-900"}`}
+                    >
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                         <p className="text-sm text-muted-foreground">
-                          {hasWooData ? "רכישות (WooCommerce)" : "רכישות (Analytics)"}
+                          ROAS משולב
                         </p>
-                        <p className="text-3xl font-bold mt-2">
-                          {formatNumber(hasWooData ? wooSummary.orderCount : (totalSummary.analyticsPurchases || totalSummary.adsPurchases || totalSummary.results))}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  )}
-                  {showAnalyticsCards && totalSummary.analyticsAddToCart > 0 && (
-                    <Card className="h-full bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
-                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">הוספה לעגלה (ATC)</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.analyticsAddToCart)}</p>
-                      </CardContent>
-                    </Card>
-                  )}
-                  {(platformFilter === 'all' || platformFilter === 'google_analytics' || platformFilter === 'woocommerce') && (
-                    <Card className={`h-full bg-gradient-to-br ${combinedRoas >= 1 ? 'from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900' : 'from-red-50 to-red-100 dark:from-red-950 dark:to-red-900'}`}>
-                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">ROAS משולב</p>
                         <div className="flex items-center gap-2 mt-2">
-                          <p className="text-3xl font-bold">{combinedRoas.toFixed(2)}</p>
-                          {combinedRoas > 1 ? <TrendingUp className="h-6 w-6 text-green-600" /> :
-                            combinedRoas < 1 ? <TrendingDown className="h-6 w-6 text-red-600" /> :
-                            <Minus className="h-6 w-6 text-muted-foreground" />}
+                          <p className="text-3xl font-bold">
+                            {combinedRoas.toFixed(2)}
+                          </p>
+                          {combinedRoas > 1 ? (
+                            <TrendingUp className="h-6 w-6 text-green-600" />
+                          ) : combinedRoas < 1 ? (
+                            <TrendingDown className="h-6 w-6 text-red-600" />
+                          ) : (
+                            <Minus className="h-6 w-6 text-muted-foreground" />
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -1208,7 +1685,9 @@ export default function SharedDashboard({
                     <Card className="h-full bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                         <p className="text-sm text-muted-foreground">לידים</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.results)}</p>
+                        <p className="text-3xl font-bold mt-2">
+                          {formatNumber(totalSummary.results)}
+                        </p>
                       </CardContent>
                     </Card>
                   )}
@@ -1216,23 +1695,33 @@ export default function SharedDashboard({
                     <Card className="h-full bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                         <p className="text-sm text-muted-foreground">קליקים</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.clicks)}</p>
+                        <p className="text-3xl font-bold mt-2">
+                          {formatNumber(totalSummary.clicks)}
+                        </p>
                       </CardContent>
                     </Card>
                   )}
                   {showAdsCards && (
                     <Card className="h-full bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
-                        <p className="text-3xl font-bold mt-2">{formatCurrency(combinedCpl)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          עלות לליד (CPL)
+                        </p>
+                        <p className="text-3xl font-bold mt-2">
+                          {formatCurrency(combinedCpl)}
+                        </p>
                       </CardContent>
                     </Card>
                   )}
                   {showAnalyticsCards && (
                     <Card className="h-full bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
-                        <p className="text-sm text-muted-foreground">סשנים (Analytics)</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.analyticsSessions)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          סשנים (Analytics)
+                        </p>
+                        <p className="text-3xl font-bold mt-2">
+                          {formatNumber(totalSummary.analyticsSessions)}
+                        </p>
                       </CardContent>
                     </Card>
                   )}
@@ -1241,157 +1730,284 @@ export default function SharedDashboard({
             </div>
           )}
 
-
           {/* Facebook Campaign Summary Tables */}
-          {platformFilter === 'facebook' && facebookCampaignGroups.all.length > 0 && (
-            <div className="space-y-4">
-              {facebookCampaignGroups.ecommerce.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Facebook className="h-5 w-5 text-blue-600" />
-                      קמפיינים איקומרס - Facebook
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-right">קמפיין</TableHead>
-                            <TableHead className="text-right">חשיפות</TableHead>
-                            <TableHead className="text-right">קליקים</TableHead>
-                            <TableHead className="text-right">הוצאה</TableHead>
-                            <TableHead className="text-right">הוספות לעגלה</TableHead>
-                            <TableHead className="text-right">רכישות</TableHead>
-                            <TableHead className="text-right">ערך רכישות</TableHead>
-                            <TableHead className="text-right">ROAS</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {facebookCampaignGroups.ecommerce.map((c) => {
-                            const roas = c.spend > 0 ? c.purchase_value / c.spend : 0;
-                            return (
-                              <TableRow key={`ecom-${c.name}`}>
-                                <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
-                                <TableCell>{formatNumber(c.impressions)}</TableCell>
-                                <TableCell>{formatNumber(c.clicks)}</TableCell>
-                                <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                <TableCell className={c.add_to_cart > 0 ? 'text-orange-600 font-medium' : ''}>{formatNumber(c.add_to_cart)}</TableCell>
-                                <TableCell className={c.purchases > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(c.purchases)}</TableCell>
-                                <TableCell className={c.purchase_value > 0 ? 'text-green-600 font-medium' : ''}>{formatCurrency(c.purchase_value)}</TableCell>
-                                <TableCell>
-                                  <span className={roas >= 1 ? 'text-green-600 font-semibold' : roas > 0 ? 'text-red-600' : ''}>
-                                    {roas > 0 ? roas.toFixed(2) + 'x' : '0x'}
-                                  </span>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-              {facebookCampaignGroups.leads.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Facebook className="h-5 w-5 text-blue-600" />
-                      קמפיינים לידים - Facebook
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-right">קמפיין</TableHead>
-                            <TableHead className="text-right">חשיפות</TableHead>
-                            <TableHead className="text-right">קליקים</TableHead>
-                            <TableHead className="text-right">לידים</TableHead>
-                            <TableHead className="text-right">הוצאה</TableHead>
-                            <TableHead className="text-right">עלות לליד</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {facebookCampaignGroups.leads.map((c) => {
-                            const cpl = c.leads > 0 ? c.spend / c.leads : 0;
-                            return (
-                              <TableRow key={`leads-${c.name}`}>
-                                <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
-                                <TableCell>{formatNumber(c.impressions)}</TableCell>
-                                <TableCell>{formatNumber(c.clicks)}</TableCell>
-                                <TableCell className={c.leads > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(c.leads)}</TableCell>
-                                <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                <TableCell>{cpl > 0 ? formatCurrency(cpl) : '-'}</TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-              {facebookCampaignGroups.traffic.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Facebook className="h-5 w-5 text-blue-600" />
-                      קמפיינים טראפיק - Facebook
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-right">קמפיין</TableHead>
-                            <TableHead className="text-right">חשיפות</TableHead>
-                            <TableHead className="text-right">קליקים</TableHead>
-                            <TableHead className="text-right">הוצאה</TableHead>
-                            <TableHead className="text-right">CTR</TableHead>
-                            <TableHead className="text-right">עלות לקליק</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {facebookCampaignGroups.traffic.map((c) => {
-                            const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
-                            const cpc = c.clicks > 0 ? c.spend / c.clicks : 0;
-                            return (
-                              <TableRow key={`traffic-${c.name}`}>
-                                <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
-                                <TableCell>{formatNumber(c.impressions)}</TableCell>
-                                <TableCell className={c.clicks > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(c.clicks)}</TableCell>
-                                <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                <TableCell>{ctr > 0 ? ctr.toFixed(2) + '%' : '-'}</TableCell>
-                                <TableCell>{cpc > 0 ? formatCurrency(cpc) : '-'}</TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-              <p className="text-xs text-muted-foreground px-1">
-                * נתוני רכישות וערך רכישות מבוססים על דיווח פייסבוק (כולל ייחוס צפייה וחלון 7 ימים). ה-ROAS הכללי בשורת הסה"כ מחושב לפי הכנסות WooCommerce / Analytics בפועל.
-              </p>
-            </div>
-          )}
+          {platformFilter === "facebook" &&
+            facebookCampaignGroups.all.length > 0 && (
+              <div className="space-y-4">
+                {facebookCampaignGroups.ecommerce.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Facebook className="h-5 w-5 text-blue-600" />
+                        קמפיינים איקומרס - Facebook
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">
+                                קמפיין
+                              </TableHead>
+                              <TableHead className="text-right">
+                                חשיפות
+                              </TableHead>
+                              <TableHead className="text-right">
+                                קליקים
+                              </TableHead>
+                              <TableHead className="text-right">
+                                הוצאה
+                              </TableHead>
+                              <TableHead className="text-right">
+                                הוספות לעגלה
+                              </TableHead>
+                              <TableHead className="text-right">
+                                רכישות
+                              </TableHead>
+                              <TableHead className="text-right">
+                                ערך רכישות
+                              </TableHead>
+                              <TableHead className="text-right">ROAS</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {facebookCampaignGroups.ecommerce.map((c) => {
+                              const roas =
+                                c.spend > 0 ? c.purchase_value / c.spend : 0;
+                              return (
+                                <TableRow key={`ecom-${c.name}`}>
+                                  <TableCell className="font-medium max-w-[300px]">
+                                    {c.name}
+                                  </TableCell>
+                                  <TableCell>
+                                    {formatNumber(c.impressions)}
+                                  </TableCell>
+                                  <TableCell>
+                                    {formatNumber(c.clicks)}
+                                  </TableCell>
+                                  <TableCell>
+                                    {formatCurrency(c.spend)}
+                                  </TableCell>
+                                  <TableCell
+                                    className={
+                                      c.add_to_cart > 0
+                                        ? "text-orange-600 font-medium"
+                                        : ""
+                                    }
+                                  >
+                                    {formatNumber(c.add_to_cart)}
+                                  </TableCell>
+                                  <TableCell
+                                    className={
+                                      c.purchases > 0
+                                        ? "text-green-600 font-medium"
+                                        : ""
+                                    }
+                                  >
+                                    {formatNumber(c.purchases)}
+                                  </TableCell>
+                                  <TableCell
+                                    className={
+                                      c.purchase_value > 0
+                                        ? "text-green-600 font-medium"
+                                        : ""
+                                    }
+                                  >
+                                    {formatCurrency(c.purchase_value)}
+                                  </TableCell>
+                                  <TableCell>
+                                    <span
+                                      className={
+                                        roas >= 1
+                                          ? "text-green-600 font-semibold"
+                                          : roas > 0
+                                            ? "text-red-600"
+                                            : ""
+                                      }
+                                    >
+                                      {roas > 0 ? roas.toFixed(2) + "x" : "0x"}
+                                    </span>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                {facebookCampaignGroups.leads.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Facebook className="h-5 w-5 text-blue-600" />
+                        קמפיינים לידים - Facebook
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">
+                                קמפיין
+                              </TableHead>
+                              <TableHead className="text-right">
+                                חשיפות
+                              </TableHead>
+                              <TableHead className="text-right">
+                                קליקים
+                              </TableHead>
+                              <TableHead className="text-right">
+                                לידים
+                              </TableHead>
+                              <TableHead className="text-right">
+                                הוצאה
+                              </TableHead>
+                              <TableHead className="text-right">
+                                עלות לליד
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {facebookCampaignGroups.leads.map((c) => {
+                              const cpl = c.leads > 0 ? c.spend / c.leads : 0;
+                              return (
+                                <TableRow key={`leads-${c.name}`}>
+                                  <TableCell className="font-medium max-w-[300px]">
+                                    {c.name}
+                                  </TableCell>
+                                  <TableCell>
+                                    {formatNumber(c.impressions)}
+                                  </TableCell>
+                                  <TableCell>
+                                    {formatNumber(c.clicks)}
+                                  </TableCell>
+                                  <TableCell
+                                    className={
+                                      c.leads > 0
+                                        ? "text-green-600 font-medium"
+                                        : ""
+                                    }
+                                  >
+                                    {formatNumber(c.leads)}
+                                  </TableCell>
+                                  <TableCell>
+                                    {formatCurrency(c.spend)}
+                                  </TableCell>
+                                  <TableCell>
+                                    {cpl > 0 ? formatCurrency(cpl) : "-"}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                {facebookCampaignGroups.traffic.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Facebook className="h-5 w-5 text-blue-600" />
+                        קמפיינים טראפיק - Facebook
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-right">
+                                קמפיין
+                              </TableHead>
+                              <TableHead className="text-right">
+                                חשיפות
+                              </TableHead>
+                              <TableHead className="text-right">
+                                קליקים
+                              </TableHead>
+                              <TableHead className="text-right">
+                                הוצאה
+                              </TableHead>
+                              <TableHead className="text-right">CTR</TableHead>
+                              <TableHead className="text-right">
+                                עלות לקליק
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {facebookCampaignGroups.traffic.map((c) => {
+                              const ctr =
+                                c.impressions > 0
+                                  ? (c.clicks / c.impressions) * 100
+                                  : 0;
+                              const cpc = c.clicks > 0 ? c.spend / c.clicks : 0;
+                              return (
+                                <TableRow key={`traffic-${c.name}`}>
+                                  <TableCell className="font-medium max-w-[300px]">
+                                    {c.name}
+                                  </TableCell>
+                                  <TableCell>
+                                    {formatNumber(c.impressions)}
+                                  </TableCell>
+                                  <TableCell
+                                    className={
+                                      c.clicks > 0
+                                        ? "text-green-600 font-medium"
+                                        : ""
+                                    }
+                                  >
+                                    {formatNumber(c.clicks)}
+                                  </TableCell>
+                                  <TableCell>
+                                    {formatCurrency(c.spend)}
+                                  </TableCell>
+                                  <TableCell>
+                                    {ctr > 0 ? ctr.toFixed(2) + "%" : "-"}
+                                  </TableCell>
+                                  <TableCell>
+                                    {cpc > 0 ? formatCurrency(cpc) : "-"}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                <p className="text-xs text-muted-foreground px-1">
+                  * נתוני רכישות וערך רכישות מבוססים על דיווח פייסבוק (כולל
+                  ייחוס צפייה וחלון 7 ימים). ה-ROAS הכללי בשורת הסה"כ מחושב לפי
+                  הכנסות WooCommerce / Analytics בפועל.
+                </p>
+              </div>
+            )}
 
           {/* Google Ads Campaign Summary */}
-          {platformFilter === 'google_ads' && (
+          {platformFilter === "google_ads" && (
             <>
               {useGoogleWooOverlay && googleAdsGaDiffersFromWoo && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
-                  רכישות והכנסות בכרטיסים למטה מבוססים על ייחוס WooCommerce (Google ממומן).
-                  דיווח Google Ads: {formatNumber(googleAdsTotals.conversions)} המרות, {formatCurrency(googleAdsTotals.conversions_value)} ערך המרה.
+                  רכישות והכנסות בכרטיסים למטה מבוססים על ייחוס WooCommerce
+                  (Google ממומן). דיווח Google Ads:{" "}
+                  {formatNumber(googleAdsTotals.conversions)} המרות,{" "}
+                  {formatCurrency(googleAdsTotals.conversions_value)} ערך המרה.
                   {googleWooAttribution.organicOrders > 0 && (
-                    <> בנוסף: {formatNumber(googleWooAttribution.organicOrders)} רכישות Google אורגני ({formatCurrency(googleWooAttribution.organicRevenue)}).</>
+                    <>
+                      {" "}
+                      בנוסף: {formatNumber(
+                        googleWooAttribution.organicOrders,
+                      )}{" "}
+                      רכישות Google אורגני (
+                      {formatCurrency(googleWooAttribution.organicRevenue)}).
+                    </>
                   )}
                 </div>
               )}
@@ -1399,32 +2015,43 @@ export default function SharedDashboard({
                 <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
                   <CardContent className="p-6 text-center">
                     <p className="text-sm text-muted-foreground">הוצאה כוללת</p>
-                    <p className="text-3xl font-bold mt-2">{formatCurrency(googleAdsTotals.spend)}</p>
+                    <p className="text-3xl font-bold mt-2">
+                      {formatCurrency(googleAdsTotals.spend)}
+                    </p>
                   </CardContent>
                 </Card>
                 <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
                   <CardContent className="p-6 text-center">
                     <p className="text-sm text-muted-foreground">חשיפות</p>
-                    <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.impressions)}</p>
+                    <p className="text-3xl font-bold mt-2">
+                      {formatNumber(googleAdsTotals.impressions)}
+                    </p>
                   </CardContent>
                 </Card>
                 <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
                   <CardContent className="p-6 text-center">
                     <p className="text-sm text-muted-foreground">קליקים</p>
-                    <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.clicks)}</p>
+                    <p className="text-3xl font-bold mt-2">
+                      {formatNumber(googleAdsTotals.clicks)}
+                    </p>
                   </CardContent>
                 </Card>
-                {googleAdsCampaignType === 'ecommerce' ? (
+                {googleAdsCampaignType === "ecommerce" ? (
                   <>
                     <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
                       <CardContent className="p-6 text-center">
                         <p className="text-sm text-muted-foreground">
-                          {useGoogleWooOverlay ? 'רכישות (WooCommerce)' : 'רכישות'}
+                          {useGoogleWooOverlay
+                            ? "רכישות (WooCommerce)"
+                            : "רכישות"}
                         </p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsStorePurchases)}</p>
+                        <p className="text-3xl font-bold mt-2">
+                          {formatNumber(googleAdsStorePurchases)}
+                        </p>
                         {useGoogleWooOverlay && googleAdsGaDiffersFromWoo && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            Google Ads: {formatNumber(googleAdsTotals.conversions)}
+                            Google Ads:{" "}
+                            {formatNumber(googleAdsTotals.conversions)}
                           </p>
                         )}
                       </CardContent>
@@ -1432,12 +2059,17 @@ export default function SharedDashboard({
                     <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                       <CardContent className="p-6 text-center">
                         <p className="text-sm text-muted-foreground">
-                          {useGoogleWooOverlay ? 'הכנסות (WooCommerce)' : 'הכנסות'}
+                          {useGoogleWooOverlay
+                            ? "הכנסות (WooCommerce)"
+                            : "הכנסות"}
                         </p>
-                        <p className="text-3xl font-bold mt-2">{formatCurrency(googleAdsStoreRevenue)}</p>
+                        <p className="text-3xl font-bold mt-2">
+                          {formatCurrency(googleAdsStoreRevenue)}
+                        </p>
                         {useGoogleWooOverlay && googleAdsGaDiffersFromWoo && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            Google Ads: {formatCurrency(googleAdsTotals.conversions_value)}
+                            Google Ads:{" "}
+                            {formatCurrency(googleAdsTotals.conversions_value)}
                           </p>
                         )}
                       </CardContent>
@@ -1445,12 +2077,12 @@ export default function SharedDashboard({
                     <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
                       <CardContent className="p-6 text-center">
                         <p className="text-sm text-muted-foreground">
-                          {useGoogleWooOverlay ? 'ROAS (WooCommerce)' : 'ROAS'}
+                          {useGoogleWooOverlay ? "ROAS (WooCommerce)" : "ROAS"}
                         </p>
                         <p className="text-3xl font-bold mt-2">
                           {googleAdsTotals.spend > 0
                             ? googleAdsStoreRoas.toFixed(2)
-                            : '-'}
+                            : "-"}
                         </p>
                       </CardContent>
                     </Card>
@@ -1460,16 +2092,23 @@ export default function SharedDashboard({
                     <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
                       <CardContent className="p-6 text-center">
                         <p className="text-sm text-muted-foreground">המרות</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.conversions)}</p>
+                        <p className="text-3xl font-bold mt-2">
+                          {formatNumber(googleAdsTotals.conversions)}
+                        </p>
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
                       <CardContent className="p-6 text-center">
-                        <p className="text-sm text-muted-foreground">עלות להמרה</p>
+                        <p className="text-sm text-muted-foreground">
+                          עלות להמרה
+                        </p>
                         <p className="text-3xl font-bold mt-2">
                           {googleAdsTotals.conversions > 0
-                            ? formatCurrency(googleAdsTotals.spend / googleAdsTotals.conversions)
-                            : '-'}
+                            ? formatCurrency(
+                                googleAdsTotals.spend /
+                                  googleAdsTotals.conversions,
+                              )
+                            : "-"}
                         </p>
                       </CardContent>
                     </Card>
@@ -1477,134 +2116,249 @@ export default function SharedDashboard({
                 )}
               </div>
 
-              {googleAdsCampaignSummary.length > 0 && (() => {
-                const totalCtr = googleAdsTotals.impressions > 0
-                  ? (googleAdsTotals.clicks / googleAdsTotals.impressions) * 100
-                  : 0;
-                const totalCpc = googleAdsTotals.clicks > 0
-                  ? googleAdsTotals.spend / googleAdsTotals.clicks
-                  : 0;
-                const totalCpa = googleAdsTotals.conversions > 0
-                  ? googleAdsTotals.spend / googleAdsTotals.conversions
-                  : 0;
+              {googleAdsCampaignSummary.length > 0 &&
+                (() => {
+                  const totalCtr =
+                    googleAdsTotals.impressions > 0
+                      ? (googleAdsTotals.clicks / googleAdsTotals.impressions) *
+                        100
+                      : 0;
+                  const totalCpc =
+                    googleAdsTotals.clicks > 0
+                      ? googleAdsTotals.spend / googleAdsTotals.clicks
+                      : 0;
+                  const totalCpa =
+                    googleAdsTotals.conversions > 0
+                      ? googleAdsTotals.spend / googleAdsTotals.conversions
+                      : 0;
 
-                return (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        {getIntegrationIcon('google_ads')}
-                        סיכום קמפיינים - Google Ads
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="text-right">קמפיין</TableHead>
-                              <TableHead className="text-right">חשיפות</TableHead>
-                              <TableHead className="text-right">קליקים</TableHead>
-                              <TableHead className="text-right">CTR</TableHead>
-                              <TableHead className="text-right">CPC</TableHead>
-                              <TableHead className="text-right">הוצאה</TableHead>
-                              {googleAdsCampaignType === 'ecommerce' ? (
-                                <>
-                                  <TableHead className="text-right">רכישות</TableHead>
-                                  <TableHead className="text-right">הכנסות</TableHead>
-                                  <TableHead className="text-right">ROAS</TableHead>
-                                  <TableHead className="text-right">AOV</TableHead>
-                                </>
-                              ) : (
-                                <>
-                                  <TableHead className="text-right">המרות</TableHead>
-                                  <TableHead className="text-right">עלות להמרה</TableHead>
-                                </>
-                              )}
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {googleAdsCampaignSummary.map((c, i) => {
-                              const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
-                              const cpc = c.clicks > 0 ? c.spend / c.clicks : 0;
-                              const cpa = c.conversions > 0 ? c.spend / c.conversions : 0;
-                              const roas = c.spend > 0 ? c.conversions_value / c.spend : 0;
-                              const aov = c.conversions > 0 ? c.conversions_value / c.conversions : 0;
-                              return (
-                                <TableRow key={i}>
-                                  <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
-                                  <TableCell>{formatNumber(c.impressions)}</TableCell>
-                                  <TableCell>{formatNumber(c.clicks)}</TableCell>
-                                  <TableCell>{ctr.toFixed(2)}%</TableCell>
-                                  <TableCell>{cpc > 0 ? formatUnitCost(cpc) : '-'}</TableCell>
-                                  <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                  {googleAdsCampaignType === 'ecommerce' ? (
-                                    <>
-                                      <TableCell className={c.conversions > 0 ? 'text-green-600 font-medium' : ''}>
-                                        {formatNumber(c.conversions)}
-                                      </TableCell>
-                                      <TableCell className={c.conversions_value > 0 ? 'text-green-600 font-medium' : ''}>
-                                        {formatCurrency(c.conversions_value)}
-                                      </TableCell>
-                                      <TableCell>{roas > 0 ? roas.toFixed(2) : '-'}</TableCell>
-                                      <TableCell>{aov > 0 ? formatCurrency(aov) : '-'}</TableCell>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <TableCell className={c.conversions > 0 ? 'text-green-600 font-medium' : ''}>
-                                        {formatNumber(c.conversions)}
-                                      </TableCell>
-                                      <TableCell>{cpa > 0 ? formatCurrency(cpa) : '-'}</TableCell>
-                                    </>
-                                  )}
-                                </TableRow>
-                              );
-                            })}
-                            <TableRow className="bg-muted/50 font-bold border-t-2">
-                              <TableCell>סה"כ</TableCell>
-                              <TableCell>{formatNumber(googleAdsTotals.impressions)}</TableCell>
-                              <TableCell>{formatNumber(googleAdsTotals.clicks)}</TableCell>
-                              <TableCell>{totalCtr.toFixed(2)}%</TableCell>
-                              <TableCell>{totalCpc > 0 ? formatUnitCost(totalCpc) : '-'}</TableCell>
-                              <TableCell>{formatCurrency(googleAdsTotals.spend)}</TableCell>
-                              {googleAdsCampaignType === 'ecommerce' ? (
-                                <>
-                                  <TableCell className="text-green-600">{formatNumber(googleAdsStorePurchases)}</TableCell>
-                                  <TableCell className="text-green-600">{formatCurrency(googleAdsStoreRevenue)}</TableCell>
-                                  <TableCell>{googleAdsTotals.spend > 0 ? googleAdsStoreRoas.toFixed(2) : '-'}</TableCell>
-                                  <TableCell>{googleAdsStorePurchases > 0 ? formatCurrency(googleAdsStoreRevenue / googleAdsStorePurchases) : '-'}</TableCell>
-                                </>
-                              ) : (
-                                <>
-                                  <TableCell className="text-green-600">{formatNumber(googleAdsTotals.conversions)}</TableCell>
-                                  <TableCell>{totalCpa > 0 ? formatCurrency(totalCpa) : '-'}</TableCell>
-                                </>
-                              )}
-                            </TableRow>
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })()}
+                  return (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          {getIntegrationIcon("google_ads")}
+                          סיכום קמפיינים - Google Ads
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-right">
+                                  קמפיין
+                                </TableHead>
+                                <TableHead className="text-right">
+                                  חשיפות
+                                </TableHead>
+                                <TableHead className="text-right">
+                                  קליקים
+                                </TableHead>
+                                <TableHead className="text-right">
+                                  CTR
+                                </TableHead>
+                                <TableHead className="text-right">
+                                  CPC
+                                </TableHead>
+                                <TableHead className="text-right">
+                                  הוצאה
+                                </TableHead>
+                                {googleAdsCampaignType === "ecommerce" ? (
+                                  <>
+                                    <TableHead className="text-right">
+                                      רכישות
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                      הכנסות
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                      ROAS
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                      AOV
+                                    </TableHead>
+                                  </>
+                                ) : (
+                                  <>
+                                    <TableHead className="text-right">
+                                      המרות
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                      עלות להמרה
+                                    </TableHead>
+                                  </>
+                                )}
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {googleAdsCampaignSummary.map((c, i) => {
+                                const ctr =
+                                  c.impressions > 0
+                                    ? (c.clicks / c.impressions) * 100
+                                    : 0;
+                                const cpc =
+                                  c.clicks > 0 ? c.spend / c.clicks : 0;
+                                const cpa =
+                                  c.conversions > 0
+                                    ? c.spend / c.conversions
+                                    : 0;
+                                const roas =
+                                  c.spend > 0
+                                    ? c.conversions_value / c.spend
+                                    : 0;
+                                const aov =
+                                  c.conversions > 0
+                                    ? c.conversions_value / c.conversions
+                                    : 0;
+                                return (
+                                  <TableRow key={i}>
+                                    <TableCell className="font-medium max-w-[300px]">
+                                      {c.name}
+                                    </TableCell>
+                                    <TableCell>
+                                      {formatNumber(c.impressions)}
+                                    </TableCell>
+                                    <TableCell>
+                                      {formatNumber(c.clicks)}
+                                    </TableCell>
+                                    <TableCell>{ctr.toFixed(2)}%</TableCell>
+                                    <TableCell>
+                                      {cpc > 0 ? formatUnitCost(cpc) : "-"}
+                                    </TableCell>
+                                    <TableCell>
+                                      {formatCurrency(c.spend)}
+                                    </TableCell>
+                                    {googleAdsCampaignType === "ecommerce" ? (
+                                      <>
+                                        <TableCell
+                                          className={
+                                            c.conversions > 0
+                                              ? "text-green-600 font-medium"
+                                              : ""
+                                          }
+                                        >
+                                          {formatNumber(c.conversions)}
+                                        </TableCell>
+                                        <TableCell
+                                          className={
+                                            c.conversions_value > 0
+                                              ? "text-green-600 font-medium"
+                                              : ""
+                                          }
+                                        >
+                                          {formatCurrency(c.conversions_value)}
+                                        </TableCell>
+                                        <TableCell>
+                                          {roas > 0 ? roas.toFixed(2) : "-"}
+                                        </TableCell>
+                                        <TableCell>
+                                          {aov > 0 ? formatCurrency(aov) : "-"}
+                                        </TableCell>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <TableCell
+                                          className={
+                                            c.conversions > 0
+                                              ? "text-green-600 font-medium"
+                                              : ""
+                                          }
+                                        >
+                                          {formatNumber(c.conversions)}
+                                        </TableCell>
+                                        <TableCell>
+                                          {cpa > 0 ? formatCurrency(cpa) : "-"}
+                                        </TableCell>
+                                      </>
+                                    )}
+                                  </TableRow>
+                                );
+                              })}
+                              <TableRow className="bg-muted/50 font-bold border-t-2">
+                                <TableCell>סה"כ</TableCell>
+                                <TableCell>
+                                  {formatNumber(googleAdsTotals.impressions)}
+                                </TableCell>
+                                <TableCell>
+                                  {formatNumber(googleAdsTotals.clicks)}
+                                </TableCell>
+                                <TableCell>{totalCtr.toFixed(2)}%</TableCell>
+                                <TableCell>
+                                  {totalCpc > 0
+                                    ? formatUnitCost(totalCpc)
+                                    : "-"}
+                                </TableCell>
+                                <TableCell>
+                                  {formatCurrency(googleAdsTotals.spend)}
+                                </TableCell>
+                                {googleAdsCampaignType === "ecommerce" ? (
+                                  <>
+                                    <TableCell className="text-green-600">
+                                      {formatNumber(googleAdsStorePurchases)}
+                                    </TableCell>
+                                    <TableCell className="text-green-600">
+                                      {formatCurrency(googleAdsStoreRevenue)}
+                                    </TableCell>
+                                    <TableCell>
+                                      {googleAdsTotals.spend > 0
+                                        ? googleAdsStoreRoas.toFixed(2)
+                                        : "-"}
+                                    </TableCell>
+                                    <TableCell>
+                                      {googleAdsStorePurchases > 0
+                                        ? formatCurrency(
+                                            googleAdsStoreRevenue /
+                                              googleAdsStorePurchases,
+                                          )
+                                        : "-"}
+                                    </TableCell>
+                                  </>
+                                ) : (
+                                  <>
+                                    <TableCell className="text-green-600">
+                                      {formatNumber(
+                                        googleAdsTotals.conversions,
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      {totalCpa > 0
+                                        ? formatCurrency(totalCpa)
+                                        : "-"}
+                                    </TableCell>
+                                  </>
+                                )}
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
 
               {googleAdsCampaignSummary.length === 0 && (
                 <Card className="p-12 text-center">
-                  <p className="text-muted-foreground">אין נתוני Google Ads בטווח התאריכים הנבחר</p>
+                  <p className="text-muted-foreground">
+                    אין נתוני Google Ads בטווח התאריכים הנבחר
+                  </p>
                 </Card>
               )}
               {useGoogleWooOverlay && (
                 <p className="text-xs text-muted-foreground px-1">
-                  * שורת הסה"כ וכרטיסי הרכישות/הכנסות/ROAS מבוססים על ייחוס WooCommerce (Google ממומן). עמודות לפי קמפיין מציגות את דיווח Google Ads API.
+                  * שורת הסה"כ וכרטיסי הרכישות/הכנסות/ROAS מבוססים על ייחוס
+                  WooCommerce (Google ממומן). עמודות לפי קמפיין מציגות את דיווח
+                  Google Ads API.
                 </p>
               )}
             </>
           )}
 
           {/* Platform Breakdown Table */}
-          {platformBreakdownRows.length > 0 && platformFilter === 'all' && (
+          {platformBreakdownRows.length > 0 && platformFilter === "all" && (
             <Card>
-              <CardHeader><CardTitle>פירוט לפי פלטפורמה</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>פירוט לפי פלטפורמה</CardTitle>
+              </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
                   <Table>
@@ -1612,19 +2366,28 @@ export default function SharedDashboard({
                       <TableRow>
                         <TableHead className="text-right">פלטפורמה</TableHead>
                         <TableHead className="text-right">הוצאה</TableHead>
-                        {facebookMixedMode || dashboardCampaignType === 'ecommerce' ? (
+                        {facebookMixedMode ||
+                        dashboardCampaignType === "ecommerce" ? (
                           <>
                             <TableHead className="text-right">חשיפות</TableHead>
                             <TableHead className="text-right">קליקים</TableHead>
-                            <TableHead className="text-right">עלות לקליק</TableHead>
-                            <TableHead className="text-right">הוספה לעגלה</TableHead>
+                            <TableHead className="text-right">
+                              עלות לקליק
+                            </TableHead>
+                            <TableHead className="text-right">
+                              הוספה לעגלה
+                            </TableHead>
                             <TableHead className="text-right">רכישות</TableHead>
                             <TableHead className="text-right">הכנסות</TableHead>
                             <TableHead className="text-right">ROAS</TableHead>
                             {facebookMixedMode && (
                               <>
-                                <TableHead className="text-right">לידים</TableHead>
-                                <TableHead className="text-right">עלות לליד</TableHead>
+                                <TableHead className="text-right">
+                                  לידים
+                                </TableHead>
+                                <TableHead className="text-right">
+                                  עלות לליד
+                                </TableHead>
                               </>
                             )}
                           </>
@@ -1632,61 +2395,127 @@ export default function SharedDashboard({
                           <>
                             <TableHead className="text-right">חשיפות</TableHead>
                             <TableHead className="text-right">קליקים</TableHead>
-                            <TableHead className="text-right">עלות לקליק</TableHead>
+                            <TableHead className="text-right">
+                              עלות לקליק
+                            </TableHead>
                             <TableHead className="text-right">לידים</TableHead>
-                            <TableHead className="text-right">עלות לליד</TableHead>
+                            <TableHead className="text-right">
+                              עלות לליד
+                            </TableHead>
                           </>
                         )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {platformBreakdownRows.map((row) => {
-                        const config = PLATFORM_CONFIG[row.platform] || { name: row.platform, color: 'text-muted-foreground' };
+                        const config = PLATFORM_CONFIG[row.platform] || {
+                          name: row.platform,
+                          color: "text-muted-foreground",
+                        };
                         const metrics = row.metrics;
                         const showEcomCols = facebookMixedMode
-                          ? row.rowKind !== 'leads'
-                          : dashboardCampaignType === 'ecommerce';
+                          ? row.rowKind !== "leads"
+                          : dashboardCampaignType === "ecommerce";
                         const showLeadsCols = facebookMixedMode
-                          ? row.rowKind !== 'ecommerce'
-                          : dashboardCampaignType !== 'ecommerce';
+                          ? row.rowKind !== "ecommerce"
+                          : dashboardCampaignType !== "ecommerce";
                         return (
                           <TableRow key={row.key}>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
                                 {getIntegrationIcon(row.platform)}
-                                <span className={config.color}>{row.label}</span>
+                                <span className={config.color}>
+                                  {row.label}
+                                </span>
                               </div>
                             </TableCell>
-                            <TableCell>{formatCurrency(metrics.spend)}</TableCell>
-                            {facebookMixedMode || dashboardCampaignType === 'ecommerce' ? (
+                            <TableCell>
+                              {formatCurrency(metrics.spend)}
+                            </TableCell>
+                            {facebookMixedMode ||
+                            dashboardCampaignType === "ecommerce" ? (
                               <>
-                                <TableCell>{formatNumber(metrics.impressions)}</TableCell>
-                                <TableCell>{formatNumber(metrics.clicks)}</TableCell>
-                                <TableCell>{metrics.clicks > 0 ? formatUnitCost(metrics.spend / metrics.clicks) : '-'}</TableCell>
-                                <TableCell>{showEcomCols ? (metrics.addToCartTracked ? formatNumber(metrics.addToCart) : '-') : '-'}</TableCell>
-                                <TableCell>{showEcomCols ? formatNumber(metrics.purchases) : '-'}</TableCell>
-                                <TableCell>{showEcomCols ? formatCurrency(metrics.revenue) : '-'}</TableCell>
+                                <TableCell>
+                                  {formatNumber(metrics.impressions)}
+                                </TableCell>
+                                <TableCell>
+                                  {formatNumber(metrics.clicks)}
+                                </TableCell>
+                                <TableCell>
+                                  {metrics.clicks > 0
+                                    ? formatUnitCost(
+                                        metrics.spend / metrics.clicks,
+                                      )
+                                    : "-"}
+                                </TableCell>
+                                <TableCell>
+                                  {showEcomCols
+                                    ? metrics.addToCartTracked
+                                      ? formatNumber(metrics.addToCart)
+                                      : "-"
+                                    : "-"}
+                                </TableCell>
+                                <TableCell>
+                                  {showEcomCols
+                                    ? formatNumber(metrics.purchases)
+                                    : "-"}
+                                </TableCell>
+                                <TableCell>
+                                  {showEcomCols
+                                    ? formatCurrency(metrics.revenue)
+                                    : "-"}
+                                </TableCell>
                                 <TableCell>
                                   {showEcomCols ? (
-                                    <span className={metrics.roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
+                                    <span
+                                      className={
+                                        metrics.roas >= 1
+                                          ? "text-green-600 font-semibold"
+                                          : "text-red-600"
+                                      }
+                                    >
                                       {metrics.roas.toFixed(2)}
                                     </span>
-                                  ) : '-'}
+                                  ) : (
+                                    "-"
+                                  )}
                                 </TableCell>
                                 {facebookMixedMode && (
                                   <>
-                                    <TableCell>{showLeadsCols ? formatNumber(metrics.leads) : '-'}</TableCell>
-                                    <TableCell>{showLeadsCols && metrics.cpl > 0 ? formatCurrency(metrics.cpl) : '-'}</TableCell>
+                                    <TableCell>
+                                      {showLeadsCols
+                                        ? formatNumber(metrics.leads)
+                                        : "-"}
+                                    </TableCell>
+                                    <TableCell>
+                                      {showLeadsCols && metrics.cpl > 0
+                                        ? formatCurrency(metrics.cpl)
+                                        : "-"}
+                                    </TableCell>
                                   </>
                                 )}
                               </>
                             ) : (
                               <>
-                                <TableCell>{formatNumber(metrics.impressions)}</TableCell>
-                                <TableCell>{formatNumber(metrics.clicks)}</TableCell>
-                                <TableCell>{metrics.clicks > 0 ? formatUnitCost(metrics.spend / metrics.clicks) : '-'}</TableCell>
-                                <TableCell>{formatNumber(metrics.results)}</TableCell>
-                                <TableCell>{formatCurrency(metrics.cpl)}</TableCell>
+                                <TableCell>
+                                  {formatNumber(metrics.impressions)}
+                                </TableCell>
+                                <TableCell>
+                                  {formatNumber(metrics.clicks)}
+                                </TableCell>
+                                <TableCell>
+                                  {metrics.clicks > 0
+                                    ? formatUnitCost(
+                                        metrics.spend / metrics.clicks,
+                                      )
+                                    : "-"}
+                                </TableCell>
+                                <TableCell>
+                                  {formatNumber(metrics.results)}
+                                </TableCell>
+                                <TableCell>
+                                  {formatCurrency(metrics.cpl)}
+                                </TableCell>
                               </>
                             )}
                           </TableRow>
@@ -1695,39 +2524,93 @@ export default function SharedDashboard({
                       <TableRow className="bg-muted/50 font-bold border-t-2">
                         <TableCell>
                           סה"כ
-                          {dashboardCampaignType === 'ecommerce' && (
+                          {dashboardCampaignType === "ecommerce" && (
                             <span className="text-xs font-normal text-muted-foreground block">
-                              {hasWooData ? 'הכנסות WooCommerce / הוצאות פרסום' : 'הכנסות מ-Analytics / הוצאות פרסום'}
+                              {hasWooData
+                                ? "הכנסות WooCommerce / הוצאות פרסום"
+                                : "הכנסות מ-Analytics / הוצאות פרסום"}
                             </span>
                           )}
                         </TableCell>
-                        <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
-                        {facebookMixedMode || dashboardCampaignType === 'ecommerce' ? (
+                        <TableCell>
+                          {formatCurrency(totalSummary.spend)}
+                        </TableCell>
+                        {facebookMixedMode ||
+                        dashboardCampaignType === "ecommerce" ? (
                           <>
-                            <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
-                            <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
-                            <TableCell>{totalSummary.clicks > 0 ? formatUnitCost(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
-                            <TableCell>{formatNumber(totalSummary.analyticsAddToCart)}</TableCell>
-                            <TableCell>{formatNumber(hasWooData ? wooSummary.orderCount : (totalSummary.analyticsPurchases || totalSummary.results))}</TableCell>
-                            <TableCell>{formatCurrency(hasWooData ? wooSummary.revenue : totalSummary.revenue)}</TableCell>
                             <TableCell>
-                              <span className={combinedRoas >= 1 ? 'text-green-600' : 'text-red-600'}>
+                              {formatNumber(totalSummary.impressions)}
+                            </TableCell>
+                            <TableCell>
+                              {formatNumber(totalSummary.clicks)}
+                            </TableCell>
+                            <TableCell>
+                              {totalSummary.clicks > 0
+                                ? formatUnitCost(
+                                    totalSummary.spend / totalSummary.clicks,
+                                  )
+                                : "-"}
+                            </TableCell>
+                            <TableCell>
+                              {formatNumber(totalSummary.analyticsAddToCart)}
+                            </TableCell>
+                            <TableCell>
+                              {formatNumber(
+                                hasWooData
+                                  ? wooSummary.orderCount
+                                  : totalSummary.analyticsPurchases ||
+                                      totalSummary.results,
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {formatCurrency(
+                                hasWooData
+                                  ? wooSummary.revenue
+                                  : totalSummary.revenue,
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <span
+                                className={
+                                  combinedRoas >= 1
+                                    ? "text-green-600"
+                                    : "text-red-600"
+                                }
+                              >
                                 {combinedRoas.toFixed(2)}
                               </span>
                             </TableCell>
                             {facebookMixedMode && (
                               <>
-                                <TableCell>{formatNumber(totalSummary.leads)}</TableCell>
-                                <TableCell>{combinedCpl > 0 ? formatCurrency(combinedCpl) : '-'}</TableCell>
+                                <TableCell>
+                                  {formatNumber(totalSummary.leads)}
+                                </TableCell>
+                                <TableCell>
+                                  {combinedCpl > 0
+                                    ? formatCurrency(combinedCpl)
+                                    : "-"}
+                                </TableCell>
                               </>
                             )}
                           </>
                         ) : (
                           <>
-                            <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
-                            <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
-                            <TableCell>{totalSummary.clicks > 0 ? formatUnitCost(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
-                            <TableCell>{formatNumber(totalSummary.results)}</TableCell>
+                            <TableCell>
+                              {formatNumber(totalSummary.impressions)}
+                            </TableCell>
+                            <TableCell>
+                              {formatNumber(totalSummary.clicks)}
+                            </TableCell>
+                            <TableCell>
+                              {totalSummary.clicks > 0
+                                ? formatUnitCost(
+                                    totalSummary.spend / totalSummary.clicks,
+                                  )
+                                : "-"}
+                            </TableCell>
+                            <TableCell>
+                              {formatNumber(totalSummary.results)}
+                            </TableCell>
                             <TableCell>{formatCurrency(combinedCpl)}</TableCell>
                           </>
                         )}
@@ -1735,11 +2618,17 @@ export default function SharedDashboard({
                     </TableBody>
                   </Table>
                 </div>
-                {dashboardCampaignType === 'ecommerce' && (hasWooData || showAnalyticsCards) && (
-                  <p className="text-xs text-muted-foreground mt-3 px-1">
-                    * נתוני רכישות וערך רכישות של פייסבוק מבוססים על דיווח פייסבוק (כולל ייחוס צפייה וחלון 7 ימים), ועשויים להיות גבוהים מהמכירות בפועל בשל ספירה כפולה בין קמפיינים. ה-ROAS הכללי בשורת הסה"כ מחושב לפי הכנסות {hasWooData ? 'WooCommerce' : 'Analytics'} בפועל חלקי סך הוצאות הפרסום.
-                  </p>
-                )}
+                {dashboardCampaignType === "ecommerce" &&
+                  (hasWooData || showAnalyticsCards) && (
+                    <p className="text-xs text-muted-foreground mt-3 px-1">
+                      * נתוני רכישות וערך רכישות של פייסבוק מבוססים על דיווח
+                      פייסבוק (כולל ייחוס צפייה וחלון 7 ימים), ועשויים להיות
+                      גבוהים מהמכירות בפועל בשל ספירה כפולה בין קמפיינים. ה-ROAS
+                      הכללי בשורת הסה"כ מחושב לפי הכנסות{" "}
+                      {hasWooData ? "WooCommerce" : "Analytics"} בפועל חלקי סך
+                      הוצאות הפרסום.
+                    </p>
+                  )}
               </CardContent>
             </Card>
           )}
@@ -1748,20 +2637,28 @@ export default function SharedDashboard({
           <div data-snapshot-end="true" aria-hidden="true" />
 
           {/* Analytics Source Breakdown */}
-          {analyticsSourceBreakdown.length > 0 && platformFilter === 'all' && (
+          {analyticsSourceBreakdown.length > 0 && platformFilter === "all" && (
             <Card>
-              <CardHeader><CardTitle>פירוט לפי מקור הגעה (Analytics)</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>פירוט לפי מקור הגעה (Analytics)</CardTitle>
+              </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-right">מקור / מדיום</TableHead>
+                        <TableHead className="text-right">
+                          מקור / מדיום
+                        </TableHead>
                         <TableHead className="text-right">סשנים</TableHead>
-                        <TableHead className="text-right">משתמשים יחודיים</TableHead>
-                        {dashboardCampaignType === 'ecommerce' && (
+                        <TableHead className="text-right">
+                          משתמשים יחודיים
+                        </TableHead>
+                        {dashboardCampaignType === "ecommerce" && (
                           <>
-                            <TableHead className="text-right">הוספה לעגלה</TableHead>
+                            <TableHead className="text-right">
+                              הוספה לעגלה
+                            </TableHead>
                             <TableHead className="text-right">רכישות</TableHead>
                             <TableHead className="text-right">הכנסות</TableHead>
                           </>
@@ -1771,14 +2668,22 @@ export default function SharedDashboard({
                     <TableBody>
                       {analyticsSourceBreakdown.map((source) => (
                         <TableRow key={source.name}>
-                          <TableCell className="font-medium">{source.name}</TableCell>
+                          <TableCell className="font-medium">
+                            {source.name}
+                          </TableCell>
                           <TableCell>{formatNumber(source.sessions)}</TableCell>
                           <TableCell>{formatNumber(source.users)}</TableCell>
-                          {dashboardCampaignType === 'ecommerce' && (
+                          {dashboardCampaignType === "ecommerce" && (
                             <>
-                              <TableCell>{formatNumber(source.addToCart)}</TableCell>
-                              <TableCell>{formatNumber(source.purchases)}</TableCell>
-                              <TableCell>{formatCurrency(source.revenue)}</TableCell>
+                              <TableCell>
+                                {formatNumber(source.addToCart)}
+                              </TableCell>
+                              <TableCell>
+                                {formatNumber(source.purchases)}
+                              </TableCell>
+                              <TableCell>
+                                {formatCurrency(source.revenue)}
+                              </TableCell>
                             </>
                           )}
                         </TableRow>
@@ -1791,22 +2696,34 @@ export default function SharedDashboard({
           )}
 
           {/* Traffic Acquisition by Channel Group */}
-          {channelGroupBreakdown.length > 0 && platformFilter === 'all' && (
+          {channelGroupBreakdown.length > 0 && platformFilter === "all" && (
             <Card>
-              <CardHeader><CardTitle>טרפיק לפי ערוץ (Traffic Acquisition)</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>טרפיק לפי ערוץ (Traffic Acquisition)</CardTitle>
+              </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-right">Channel Group</TableHead>
+                        <TableHead className="text-right">
+                          Channel Group
+                        </TableHead>
                         <TableHead className="text-right">Sessions</TableHead>
-                        <TableHead className="text-right">Engaged Sessions</TableHead>
-                        <TableHead className="text-right">Engagement Rate</TableHead>
-                        <TableHead className="text-right">Avg. Engagement Time</TableHead>
-                        <TableHead className="text-right">Events / Session</TableHead>
+                        <TableHead className="text-right">
+                          Engaged Sessions
+                        </TableHead>
+                        <TableHead className="text-right">
+                          Engagement Rate
+                        </TableHead>
+                        <TableHead className="text-right">
+                          Avg. Engagement Time
+                        </TableHead>
+                        <TableHead className="text-right">
+                          Events / Session
+                        </TableHead>
                         <TableHead className="text-right">Users</TableHead>
-                        {dashboardCampaignType === 'ecommerce' && (
+                        {dashboardCampaignType === "ecommerce" && (
                           <>
                             <TableHead className="text-right">רכישות</TableHead>
                             <TableHead className="text-right">הכנסות</TableHead>
@@ -1820,44 +2737,79 @@ export default function SharedDashboard({
                         const secs = Math.round(ch.avgDuration % 60);
                         return (
                           <TableRow key={ch.name}>
-                            <TableCell className="font-medium">{ch.name}</TableCell>
+                            <TableCell className="font-medium">
+                              {ch.name}
+                            </TableCell>
                             <TableCell>{formatNumber(ch.sessions)}</TableCell>
-                            <TableCell>{formatNumber(ch.engagedSessions)}</TableCell>
-                            <TableCell>{Number(ch.engagementRate).toFixed(1)}%</TableCell>
-                            <TableCell>{mins}:{secs.toString().padStart(2, '0')}</TableCell>
-                            <TableCell>{Number(ch.eventsPerSession).toFixed(2)}</TableCell>
+                            <TableCell>
+                              {formatNumber(ch.engagedSessions)}
+                            </TableCell>
+                            <TableCell>
+                              {Number(ch.engagementRate).toFixed(1)}%
+                            </TableCell>
+                            <TableCell>
+                              {mins}:{secs.toString().padStart(2, "0")}
+                            </TableCell>
+                            <TableCell>
+                              {Number(ch.eventsPerSession).toFixed(2)}
+                            </TableCell>
                             <TableCell>{formatNumber(ch.users)}</TableCell>
-                            {dashboardCampaignType === 'ecommerce' && (
+                            {dashboardCampaignType === "ecommerce" && (
                               <>
-                                <TableCell>{formatNumber(ch.purchases)}</TableCell>
-                                <TableCell>{formatCurrency(ch.revenue)}</TableCell>
+                                <TableCell>
+                                  {formatNumber(ch.purchases)}
+                                </TableCell>
+                                <TableCell>
+                                  {formatCurrency(ch.revenue)}
+                                </TableCell>
                               </>
                             )}
                           </TableRow>
                         );
                       })}
                       {(() => {
-                        const totals = channelGroupBreakdown.reduce((acc, ch) => ({
-                          sessions: acc.sessions + ch.sessions,
-                          engagedSessions: acc.engagedSessions + ch.engagedSessions,
-                          users: acc.users + ch.users,
-                          purchases: acc.purchases + ch.purchases,
-                          revenue: acc.revenue + ch.revenue,
-                        }), { sessions: 0, engagedSessions: 0, users: 0, purchases: 0, revenue: 0 });
-                        const totalRate = totals.sessions > 0 ? (totals.engagedSessions / totals.sessions * 100) : 0;
+                        const totals = channelGroupBreakdown.reduce(
+                          (acc, ch) => ({
+                            sessions: acc.sessions + ch.sessions,
+                            engagedSessions:
+                              acc.engagedSessions + ch.engagedSessions,
+                            users: acc.users + ch.users,
+                            purchases: acc.purchases + ch.purchases,
+                            revenue: acc.revenue + ch.revenue,
+                          }),
+                          {
+                            sessions: 0,
+                            engagedSessions: 0,
+                            users: 0,
+                            purchases: 0,
+                            revenue: 0,
+                          },
+                        );
+                        const totalRate =
+                          totals.sessions > 0
+                            ? (totals.engagedSessions / totals.sessions) * 100
+                            : 0;
                         return (
                           <TableRow className="bg-muted/50 font-bold border-t-2">
                             <TableCell>סה"כ</TableCell>
-                            <TableCell>{formatNumber(totals.sessions)}</TableCell>
-                            <TableCell>{formatNumber(totals.engagedSessions)}</TableCell>
+                            <TableCell>
+                              {formatNumber(totals.sessions)}
+                            </TableCell>
+                            <TableCell>
+                              {formatNumber(totals.engagedSessions)}
+                            </TableCell>
                             <TableCell>{totalRate.toFixed(1)}%</TableCell>
                             <TableCell>-</TableCell>
                             <TableCell>-</TableCell>
                             <TableCell>{formatNumber(totals.users)}</TableCell>
-                            {dashboardCampaignType === 'ecommerce' && (
+                            {dashboardCampaignType === "ecommerce" && (
                               <>
-                                <TableCell>{formatNumber(totals.purchases)}</TableCell>
-                                <TableCell>{formatCurrency(totals.revenue)}</TableCell>
+                                <TableCell>
+                                  {formatNumber(totals.purchases)}
+                                </TableCell>
+                                <TableCell>
+                                  {formatCurrency(totals.revenue)}
+                                </TableCell>
                               </>
                             )}
                           </TableRow>
@@ -1871,33 +2823,50 @@ export default function SharedDashboard({
           )}
 
           {/* Charts */}
-          {dailyChartData.length > 1 && platformFilter === 'all' && (
+          {dailyChartData.length > 1 && platformFilter === "all" && (
             <div className="grid gap-4 md:grid-cols-2">
               {/* Revenue vs Spend */}
-              {dashboardCampaignType === 'ecommerce' && (showAdsCards || showAnalyticsCards) && (
-                <Card>
-                  <CardHeader><CardTitle>הכנסות מול הוצאות</CardTitle></CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <ComposedChart data={dailyChartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="dateLabel" fontSize={12} />
-                        <YAxis fontSize={12} />
-                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                        <Legend />
-                        {showAnalyticsCards && <Area type="monotone" dataKey="revenue" name="הכנסות" fill="#22c55e" stroke="#16a34a" fillOpacity={0.3} />}
-                        {showAdsCards && <Bar dataKey="spend" name="הוצאה" fill="#3b82f6" />}
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              )}
-
+              {dashboardCampaignType === "ecommerce" &&
+                (showAdsCards || showAnalyticsCards) && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>הכנסות מול הוצאות</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <ComposedChart data={dailyChartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="dateLabel" fontSize={12} />
+                          <YAxis fontSize={12} />
+                          <Tooltip
+                            formatter={(v: number) => formatCurrency(v)}
+                          />
+                          <Legend />
+                          {showAnalyticsCards && (
+                            <Area
+                              type="monotone"
+                              dataKey="revenue"
+                              name="הכנסות"
+                              fill="#22c55e"
+                              stroke="#16a34a"
+                              fillOpacity={0.3}
+                            />
+                          )}
+                          {showAdsCards && (
+                            <Bar dataKey="spend" name="הוצאה" fill="#3b82f6" />
+                          )}
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                )}
 
               {/* Sessions */}
               {showAnalyticsCards && (
                 <Card>
-                  <CardHeader><CardTitle>סשנים יומיים</CardTitle></CardHeader>
+                  <CardHeader>
+                    <CardTitle>סשנים יומיים</CardTitle>
+                  </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={300}>
                       <LineChart data={dailyChartData}>
@@ -1905,7 +2874,14 @@ export default function SharedDashboard({
                         <XAxis dataKey="dateLabel" fontSize={12} />
                         <YAxis fontSize={12} />
                         <Tooltip />
-                        <Line type="monotone" dataKey="sessions" name="סשנים" stroke="#f97316" strokeWidth={2} dot={false} />
+                        <Line
+                          type="monotone"
+                          dataKey="sessions"
+                          name="סשנים"
+                          stroke="#f97316"
+                          strokeWidth={2}
+                          dot={false}
+                        />
                       </LineChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -1913,9 +2889,11 @@ export default function SharedDashboard({
               )}
 
               {/* Spend chart for leads */}
-              {dashboardCampaignType === 'leads' && showAdsCards && (
+              {dashboardCampaignType === "leads" && showAdsCards && (
                 <Card>
-                  <CardHeader><CardTitle>הוצאה יומית</CardTitle></CardHeader>
+                  <CardHeader>
+                    <CardTitle>הוצאה יומית</CardTitle>
+                  </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={dailyChartData}>
@@ -1931,9 +2909,11 @@ export default function SharedDashboard({
               )}
 
               {/* Leads chart */}
-              {dashboardCampaignType === 'leads' && showAdsCards && (
+              {dashboardCampaignType === "leads" && showAdsCards && (
                 <Card>
-                  <CardHeader><CardTitle>לידים יומיים</CardTitle></CardHeader>
+                  <CardHeader>
+                    <CardTitle>לידים יומיים</CardTitle>
+                  </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={dailyChartData}>
@@ -1954,7 +2934,7 @@ export default function SharedDashboard({
 
       {/* Footer */}
       <p className="text-center text-xs text-muted-foreground">
-        Powered by {data?.dashboard?.agency_name || 'Marketing Captain'}
+        Powered by {data?.dashboard?.agency_name || "Marketing Captain"}
       </p>
     </div>
   );

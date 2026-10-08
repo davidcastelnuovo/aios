@@ -1,48 +1,52 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
-import { aggregateGscQueryRows } from '../_shared/gscPosition.ts';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { aggregateGscQueryRows } from "../_shared/gscPosition.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
 };
 
-const APP_TIME_ZONE = Deno.env.get('APP_TIME_ZONE') ?? 'Asia/Jerusalem';
+const APP_TIME_ZONE = Deno.env.get("APP_TIME_ZONE") ?? "Asia/Jerusalem";
 
 function getDateStringInTimeZone(date: Date, timeZone = APP_TIME_ZONE): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).formatToParts(date);
 
-  const year = parts.find((part) => part.type === 'year')?.value;
-  const month = parts.find((part) => part.type === 'month')?.value;
-  const day = parts.find((part) => part.type === 'day')?.value;
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
 
   if (!year || !month || !day) {
-    throw new Error('Failed to resolve date parts for date filtering');
+    throw new Error("Failed to resolve date parts for date filtering");
   }
 
   return `${year}-${month}-${day}`;
 }
 
 function shiftDateString(dateString: string, days: number): string {
-  const [year, month, day] = dateString.split('-').map(Number);
+  const [year, month, day] = dateString.split("-").map(Number);
   const utcDate = new Date(Date.UTC(year, month - 1, day));
   utcDate.setUTCDate(utcDate.getUTCDate() + days);
-  return utcDate.toISOString().split('T')[0];
+  return utcDate.toISOString().split("T")[0];
 }
 
 function getMonthStart(dateString: string): string {
   return `${dateString.slice(0, 7)}-01`;
 }
 
-function getWeekdayIndexInTimeZone(date: Date, timeZone = APP_TIME_ZONE): number {
-  const weekday = new Intl.DateTimeFormat('en-US', {
+function getWeekdayIndexInTimeZone(
+  date: Date,
+  timeZone = APP_TIME_ZONE,
+): number {
+  const weekday = new Intl.DateTimeFormat("en-US", {
     timeZone,
-    weekday: 'short',
+    weekday: "short",
   }).format(date);
 
   const weekdayMap: Record<string, number> = {
@@ -59,7 +63,12 @@ function getWeekdayIndexInTimeZone(date: Date, timeZone = APP_TIME_ZONE): number
 }
 
 // Helper to get date range for filtering
-function getDateRange(filter: string, customFrom?: string, customTo?: string, integrationType?: string | null): { startDate: string | null; endDate: string | null } {
+function getDateRange(
+  filter: string,
+  customFrom?: string,
+  customTo?: string,
+  integrationType?: string | null,
+): { startDate: string | null; endDate: string | null } {
   const now = new Date();
   const today = getDateStringInTimeZone(now);
   const dayOfWeek = getWeekdayIndexInTimeZone(now);
@@ -67,78 +76,78 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string, in
   let endDate: string | null = null;
 
   switch (filter) {
-    case 'today':
+    case "today":
       startDate = today;
       endDate = today;
       break;
-    case 'yesterday': {
+    case "yesterday": {
       const yesterday = shiftDateString(today, -1);
       startDate = yesterday;
       endDate = yesterday;
       break;
     }
-    case 'this_week':
+    case "this_week":
       startDate = shiftDateString(today, -dayOfWeek);
       endDate = today;
       break;
-    case 'last_week': {
+    case "last_week": {
       const endOfLastWeek = shiftDateString(today, -(dayOfWeek + 1));
       const startOfLastWeek = shiftDateString(endOfLastWeek, -6);
       startDate = startOfLastWeek;
       endDate = endOfLastWeek;
       break;
     }
-    case 'last_7_days': {
+    case "last_7_days": {
       // Rolling 7 full days ending yesterday — matches GA4, Google Ads, Facebook,
       // DynamicTableView, and WooCommerce combined-dashboard totals.
       startDate = shiftDateString(today, -7);
       endDate = shiftDateString(today, -1);
       break;
     }
-    case 'last_14_days':
+    case "last_14_days":
       startDate = shiftDateString(today, -14);
       endDate = shiftDateString(today, -1);
       break;
-    case 'last_30_days':
+    case "last_30_days":
       startDate = shiftDateString(today, -30);
       endDate = shiftDateString(today, -1);
       break;
-    case 'last_60_days':
+    case "last_60_days":
       startDate = shiftDateString(today, -60);
       endDate = shiftDateString(today, -1);
       break;
-    case 'last_70_days':
+    case "last_70_days":
       startDate = shiftDateString(today, -70);
       endDate = shiftDateString(today, -1);
       break;
-    case 'this_month':
+    case "this_month":
       startDate = getMonthStart(today);
       endDate = today;
       break;
-    case 'last_month': {
+    case "last_month": {
       const startOfCurrentMonth = getMonthStart(today);
       const endOfLastMonth = shiftDateString(startOfCurrentMonth, -1);
       startDate = getMonthStart(endOfLastMonth);
       endDate = endOfLastMonth;
       break;
     }
-    case 'last_90_days':
+    case "last_90_days":
       startDate = shiftDateString(today, -90);
       endDate = shiftDateString(today, -1);
       break;
-    case 'last_120_days':
+    case "last_120_days":
       startDate = shiftDateString(today, -120);
       endDate = shiftDateString(today, -1);
       break;
-    case 'last_180_days':
+    case "last_180_days":
       startDate = shiftDateString(today, -180);
       endDate = shiftDateString(today, -1);
       break;
-    case 'last_365_days':
+    case "last_365_days":
       startDate = shiftDateString(today, -365);
       endDate = shiftDateString(today, -1);
       break;
-    case 'custom':
+    case "custom":
       if (customFrom && customTo) {
         startDate = customFrom;
         endDate = customTo;
@@ -150,7 +159,11 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string, in
 }
 
 /** Push date filtering into Postgres so report views don't scan full table history. */
-function applyJsonDateFilter(query: any, startDate: string, endDate?: string | null) {
+function applyJsonDateFilter(
+  query: any,
+  startDate: string,
+  endDate?: string | null,
+) {
   if (endDate) {
     return query.or(
       `and(data->>date.gte.${startDate},data->>date.lte.${endDate}),data->>date.is.null`,
@@ -160,51 +173,70 @@ function applyJsonDateFilter(query: any, startDate: string, endDate?: string | n
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     // Use service role to bypass RLS row limits for reading
     const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      {
+        global: {
+          headers: { Authorization: req.headers.get("Authorization")! },
+        },
+      },
     );
 
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseAuth.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { data: tenantId, error: tenantError } = await supabaseAuth
-      .rpc('get_user_tenant_id', { _user_id: user.id });
+    const { data: tenantId, error: tenantError } = await supabaseAuth.rpc(
+      "get_user_tenant_id",
+      { _user_id: user.id },
+    );
 
     if (tenantError || !tenantId) {
-      console.error('Tenant lookup error:', tenantError, 'user_id:', user.id);
-      return new Response(JSON.stringify({ 
-        error: 'No tenant found', 
-        details: tenantError?.message || 'User not associated with any tenant' 
-      }), {
-        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      console.error("Tenant lookup error:", tenantError, "user_id:", user.id);
+      return new Response(
+        JSON.stringify({
+          error: "No tenant found",
+          details:
+            tenantError?.message || "User not associated with any tenant",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
-    
 
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     if (!serviceRoleKey) {
-      return new Response(JSON.stringify({ error: 'Server misconfiguration: missing service role key' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Server misconfiguration: missing service role key",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Use service role for data operations to bypass RLS row limits
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      serviceRoleKey
+      Deno.env.get("SUPABASE_URL") ?? "",
+      serviceRoleKey,
     );
 
     const method = req.method;
@@ -214,41 +246,51 @@ Deno.serve(async (req) => {
       if (text) body = JSON.parse(text);
     } catch (e) {}
 
-    if (method === 'GET') {
+    if (method === "GET") {
       const url = new URL(req.url);
-      const table_id = url.searchParams.get('table_id');
-      const date_filter = url.searchParams.get('date_filter');
-      const date_from = url.searchParams.get('date_from');
-      const date_to = url.searchParams.get('date_to');
-      const aggregated = url.searchParams.get('aggregated');
-      
+      const table_id = url.searchParams.get("table_id");
+      const date_filter = url.searchParams.get("date_filter");
+      const date_from = url.searchParams.get("date_from");
+      const date_to = url.searchParams.get("date_to");
+      const aggregated = url.searchParams.get("aggregated");
+
       if (!table_id) {
-        return new Response(JSON.stringify({ error: 'table_id required' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        return new Response(JSON.stringify({ error: "table_id required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       // Fetch table info to determine access and correct tenant_id for filtering
       const { data: tableInfo, error: tableError } = await supabase
-        .from('crm_tables')
-        .select('tenant_id, agency_id, integration_type')
-        .eq('id', table_id)
+        .from("crm_tables")
+        .select("tenant_id, agency_id, integration_type")
+        .eq("id", table_id)
         .single();
 
       if (tableError || !tableInfo) {
-        console.error('Table not found:', table_id);
-        return new Response(JSON.stringify({ error: 'Table not found' }), {
-          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        console.error("Table not found:", table_id);
+        return new Response(JSON.stringify({ error: "Table not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const { data: hasAccess, error: accessError } = await supabase
-        .rpc('user_can_access_crm_table', { _user_id: user.id, _table_id: table_id });
+      const { data: hasAccess, error: accessError } = await supabase.rpc(
+        "user_can_access_crm_table",
+        { _user_id: user.id, _table_id: table_id },
+      );
 
       if (accessError || !hasAccess) {
-        console.error('Access denied: user tenant', tenantId, 'cannot access table from tenant', tableInfo.tenant_id);
-        return new Response(JSON.stringify({ error: 'Access denied' }), {
-          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        console.error(
+          "Access denied: user tenant",
+          tenantId,
+          "cannot access table from tenant",
+          tableInfo.tenant_id,
+        );
+        return new Response(JSON.stringify({ error: "Access denied" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -256,27 +298,26 @@ Deno.serve(async (req) => {
       const effectiveTenantId = tableInfo.tenant_id;
 
       const resolvedDateRange =
-        date_filter && date_filter !== 'all'
+        date_filter && date_filter !== "all"
           ? getDateRange(
-            date_filter,
-            date_from || undefined,
-            date_to || undefined,
-            (tableInfo as any).integration_type,
-          )
+              date_filter,
+              date_from || undefined,
+              date_to || undefined,
+              (tableInfo as any).integration_type,
+            )
           : { startDate: null, endDate: null };
 
       // Check if aggregated data is requested (for dashboards like Search Console)
-      if (aggregated === 'search_console') {
-        
+      if (aggregated === "search_console") {
         const pageSize = 1000;
         const allRecords: any[] = [];
-        
+
         for (let from = 0; ; from += pageSize) {
           let pageQuery = supabase
-            .from('crm_records')
-            .select('id, data')
-            .eq('table_id', table_id)
-            .eq('tenant_id', effectiveTenantId)
+            .from("crm_records")
+            .select("id, data")
+            .eq("table_id", table_id)
+            .eq("tenant_id", effectiveTenantId)
             .range(from, from + pageSize - 1);
 
           if (resolvedDateRange.startDate) {
@@ -299,35 +340,44 @@ Deno.serve(async (req) => {
 
         // Impression-weighted position. A day with position 0 is not a rank and
         // must not pull the average into the top 20.
-        const queryData = aggregateGscQueryRows(scopedRecords.map((r: any) => ({
-          query: r.data?.query || '',
-          clicks: r.data?.clicks,
-          impressions: r.data?.impressions,
-          position: r.data?.position,
-        })));
+        const queryData = aggregateGscQueryRows(
+          scopedRecords.map((r: any) => ({
+            query: r.data?.query || "",
+            clicks: r.data?.clicks,
+            impressions: r.data?.impressions,
+            position: r.data?.position,
+          })),
+        );
 
         // Sort by impressions desc — return ALL queries (client filters/searches in UI)
         queryData.sort((a, b) => b.impressions - a.impressions);
 
         // Calculate totals
         const totalClicks = queryData.reduce((sum, q) => sum + q.clicks, 0);
-        const totalImpressions = queryData.reduce((sum, q) => sum + q.impressions, 0);
+        const totalImpressions = queryData.reduce(
+          (sum, q) => sum + q.impressions,
+          0,
+        );
         const totals = {
           clicks: totalClicks,
           impressions: totalImpressions,
           avgCtr: totalImpressions > 0 ? totalClicks / totalImpressions : 0,
-          firstPageQueries: queryData.filter(q => q.position <= 10 && q.position > 0).length,
+          firstPageQueries: queryData.filter(
+            (q) => q.position <= 10 && q.position > 0,
+          ).length,
           totalQueries: queryData.length,
         };
 
-
-        return new Response(JSON.stringify({
-          queries: queryData,
-          totals,
-          totalRecords: scopedRecords.length,
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return new Response(
+          JSON.stringify({
+            queries: queryData,
+            totals,
+            totalRecords: scopedRecords.length,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       // Fetch records with pagination (PostgREST enforces a 1000-row cap per request)
@@ -339,11 +389,11 @@ Deno.serve(async (req) => {
         const to = from + pageSize - 1;
 
         let pageQuery = supabase
-          .from('crm_records')
-          .select('id, data')
-          .eq('table_id', table_id)
-          .eq('tenant_id', effectiveTenantId)
-          .order('created_at', { ascending: false })
+          .from("crm_records")
+          .select("id, data")
+          .eq("table_id", table_id)
+          .eq("tenant_id", effectiveTenantId)
+          .order("created_at", { ascending: false })
           .range(from, to);
 
         if (resolvedDateRange.startDate) {
@@ -367,98 +417,136 @@ Deno.serve(async (req) => {
 
       // Sort by date descending (newest first)
       filteredRecords.sort((a: any, b: any) => {
-        const dateA = a.data?.date || '';
-        const dateB = b.data?.date || '';
+        const dateA = a.data?.date || "";
+        const dateB = b.data?.date || "";
         return dateB.localeCompare(dateA);
       });
 
       // Calculate totals for logging
-      const totalClicks = filteredRecords.reduce((sum: number, r: any) => sum + (Number(r.data?.clicks) || 0), 0);
-      const totalImpressions = filteredRecords.reduce((sum: number, r: any) => sum + (Number(r.data?.impressions) || 0), 0);
+      const totalClicks = filteredRecords.reduce(
+        (sum: number, r: any) => sum + (Number(r.data?.clicks) || 0),
+        0,
+      );
+      const totalImpressions = filteredRecords.reduce(
+        (sum: number, r: any) => sum + (Number(r.data?.impressions) || 0),
+        0,
+      );
 
       return new Response(JSON.stringify(filteredRecords), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (method === 'POST') {
+    if (method === "POST") {
       const { table_id, data: recordData, agency_id } = body;
       if (!table_id || !recordData) {
-        return new Response(JSON.stringify({ error: 'table_id and data required' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        return new Response(
+          JSON.stringify({ error: "table_id and data required" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
-      const { data: record, error } = await supabase.from('crm_records').insert({
-        table_id, tenant_id: tenantId, agency_id: agency_id || null,
-        data: recordData, created_by: user.id
-      }).select().single();
+      const { data: record, error } = await supabase
+        .from("crm_records")
+        .insert({
+          table_id,
+          tenant_id: tenantId,
+          agency_id: agency_id || null,
+          data: recordData,
+          created_by: user.id,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
       return new Response(JSON.stringify(record), {
-        status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 201,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (method === 'PATCH') {
+    if (method === "PATCH") {
       const { record_id, data: recordData } = body;
       if (!record_id || !recordData) {
-        return new Response(JSON.stringify({ error: 'record_id and data required' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        return new Response(
+          JSON.stringify({ error: "record_id and data required" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
-      const { data: existing } = await supabase.from('crm_records')
-        .select('data, tenant_id').eq('id', record_id).single();
+      const { data: existing } = await supabase
+        .from("crm_records")
+        .select("data, tenant_id")
+        .eq("id", record_id)
+        .single();
 
       if (!existing || existing.tenant_id !== tenantId) {
-        return new Response(JSON.stringify({ error: 'Record not found' }), {
-          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        return new Response(JSON.stringify({ error: "Record not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const { data: record, error } = await supabase.from('crm_records')
+      const { data: record, error } = await supabase
+        .from("crm_records")
         .update({ data: { ...existing.data, ...recordData } })
-        .eq('id', record_id).select().single();
+        .eq("id", record_id)
+        .select()
+        .single();
 
       if (error) throw error;
       return new Response(JSON.stringify(record), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (method === 'DELETE') {
+    if (method === "DELETE") {
       const { record_id } = body;
       if (!record_id) {
-        return new Response(JSON.stringify({ error: 'record_id required' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        return new Response(JSON.stringify({ error: "record_id required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const { data: record } = await supabase.from('crm_records')
-        .select('tenant_id').eq('id', record_id).single();
+      const { data: record } = await supabase
+        .from("crm_records")
+        .select("tenant_id")
+        .eq("id", record_id)
+        .single();
 
       if (!record || record.tenant_id !== tenantId) {
-        return new Response(JSON.stringify({ error: 'Access denied' }), {
-          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        return new Response(JSON.stringify({ error: "Access denied" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const { error } = await supabase.from('crm_records').delete().eq('id', record_id);
+      const { error } = await supabase
+        .from("crm_records")
+        .delete()
+        .eq("id", record_id);
       if (error) throw error;
 
       return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (error: any) {
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

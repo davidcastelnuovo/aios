@@ -3,12 +3,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   try {
     const { item_id } = await req.json();
@@ -44,7 +46,9 @@ serve(async (req) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(auth ? { Authorization: auth } : { Authorization: `Bearer ${supaService}` }),
+          ...(auth
+            ? { Authorization: auth }
+            : { Authorization: `Bearer ${supaService}` }),
           apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
         },
         body: JSON.stringify({ item_id, stage_id: s.id }),
@@ -54,7 +58,10 @@ serve(async (req) => {
 
       if (!r.ok || json.error || json.status === "failed") {
         // Stage failed — do NOT advance current_stage_id, stop pipeline
-        console.error(`[run-pipeline] Stage ${s.id} failed:`, json.error ?? json.status);
+        console.error(
+          `[run-pipeline] Stage ${s.id} failed:`,
+          json.error ?? json.status,
+        );
         return new Response(
           JSON.stringify({
             results,
@@ -64,7 +71,7 @@ serve(async (req) => {
           {
             status: 422,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          },
         );
       }
 
@@ -82,7 +89,7 @@ serve(async (req) => {
             stopped_at: s.id,
             awaiting_approval: true,
           }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
     }

@@ -13,14 +13,53 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle, Link2, Users, Building2, Megaphone, Bell, Repeat } from "lucide-react";
+import {
+  CalendarIcon,
+  Save,
+  Trash2,
+  UserPlus,
+  UserRound,
+  X,
+  Send,
+  Search,
+  ListTodo,
+  ExternalLink,
+  Check,
+  Bot,
+  GitCommit,
+  ArrowRightLeft,
+  MessageCircle,
+  Link2,
+  Users,
+  Building2,
+  Megaphone,
+  Bell,
+  Repeat,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -28,15 +67,24 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { TimeSlotPicker } from "./TimeSlotPicker";
-import { TaskRecurrenceFields, type TaskRecurrenceValue } from "./TaskRecurrenceFields";
+import {
+  TaskRecurrenceFields,
+  type TaskRecurrenceValue,
+} from "./TaskRecurrenceFields";
 import { TaskChecklistSection } from "./TaskChecklistSection";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
-import { NotesWithAttachments, type TaskAttachment } from "./NotesWithAttachments";
+import {
+  NotesWithAttachments,
+  type TaskAttachment,
+} from "./NotesWithAttachments";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { syncTaskCalendarEvent } from "@/lib/calendarApi";
 import { coerceHumanTaskStatus } from "@/lib/taskStatus";
 import { PRIORITY_BAR_LABELS, priorityBarColor } from "@/lib/taskPriority";
-import { notifyTaskCollaboratorAdded, notifyTaskUpdateAdded } from "@/lib/notifyTaskPeers";
+import {
+  notifyTaskCollaboratorAdded,
+  notifyTaskUpdateAdded,
+} from "@/lib/notifyTaskPeers";
 import {
   computeFirstOccurrenceDate,
   formatLocalDate,
@@ -61,12 +109,14 @@ function parseOptionalDate(value: string | null | undefined): Date | undefined {
 }
 
 function personInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("") || "?";
+  return (
+    name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("") || "?"
+  );
 }
 
 interface Task {
@@ -119,7 +169,7 @@ export function TaskDetailDialog({
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
   const { campaignerId: userCampaignerId } = useUserRole();
-  
+
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [priority, setPriority] = useState(5);
@@ -139,7 +189,7 @@ export function TaskDetailDialog({
   const [newUpdate, setNewUpdate] = useState("");
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [selectedCollaborator, setSelectedCollaborator] = useState("");
-  
+
   // Search states for comboboxes
   const [clientSearch, setClientSearch] = useState("");
   const [campaignerSearch, setCampaignerSearch] = useState("");
@@ -151,7 +201,9 @@ export function TaskDetailDialog({
   const [selfReminderEnabled, setSelfReminderEnabled] = useState(false);
   const [selfReminderAt, setSelfReminderAt] = useState("");
   const [viewLeadOpen, setViewLeadOpen] = useState(false);
-  const [googleCalendarEventId, setGoogleCalendarEventId] = useState<string | null>(null);
+  const [googleCalendarEventId, setGoogleCalendarEventId] = useState<
+    string | null
+  >(null);
   const [creatorName, setCreatorName] = useState("");
   const titleFieldRef = useRef<HTMLTextAreaElement>(null);
 
@@ -201,20 +253,30 @@ export function TaskDetailDialog({
         setTargetDate(parseOptionalDate(t.target_date));
         setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
         setRecurrence({
-          frequency: (t.recurrence_frequency as RecurrenceFrequency | null) || null,
+          frequency:
+            (t.recurrence_frequency as RecurrenceFrequency | null) || null,
           weekday: t.recurrence_weekday ?? null,
           monthday: t.recurrence_monthday ?? null,
           time: t.due_time ? String(t.due_time).substring(0, 5) : null,
         });
         setClientId(t.client_id || "");
         setLeadId(t.lead_id || "");
-        const rawDuration = Number((t as { duration_minutes?: number }).duration_minutes) || 30;
-        setDurationMinutes((DURATION_OPTIONS as readonly number[]).includes(rawDuration) ? rawDuration : 30);
+        const rawDuration =
+          Number((t as { duration_minutes?: number }).duration_minutes) || 30;
+        setDurationMinutes(
+          (DURATION_OPTIONS as readonly number[]).includes(rawDuration)
+            ? rawDuration
+            : 30,
+        );
         setAssignedCampaignerId(t.campaigner_id || "");
         setSelfReminderEnabled(Boolean(t.self_reminder_at));
         const reminderAt = parseOptionalDate(t.self_reminder_at);
-        setSelfReminderAt(reminderAt ? format(reminderAt, "yyyy-MM-dd'T'HH:mm") : "");
-        setAttachments(Array.isArray((t as any).attachments) ? (t as any).attachments : []);
+        setSelfReminderAt(
+          reminderAt ? format(reminderAt, "yyyy-MM-dd'T'HH:mm") : "",
+        );
+        setAttachments(
+          Array.isArray((t as any).attachments) ? (t as any).attachments : [],
+        );
         setGoogleCalendarEventId((t as any).google_calendar_event_id || null);
         const knownCreatorName = (t as any).creator_name || "";
         if (knownCreatorName) {
@@ -245,7 +307,9 @@ export function TaskDetailDialog({
     queryFn: async () => {
       let query = supabase.from("clients").select("id, name");
       if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
         query = query.eq("tenant_id", tenantId);
       }
@@ -271,7 +335,11 @@ export function TaskDetailDialog({
 
   // Fetch campaigners for collaboration
   const { data: campaigners } = useQuery({
-    queryKey: ["campaigners-for-tasks", tenantId, crossTenantAgencyIds.join(",")],
+    queryKey: [
+      "campaigners-for-tasks",
+      tenantId,
+      crossTenantAgencyIds.join(","),
+    ],
     queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId && isActive,
   });
@@ -307,8 +375,8 @@ export function TaskDetailDialog({
   const filteredClients = useMemo(() => {
     if (!clients) return [];
     if (!clientSearch.trim()) return clients;
-    return clients.filter(c => 
-      c.name.toLowerCase().includes(clientSearch.toLowerCase())
+    return clients.filter((c) =>
+      c.name.toLowerCase().includes(clientSearch.toLowerCase()),
     );
   }, [clients, clientSearch]);
 
@@ -316,8 +384,8 @@ export function TaskDetailDialog({
   const filteredCampaigners = useMemo(() => {
     if (!campaigners) return [];
     if (!campaignerSearch.trim()) return campaigners;
-    return campaigners.filter(c => 
-      c.full_name.toLowerCase().includes(campaignerSearch.toLowerCase())
+    return campaigners.filter((c) =>
+      c.full_name.toLowerCase().includes(campaignerSearch.toLowerCase()),
     );
   }, [campaigners, campaignerSearch]);
 
@@ -325,39 +393,49 @@ export function TaskDetailDialog({
   const filteredLeads = useMemo(() => {
     if (!leads) return [];
     if (!leadSearch.trim()) return leads;
-    return leads.filter(l => 
-      l.company_name?.toLowerCase().includes(leadSearch.toLowerCase())
+    return leads.filter((l) =>
+      l.company_name?.toLowerCase().includes(leadSearch.toLowerCase()),
     );
   }, [leads, leadSearch]);
 
   // Get selected client name
   const selectedClientName = useMemo(() => {
     if (!clientId) return "";
-    return clients?.find(c => c.id === clientId)?.name || "";
+    return clients?.find((c) => c.id === clientId)?.name || "";
   }, [clients, clientId]);
 
   // Get assigned campaigner name
   const assignedCampaignerName = useMemo(() => {
     if (!assignedCampaignerId) return "";
-    return campaigners?.find(c => c.id === assignedCampaignerId)?.full_name || "";
+    return (
+      campaigners?.find((c) => c.id === assignedCampaignerId)?.full_name || ""
+    );
   }, [campaigners, assignedCampaignerId]);
 
   // Get selected lead name
   const selectedLeadName = useMemo(() => {
     if (!leadId) return "";
-    return leads?.find(l => l.id === leadId)?.company_name || "";
+    return leads?.find((l) => l.id === leadId)?.company_name || "";
   }, [leads, leadId]);
 
   // Update task mutation
   const updateTask = useMutation({
     mutationFn: async () => {
-      if (selfReminderEnabled && assignedCampaignerId === userCampaignerId && !selfReminderAt) {
+      if (
+        selfReminderEnabled &&
+        assignedCampaignerId === userCampaignerId &&
+        !selfReminderAt
+      ) {
         throw new Error("יש לבחור תאריך ושעה לתזכורת");
       }
-      const nextDueDate = isUsableDate(dueDate) ? format(dueDate, "yyyy-MM-dd") : null;
-      const nextTargetDate = isUsableDate(targetDate) ? format(targetDate, "yyyy-MM-dd") : null;
+      const nextDueDate = isUsableDate(dueDate)
+        ? format(dueDate, "yyyy-MM-dd")
+        : null;
+      const nextTargetDate = isUsableDate(targetDate)
+        ? format(targetDate, "yyyy-MM-dd")
+        : null;
       const effectiveDueTime = recurrence.frequency
-        ? (recurrence.time || dueTime)
+        ? recurrence.time || dueTime
         : dueTime;
       const nextDueTime = effectiveDueTime ? effectiveDueTime + ":00" : null;
       const updatePayload: Record<string, unknown> = {
@@ -373,7 +451,9 @@ export function TaskDetailDialog({
         lead_id: leadId || null,
         campaigner_id: assignedCampaignerId || null,
         self_reminder_at:
-          assignedCampaignerId === userCampaignerId && selfReminderEnabled && selfReminderAt
+          assignedCampaignerId === userCampaignerId &&
+          selfReminderEnabled &&
+          selfReminderAt
             ? new Date(selfReminderAt).toISOString()
             : null,
         attachments: attachments as any,
@@ -444,7 +524,10 @@ export function TaskDetailDialog({
   // Add collaborator mutation
   const addCollaborator = useMutation({
     mutationFn: async (campaignerId: string) => {
-      const collabTenantId = resolveTaskCollaboratorTenantId(task!.tenant_id, tenantId);
+      const collabTenantId = resolveTaskCollaboratorTenantId(
+        task!.tenant_id,
+        tenantId,
+      );
       if (!collabTenantId) {
         throw new Error("חסר מזהה ארגון למשימה");
       }
@@ -464,13 +547,19 @@ export function TaskDetailDialog({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["task-collaborators", task?.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["task-collaborators", task?.id],
+      });
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       setSelectedCollaborator("");
       toast.success("איש צוות נוסף למשימה");
     },
     onError: (error: Error) => {
-      toast.error(formatTaskCollaboratorInsertError(error.message || "שגיאה בהוספת איש צוות"));
+      toast.error(
+        formatTaskCollaboratorInsertError(
+          error.message || "שגיאה בהוספת איש צוות",
+        ),
+      );
     },
   });
 
@@ -484,7 +573,9 @@ export function TaskDetailDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["task-collaborators", task?.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["task-collaborators", task?.id],
+      });
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("איש צוות הוסר מהמשימה");
     },
@@ -526,8 +617,10 @@ export function TaskDetailDialog({
       };
       if (next.frequency) {
         payload.recurrence_frequency = next.frequency;
-        payload.recurrence_weekday = next.frequency === "weekly" ? next.weekday : null;
-        payload.recurrence_monthday = next.frequency === "monthly" ? next.monthday : null;
+        payload.recurrence_weekday =
+          next.frequency === "weekly" ? next.weekday : null;
+        payload.recurrence_monthday =
+          next.frequency === "monthly" ? next.monthday : null;
         const effectiveTime = next.time || dueTime;
         if (effectiveTime) {
           payload.due_time = `${effectiveTime}:00`;
@@ -546,7 +639,10 @@ export function TaskDetailDialog({
         payload.recurrence_weekday = null;
         payload.recurrence_monthday = null;
       }
-      const { error } = await supabase.from("tasks").update(payload as any).eq("id", task.id);
+      const { error } = await supabase
+        .from("tasks")
+        .update(payload as any)
+        .eq("id", task.id);
       if (error) throw error;
     },
     onSuccess: (_data, next) => {
@@ -624,7 +720,7 @@ export function TaskDetailDialog({
   const availableCollaborators = campaigners?.filter(
     (c) =>
       c.id !== primaryAssigneeId &&
-      !collaborators?.some((col) => col.campaigner_id === c.id)
+      !collaborators?.some((col) => col.campaigner_id === c.id),
   );
 
   const assignmentSearch = (
@@ -671,7 +767,13 @@ export function TaskDetailDialog({
   );
 
   const body = (
-    <div className={cn("flex flex-col h-full min-h-0 overflow-hidden", isPanel && "bg-muted/20")} dir="rtl">
+    <div
+      className={cn(
+        "flex flex-col h-full min-h-0 overflow-hidden",
+        isPanel && "bg-muted/20",
+      )}
+      dir="rtl"
+    >
       <div
         className={cn(
           "shrink-0 border-b bg-card",
@@ -700,7 +802,9 @@ export function TaskDetailDialog({
             className={cn(
               "min-w-0 w-full resize-none overflow-hidden border-0 bg-transparent px-0 font-bold shadow-none focus-visible:ring-0",
               "whitespace-pre-wrap break-words leading-snug text-right",
-              isMobile ? "text-[15px] min-h-[3rem] max-h-40 py-1.5" : "text-base min-h-10 max-h-28 py-2",
+              isMobile
+                ? "text-[15px] min-h-[3rem] max-h-40 py-1.5"
+                : "text-base min-h-10 max-h-28 py-2",
             )}
           />
           {creatorName && (
@@ -712,38 +816,45 @@ export function TaskDetailDialog({
               title={`המשימה ניתנה על ידי ${creatorName}`}
             >
               <UserRound className="h-3 w-3 shrink-0" />
-              <span className={cn(isMobile ? "break-words" : "truncate")}>ניתנה על ידי {creatorName}</span>
+              <span className={cn(isMobile ? "break-words" : "truncate")}>
+                ניתנה על ידי {creatorName}
+              </span>
             </span>
           )}
         </div>
       </div>
 
-      <div className={cn("flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] bg-muted/20 space-y-3", isMobile ? "p-2.5" : "p-4")}>
-            <div
-              className={cn(
-                "grid grid-cols-1 md:grid-cols-2 gap-3 items-stretch",
-                isPanel && "md:min-h-[min(58vh,520px)]",
-              )}
-            >
-            <div className="md:col-start-1 flex flex-col gap-3 min-h-0">
+      <div
+        className={cn(
+          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] bg-muted/20 space-y-3",
+          isMobile ? "p-2.5" : "p-4",
+        )}
+      >
+        <div
+          className={cn(
+            "grid grid-cols-1 md:grid-cols-2 gap-3 items-stretch",
+            isPanel && "md:min-h-[min(58vh,520px)]",
+          )}
+        >
+          <div className="md:col-start-1 flex flex-col gap-3 min-h-0">
             <section className={cn(FRAME, "space-y-0 p-2.5 shrink-0")}>
               <div className="flex items-center gap-1.5 text-xs font-medium mb-1 pb-1.5">
                 <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
                 שיוך
               </div>
               {creatorName && (
-              <div className="flex items-center gap-2 py-1.5 border-t">
-                <div className="w-[4.25rem] shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <UserRound className="h-3 w-3" />
-                  נתן
-                </div>
-                <span className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-1.5 py-0.5 text-xs max-w-full">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold">
-                    {personInitials(creatorName)}
+                <div className="flex items-center gap-2 py-1.5 border-t">
+                  <div className="w-[4.25rem] shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <UserRound className="h-3 w-3" />
+                    נתן
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-1.5 py-0.5 text-xs max-w-full">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold">
+                      {personInitials(creatorName)}
+                    </span>
+                    <span className="truncate">{creatorName}</span>
                   </span>
-                  <span className="truncate">{creatorName}</span>
-                </span>
-              </div>
+                </div>
               )}
               <div className="flex items-center gap-2 py-1.5 border-t">
                 <div className="w-[4.25rem] shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -775,7 +886,10 @@ export function TaskDetailDialog({
                     campaignerSearch,
                     setCampaignerSearch,
                     "חפש...",
-                    filteredCampaigners.map((c) => ({ id: c.id, name: c.full_name })),
+                    filteredCampaigners.map((c) => ({
+                      id: c.id,
+                      name: c.full_name,
+                    })),
                     (id) => handleAssignedCampaignerChange(id),
                   )
                 )}
@@ -857,7 +971,10 @@ export function TaskDetailDialog({
                     leadSearch,
                     setLeadSearch,
                     "חפש...",
-                    filteredLeads.map((l) => ({ id: l.id, name: l.company_name || "ליד" })),
+                    filteredLeads.map((l) => ({
+                      id: l.id,
+                      name: l.company_name || "ליד",
+                    })),
                     setLeadId,
                   )
                 )}
@@ -869,9 +986,15 @@ export function TaskDetailDialog({
                 </div>
                 <div className="flex-1 flex flex-wrap items-center gap-1">
                   {collaborators?.map((col) => {
-                    const name = (col.campaigners as { full_name?: string } | null)?.full_name || "איש צוות";
+                    const name =
+                      (col.campaigners as { full_name?: string } | null)
+                        ?.full_name || "איש צוות";
                     return (
-                      <Badge key={col.id} variant="secondary" className="gap-1 pr-1 h-6 text-[10px]">
+                      <Badge
+                        key={col.id}
+                        variant="secondary"
+                        className="gap-1 pr-1 h-6 text-[10px]"
+                      >
                         <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15 text-[8px] font-bold">
                           {personInitials(name)}
                         </span>
@@ -888,12 +1011,19 @@ export function TaskDetailDialog({
                   })}
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-6 gap-1 rounded-full text-[10px] bg-card px-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 gap-1 rounded-full text-[10px] bg-card px-2"
+                      >
                         <UserPlus className="h-3 w-3" />
                         הוסף
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[250px] p-0 z-50" align="start">
+                    <PopoverContent
+                      className="w-[250px] p-0 z-50"
+                      align="start"
+                    >
                       <Command>
                         <CommandInput placeholder="חיפוש איש צוות..." />
                         <CommandList>
@@ -907,7 +1037,14 @@ export function TaskDetailDialog({
                                   addCollaborator.mutate(c.id);
                                 }}
                               >
-                                <Check className={cn("h-4 w-4 ms-2", selectedCollaborator === c.id ? "opacity-100" : "opacity-0")} />
+                                <Check
+                                  className={cn(
+                                    "h-4 w-4 ms-2",
+                                    selectedCollaborator === c.id
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
                                 {c.full_name}
                               </CommandItem>
                             ))}
@@ -929,13 +1066,17 @@ export function TaskDetailDialog({
                   onChange={handleRecurrenceChange}
                 />
               </div>
-              {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
+              {Boolean(
+                userCampaignerId && assignedCampaignerId === userCampaignerId,
+              ) && (
                 <div className="flex items-center gap-2 py-1.5 border-t">
                   <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium shrink-0">
                     <input
                       type="checkbox"
                       checked={selfReminderEnabled}
-                      onChange={(event) => setSelfReminderEnabled(event.target.checked)}
+                      onChange={(event) =>
+                        setSelfReminderEnabled(event.target.checked)
+                      }
                       className="h-3.5 w-3.5 rounded border-input"
                     />
                     <Bell className="h-3 w-3 text-muted-foreground" />
@@ -945,7 +1086,9 @@ export function TaskDetailDialog({
                     <Input
                       type="datetime-local"
                       value={selfReminderAt}
-                      onChange={(event) => setSelfReminderAt(event.target.value)}
+                      onChange={(event) =>
+                        setSelfReminderAt(event.target.value)
+                      }
                       className="h-7 bg-card text-xs flex-1 min-w-0"
                       title="כרמן תזכיר רק במועד שתבחר"
                     />
@@ -954,216 +1097,300 @@ export function TaskDetailDialog({
               )}
             </section>
 
-              {task?.id && tenantId && (
-                <TaskChecklistSection taskId={task.id} tenantId={tenantId} className="shrink-0" />
-              )}
-            </div>
-
-            <div className="md:col-start-2 flex flex-col min-h-[280px] h-full">
-              <NotesWithAttachments
-                value={notes}
-                onChange={setNotes}
-                attachments={attachments}
-                onAttachmentsChange={setAttachments}
-                taskId={task?.id}
-                variant="notes"
-                rows={4}
-                fillHeight
-                notesLayout="updates-first"
-                notesTitle="עדכונים"
-                placeholder="כאן שמים הערות קבועות — לדוגמה: אין לפנות ללקוח ישירות, רק דרך איש הקשר..."
-                notesWrapperClassName="h-full min-h-0"
-                notesFooter={
-                  <>
-                    <div className="flex gap-2 shrink-0">
-                      <Textarea
-                        value={newUpdate}
-                        onChange={(e) => setNewUpdate(e.target.value)}
-                        placeholder="הוסף עדכון..."
-                        rows={2}
-                        className="flex-1 bg-transparent border-input min-h-[52px]"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && newUpdate.trim()) {
-                            e.preventDefault();
-                            addUpdate.mutate();
-                          }
-                        }}
-                      />
-                      <Button
-                        onClick={() => addUpdate.mutate()}
-                        disabled={!newUpdate.trim() || addUpdate.isPending}
-                        size="icon"
-                        className="self-end h-8 w-8"
-                        aria-label="שלח עדכון"
-                      >
-                        <Send className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="flex-1 min-h-[120px] overflow-y-auto space-y-2 [scrollbar-width:thin]">
-                    {updates?.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-1">אין עדכונים עדיין</p>
-                    )}
-                    {updates?.map((update) => {
-                      const updateType = (update as { update_type?: string }).update_type || "comment";
-                      const createdAt = parseOptionalDate(update.created_at);
-                      const typeIcon =
-                        updateType === "agent_action" ? <Bot className="h-3.5 w-3.5 text-purple-500" /> :
-                        updateType === "status_change" ? <GitCommit className="h-3.5 w-3.5 text-blue-500" /> :
-                        updateType === "assignment" ? <ArrowRightLeft className="h-3.5 w-3.5 text-orange-500" /> :
-                        <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />;
-                      const typeLabel =
-                        updateType === "agent_action" ? "פעולת סוכן" :
-                        updateType === "status_change" ? "שינוי סטטוס" :
-                        updateType === "assignment" ? "שיוך" :
-                        "תגובה";
-                      return (
-                        <div
-                          key={update.id}
-                          className={cn(
-                            "p-2 rounded-lg border bg-card text-right",
-                            updateType === "agent_action" && "bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800",
-                          )}
-                        >
-                          <div className="flex items-center justify-between mb-0.5 gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              {typeIcon}
-                              <span className="text-xs font-medium truncate">
-                                {(update.profiles as { full_name?: string } | null)?.full_name || "משתמש"}
-                              </span>
-                              <Badge variant="outline" className="text-[10px] h-4 px-1.5">
-                                {typeLabel}
-                              </Badge>
-                            </div>
-                            <span className="text-[10px] text-muted-foreground shrink-0">
-                              {createdAt ? format(createdAt, "dd/MM HH:mm", { locale: he }) : ""}
-                            </span>
-                          </div>
-                          <p className="text-xs whitespace-pre-wrap">{update.content}</p>
-                        </div>
-                      );
-                    })}
-                    </div>
-                  </>
-                }
+            {task?.id && tenantId && (
+              <TaskChecklistSection
+                taskId={task.id}
+                tenantId={tenantId}
+                className="shrink-0"
               />
-            </div>
-            </div>
+            )}
+          </div>
 
+          <div className="md:col-start-2 flex flex-col min-h-[280px] h-full">
             <NotesWithAttachments
               value={notes}
               onChange={setNotes}
               attachments={attachments}
               onAttachmentsChange={setAttachments}
               taskId={task?.id}
-              variant="files"
-              thumbSize="lg"
-            />
-
-            <section className={cn(FRAME, "space-y-3 p-3")}>
-              <div className="flex items-center gap-1.5 text-sm font-medium">
-                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                תאריכים ודחיפות
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">תאריך ביצוע</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn("w-full justify-start text-right h-9 bg-card", !isUsableDate(dueDate) && "text-muted-foreground")}
-                      >
-                        <CalendarIcon className="ms-2 h-4 w-4" />
-                        {isUsableDate(dueDate) ? format(dueDate, "dd/MM/yyyy", { locale: he }) : "בחר"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent portalled={false} className="w-auto p-0 z-[9999]" align="start">
-                      <Calendar mode="single" selected={dueDate} onSelect={setDueDate} initialFocus className="p-3 pointer-events-auto" />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">שעה</Label>
-                  <TimeSlotPicker value={dueTime} onChange={setDueTime} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">תאריך יעד</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn("w-full justify-start text-right h-9 bg-card", !isUsableDate(targetDate) && "text-muted-foreground")}
-                      >
-                        <CalendarIcon className="ms-2 h-4 w-4" />
-                        {isUsableDate(targetDate) ? format(targetDate, "dd/MM/yyyy", { locale: he }) : "בחר"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent portalled={false} className="w-auto p-0 z-[9999]" align="start">
-                      <Calendar mode="single" selected={targetDate} onSelect={setTargetDate} initialFocus className="p-3 pointer-events-auto" />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">משך</Label>
-                  <Select
-                    value={String((DURATION_OPTIONS as readonly number[]).includes(durationMinutes) ? durationMinutes : 30)}
-                    onValueChange={(val) => setDurationMinutes(parseInt(val))}
-                  >
-                    <SelectTrigger className="h-9 bg-card">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="30">30 דקות</SelectItem>
-                      <SelectItem value="60">שעה</SelectItem>
-                      <SelectItem value="90">שעה וחצי</SelectItem>
-                      <SelectItem value="120">שעתיים</SelectItem>
-                      <SelectItem value="150">שעתיים וחצי</SelectItem>
-                      <SelectItem value="180">3 שעות</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2 pt-1">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>דחיפות</span>
-                  <span className="font-medium" style={{ color: priorityBarColor(priority) }}>{priority}</span>
-                </div>
-                <div dir="ltr">
-                  <Slider
-                    dir="ltr"
-                    value={[priority]}
-                    onValueChange={([val]) => setPriority(val)}
-                    min={1}
-                    max={10}
-                    step={1}
-                    className="py-2"
-                    style={{ ["--slider-color" as any]: priorityBarColor(priority) }}
-                  />
-                  <div className="flex justify-between text-[10px] text-muted-foreground">
-                    {PRIORITY_BAR_LABELS.map((label) => (
-                      <span key={label}>{label}</span>
-                    ))}
+              variant="notes"
+              rows={4}
+              fillHeight
+              notesLayout="updates-first"
+              notesTitle="עדכונים"
+              placeholder="כאן שמים הערות קבועות — לדוגמה: אין לפנות ללקוח ישירות, רק דרך איש הקשר..."
+              notesWrapperClassName="h-full min-h-0"
+              notesFooter={
+                <>
+                  <div className="flex gap-2 shrink-0">
+                    <Textarea
+                      value={newUpdate}
+                      onChange={(e) => setNewUpdate(e.target.value)}
+                      placeholder="הוסף עדכון..."
+                      rows={2}
+                      className="flex-1 bg-transparent border-input min-h-[52px]"
+                      onKeyDown={(e) => {
+                        if (
+                          e.key === "Enter" &&
+                          (e.metaKey || e.ctrlKey) &&
+                          newUpdate.trim()
+                        ) {
+                          e.preventDefault();
+                          addUpdate.mutate();
+                        }
+                      }}
+                    />
+                    <Button
+                      onClick={() => addUpdate.mutate()}
+                      disabled={!newUpdate.trim() || addUpdate.isPending}
+                      size="icon"
+                      className="self-end h-8 w-8"
+                      aria-label="שלח עדכון"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
                   </div>
-                </div>
+                  <div className="flex-1 min-h-[120px] overflow-y-auto space-y-2 [scrollbar-width:thin]">
+                    {updates?.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-1">
+                        אין עדכונים עדיין
+                      </p>
+                    )}
+                    {updates?.map((update) => {
+                      const updateType =
+                        (update as { update_type?: string }).update_type ||
+                        "comment";
+                      const createdAt = parseOptionalDate(update.created_at);
+                      const typeIcon =
+                        updateType === "agent_action" ? (
+                          <Bot className="h-3.5 w-3.5 text-purple-500" />
+                        ) : updateType === "status_change" ? (
+                          <GitCommit className="h-3.5 w-3.5 text-blue-500" />
+                        ) : updateType === "assignment" ? (
+                          <ArrowRightLeft className="h-3.5 w-3.5 text-orange-500" />
+                        ) : (
+                          <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                        );
+                      const typeLabel =
+                        updateType === "agent_action"
+                          ? "פעולת סוכן"
+                          : updateType === "status_change"
+                            ? "שינוי סטטוס"
+                            : updateType === "assignment"
+                              ? "שיוך"
+                              : "תגובה";
+                      return (
+                        <div
+                          key={update.id}
+                          className={cn(
+                            "p-2 rounded-lg border bg-card text-right",
+                            updateType === "agent_action" &&
+                              "bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800",
+                          )}
+                        >
+                          <div className="flex items-center justify-between mb-0.5 gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {typeIcon}
+                              <span className="text-xs font-medium truncate">
+                                {(
+                                  update.profiles as {
+                                    full_name?: string;
+                                  } | null
+                                )?.full_name || "משתמש"}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] h-4 px-1.5"
+                              >
+                                {typeLabel}
+                              </Badge>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground shrink-0">
+                              {createdAt
+                                ? format(createdAt, "dd/MM HH:mm", {
+                                    locale: he,
+                                  })
+                                : ""}
+                            </span>
+                          </div>
+                          <p className="text-xs whitespace-pre-wrap">
+                            {update.content}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              }
+            />
+          </div>
+        </div>
+
+        <NotesWithAttachments
+          value={notes}
+          onChange={setNotes}
+          attachments={attachments}
+          onAttachmentsChange={setAttachments}
+          taskId={task?.id}
+          variant="files"
+          thumbSize="lg"
+        />
+
+        <section className={cn(FRAME, "space-y-3 p-3")}>
+          <div className="flex items-center gap-1.5 text-sm font-medium">
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+            תאריכים ודחיפות
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                תאריך ביצוע
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-right h-9 bg-card",
+                      !isUsableDate(dueDate) && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="ms-2 h-4 w-4" />
+                    {isUsableDate(dueDate)
+                      ? format(dueDate, "dd/MM/yyyy", { locale: he })
+                      : "בחר"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  portalled={false}
+                  className="w-auto p-0 z-[9999]"
+                  align="start"
+                >
+                  <Calendar
+                    mode="single"
+                    selected={dueDate}
+                    onSelect={setDueDate}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">שעה</Label>
+              <TimeSlotPicker value={dueTime} onChange={setDueTime} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">תאריך יעד</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-right h-9 bg-card",
+                      !isUsableDate(targetDate) && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="ms-2 h-4 w-4" />
+                    {isUsableDate(targetDate)
+                      ? format(targetDate, "dd/MM/yyyy", { locale: he })
+                      : "בחר"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  portalled={false}
+                  className="w-auto p-0 z-[9999]"
+                  align="start"
+                >
+                  <Calendar
+                    mode="single"
+                    selected={targetDate}
+                    onSelect={setTargetDate}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">משך</Label>
+              <Select
+                value={String(
+                  (DURATION_OPTIONS as readonly number[]).includes(
+                    durationMinutes,
+                  )
+                    ? durationMinutes
+                    : 30,
+                )}
+                onValueChange={(val) => setDurationMinutes(parseInt(val))}
+              >
+                <SelectTrigger className="h-9 bg-card">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 דקות</SelectItem>
+                  <SelectItem value="60">שעה</SelectItem>
+                  <SelectItem value="90">שעה וחצי</SelectItem>
+                  <SelectItem value="120">שעתיים</SelectItem>
+                  <SelectItem value="150">שעתיים וחצי</SelectItem>
+                  <SelectItem value="180">3 שעות</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>דחיפות</span>
+              <span
+                className="font-medium"
+                style={{ color: priorityBarColor(priority) }}
+              >
+                {priority}
+              </span>
+            </div>
+            <div dir="ltr">
+              <Slider
+                dir="ltr"
+                value={[priority]}
+                onValueChange={([val]) => setPriority(val)}
+                min={1}
+                max={10}
+                step={1}
+                className="py-2"
+                style={{
+                  ["--slider-color" as any]: priorityBarColor(priority),
+                }}
+              />
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                {PRIORITY_BAR_LABELS.map((label) => (
+                  <span key={label}>{label}</span>
+                ))}
               </div>
-            </section>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <div className={cn("flex justify-between border-t bg-card shrink-0 gap-2 flex-wrap", isMobile ? "px-3 py-2.5" : "px-4 py-3")}>
+      <div
+        className={cn(
+          "flex justify-between border-t bg-card shrink-0 gap-2 flex-wrap",
+          isMobile ? "px-3 py-2.5" : "px-4 py-3",
+        )}
+      >
         <div className="flex gap-2">
           {onDelete && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={() => {
-              onDelete(task.id);
-              onOpenChange(false);
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-            מחק
-          </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => {
+                onDelete(task.id);
+                onOpenChange(false);
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+              מחק
+            </Button>
           )}
           {(task.due_date || task.due_time) && onMoveToBacklog && (
             <Button
@@ -1180,7 +1407,10 @@ export function TaskDetailDialog({
             </Button>
           )}
         </div>
-        <Button onClick={() => updateTask.mutate()} disabled={updateTask.isPending}>
+        <Button
+          onClick={() => updateTask.mutate()}
+          disabled={updateTask.isPending}
+        >
           <Save className="h-4 w-4" />
           שמור שינויים
         </Button>
@@ -1207,13 +1437,13 @@ export function TaskDetailDialog({
           </DialogContent>
         </Dialog>
       )}
-    {fullLeadData && (
-      <EditLeadDialog
-        lead={fullLeadData}
-        open={viewLeadOpen}
-        onOpenChange={setViewLeadOpen}
-      />
-    )}
+      {fullLeadData && (
+        <EditLeadDialog
+          lead={fullLeadData}
+          open={viewLeadOpen}
+          onOpenChange={setViewLeadOpen}
+        />
+      )}
     </>
   );
 }

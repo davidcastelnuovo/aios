@@ -15,7 +15,13 @@ export interface CopyConcept {
   approvedAt: string | null;
 }
 
-const FIELD_ALIASES: Record<keyof Omit<CopyConcept, "id" | "approved" | "approvedAt" | "copyId" | "copyKey">, string[]> = {
+const FIELD_ALIASES: Record<
+  keyof Omit<
+    CopyConcept,
+    "id" | "approved" | "approvedAt" | "copyId" | "copyKey"
+  >,
+  string[]
+> = {
   name: ["שם", "name", "title"],
   bigIdea: ["רעיון", "רעיון גדול", "big idea", "idea"],
   visualLanguage: ["ויזואל", "שפה ויזואלית", "visual", "visual language"],
@@ -26,7 +32,8 @@ const FIELD_ALIASES: Record<keyof Omit<CopyConcept, "id" | "approved" | "approve
 };
 
 const extractCopyKey = (value: string) => {
-  const match = value.match(/(?:וריאציה|variation)\s*(\d+)/i) || value.match(/^(\d+)\b/);
+  const match =
+    value.match(/(?:וריאציה|variation)\s*(\d+)/i) || value.match(/^(\d+)\b/);
   return match?.[1] ?? "";
 };
 
@@ -46,11 +53,16 @@ const emptyConcept = (): CopyConcept => ({
 });
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 
-const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
+const text = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
 
-export function parseCopyConceptsFromPayload(payload: Record<string, unknown> | null | undefined): CopyConcept[] {
+export function parseCopyConceptsFromPayload(
+  payload: Record<string, unknown> | null | undefined,
+): CopyConcept[] {
   const raw = payload?.copy_concepts;
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((value) => {
@@ -59,20 +71,24 @@ export function parseCopyConceptsFromPayload(payload: Record<string, unknown> | 
     const name = text(rec.name);
     const bigIdea = text(rec.bigIdea);
     if (!name && !bigIdea) return [];
-    return [{
-      id: text(rec.id) || crypto.randomUUID(),
-      name: name || "קונספט",
-      bigIdea,
-      visualLanguage: text(rec.visualLanguage),
-      hook: text(rec.hook),
-      copyAngle: text(rec.copyAngle),
-      whyItWorks: text(rec.whyItWorks),
-      reference: text(rec.reference),
-      copyId: text(rec.copyId),
-      copyKey: text(rec.copyKey) || extractCopyKey(text(rec.copyAngle) || text(rec.copyKey)),
-      approved: rec.approved === true,
-      approvedAt: text(rec.approvedAt) || null,
-    }];
+    return [
+      {
+        id: text(rec.id) || crypto.randomUUID(),
+        name: name || "קונספט",
+        bigIdea,
+        visualLanguage: text(rec.visualLanguage),
+        hook: text(rec.hook),
+        copyAngle: text(rec.copyAngle),
+        whyItWorks: text(rec.whyItWorks),
+        reference: text(rec.reference),
+        copyId: text(rec.copyId),
+        copyKey:
+          text(rec.copyKey) ||
+          extractCopyKey(text(rec.copyAngle) || text(rec.copyKey)),
+        approved: rec.approved === true,
+        approvedAt: text(rec.approvedAt) || null,
+      },
+    ];
   });
 }
 
@@ -89,14 +105,23 @@ export function copyConceptsGenerateGate(input: {
   copyText?: string;
   variationCount?: number;
 }): { canGenerate: boolean; block?: CopyConceptsGenerateBlock } {
-  const hasContext = [input.title, input.brief, input.copyText].some((value) => (value ?? "").trim().length > 0)
-    || (input.variationCount ?? 0) > 0;
+  const hasContext =
+    [input.title, input.brief, input.copyText].some(
+      (value) => (value ?? "").trim().length > 0,
+    ) || (input.variationCount ?? 0) > 0;
   if (!hasContext) return { canGenerate: false, block: "need_context" };
   return { canGenerate: true };
 }
 
-export function appendCopyConcepts(existing: CopyConcept[], incoming: CopyConcept[]): CopyConcept[] {
-  const names = new Set(existing.map((concept) => concept.name.trim().toLowerCase()).filter(Boolean));
+export function appendCopyConcepts(
+  existing: CopyConcept[],
+  incoming: CopyConcept[],
+): CopyConcept[] {
+  const names = new Set(
+    existing
+      .map((concept) => concept.name.trim().toLowerCase())
+      .filter(Boolean),
+  );
   const fresh = incoming.filter((concept) => {
     const name = concept.name.trim().toLowerCase();
     if (!name || names.has(name)) return false;
@@ -107,28 +132,40 @@ export function appendCopyConcepts(existing: CopyConcept[], incoming: CopyConcep
 }
 
 export function formatApprovedConceptsForCopy(concepts: CopyConcept[]): string {
-  return concepts.map((concept, index) => [
-    `${index + 1}. ${concept.name}`,
-    concept.bigIdea && `רעיון: ${concept.bigIdea}`,
-    concept.hook && `הוק: ${concept.hook}`,
-    concept.visualLanguage && `ויזואל: ${concept.visualLanguage}`,
-    concept.whyItWorks && `למה זה עובד: ${concept.whyItWorks}`,
-    concept.reference && `רפרנס: ${concept.reference}`,
-    concept.copyAngle && `זווית: ${concept.copyAngle}`,
-  ].filter(Boolean).join("\n")).join("\n\n");
+  return concepts
+    .map((concept, index) =>
+      [
+        `${index + 1}. ${concept.name}`,
+        concept.bigIdea && `רעיון: ${concept.bigIdea}`,
+        concept.hook && `הוק: ${concept.hook}`,
+        concept.visualLanguage && `ויזואל: ${concept.visualLanguage}`,
+        concept.whyItWorks && `למה זה עובד: ${concept.whyItWorks}`,
+        concept.reference && `רפרנס: ${concept.reference}`,
+        concept.copyAngle && `זווית: ${concept.copyAngle}`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    )
+    .join("\n\n");
 }
 
 export function formatCopyConceptsForCreative(concepts: CopyConcept[]): string {
-  return concepts.map((concept, index) => [
-    `${index + 1}. ${concept.name}`,
-    concept.bigIdea && `רעיון גדול: ${concept.bigIdea}`,
-    concept.visualLanguage && `שפה ויזואלית: ${concept.visualLanguage}`,
-    concept.hook && `הוק / סצנה: ${concept.hook}`,
-    concept.copyAngle && `קופי על הקונספט: ${concept.copyAngle}`,
-    concept.copyKey && `וריאציית קופי משויכת: ${concept.copyKey}`,
-    concept.whyItWorks && `למה זה עובד: ${concept.whyItWorks}`,
-    concept.reference && `רפרנס: ${concept.reference}`,
-  ].filter(Boolean).join("\n")).join("\n\n");
+  return concepts
+    .map((concept, index) =>
+      [
+        `${index + 1}. ${concept.name}`,
+        concept.bigIdea && `רעיון גדול: ${concept.bigIdea}`,
+        concept.visualLanguage && `שפה ויזואלית: ${concept.visualLanguage}`,
+        concept.hook && `הוק / סצנה: ${concept.hook}`,
+        concept.copyAngle && `קופי על הקונספט: ${concept.copyAngle}`,
+        concept.copyKey && `וריאציית קופי משויכת: ${concept.copyKey}`,
+        concept.whyItWorks && `למה זה עובד: ${concept.whyItWorks}`,
+        concept.reference && `רפרנס: ${concept.reference}`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    )
+    .join("\n\n");
 }
 
 const CONCEPT_PHOTOGRAPH_CLOSER = [
@@ -138,7 +175,10 @@ const CONCEPT_PHOTOGRAPH_CLOSER = [
   "Do NOT invent a different metaphor. Do NOT flatten this into a generic lifestyle / product packshot unless the concept itself is a packshot.",
 ].join("\n");
 
-export function findCopyConcept(concepts: CopyConcept[], id?: string | null): CopyConcept | undefined {
+export function findCopyConcept(
+  concepts: CopyConcept[],
+  id?: string | null,
+): CopyConcept | undefined {
   if (!id) return undefined;
   return concepts.find((concept) => concept.id === id);
 }
@@ -169,34 +209,53 @@ export function formatCopyConceptsForImagePrompt(
   if (concepts.length === 0) return "";
   const primary = findCopyConcept(concepts, options?.primaryId) ?? concepts[0];
   const lockToOne = Boolean(options?.primaryId);
-  const extras = lockToOne ? [] : concepts.filter((concept) => concept.id !== primary.id);
+  const extras = lockToOne
+    ? []
+    : concepts.filter((concept) => concept.id !== primary.id);
   const lines = [
     "MUST FOLLOW THIS APPROVED VISUAL CONCEPT. This block IS the photograph — subject, location, props, lighting, and the first-second hook.",
     "The slogan and headline do NOT choose the scene. Never replace this concept with a literal illustration of the copy.",
     CONCEPT_PHOTOGRAPH_CLOSER,
     "Build a cinematic advertising still around this idea — never a generic text-on-background graphic.",
-    lockToOne && "This is the ONLY concept for this still. Do not blend, swap, or borrow a different approved campaign idea.",
+    lockToOne &&
+      "This is the ONLY concept for this still. Do not blend, swap, or borrow a different approved campaign idea.",
     primary.name && `Concept name: ${primary.name}`,
-    primary.bigIdea && `PHOTOGRAPH THIS SCENE (the entire still is this idea, not a pretty product photo): ${primary.bigIdea}`,
-    primary.visualLanguage && `Art direction / visual language: ${primary.visualLanguage}`,
-    primary.hook && `Narrative to stage — people, place, props, action: ${primary.hook}`,
-    primary.copyAngle && `Copy angle (words only — do not restage this as a new scene): ${primary.copyAngle}`,
-    primary.whyItWorks && `Why this concept works (keep this tension in the frame): ${primary.whyItWorks}`,
-    primary.reference && `Canonical campaign method to steal (not the slogan): ${primary.reference}`,
+    primary.bigIdea &&
+      `PHOTOGRAPH THIS SCENE (the entire still is this idea, not a pretty product photo): ${primary.bigIdea}`,
+    primary.visualLanguage &&
+      `Art direction / visual language: ${primary.visualLanguage}`,
+    primary.hook &&
+      `Narrative to stage — people, place, props, action: ${primary.hook}`,
+    primary.copyAngle &&
+      `Copy angle (words only — do not restage this as a new scene): ${primary.copyAngle}`,
+    primary.whyItWorks &&
+      `Why this concept works (keep this tension in the frame): ${primary.whyItWorks}`,
+    primary.reference &&
+      `Canonical campaign method to steal (not the slogan): ${primary.reference}`,
   ];
   if (extras.length > 0) {
-    lines.push("Additional approved concepts (keep the primary scene; borrow only supporting visual cues):");
-    lines.push(extras.map((concept, index) => {
-      const detail = [concept.bigIdea, concept.visualLanguage, concept.hook].filter(Boolean).join(" — ");
-      return `${index + 2}. ${concept.name}${detail ? `: ${detail}` : ""}`;
-    }).join("\n"));
+    lines.push(
+      "Additional approved concepts (keep the primary scene; borrow only supporting visual cues):",
+    );
+    lines.push(
+      extras
+        .map((concept, index) => {
+          const detail = [concept.bigIdea, concept.visualLanguage, concept.hook]
+            .filter(Boolean)
+            .join(" — ");
+          return `${index + 2}. ${concept.name}${detail ? `: ${detail}` : ""}`;
+        })
+        .join("\n"),
+    );
   }
   return lines.filter(Boolean).join("\n");
 }
 
 /** True when the visual prompt is an approved-concept lock, not a freeform copy brief. */
 export function isApprovedConceptPrompt(visualPrompt?: string | null): boolean {
-  return /MUST FOLLOW THIS APPROVED VISUAL CONCEPT|CONCEPT PHOTOGRAPH — HARD LOCK/i.test(String(visualPrompt ?? ""));
+  return /MUST FOLLOW THIS APPROVED VISUAL CONCEPT|CONCEPT PHOTOGRAPH — HARD LOCK/i.test(
+    String(visualPrompt ?? ""),
+  );
 }
 
 export function resolveVisualPrompt(
@@ -205,37 +264,64 @@ export function resolveVisualPrompt(
   options?: ConceptPromptOptions,
 ): string {
   const fromCaller = concepts?.length
-    ? (approvedCopyConcepts(concepts).length > 0 ? approvedCopyConcepts(concepts) : concepts)
+    ? approvedCopyConcepts(concepts).length > 0
+      ? approvedCopyConcepts(concepts)
+      : concepts
     : [];
-  const fromPayload = approvedCopyConcepts(parseCopyConceptsFromPayload(payload));
-  const storedApproved = parseCopyConceptsFromPayload({ copy_concepts: payload?.approved_concepts });
-  const approved = fromCaller.length > 0
-    ? fromCaller
-    : storedApproved.length > 0
-      ? storedApproved.map((concept) => ({ ...concept, approved: true }))
-      : fromPayload;
+  const fromPayload = approvedCopyConcepts(
+    parseCopyConceptsFromPayload(payload),
+  );
+  const storedApproved = parseCopyConceptsFromPayload({
+    copy_concepts: payload?.approved_concepts,
+  });
+  const approved =
+    fromCaller.length > 0
+      ? fromCaller
+      : storedApproved.length > 0
+        ? storedApproved.map((concept) => ({ ...concept, approved: true }))
+        : fromPayload;
   const live = formatCopyConceptsForImagePrompt(approved, options);
   if (live) return live;
-  return typeof payload?.visual_prompt === "string" ? payload.visual_prompt.trim() : "";
+  return typeof payload?.visual_prompt === "string"
+    ? payload.visual_prompt.trim()
+    : "";
 }
 
 export function extractConceptsDocument(output: string): string {
   const marker = output.split(/---CONCEPTS---/i);
-  const body = (marker.length > 1 ? marker.slice(1).join("---CONCEPTS---") : output).trim();
-  return body.replace(/^```(?:markdown|md|json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  const body = (
+    marker.length > 1 ? marker.slice(1).join("---CONCEPTS---") : output
+  ).trim();
+  return body
+    .replace(/^```(?:markdown|md|json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
 }
 
 const matchField = (label: string): keyof CopyConcept | null => {
   const normalized = label.trim().toLowerCase();
-  for (const [field, aliases] of Object.entries(FIELD_ALIASES) as [keyof typeof FIELD_ALIASES, string[]][]) {
-    if (aliases.some((alias) => normalized === alias.toLowerCase() || normalized.startsWith(`${alias.toLowerCase()} `))) {
+  for (const [field, aliases] of Object.entries(FIELD_ALIASES) as [
+    keyof typeof FIELD_ALIASES,
+    string[],
+  ][]) {
+    if (
+      aliases.some(
+        (alias) =>
+          normalized === alias.toLowerCase() ||
+          normalized.startsWith(`${alias.toLowerCase()} `),
+      )
+    ) {
       return field;
     }
   }
   return null;
 };
 
-const applyField = (concept: CopyConcept, field: keyof CopyConcept, value: string) => {
+const applyField = (
+  concept: CopyConcept,
+  field: keyof CopyConcept,
+  value: string,
+) => {
   if (field === "id" || field === "approved" || field === "approvedAt") return;
   concept[field] = value;
 };
@@ -248,7 +334,7 @@ export function parseConceptsFromCarmen(output: string): CopyConcept[] {
       const parsed = JSON.parse(jsonBlock[0]) as unknown;
       const rows = Array.isArray(parsed)
         ? parsed
-        : asRecord(parsed)?.concepts ?? asRecord(parsed)?.copy_concepts;
+        : (asRecord(parsed)?.concepts ?? asRecord(parsed)?.copy_concepts);
       if (Array.isArray(rows)) {
         const fromJson = parseCopyConceptsFromPayload({ copy_concepts: rows });
         if (fromJson.length > 0) return fromJson.slice(0, 5);
@@ -258,17 +344,30 @@ export function parseConceptsFromCarmen(output: string): CopyConcept[] {
     }
   }
 
-  const headingChunks = document.split(/^#{1,3}\s+/m).map((chunk) => chunk.trim()).filter(Boolean);
-  const numberedChunks = document.split(/\n(?=\d+\s*[.)\-–])/).map((chunk) => chunk.trim()).filter(Boolean);
+  const headingChunks = document
+    .split(/^#{1,3}\s+/m)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  const numberedChunks = document
+    .split(/\n(?=\d+\s*[.)\-–])/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
   const source = headingChunks.length > 1 ? headingChunks : numberedChunks;
   const concepts: CopyConcept[] = [];
 
   for (const chunk of source) {
     const concept = emptyConcept();
-    const lines = chunk.split("\n").map((line) => line.trim()).filter(Boolean);
+    const lines = chunk
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
     if (lines.length === 0) continue;
-    const heading = lines[0].replace(/^\d+\s*[.|)\-–]\s*/, "").replace(/^\|\s*/, "").trim();
-    if (heading && !heading.includes(":")) concept.name = heading.replace(/^שם[:\s]*/, "");
+    const heading = lines[0]
+      .replace(/^\d+\s*[.|)\-–]\s*/, "")
+      .replace(/^\|\s*/, "")
+      .trim();
+    if (heading && !heading.includes(":"))
+      concept.name = heading.replace(/^שם[:\s]*/, "");
 
     for (const line of lines.slice(concept.name === heading ? 1 : 0)) {
       const split = line.match(/^([^:]{2,24})\s*[:：]\s*(.+)$/);

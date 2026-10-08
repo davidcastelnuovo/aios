@@ -42,15 +42,25 @@ export async function fetchCarmenAutomationConfig(
   // Prefer the private-phone trigger when Carmen has both a private and a group
   // trigger — otherwise an unordered `.find()` can pick the group-only step and
   // the Agent Hub allowlist looks empty even though private replies work.
-  const withPhones = configs.filter((c) => (c.carmen_allowed_phones || []).length > 0);
+  const withPhones = configs.filter(
+    (c) => (c.carmen_allowed_phones || []).length > 0,
+  );
   const preferred = withPhones[0] || configs[0];
-  const mergedPhones = [...new Set(
-    configs.flatMap((c) => (c.carmen_allowed_phones || []).map((p) => String(p).replace(/\D/g, "")).filter(Boolean)),
-  )];
+  const mergedPhones = [
+    ...new Set(
+      configs.flatMap((c) =>
+        (c.carmen_allowed_phones || [])
+          .map((p) => String(p).replace(/\D/g, ""))
+          .filter(Boolean),
+      ),
+    ),
+  ];
 
   return {
     ...preferred,
-    carmen_allowed_phones: mergedPhones.length ? mergedPhones : preferred.carmen_allowed_phones,
+    carmen_allowed_phones: mergedPhones.length
+      ? mergedPhones
+      : preferred.carmen_allowed_phones,
   };
 }
 
@@ -60,7 +70,9 @@ export function resolveAutomationGroupIds(
 ): string[] {
   const refs: string[] = cfg.carmen_allowed_group_ids?.length
     ? cfg.carmen_allowed_group_ids
-    : (cfg.carmen_allowed_group_id ? [cfg.carmen_allowed_group_id] : []);
+    : cfg.carmen_allowed_group_id
+      ? [cfg.carmen_allowed_group_id]
+      : [];
   if (!refs.length) return [];
   return (manusGroups || [])
     .filter((g) => refs.includes(g.group_chat_id) || refs.includes(g.id))

@@ -2,7 +2,11 @@
 // Supports ad-hoc join via pasted meeting URL (no calendar required).
 // deploy: recall 402 WhatsApp alert (2026-08-26)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createRecallBot, isRecallCreditError, recallApiKey } from "../_shared/recall.ts";
+import {
+  createRecallBot,
+  isRecallCreditError,
+  recallApiKey,
+} from "../_shared/recall.ts";
 import { notifyRecallCreditEmpty } from "../_shared/recall-credit-alert.ts";
 import {
   detectMeetingPlatform,
@@ -24,7 +28,8 @@ const json = (body: unknown, status = 200) =>
   });
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -55,10 +60,17 @@ Deno.serve(async (req) => {
       tenantId = bodyTenantId || null;
       userId = body.created_by || null;
     } else {
-      const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user }, error: authError } = await userClient.auth.getUser();
+      const userClient = createClient(
+        SUPABASE_URL,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        {
+          global: { headers: { Authorization: authHeader } },
+        },
+      );
+      const {
+        data: { user },
+        error: authError,
+      } = await userClient.auth.getUser();
       if (authError || !user) return json({ error: "Unauthorized" }, 401);
       userId = user.id;
       tenantId = bodyTenantId || null;
@@ -75,33 +87,53 @@ Deno.serve(async (req) => {
 
     if (!tenantId) return json({ error: "tenant_id is required" }, 400);
     if (!rawUrl?.trim()) return json({ error: "meeting_url is required" }, 400);
-    if (!recallApiKey()) return json({ error: "Meeting bot is not configured (RECALL_API_KEY)" }, 503);
+    if (!recallApiKey())
+      return json(
+        { error: "Meeting bot is not configured (RECALL_API_KEY)" },
+        503,
+      );
 
     const meeting_url = normalizeMeetingUrl(rawUrl);
     const platform = detectMeetingPlatform(meeting_url);
     if (!isSupportedMeetingUrl(meeting_url)) {
-      return json({
-        error: "קישור לא נתמך. נא להדביק קישור Zoom, Google Meet או Microsoft Teams.",
-        platform,
-      }, 400);
+      return json(
+        {
+          error:
+            "קישור לא נתמך. נא להדביק קישור Zoom, Google Meet או Microsoft Teams.",
+          platform,
+        },
+        400,
+      );
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     const campaignerIds = Array.isArray(requestedCampaignerIds)
-      ? [...new Set(requestedCampaignerIds.filter((id): id is string => typeof id === "string" && !!id))]
+      ? [
+          ...new Set(
+            requestedCampaignerIds.filter(
+              (id): id is string => typeof id === "string" && !!id,
+            ),
+          ),
+        ]
       : [];
-    const validScopes = new Set(["auto", "client", "lead", "campaigner", "agency"]);
+    const validScopes = new Set([
+      "auto",
+      "client",
+      "lead",
+      "campaigner",
+      "agency",
+    ]);
     const summaryScope = validScopes.has(requestedSummaryScope)
       ? requestedSummaryScope
       : client_id
-      ? "client"
-      : lead_id
-      ? "lead"
-      : campaignerIds.length > 0
-      ? "campaigner"
-      : requestedAgencyId
-      ? "agency"
-      : "auto";
+        ? "client"
+        : lead_id
+          ? "lead"
+          : campaignerIds.length > 0
+            ? "campaigner"
+            : requestedAgencyId
+              ? "agency"
+              : "auto";
 
     if (summaryScope === "campaigner" && campaignerIds.length === 0) {
       return json({ error: "נא לבחור איש צוות אחד לפחות" }, 400);
@@ -115,7 +147,8 @@ Deno.serve(async (req) => {
         .eq("id", agencyId)
         .eq("tenant_id", tenantId)
         .maybeSingle();
-      if (!agency) return json({ error: "הסוכנות אינה שייכת לארגון הפעיל" }, 403);
+      if (!agency)
+        return json({ error: "הסוכנות אינה שייכת לארגון הפעיל" }, 403);
     } else if (summaryScope === "agency" || summaryScope === "campaigner") {
       const { data: agency } = await admin
         .from("agencies")
@@ -126,7 +159,8 @@ Deno.serve(async (req) => {
         .limit(1)
         .maybeSingle();
       agencyId = agency?.id || null;
-      if (!agencyId) return json({ error: "לא נמצאה סוכנות לשיוך הסיכום" }, 400);
+      if (!agencyId)
+        return json({ error: "לא נמצאה סוכנות לשיוך הסיכום" }, 400);
     }
 
     if (campaignerIds.length > 0) {
@@ -161,7 +195,10 @@ Deno.serve(async (req) => {
 
     if (insertError || !session) {
       console.error("[dispatch-meeting-bot] insert failed", insertError);
-      return json({ error: insertError?.message || "Failed to create session" }, 500);
+      return json(
+        { error: insertError?.message || "Failed to create session" },
+        500,
+      );
     }
 
     let bot;
@@ -176,10 +213,13 @@ Deno.serve(async (req) => {
       });
     } catch (botErr) {
       const msg = botErr instanceof Error ? botErr.message : String(botErr);
-      await admin.from("meeting_bot_sessions").update({
-        status: "failed",
-        error: msg,
-      }).eq("id", session.id);
+      await admin
+        .from("meeting_bot_sessions")
+        .update({
+          status: "failed",
+          error: msg,
+        })
+        .eq("id", session.id);
       if (isRecallCreditError(botErr)) {
         await notifyRecallCreditEmpty(admin);
         return json({ error: msg }, 402);
@@ -187,11 +227,14 @@ Deno.serve(async (req) => {
       return json({ error: msg }, 502);
     }
 
-    await admin.from("meeting_bot_sessions").update({
-      external_bot_id: bot.id,
-      status: "joining",
-      joined_at: new Date().toISOString(),
-    }).eq("id", session.id);
+    await admin
+      .from("meeting_bot_sessions")
+      .update({
+        external_bot_id: bot.id,
+        status: "joining",
+        joined_at: new Date().toISOString(),
+      })
+      .eq("id", session.id);
 
     return json({
       success: true,
@@ -204,6 +247,9 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("[dispatch-meeting-bot] error:", error);
-    return json({ error: error instanceof Error ? error.message : "Unknown error" }, 500);
+    return json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      500,
+    );
   }
 });

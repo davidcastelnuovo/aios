@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, FileSpreadsheet } from "lucide-react";
@@ -15,11 +21,13 @@ export function ImportLeadsCSV() {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.csv')) {
+    if (!file.name.endsWith(".csv")) {
       toast({
         title: "שגיאה",
         description: "יש להעלות קובץ CSV בלבד",
@@ -32,21 +40,26 @@ export function ImportLeadsCSV() {
 
     try {
       const text = await file.text();
-      
+
       // Get current user and tenant for backup
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("משתמש לא מחובר");
-      
+
       const { data: tenantData } = await supabase
         .from("tenant_users")
         .select("tenant_id")
         .eq("user_id", user.id)
         .single();
-      
+
       if (!tenantData) throw new Error("לא נמצא tenant למשתמש");
 
       // Parse CSV
-      const parsed = Papa.parse<any>(text, { header: true, skipEmptyLines: true });
+      const parsed = Papa.parse<any>(text, {
+        header: true,
+        skipEmptyLines: true,
+      });
       if (parsed.errors && parsed.errors.length) {
         console.warn("CSV parse warnings:", parsed.errors);
       }
@@ -75,26 +88,32 @@ export function ImportLeadsCSV() {
       if (!zivPerson) throw new Error('איש מכירות "זיו" לא נמצא');
 
       const normalize = (s: string | null | undefined) =>
-        (s || "").toString().trim().replace(/[\s_\-\/'"]/g, "").toLowerCase();
+        (s || "")
+          .toString()
+          .trim()
+          .replace(/[\s_\-\/'"]/g, "")
+          .toLowerCase();
 
       const isUUID = (s: string) =>
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          s,
+        );
 
       const parseDate = (val: string) => {
         if (!val) return null;
         // Try DD/MM/YY format
-        const parts = val.split('/');
+        const parts = val.split("/");
         if (parts.length === 3) {
-          const day = parts[0].padStart(2, '0');
-          const month = parts[1].padStart(2, '0');
+          const day = parts[0].padStart(2, "0");
+          const month = parts[1].padStart(2, "0");
           let year = parts[2];
-          if (year.length === 2) year = '20' + year;
+          if (year.length === 2) year = "20" + year;
           const d = new Date(`${year}-${month}-${day}`);
-          if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+          if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
         }
         // Try ISO format
         const d = new Date(val);
-        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+        if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
         return null;
       };
 
@@ -109,7 +128,7 @@ export function ImportLeadsCSV() {
           const v = row[key] ?? row[String(key).trim()];
           if (v !== undefined && v !== null) {
             const s = String(v).trim();
-            if (s !== '') return s;
+            if (s !== "") return s;
           }
         }
         return undefined;
@@ -119,7 +138,13 @@ export function ImportLeadsCSV() {
         const v = normalize(val);
         if (v.includes("אתר") || v.includes("website")) return "website";
         if (v.includes("לינקדאין") || v.includes("linkedin")) return "linkedin";
-        if (v.includes("שיחה") || v.includes("טלפון") || v.includes("איתי") || v.includes("המלצה")) return "referral";
+        if (
+          v.includes("שיחה") ||
+          v.includes("טלפון") ||
+          v.includes("איתי") ||
+          v.includes("המלצה")
+        )
+          return "referral";
         // Default to 'other' for all social media and unrecognized sources
         return "other";
       };
@@ -128,8 +153,15 @@ export function ImportLeadsCSV() {
         const v = normalize(val);
         if (v.includes("איןמענה") || v.includes("אינומענה")) return "contacted";
         if (v.includes("פולואפ") || v.includes("פולאפ")) return "follow_up";
-        if (v.includes("הצעתמחיר") || v.includes("הצעה") || v.includes("נקבעהפגישה") || v.includes("נקבעהשיחה")) return "proposal_sent";
-        if (v.includes("פגישהעםאיתי") || v.includes("ממתיןלשיחה")) return "follow_up";
+        if (
+          v.includes("הצעתמחיר") ||
+          v.includes("הצעה") ||
+          v.includes("נקבעהפגישה") ||
+          v.includes("נקבעהשיחה")
+        )
+          return "proposal_sent";
+        if (v.includes("פגישהעםאיתי") || v.includes("ממתיןלשיחה"))
+          return "follow_up";
         // לא מעוניין / לא רלוונטי נשארים כ-new, רק תאריך ב"נסגר" יקבע closed
         return "new";
       };
@@ -139,7 +171,8 @@ export function ImportLeadsCSV() {
         if (v.includes("איןמענה4")) return "no_answer_4";
         if (v.includes("איןמענה3")) return "no_answer_3";
         if (v.includes("איןמענה2")) return "no_answer_2";
-        if (v.includes("איןמענה") || v.includes("אינומענה")) return "no_answer_1";
+        if (v.includes("איןמענה") || v.includes("אינומענה"))
+          return "no_answer_1";
         if (v.includes("מכחישפניה")) return "denies_contact";
         if (v.includes("לארלוונטי")) return "not_relevant";
         return null;
@@ -149,12 +182,12 @@ export function ImportLeadsCSV() {
         const cleaned: any = {};
         for (const [k, v] of Object.entries(obj)) {
           if (v === undefined || v === null) continue;
-          if (typeof v === 'string' && v.trim() === '') continue;
+          if (typeof v === "string" && v.trim() === "") continue;
           cleaned[k] = v;
         }
         return cleaned;
       };
-      
+
       const mapped = rows.map((row) => {
         const lead: any = {
           tenant_id: tenantData.tenant_id,
@@ -163,138 +196,157 @@ export function ImportLeadsCSV() {
         };
 
         // ליד ID - אם קיים ונראה כמו UUID נשתמש בו
-        if (row['ליד id']) {
-          const idStr = row['ליד id'].toString().trim();
+        if (row["ליד id"]) {
+          const idStr = row["ליד id"].toString().trim();
           if (isUUID(idStr)) lead.id = idStr;
         }
 
         // שם - contact name
-        const contact = getFirst(row, ['שם', 'איש קשר', 'שם איש קשר']);
+        const contact = getFirst(row, ["שם", "איש קשר", "שם איש קשר"]);
         if (contact && !isDateLike(contact)) {
           lead.contact_name = contact;
         }
-        
+
         // נייד - phone
-        if (row['נייד']) lead.phone = row['נייד'].toString().trim();
-        
+        if (row["נייד"]) lead.phone = row["נייד"].toString().trim();
+
         // מייל - email (מתעלם מתאריכים)
-        const emailVal = row['מייל'] ? row['מייל'].toString().trim() : '';
+        const emailVal = row["מייל"] ? row["מייל"].toString().trim() : "";
         if (emailVal && !isDateLike(emailVal)) {
           lead.email = emailVal;
         }
-        
+
         // שם העסק - company name (מניעת זיהוי תאריך בתור שם)
-        const company = getFirst(row, ['שם העסק', 'שם חברה', 'שם החברה', 'חברה', 'עסק', 'שם העסק/חברה', 'שם עסק']);
+        const company = getFirst(row, [
+          "שם העסק",
+          "שם חברה",
+          "שם החברה",
+          "חברה",
+          "עסק",
+          "שם העסק/חברה",
+          "שם עסק",
+        ]);
         if (company && !isDateLike(company)) {
           lead.company_name = company;
         } else if (!lead.company_name && lead.contact_name) {
           lead.company_name = lead.contact_name;
         }
-        
+
         // פרסום - industry/notes
-        if (row['פרסום']) lead.industry = row['פרסום'].toString().trim();
-        
+        if (row["פרסום"]) lead.industry = row["פרסום"].toString().trim();
+
         // מקור הגעה - source (חובה - ברירת מחדל "other")
-        if (row['מקור הגעה']) {
-          lead.source = mapSource(row['מקור הגעה'].toString());
+        if (row["מקור הגעה"]) {
+          lead.source = mapSource(row["מקור הגעה"].toString());
         } else {
-          lead.source = 'other';
+          lead.source = "other";
         }
-        
+
         // שם קמפיין - campaign_name
-        if (row['שם קמפיין']) lead.campaign_name = row['שם קמפיין'].toString().trim();
-        
+        if (row["שם קמפיין"])
+          lead.campaign_name = row["שם קמפיין"].toString().trim();
+
         // סטטוס + סיבת הפסד (אם רלוונטי)
-        if (row['סטטוס']) {
-          const statusText = row['סטטוס'].toString();
+        if (row["סטטוס"]) {
+          const statusText = row["סטטוס"].toString();
           lead.status = mapStatus(statusText);
           const vstat = normalize(statusText);
-          if (vstat.includes('לאמעוניין') || vstat.includes('לאמעניין') || vstat.includes('לארלוונטי')) {
+          if (
+            vstat.includes("לאמעוניין") ||
+            vstat.includes("לאמעניין") ||
+            vstat.includes("לארלוונטי")
+          ) {
             lead.lost_reason = statusText.trim();
           }
           const resp = mapResponseStatus(statusText);
           if (resp) lead.response_status = resp;
         }
-        
+
         // הערות - notes
-        if (row['הערות']) lead.notes = row['הערות'].toString().trim();
-        
+        if (row["הערות"]) lead.notes = row["הערות"].toString().trim();
+
         // מוצרים - products
-        if (row['מוצרים']) lead.products = row['מוצרים'].toString().trim();
-        
+        if (row["מוצרים"]) lead.products = row["מוצרים"].toString().trim();
+
         // שיחה עם איתי - תאריך פגישה/שיחה
-        if (row['שיחה עם איתי']) {
-          const d = parseDate(row['שיחה עם איתי'].toString());
+        if (row["שיחה עם איתי"]) {
+          const d = parseDate(row["שיחה עם איתי"].toString());
           if (d) {
             lead.itai_meeting_date = d;
           }
         }
-        
+
         // תאריך הצעה
-        if (row['תאריך הצעה']) {
-          const d = parseDate(row['תאריך הצעה'].toString());
+        if (row["תאריך הצעה"]) {
+          const d = parseDate(row["תאריך הצעה"].toString());
           if (d) {
             lead.proposal_date = d;
             lead.proposal_sent_date = d;
-            if (lead.status === 'new') lead.status = 'proposal_sent';
+            if (lead.status === "new") lead.status = "proposal_sent";
           }
         }
-        
+
         // נסגר - תאריך מכירה (אם יש תאריך, הסטטוס תמיד יהיה "closed")
-        if (row['נסגר']) {
-          const d = parseDate(row['נסגר'].toString());
+        if (row["נסגר"]) {
+          const d = parseDate(row["נסגר"].toString());
           if (d) {
             lead.sale_date = d;
             lead.won_date = d;
             lead.closing_date = d;
-            lead.status = 'closed';
+            lead.status = "closed";
           }
         }
-        
+
         // תאריך יצירה - created_at (חובה - אם לא קיים נשתמש בתאריך הנוכחי)
-        if (row['תאריך יצירה']) {
-          const d = parseDate(row['תאריך יצירה'].toString());
+        if (row["תאריך יצירה"]) {
+          const d = parseDate(row["תאריך יצירה"].toString());
           if (d) {
-            lead.created_at = d + 'T00:00:00Z';
+            lead.created_at = d + "T00:00:00Z";
           } else {
             lead.created_at = new Date().toISOString();
           }
         } else {
           lead.created_at = new Date().toISOString();
         }
-        
+
         // הצעה חד"פ - monthly budget
-        const monthlyKey = row['הצעה חד"פ'] ? 'הצעה חד"פ' : row['הצעה חד״פ'] ? 'הצעה חד״פ' : null;
+        const monthlyKey = row['הצעה חד"פ']
+          ? 'הצעה חד"פ'
+          : row["הצעה חד״פ"]
+            ? "הצעה חד״פ"
+            : null;
         if (monthlyKey && row[monthlyKey]) {
-          const val = row[monthlyKey].toString().replace(/[^\d.-]/g, '');
+          const val = row[monthlyKey].toString().replace(/[^\d.-]/g, "");
           const n = parseFloat(val);
           if (!isNaN(n) && n > 0) lead.monthly_budget = n;
         }
-        
+
         // הצעה 3 חודשים
-        if (row['הצעה 3 חודשים']) {
-          const val = row['הצעה 3 חודשים'].toString().replace(/[^\d.-]/g, '');
+        if (row["הצעה 3 חודשים"]) {
+          const val = row["הצעה 3 חודשים"].toString().replace(/[^\d.-]/g, "");
           const n = parseFloat(val);
           if (!isNaN(n) && n > 0) lead.three_month_budget = n;
         }
-        
+
         // שווי הצעות/הסכמים
-        if (row['שווי הצעות/הסכמים']) {
-          const val = row['שווי הצעות/הסכמים'].toString().replace(/[^\d.-]/g, '');
+        if (row["שווי הצעות/הסכמים"]) {
+          const val = row["שווי הצעות/הסכמים"]
+            .toString()
+            .replace(/[^\d.-]/g, "");
           const n = parseFloat(val);
           if (!isNaN(n) && n > 0) lead.estimated_deal_value = n;
         }
 
         if (!lead.status) lead.status = "new";
-        
+
         return sanitize(lead);
       });
 
       const validLeads = mapped.filter((l) => {
-        const name = (l.company_name || '').trim();
-        const contact = (l.contact_name || '').trim();
-        const email = (l.email || '').trim();
-        const phone = (l.phone || '').trim();
+        const name = (l.company_name || "").trim();
+        const contact = (l.contact_name || "").trim();
+        const email = (l.email || "").trim();
+        const phone = (l.phone || "").trim();
         if (!name && !contact && !email && !phone) return false;
         return true;
       });
@@ -314,7 +366,7 @@ export function ImportLeadsCSV() {
           imported_by: user.id,
           records_count: validLeads.length,
         });
-      
+
       if (backupError) {
         console.error("Failed to save backup:", backupError);
         // Continue with import even if backup fails
@@ -328,7 +380,8 @@ export function ImportLeadsCSV() {
         .eq("agency_id", promoAgency.id);
       if (existingErr) throw existingErr;
       // בניית רשימות עדכון/הוספה לפי התאמה בתוך אותה סוכנות (השוואה לא רגישה לרישיות)
-      const normalizeStr = (s: string | null | undefined) => (s || "").toString().trim().toLowerCase();
+      const normalizeStr = (s: string | null | undefined) =>
+        (s || "").toString().trim().toLowerCase();
 
       const updates: any[] = [];
       const inserts: any[] = [];
@@ -349,12 +402,13 @@ export function ImportLeadsCSV() {
         const name = normalizeStr(lead.company_name);
         const email = normalizeStr(lead.email);
         const phone = (lead.phone || "").toString().replace(/[\s-]/g, "");
-        const existing = existingLeads?.find((e) =>
-          normalizeStr(e.company_name) === name &&
-          (
-            (email && normalizeStr(e.email) === email) ||
-            (!email && e.phone && e.phone.toString().replace(/[\s-]/g, "") === phone)
-          )
+        const existing = existingLeads?.find(
+          (e) =>
+            normalizeStr(e.company_name) === name &&
+            ((email && normalizeStr(e.email) === email) ||
+              (!email &&
+                e.phone &&
+                e.phone.toString().replace(/[\s-]/g, "") === phone)),
         );
 
         if (existing) {

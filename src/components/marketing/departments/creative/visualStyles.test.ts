@@ -11,7 +11,10 @@ import {
 
 test("default style is adaptive; the ten boards stay optional", () => {
   assert.equal(DEFAULT_VISUAL_STYLE_ID, "adaptive");
-  assert.deepEqual(stylesInGroup("auto").map((item) => item.id), ["adaptive"]);
+  assert.deepEqual(
+    stylesInGroup("auto").map((item) => item.id),
+    ["adaptive"],
+  );
   const reference = stylesInGroup("reference").map((item) => item.id);
   assert.deepEqual(reference, [
     "swiss",
@@ -28,7 +31,18 @@ test("default style is adaptive; the ten boards stay optional", () => {
 });
 
 test("legacy style ids still resolve so old projects keep working", () => {
-  for (const id of ["adaptive", "photoreal", "animation", "illustration", "popart", "render3d", "editorial", "ugc", "watercolor", "comic"]) {
+  for (const id of [
+    "adaptive",
+    "photoreal",
+    "animation",
+    "illustration",
+    "popart",
+    "render3d",
+    "editorial",
+    "ugc",
+    "watercolor",
+    "comic",
+  ]) {
     assert.equal(isVisualStyleId(id), true);
   }
 });
@@ -40,7 +54,14 @@ test("collage lock is not overridden by a global anti-collage rule", () => {
 });
 
 test("style locks are treatment only and never require a travel cliché", () => {
-  for (const styleId of ["swiss", "kinetic", "organic", "bauhaus", "cinematic", "holographic"] as const) {
+  for (const styleId of [
+    "swiss",
+    "kinetic",
+    "organic",
+    "bauhaus",
+    "cinematic",
+    "holographic",
+  ] as const) {
     const lock = buildVisualStyleLock({}, { styleId });
     assert.match(lock, /THIS copy/i);
     assert.match(lock, /IRON RULE/i);
@@ -50,9 +71,18 @@ test("style locks are treatment only and never require a travel cliché", () => 
     assert.match(lock, /BRAND COLOR LOCK/i);
     assert.doesNotMatch(lock, /destination coast/i);
   }
-  assert.match(buildVisualStyleLock({}, { styleId: "organic" }), /ONLY if the copy is about a place/i);
-  assert.match(buildVisualStyleLock({}, { styleId: "bauhaus" }), /never a default airplane wing/i);
-  assert.match(buildVisualStyleLock({}, { styleId: "kinetic" }), /not a random streaking car/i);
+  assert.match(
+    buildVisualStyleLock({}, { styleId: "organic" }),
+    /ONLY if the copy is about a place/i,
+  );
+  assert.match(
+    buildVisualStyleLock({}, { styleId: "bauhaus" }),
+    /never a default airplane wing/i,
+  );
+  assert.match(
+    buildVisualStyleLock({}, { styleId: "kinetic" }),
+    /not a random streaking car/i,
+  );
 });
 
 test("new variations stay adaptive instead of cycling the style boards", () => {

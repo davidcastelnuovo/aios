@@ -1,7 +1,17 @@
 import { useState, useRef, KeyboardEvent } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Send, Paperclip, Mic, Square, X, Loader2, Smile, AudioLines, Type } from "lucide-react";
+import {
+  Send,
+  Paperclip,
+  Mic,
+  Square,
+  X,
+  Loader2,
+  Smile,
+  AudioLines,
+  Type,
+} from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -17,7 +27,28 @@ import {
 } from "@/components/ui/tooltip";
 
 // Simple emoji list for quick selection
-const COMMON_EMOJIS = ['😊', '😂', '❤️', '👍', '🙏', '😍', '🔥', '💪', '✅', '👏', '🎉', '😁', '🤔', '💯', '⭐', '🙌', '😎', '💬', '📞', '✨'];
+const COMMON_EMOJIS = [
+  "😊",
+  "😂",
+  "❤️",
+  "👍",
+  "🙏",
+  "😍",
+  "🔥",
+  "💪",
+  "✅",
+  "👏",
+  "🎉",
+  "😁",
+  "🤔",
+  "💯",
+  "⭐",
+  "🙌",
+  "😎",
+  "💬",
+  "📞",
+  "✨",
+];
 interface ReplyToMessage {
   id: string;
   text: string;
@@ -32,7 +63,13 @@ interface ChatInputProps {
   onClearReply?: () => void;
 }
 
-export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessage, onClearReply }: ChatInputProps) {
+export default function ChatInput({
+  onSend,
+  onSendFile,
+  isLoading,
+  replyToMessage,
+  onClearReply,
+}: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -42,7 +79,7 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [sendAsVoice, setSendAsVoice] = useState(true);
   const isMobile = useIsMobile();
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -57,11 +94,11 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
         setMessage("");
         onClearReply?.();
       } catch (error) {
-        console.error('Error sending file:', error);
+        console.error("Error sending file:", error);
       }
       return;
     }
-    
+
     if (!message.trim() || isLoading) return;
     onSend(message, replyToMessage?.id);
     setMessage("");
@@ -69,7 +106,7 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -86,9 +123,9 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
     }
 
     setSelectedFile(file);
-    
+
     // Create preview for images
-    if (file.type.startsWith('image/')) {
+    if (file.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onload = (e) => setFilePreview(e.target?.result as string);
       reader.readAsDataURL(file);
@@ -101,14 +138,16 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
     setSelectedFile(null);
     setFilePreview(null);
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: "audio/webm",
+      });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -119,9 +158,11 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        stream.getTracks().forEach(track => track.stop());
-        
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/webm",
+        });
+        stream.getTracks().forEach((track) => track.stop());
+
         if (sendAsVoice && onSendFile) {
           // Send as voice message
           await sendVoiceMessage(audioBlob);
@@ -134,7 +175,7 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
       mediaRecorder.start();
       setIsRecording(true);
     } catch (error) {
-      console.error('Error starting recording:', error);
+      console.error("Error starting recording:", error);
       toast.error("לא ניתן לגשת למיקרופון");
     }
   };
@@ -149,11 +190,13 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
   const sendVoiceMessage = async (audioBlob: Blob) => {
     setIsSendingVoice(true);
     try {
-      const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+      const file = new File([audioBlob], `voice_${Date.now()}.webm`, {
+        type: "audio/webm",
+      });
       await onSendFile!(file);
       toast.success("הודעה קולית נשלחה");
     } catch (error) {
-      console.error('Voice send error:', error);
+      console.error("Voice send error:", error);
       toast.error("שגיאה בשליחת הודעה קולית");
     } finally {
       setIsSendingVoice(false);
@@ -164,20 +207,23 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
     setIsTranscribing(true);
     try {
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append("audio", audioBlob, "recording.webm");
 
-      const { data, error } = await supabase.functions.invoke('transcribe-voice', {
-        body: formData,
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "transcribe-voice",
+        {
+          body: formData,
+        },
+      );
 
       if (error) throw error;
-      
+
       if (data?.text) {
-        setMessage(prev => prev ? prev + ' ' + data.text : data.text);
+        setMessage((prev) => (prev ? prev + " " + data.text : data.text));
         toast.success("הקלטה תומללה בהצלחה");
       }
     } catch (error) {
-      console.error('Transcription error:', error);
+      console.error("Transcription error:", error);
       toast.error("שגיאה בתמלול ההקלטה");
     } finally {
       setIsTranscribing(false);
@@ -185,25 +231,30 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
   };
 
   const handleEmojiSelect = (emoji: any) => {
-    setMessage(prev => prev + emoji.native);
+    setMessage((prev) => prev + emoji.native);
     setShowEmojiPicker(false);
     textareaRef.current?.focus();
   };
 
   return (
-    <div className={`${isMobile ? 'p-2' : 'p-4'} space-y-2`}>
+    <div className={`${isMobile ? "p-2" : "p-4"} space-y-2`}>
       {/* Reply preview */}
       {replyToMessage && (
         <div className="flex items-center gap-2 p-2 bg-muted rounded-lg border-r-4 border-blue-500">
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-blue-600">
-              מגיב ל{replyToMessage.senderName || 'הודעה'}
+              מגיב ל{replyToMessage.senderName || "הודעה"}
             </p>
             <p className="text-sm truncate text-muted-foreground">
               {replyToMessage.text}
             </p>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClearReply} className="h-8 w-8">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClearReply}
+            className="h-8 w-8"
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -213,7 +264,11 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
       {selectedFile && (
         <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
           {filePreview ? (
-            <img src={filePreview} alt="Preview" className="h-12 w-12 object-cover rounded" />
+            <img
+              src={filePreview}
+              alt="Preview"
+              className="h-12 w-12 object-cover rounded"
+            />
           ) : (
             <div className="h-12 w-12 bg-primary/10 rounded flex items-center justify-center">
               <Paperclip className="h-5 w-5 text-primary" />
@@ -262,9 +317,9 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
               <Smile className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent 
-            className="w-64 p-2 shadow-lg" 
-            side="top" 
+          <PopoverContent
+            className="w-64 p-2 shadow-lg"
+            side="top"
             align="start"
             sideOffset={8}
           >
@@ -289,15 +344,23 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
               <Button
                 variant="ghost"
                 size="icon"
-                className={`shrink-0 h-8 w-8 ${sendAsVoice ? 'text-primary' : 'text-muted-foreground'}`}
+                className={`shrink-0 h-8 w-8 ${sendAsVoice ? "text-primary" : "text-muted-foreground"}`}
                 onClick={() => setSendAsVoice(!sendAsVoice)}
-                disabled={isLoading || isRecording || isTranscribing || isSendingVoice}
+                disabled={
+                  isLoading || isRecording || isTranscribing || isSendingVoice
+                }
               >
-                {sendAsVoice ? <AudioLines className="h-3.5 w-3.5" /> : <Type className="h-3.5 w-3.5" />}
+                {sendAsVoice ? (
+                  <AudioLines className="h-3.5 w-3.5" />
+                ) : (
+                  <Type className="h-3.5 w-3.5" />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top">
-              {sendAsVoice ? "מצב: שלח כהודעה קולית (לחץ לעבור לתמלול)" : "מצב: תמלל לטקסט (לחץ לעבור לקולי)"}
+              {sendAsVoice
+                ? "מצב: שלח כהודעה קולית (לחץ לעבור לתמלול)"
+                : "מצב: תמלל לטקסט (לחץ לעבור לקולי)"}
             </TooltipContent>
           </Tooltip>
         )}
@@ -324,25 +387,37 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={selectedFile ? "הוסף כיתוב (אופציונלי)..." : "הקלד הודעה... (Enter לשליחה)"}
+          placeholder={
+            selectedFile
+              ? "הוסף כיתוב (אופציונלי)..."
+              : "הקלד הודעה... (Enter לשליחה)"
+          }
           className="resize-none flex-1 h-10 min-h-10 max-h-10"
           rows={1}
-          disabled={isLoading || isRecording || isTranscribing || isSendingVoice}
+          disabled={
+            isLoading || isRecording || isTranscribing || isSendingVoice
+          }
         />
-        
+
         <Button
           onClick={handleSend}
-          disabled={(!message.trim() && !selectedFile) || isLoading || isRecording || isTranscribing || isSendingVoice}
+          disabled={
+            (!message.trim() && !selectedFile) ||
+            isLoading ||
+            isRecording ||
+            isTranscribing ||
+            isSendingVoice
+          }
           size="icon"
           className="shrink-0 h-10 w-10"
         >
           <Send className="h-4 w-4" />
         </Button>
       </div>
-      
+
       {isRecording && (
         <p className="text-xs text-destructive text-center animate-pulse">
-          🔴 מקליט... {sendAsVoice ? '(ישלח כהודעה קולית)' : '(יתמלל לטקסט)'}
+          🔴 מקליט... {sendAsVoice ? "(ישלח כהודעה קולית)" : "(יתמלל לטקסט)"}
         </p>
       )}
     </div>

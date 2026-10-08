@@ -26,10 +26,18 @@ test("WhatsApp approval phrases are detected", () => {
 test("non-approval and reject phrases", () => {
   for (const p of cases.reject) {
     assert.equal(isExplicitRejectionPhrase(p), true, `should reject: ${p}`);
-    assert.equal(isExplicitApprovalPhrase(p), false, `reject is not approve: ${p}`);
+    assert.equal(
+      isExplicitApprovalPhrase(p),
+      false,
+      `reject is not approve: ${p}`,
+    );
   }
   for (const p of cases.notApproval) {
-    assert.equal(isExplicitApprovalPhrase(p), false, `should not approve: ${p}`);
+    assert.equal(
+      isExplicitApprovalPhrase(p),
+      false,
+      `should not approve: ${p}`,
+    );
   }
 });
 
@@ -42,8 +50,16 @@ test("repeated confirmations still count as approval", () => {
 
 test("pickLatestPendingApproval prefers Meta tools", () => {
   const rows = [
-    { id: "1", tool_name: "create_broadcast", created_at: "2026-08-04T06:00:00Z" },
-    { id: "2", tool_name: "fb_duplicate_ad_variants", created_at: "2026-08-04T05:59:00Z" },
+    {
+      id: "1",
+      tool_name: "create_broadcast",
+      created_at: "2026-08-04T06:00:00Z",
+    },
+    {
+      id: "2",
+      tool_name: "fb_duplicate_ad_variants",
+      created_at: "2026-08-04T05:59:00Z",
+    },
   ];
   // Newest-first list: broadcast is newer, but Meta should win when preferMeta.
   assert.equal(pickLatestPendingApproval(rows)?.id, "2");
@@ -57,7 +73,11 @@ test("buildNoPendingRecovery returns recreate_once for last Meta row", () => {
       status: "rejected",
       tool_name: "fb_duplicate_ad_variants",
       title: "שכפול ×4",
-      tool_input: { client_id: "c1", source_ad_id: "ad1", variants: [{ primary_text: "x" }] },
+      tool_input: {
+        client_id: "c1",
+        source_ad_id: "ad1",
+        variants: [{ primary_text: "x" }],
+      },
     },
   ];
   const { recovery, instruction_for_carmen } = buildNoPendingRecovery(recent);
@@ -69,9 +89,24 @@ test("buildNoPendingRecovery returns recreate_once for last Meta row", () => {
 
 test("formatApprovalExecutionReply never claims success on failure", () => {
   const pending = { title: "שכפול מודעה" };
-  assert.match(formatApprovalExecutionReply({ success: true }, pending), /בוצע/);
-  assert.match(formatApprovalExecutionReply({ success: false, error: "no_pending_approval" }, pending), /לא הצלחתי/);
-  assert.match(formatApprovalExecutionReply({ success: false, error: "no_pending_approval" }, pending), /לא בוצע/);
+  assert.match(
+    formatApprovalExecutionReply({ success: true }, pending),
+    /בוצע/,
+  );
+  assert.match(
+    formatApprovalExecutionReply(
+      { success: false, error: "no_pending_approval" },
+      pending,
+    ),
+    /לא הצלחתי/,
+  );
+  assert.match(
+    formatApprovalExecutionReply(
+      { success: false, error: "no_pending_approval" },
+      pending,
+    ),
+    /לא בוצע/,
+  );
 });
 
 test("isMetaApprovalTool covers duplicate variants", () => {

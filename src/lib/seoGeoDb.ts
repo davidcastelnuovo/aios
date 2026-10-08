@@ -1,7 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export type SeoGeoApprovalStatus = "pending" | "approved" | "auto_approved";
-export type SeoGeoGenerationStatus = "planned" | "generating" | "draft" | "published" | "failed";
+export type SeoGeoGenerationStatus =
+  "planned" | "generating" | "draft" | "published" | "failed";
 
 export type SeoGeoProgram = {
   id: string;

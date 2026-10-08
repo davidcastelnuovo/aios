@@ -16,14 +16,14 @@ David gives Carmen a business/product/operations goal. Carmen acts as **executio
 
 Extends existing `goals` with `execution_mode`, `priority`, `next_action`, `completion_criteria`.
 
-| Table | Purpose |
-|-------|---------|
-| `goal_milestones` | Ordered milestones |
-| `goal_blockers` | Open/resolved blockers |
-| `goal_events` | Audit log |
-| `tasks.goal_id` | Human tasks (existing) |
-| `dev_tasks.goal_id` | Cursor/Grok dev work |
-| `agent_tasks.goal_id` | Scheduled agent tasks |
+| Table                 | Purpose                |
+| --------------------- | ---------------------- |
+| `goal_milestones`     | Ordered milestones     |
+| `goal_blockers`       | Open/resolved blockers |
+| `goal_events`         | Audit log              |
+| `tasks.goal_id`       | Human tasks (existing) |
+| `dev_tasks.goal_id`   | Cursor/Grok dev work   |
+| `agent_tasks.goal_id` | Scheduled agent tasks  |
 
 ## API
 

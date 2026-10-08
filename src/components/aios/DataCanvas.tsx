@@ -27,7 +27,9 @@ export function DataCanvas({ panels, onRemovePanel }: DataCanvasProps) {
       {panels.map((panel, index) => (
         <Card key={index} className="border border-border">
           <CardHeader className="flex flex-row items-center justify-between py-3 px-4">
-            <CardTitle className="text-base font-semibold">{panel.title}</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              {panel.title}
+            </CardTitle>
             <Button
               variant="ghost"
               size="icon"
@@ -41,12 +43,8 @@ export function DataCanvas({ panels, onRemovePanel }: DataCanvasProps) {
             {panel.view_type === "table" && (
               <DataTable columns={panel.columns || []} data={panel.data} />
             )}
-            {panel.view_type === "cards" && (
-              <DataCards data={panel.data} />
-            )}
-            {panel.view_type === "stats" && (
-              <DataStats data={panel.data} />
-            )}
+            {panel.view_type === "cards" && <DataCards data={panel.data} />}
+            {panel.view_type === "stats" && <DataStats data={panel.data} />}
             {panel.view_type === "list" && (
               <DataTable columns={panel.columns || []} data={panel.data} />
             )}

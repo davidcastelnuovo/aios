@@ -12,7 +12,8 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -20,12 +21,14 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 function jsonResponse(body: any, status = 200) {
   return new Response(JSON.stringify(body), {
-    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
   try {
     const body = await req.json();
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -47,14 +50,20 @@ Deno.serve(async (req) => {
       const row = (rows || [])[0];
       if (!row) return jsonResponse({ error: "connection not found" }, 404);
       if (!isInternalMcpUrl(row.url)) {
-        return jsonResponse({ error: "refusing to resync a non-internal MCP URL" }, 400);
+        return jsonResponse(
+          { error: "refusing to resync a non-internal MCP URL" },
+          400,
+        );
       }
 
       const resynced = await resyncInternalMcpBearer(supabase, row);
       if (!resynced) {
-        return jsonResponse({
-          error: `no edge secret mapped for connection name ${row.name}`,
-        }, 400);
+        return jsonResponse(
+          {
+            error: `no edge secret mapped for connection name ${row.name}`,
+          },
+          400,
+        );
       }
 
       return jsonResponse({
@@ -68,28 +77,46 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { tenant_id, agent_id, name, url, transport = "http", bearer_token } = body;
+    const {
+      tenant_id,
+      agent_id,
+      name,
+      url,
+      transport = "http",
+      bearer_token,
+    } = body;
     if (!tenant_id || !name || !url) {
       return jsonResponse({ error: "missing tenant_id/name/url" }, 400);
     }
-    if (!/^https?:\/\//.test(url)) return jsonResponse({ error: "url must be http(s)" }, 400);
+    if (!/^https?:\/\//.test(url))
+      return jsonResponse({ error: "url must be http(s)" }, 400);
 
     const { tools, state, lastError } = await probeMcp(url, bearer_token);
 
-    const { data, error } = await supabase.from("agent_mcp_connections").insert({
-      tenant_id,
-      agent_id: agent_id ?? null,
-      name,
-      url,
-      transport,
-      state,
-      oauth_tokens: bearer_token ? { bearer: bearer_token } : null,
-      available_tools: tools,
-      last_error: lastError,
-    }).select().single();
+    const { data, error } = await supabase
+      .from("agent_mcp_connections")
+      .insert({
+        tenant_id,
+        agent_id: agent_id ?? null,
+        name,
+        url,
+        transport,
+        state,
+        oauth_tokens: bearer_token ? { bearer: bearer_token } : null,
+        available_tools: tools,
+        last_error: lastError,
+      })
+      .select()
+      .single();
     if (error) throw error;
 
-    return jsonResponse({ ok: true, connection_id: data.id, state, tools, error: lastError });
+    return jsonResponse({
+      ok: true,
+      connection_id: data.id,
+      state,
+      tools,
+      error: lastError,
+    });
   } catch (e: any) {
     console.error("[mcp-connect]", e?.message);
     return jsonResponse({ error: String(e?.message ?? e) }, 500);

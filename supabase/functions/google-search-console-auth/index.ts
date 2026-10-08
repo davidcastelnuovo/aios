@@ -2,105 +2,122 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const url = new URL(req.url);
-  const action = url.searchParams.get('action');
-
+  const action = url.searchParams.get("action");
 
   // OAuth configuration
-  const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
-  const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-  const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/google-search-console-auth?action=oauth_callback`;
+  const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
+  const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
+  const redirectUri = `${Deno.env.get("SUPABASE_URL")}/functions/v1/google-search-console-auth?action=oauth_callback`;
 
   if (!clientId || !clientSecret) {
-    console.error('Missing Google OAuth credentials');
+    console.error("Missing Google OAuth credentials");
     return new Response(
-      JSON.stringify({ error: 'Google OAuth credentials not configured' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: "Google OAuth credentials not configured" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
   // Handle OAuth initiation
-  if (action === 'authorize') {
-    const authHeader = req.headers.get('Authorization');
+  if (action === "authorize") {
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Missing authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     try {
       const { tenantId, userId, addNew, origin } = await req.json();
-      
+
       if (!tenantId || !userId) {
         return new Response(
-          JSON.stringify({ error: 'Missing tenantId or userId' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: "Missing tenantId or userId" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
 
       // Google Search Console scopes (+ userinfo.email so we can identify the Google account)
       const scopes = [
-        'https://www.googleapis.com/auth/webmasters.readonly',
-        'https://www.googleapis.com/auth/userinfo.email',
-      ].join(' ');
+        "https://www.googleapis.com/auth/webmasters.readonly",
+        "https://www.googleapis.com/auth/userinfo.email",
+      ].join(" ");
 
-      const state = btoa(JSON.stringify({ tenantId, userId, addNew: !!addNew, origin: origin || null }));
-
-      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-      authUrl.searchParams.set('client_id', clientId);
-      authUrl.searchParams.set('redirect_uri', redirectUri);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('scope', scopes);
-      authUrl.searchParams.set('access_type', 'offline');
-      authUrl.searchParams.set('prompt', 'consent');
-      if (addNew) {
-        authUrl.searchParams.set('login_hint', '');
-      }
-      authUrl.searchParams.set('state', state);
-
-
-      return new Response(
-        JSON.stringify({ authUrl: authUrl.toString() }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      const state = btoa(
+        JSON.stringify({
+          tenantId,
+          userId,
+          addNew: !!addNew,
+          origin: origin || null,
+        }),
       );
+
+      const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      authUrl.searchParams.set("client_id", clientId);
+      authUrl.searchParams.set("redirect_uri", redirectUri);
+      authUrl.searchParams.set("response_type", "code");
+      authUrl.searchParams.set("scope", scopes);
+      authUrl.searchParams.set("access_type", "offline");
+      authUrl.searchParams.set("prompt", "consent");
+      if (addNew) {
+        authUrl.searchParams.set("login_hint", "");
+      }
+      authUrl.searchParams.set("state", state);
+
+      return new Response(JSON.stringify({ authUrl: authUrl.toString() }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     } catch (error) {
-      console.error('Error generating auth URL:', error);
+      console.error("Error generating auth URL:", error);
       return new Response(
-        JSON.stringify({ error: 'Failed to generate authorization URL' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Failed to generate authorization URL" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
   }
 
   // Handle OAuth callback
-  if (action === 'oauth_callback') {
-    const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state');
-    const error = url.searchParams.get('error');
+  if (action === "oauth_callback") {
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    const error = url.searchParams.get("error");
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     async function getTenantSlug(tenantId: string): Promise<string> {
       const { data: tenant } = await supabase
-        .from('tenants')
-        .select('slug')
-        .eq('id', tenantId)
+        .from("tenants")
+        .select("slug")
+        .eq("id", tenantId)
         .single();
-      return tenant?.slug || 'app';
+      return tenant?.slug || "app";
     }
 
     let stateOrigin: string | null = null;
@@ -110,23 +127,29 @@ serve(async (req) => {
         const parsed = JSON.parse(atob(state));
         stateOrigin = parsed.origin || null;
         stateTenantId = parsed.tenantId || null;
-      } catch { /* noop */ }
+      } catch {
+        /* noop */
+      }
     }
     // Strip any trailing slash so `${APP_BASE}/t/...` never produces a double slash
     // (e.g. https://www.aios.co.il//t/... → ERR_FAILED).
-    const APP_BASE = (stateOrigin || Deno.env.get('APP_URL') || 'https://after-lead.com').replace(/\/+$/, '');
+    const APP_BASE = (
+      stateOrigin ||
+      Deno.env.get("APP_URL") ||
+      "https://after-lead.com"
+    ).replace(/\/+$/, "");
 
     if (error) {
-      const slug = stateTenantId ? await getTenantSlug(stateTenantId) : 'app';
+      const slug = stateTenantId ? await getTenantSlug(stateTenantId) : "app";
       const redirectUrl = `${APP_BASE}/t/${slug}/integrations?error=${error}`;
       return new Response(null, {
         status: 302,
-        headers: { Location: redirectUrl }
+        headers: { Location: redirectUrl },
       });
     }
 
     if (!code || !state) {
-      return new Response('Missing code or state', { status: 400 });
+      return new Response("Missing code or state", { status: 400 });
     }
 
     try {
@@ -134,67 +157,79 @@ serve(async (req) => {
       const tenantSlug = await getTenantSlug(tenantId);
 
       // Exchange code for tokens
-      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           code,
           client_id: clientId,
           client_secret: clientSecret,
           redirect_uri: redirectUri,
-          grant_type: 'authorization_code',
+          grant_type: "authorization_code",
         }),
       });
 
       const tokens = await tokenResponse.json();
 
       if (tokens.error) {
-        console.error('Token exchange error:', tokens);
+        console.error("Token exchange error:", tokens);
         throw new Error(tokens.error_description || tokens.error);
       }
 
-      const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
+      const expiresAt = new Date(
+        Date.now() + tokens.expires_in * 1000,
+      ).toISOString();
 
       // Fetch the Google email to identify which Google account was authorized
-      let googleEmail = '';
+      let googleEmail = "";
       try {
-        const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-          headers: { Authorization: `Bearer ${tokens.access_token}` },
-        });
+        const userInfoResponse = await fetch(
+          "https://www.googleapis.com/oauth2/v2/userinfo",
+          {
+            headers: { Authorization: `Bearer ${tokens.access_token}` },
+          },
+        );
         const userInfo = await userInfoResponse.json();
-        googleEmail = userInfo.email || '';
+        googleEmail = userInfo.email || "";
       } catch (e) {
-        console.error('Failed to fetch Google user info:', e);
+        console.error("Failed to fetch Google user info:", e);
       }
 
       // Find an existing GSC integration in this tenant: prefer same google_email,
       // then same user_id; otherwise insert a new row (multi-account, multi-user).
       const { data: allGsc, error: allGscError } = await supabase
-        .from('tenant_integrations')
-        .select('id, user_id, settings')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'google_search_console');
+        .from("tenant_integrations")
+        .select("id, user_id, settings")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "google_search_console");
 
       if (allGscError) {
         throw allGscError;
       }
 
       const existingForEmail = googleEmail
-        ? allGsc?.find((row: any) => (row.settings as any)?.google_email === googleEmail) || null
+        ? allGsc?.find(
+            (row: any) => (row.settings as any)?.google_email === googleEmail,
+          ) || null
         : null;
-      const existingForUser = allGsc?.find((row: any) => row.user_id === userId) || null;
+      const existingForUser =
+        allGsc?.find((row: any) => row.user_id === userId) || null;
       const existingIntegration = existingForEmail || existingForUser;
-      const existingSettings = (existingIntegration?.settings as Record<string, unknown> | null) || null;
+      const existingSettings =
+        (existingIntegration?.settings as Record<string, unknown> | null) ||
+        null;
 
       const integrationData = {
         is_active: true,
         api_key: tokens.access_token,
         settings: {
           ...(existingSettings || {}),
-          refresh_token: tokens.refresh_token || (existingSettings as any)?.refresh_token,
+          refresh_token:
+            tokens.refresh_token || (existingSettings as any)?.refresh_token,
           expires_at: expiresAt,
           connected_at: new Date().toISOString(),
-          google_email: googleEmail || (existingSettings as any)?.google_email || '',
+          google_email:
+            googleEmail || (existingSettings as any)?.google_email || "",
           // Clear any stale reconnect flags on successful re-authorization
           needs_reauth: false,
           reauth_reason: null,
@@ -206,101 +241,111 @@ serve(async (req) => {
       let saveError;
       if (existingIntegration) {
         const { error } = await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update(integrationData)
-          .eq('id', existingIntegration.id);
+          .eq("id", existingIntegration.id);
         saveError = error;
       } else {
-        const { error } = await supabase
-          .from('tenant_integrations')
-          .insert({
-            tenant_id: tenantId,
-            user_id: userId,
-            integration_type: 'google_search_console',
-            ...integrationData,
-          });
+        const { error } = await supabase.from("tenant_integrations").insert({
+          tenant_id: tenantId,
+          user_id: userId,
+          integration_type: "google_search_console",
+          ...integrationData,
+        });
         saveError = error;
       }
 
       if (saveError) {
-        console.error('Error saving tokens:', saveError);
+        console.error("Error saving tokens:", saveError);
         throw saveError;
       }
 
       const redirectUrl = `${APP_BASE}/t/${tenantSlug}/integrations?google_search_console=connected`;
       return new Response(null, {
         status: 302,
-        headers: { Location: redirectUrl }
+        headers: { Location: redirectUrl },
       });
     } catch (error) {
-      console.error('OAuth callback error:', error);
-      const slug = stateTenantId ? await getTenantSlug(stateTenantId) : 'app';
+      console.error("OAuth callback error:", error);
+      const slug = stateTenantId ? await getTenantSlug(stateTenantId) : "app";
       const redirectUrl = `${APP_BASE}/t/${slug}/integrations?error=auth_failed`;
       return new Response(null, {
         status: 302,
-        headers: { Location: redirectUrl }
+        headers: { Location: redirectUrl },
       });
     }
   }
 
   // Get Search Console sites
-  if (action === 'get_sites') {
-    const authHeader = req.headers.get('Authorization');
+  if (action === "get_sites") {
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Missing authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     try {
       const { integrationId } = await req.json();
-      
+
       const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       );
 
       const { data: integration, error: integrationError } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('id', integrationId)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("id", integrationId)
         .single();
 
       if (integrationError || !integration) {
-        throw new Error('Integration not found');
+        throw new Error("Integration not found");
       }
 
       let accessToken = integration.api_key;
       const settings = integration.settings as any;
       const ownerEmail = settings?.google_email || null;
 
-      const refreshAccessToken = async (): Promise<{ ok: boolean; reason?: string }> => {
-        if (!settings?.refresh_token) return { ok: false, reason: 'missing_refresh_token' };
-        const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            client_id: clientId,
-            client_secret: clientSecret,
-            refresh_token: settings.refresh_token,
-            grant_type: 'refresh_token',
-          }),
-        });
+      const refreshAccessToken = async (): Promise<{
+        ok: boolean;
+        reason?: string;
+      }> => {
+        if (!settings?.refresh_token)
+          return { ok: false, reason: "missing_refresh_token" };
+        const refreshResponse = await fetch(
+          "https://oauth2.googleapis.com/token",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              client_id: clientId,
+              client_secret: clientSecret,
+              refresh_token: settings.refresh_token,
+              grant_type: "refresh_token",
+            }),
+          },
+        );
         const refreshData = await refreshResponse.json().catch(() => ({}));
         if (refreshData.access_token) {
           accessToken = refreshData.access_token;
-          const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+          const newExpiresAt = new Date(
+            Date.now() + refreshData.expires_in * 1000,
+          ).toISOString();
           await supabase
-            .from('tenant_integrations')
+            .from("tenant_integrations")
             .update({
               api_key: accessToken,
               settings: { ...settings, expires_at: newExpiresAt },
             })
-            .eq('id', integrationId);
+            .eq("id", integrationId);
           return { ok: true };
         }
-        return { ok: false, reason: refreshData.error || 'refresh_failed' };
+        return { ok: false, reason: refreshData.error || "refresh_failed" };
       };
 
       // Proactive refresh if expired
@@ -309,7 +354,7 @@ serve(async (req) => {
       }
 
       const fetchSites = () =>
-        fetch('https://www.googleapis.com/webmasters/v3/sites', {
+        fetch("https://www.googleapis.com/webmasters/v3/sites", {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
 
@@ -320,7 +365,9 @@ serve(async (req) => {
       const looksUnauthorized =
         sitesResponse.status === 401 ||
         sitesData?.error?.code === 401 ||
-        /invalid.*credential|invalid_grant|unauthorized/i.test(sitesData?.error?.message || '');
+        /invalid.*credential|invalid_grant|unauthorized/i.test(
+          sitesData?.error?.message || "",
+        );
 
       if (looksUnauthorized) {
         const refreshResult = await refreshAccessToken();
@@ -333,9 +380,9 @@ serve(async (req) => {
               sites: [],
               needs_reconnect: true,
               owner_email: ownerEmail,
-              reason: refreshResult.reason || 'token_revoked',
+              reason: refreshResult.reason || "token_revoked",
             }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
       }
@@ -344,35 +391,42 @@ serve(async (req) => {
         // Still failing after refresh -> reconnect required.
         const stillUnauthorized =
           sitesData.error.code === 401 ||
-          /invalid.*credential|invalid_grant|unauthorized/i.test(sitesData.error.message || '');
+          /invalid.*credential|invalid_grant|unauthorized/i.test(
+            sitesData.error.message || "",
+          );
         if (stillUnauthorized) {
           return new Response(
             JSON.stringify({
               sites: [],
               needs_reconnect: true,
               owner_email: ownerEmail,
-              reason: 'token_revoked',
+              reason: "token_revoked",
             }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
         // Non-auth Google error (e.g. 403 insufficientPermissions / API not
         // enabled / quota). Do NOT crash with an opaque 500 — log the full error
         // for diagnosis and fall back to any previously cached site list so the
         // UI stays usable instead of looping on "reconnect".
-        console.error('GSC get_sites Google API error:', JSON.stringify(sitesData.error));
-        const cachedOnError = Array.isArray(settings?.available_sites) ? settings.available_sites : [];
+        console.error(
+          "GSC get_sites Google API error:",
+          JSON.stringify(sitesData.error),
+        );
+        const cachedOnError = Array.isArray(settings?.available_sites)
+          ? settings.available_sites
+          : [];
         return new Response(
           JSON.stringify({
             sites: cachedOnError,
             needs_reconnect: cachedOnError.length === 0,
             owner_email: ownerEmail,
-            reason: 'google_api_error',
+            reason: "google_api_error",
             error_detail: sitesData.error.message || String(sitesData.error),
             error_code: sitesData.error.code ?? null,
             error_status: sitesData.error.status ?? null,
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
@@ -385,28 +439,32 @@ serve(async (req) => {
       // fall back to it even if a future call fails.
       try {
         await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update({
             settings: { ...settings, available_sites: sites },
           })
-          .eq('id', integrationId);
-      } catch (_e) { /* non-fatal */ }
+          .eq("id", integrationId);
+      } catch (_e) {
+        /* non-fatal */
+      }
 
+      return new Response(JSON.stringify({ sites, owner_email: ownerEmail }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (error: any) {
+      console.error("Error fetching sites:", error);
       return new Response(
-        JSON.stringify({ sites, owner_email: ownerEmail }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: error.message || String(error) }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
-  } catch (error: any) {
-    console.error('Error fetching sites:', error);
-    return new Response(
-      JSON.stringify({ error: error.message || String(error) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
     }
   }
 
-  return new Response(
-    JSON.stringify({ error: 'Invalid action' }),
-    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
+  return new Response(JSON.stringify({ error: "Invalid action" }), {
+    status: 400,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 });

@@ -2,7 +2,11 @@ import { Suspense, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
-import { clientFilterToParam, entryClientFilter, parseClientFilter } from "@/components/marketing/clientFilter";
+import {
+  clientFilterToParam,
+  entryClientFilter,
+  parseClientFilter,
+} from "@/components/marketing/clientFilter";
 import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { Button } from "@/components/ui/button";
@@ -20,13 +24,19 @@ import {
 } from "lucide-react";
 
 const CopyDepartment = lazy(() =>
-  import("@/components/marketing/departments/CopyDepartment").then((module) => ({ default: module.CopyDepartment })),
+  import("@/components/marketing/departments/CopyDepartment").then(
+    (module) => ({ default: module.CopyDepartment }),
+  ),
 );
 const CreativeDepartment = lazy(() =>
-  import("@/components/marketing/departments/CreativeDepartment").then((module) => ({ default: module.CreativeDepartment })),
+  import("@/components/marketing/departments/CreativeDepartment").then(
+    (module) => ({ default: module.CreativeDepartment }),
+  ),
 );
 const SeoGeoDepartment = lazy(() =>
-  import("@/components/marketing/departments/SeoGeoDepartment").then((module) => ({ default: module.SeoGeoDepartment })),
+  import("@/components/marketing/departments/SeoGeoDepartment").then(
+    (module) => ({ default: module.SeoGeoDepartment }),
+  ),
 );
 
 type DepartmentId = "copy" | "creative" | "seo" | "campaigns" | "analytics";
@@ -98,12 +108,19 @@ export default function MarketingDepartment() {
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
   const selectedClientId = searchParams.get("client") ?? clientId;
-  const clientFilter = parseClientFilter(selectedClientId === clientId ? clientId : searchParams.get("client"));
+  const clientFilter = parseClientFilter(
+    selectedClientId === clientId ? clientId : searchParams.get("client"),
+  );
 
   useEffect(() => {
     if (clientId && department) {
-      const param = clientFilterToParam(entryClientFilter(department, parseClientFilter(clientId)));
-      navigate(`/t/${tenantSlug}/marketing/department/${department}${param ? `?client=${param}` : ""}`, { replace: true });
+      const param = clientFilterToParam(
+        entryClientFilter(department, parseClientFilter(clientId)),
+      );
+      navigate(
+        `/t/${tenantSlug}/marketing/department/${department}${param ? `?client=${param}` : ""}`,
+        { replace: true },
+      );
     }
   }, [clientId, department, navigate, tenantSlug]);
 
@@ -111,13 +128,16 @@ export default function MarketingDepartment() {
     if (department !== "creative") return;
     if (searchParams.get("client")) return;
     if (clientId) return;
-    navigate(`/t/${tenantSlug}/marketing/department/creative?client=all`, { replace: true });
+    navigate(`/t/${tenantSlug}/marketing/department/creative?client=all`, {
+      replace: true,
+    });
   }, [clientId, department, navigate, searchParams, tenantSlug]);
 
   const selectClient = (id: string | null) => {
     const param = clientFilterToParam(id);
     const suffix = param ? `?client=${param}` : "";
-    if (department) navigate(`/t/${tenantSlug}/marketing/department/${department}${suffix}`);
+    if (department)
+      navigate(`/t/${tenantSlug}/marketing/department/${department}${suffix}`);
     else navigate(`/t/${tenantSlug}/marketing${suffix}`);
   };
   const selectDepartment = (id: DepartmentId) => {
@@ -126,13 +146,20 @@ export default function MarketingDepartment() {
       return;
     }
     const param = clientFilterToParam(entryClientFilter(id, clientFilter));
-    navigate(`/t/${tenantSlug}/marketing/department/${id}${param ? `?client=${param}` : ""}`);
+    navigate(
+      `/t/${tenantSlug}/marketing/department/${id}${param ? `?client=${param}` : ""}`,
+    );
   };
 
   return (
     <div className="fixed inset-0 flex flex-col bg-background" dir="rtl">
       <header className="flex shrink-0 items-stretch gap-2 border-b bg-card/70 px-3 backdrop-blur">
-        <Button variant="ghost" size="sm" className="my-1.5 shrink-0" onClick={() => navigate(`/t/${tenantSlug}`)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="my-1.5 shrink-0"
+          onClick={() => navigate(`/t/${tenantSlug}`)}
+        >
           <ArrowRight className="ml-1 h-4 w-4" />
           חזרה
         </Button>
@@ -140,17 +167,24 @@ export default function MarketingDepartment() {
           type="button"
           className={cn(
             "my-1.5 shrink-0 rounded-md px-2 text-base font-semibold transition-colors",
-            !department ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+            !department
+              ? "text-foreground"
+              : "text-muted-foreground hover:text-foreground",
           )}
           onClick={() => {
             const param = clientFilterToParam(clientFilter);
-            navigate(`/t/${tenantSlug}/marketing${param ? `?client=${param}` : ""}`);
+            navigate(
+              `/t/${tenantSlug}/marketing${param ? `?client=${param}` : ""}`,
+            );
           }}
         >
           שיווק
         </button>
         <div className="mx-1 my-auto h-5 w-px shrink-0 bg-border" />
-        <nav className="-mb-px flex min-w-0 flex-1 items-stretch overflow-x-auto" aria-label="מחלקות">
+        <nav
+          className="-mb-px flex min-w-0 flex-1 items-stretch overflow-x-auto"
+          aria-label="מחלקות"
+        >
           {DEPARTMENTS.map((item) => {
             const Icon = item.icon;
             const active = department === item.id;
@@ -177,7 +211,9 @@ export default function MarketingDepartment() {
           <>
             <div className="mx-1 my-auto h-5 w-px shrink-0 bg-border" />
             <div className="my-1.5 flex shrink-0 items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">תצוגה:</span>
+              <span className="text-xs font-medium text-muted-foreground">
+                תצוגה:
+              </span>
               <ClientSelector
                 tenantId={tenantId}
                 value={clientFilter}
@@ -195,33 +231,61 @@ export default function MarketingDepartment() {
       {!department ? (
         <DepartmentLanding onSelect={selectDepartment} />
       ) : department === "copy" && tenantId ? (
-        <Suspense fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}>
+        <Suspense
+          fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}
+        >
           <div className="flex min-h-0 flex-1">
-            <CopyDepartment clientFilter={clientFilter} tenantId={tenantId} onClientChange={selectClient} />
+            <CopyDepartment
+              clientFilter={clientFilter}
+              tenantId={tenantId}
+              onClientChange={selectClient}
+            />
           </div>
         </Suspense>
       ) : department === "creative" && tenantId ? (
-        <Suspense fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}>
-          <CreativeDepartment clientFilter={clientFilter} tenantId={tenantId} onClientChange={selectClient} />
+        <Suspense
+          fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}
+        >
+          <CreativeDepartment
+            clientFilter={clientFilter}
+            tenantId={tenantId}
+            onClientChange={selectClient}
+          />
         </Suspense>
       ) : department === "seo" && tenantId ? (
-        <Suspense fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}>
+        <Suspense
+          fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}
+        >
           <SeoGeoDepartment clientFilter={clientFilter} tenantId={tenantId} />
         </Suspense>
       ) : (
-        <ComingSoon department={department} onBack={() => navigate(`/t/${tenantSlug}/marketing`)} />
+        <ComingSoon
+          department={department}
+          onBack={() => navigate(`/t/${tenantSlug}/marketing`)}
+        />
       )}
     </div>
   );
 }
 
-function DepartmentLanding({ onSelect }: { onSelect: (id: DepartmentId) => void }) {
+function DepartmentLanding({
+  onSelect,
+}: {
+  onSelect: (id: DepartmentId) => void;
+}) {
   return (
     <main className="flex flex-1 flex-col items-center justify-center overflow-auto p-6 md:p-10">
       <div className="mb-8 text-center">
-        <Badge variant="outline" className="mb-3 gap-1.5"><Sparkles className="h-3.5 w-3.5" />Carmen Marketing Studio</Badge>
-        <h2 className="text-4xl font-black tracking-tight">איזו מחלקה עובדת עכשיו?</h2>
-        <p className="mt-2 text-sm text-muted-foreground">לא פס ייצור. סביבת עבודה מקצועית לכל תחום.</p>
+        <Badge variant="outline" className="mb-3 gap-1.5">
+          <Sparkles className="h-3.5 w-3.5" />
+          Carmen Marketing Studio
+        </Badge>
+        <h2 className="text-4xl font-black tracking-tight">
+          איזו מחלקה עובדת עכשיו?
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          לא פס ייצור. סביבת עבודה מקצועית לכל תחום.
+        </p>
       </div>
       <div className="grid w-full max-w-5xl gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {DEPARTMENTS.map((department) => {
@@ -232,7 +296,9 @@ function DepartmentLanding({ onSelect }: { onSelect: (id: DepartmentId) => void 
               role="button"
               tabIndex={0}
               onClick={() => onSelect(department.id)}
-              onKeyDown={(event) => event.key === "Enter" && onSelect(department.id)}
+              onKeyDown={(event) =>
+                event.key === "Enter" && onSelect(department.id)
+              }
               className={cn(
                 "group relative min-h-48 cursor-pointer overflow-hidden border-0 p-0 text-white shadow-lg transition-all hover:-translate-y-1 hover:shadow-2xl",
                 `bg-gradient-to-br ${department.gradient}`,
@@ -244,13 +310,29 @@ function DepartmentLanding({ onSelect }: { onSelect: (id: DepartmentId) => void 
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur">
                     <Icon className="h-6 w-6" />
                   </div>
-                  {department.status === "active" && <Badge className="bg-white/20 text-white hover:bg-white/20">פעיל</Badge>}
-                  {department.status === "next" && <Badge className="bg-black/15 text-white hover:bg-black/15">הבא בתור</Badge>}
-                  {department.status === "existing" && <Badge className="bg-white/20 text-white hover:bg-white/20">דוחות קיימים</Badge>}
+                  {department.status === "active" && (
+                    <Badge className="bg-white/20 text-white hover:bg-white/20">
+                      פעיל
+                    </Badge>
+                  )}
+                  {department.status === "next" && (
+                    <Badge className="bg-black/15 text-white hover:bg-black/15">
+                      הבא בתור
+                    </Badge>
+                  )}
+                  {department.status === "existing" && (
+                    <Badge className="bg-white/20 text-white hover:bg-white/20">
+                      דוחות קיימים
+                    </Badge>
+                  )}
                 </div>
                 <h3 className="text-xl font-black">{department.label}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-white/80">{department.description}</p>
-                <span className="mt-auto pt-5 text-xs font-semibold opacity-0 transition-opacity group-hover:opacity-100">כניסה למחלקה ←</span>
+                <p className="mt-2 text-sm leading-relaxed text-white/80">
+                  {department.description}
+                </p>
+                <span className="mt-auto pt-5 text-xs font-semibold opacity-0 transition-opacity group-hover:opacity-100">
+                  כניסה למחלקה ←
+                </span>
               </div>
             </Card>
           );
@@ -260,7 +342,13 @@ function DepartmentLanding({ onSelect }: { onSelect: (id: DepartmentId) => void 
   );
 }
 
-function ComingSoon({ department, onBack }: { department: DepartmentId; onBack: () => void }) {
+function ComingSoon({
+  department,
+  onBack,
+}: {
+  department: DepartmentId;
+  onBack: () => void;
+}) {
   const config = DEPARTMENTS.find((item) => item.id === department);
   const Icon = config?.icon ?? Sparkles;
   return (
@@ -268,8 +356,12 @@ function ComingSoon({ department, onBack }: { department: DepartmentId; onBack: 
       <div>
         <Icon className="mx-auto mb-3 h-12 w-12 text-muted-foreground/40" />
         <h2 className="text-xl font-bold">{config?.label}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">המחלקה הבאה שנבנה כמערכת עצמאית.</p>
-        <Button className="mt-5" variant="outline" onClick={onBack}>חזרה למחלקות</Button>
+        <p className="mt-2 text-sm text-muted-foreground">
+          המחלקה הבאה שנבנה כמערכת עצמאית.
+        </p>
+        <Button className="mt-5" variant="outline" onClick={onBack}>
+          חזרה למחלקות
+        </Button>
       </div>
     </div>
   );

@@ -8,8 +8,20 @@ const corsHeaders = {
 
 type Work = {
   summary: string;
-  onsite: Array<{ id: string; kind: string; title: string; notes?: string; url?: string }>;
-  articles: Array<{ id: string; title: string; topic: string; url?: string; notes?: string }>;
+  onsite: Array<{
+    id: string;
+    kind: string;
+    title: string;
+    notes?: string;
+    url?: string;
+  }>;
+  articles: Array<{
+    id: string;
+    title: string;
+    topic: string;
+    url?: string;
+    notes?: string;
+  }>;
   links: Array<{ id: string; url: string; anchor?: string; notes?: string }>;
 };
 
@@ -24,7 +36,7 @@ function parseWork(raw: unknown, legacyNotes?: string | null): Work {
   }
   const obj = raw as Record<string, unknown>;
   const onsite = Array.isArray(obj.onsite)
-    ? obj.onsite
+    ? (obj.onsite
         .map((item, i) => {
           if (!item || typeof item !== "object") return null;
           const row = item as Record<string, unknown>;
@@ -38,10 +50,10 @@ function parseWork(raw: unknown, legacyNotes?: string | null): Work {
             url: asString(row.url).trim() || undefined,
           };
         })
-        .filter(Boolean) as Work["onsite"]
+        .filter(Boolean) as Work["onsite"])
     : [];
   const articles = Array.isArray(obj.articles)
-    ? obj.articles
+    ? (obj.articles
         .map((item, i) => {
           if (!item || typeof item !== "object") return null;
           const row = item as Record<string, unknown>;
@@ -55,10 +67,10 @@ function parseWork(raw: unknown, legacyNotes?: string | null): Work {
             notes: asString(row.notes).trim() || undefined,
           };
         })
-        .filter(Boolean) as Work["articles"]
+        .filter(Boolean) as Work["articles"])
     : [];
   const links = Array.isArray(obj.links)
-    ? obj.links
+    ? (obj.links
         .map((item, i) => {
           if (!item || typeof item !== "object") return null;
           const row = item as Record<string, unknown>;
@@ -71,7 +83,7 @@ function parseWork(raw: unknown, legacyNotes?: string | null): Work {
             notes: asString(row.notes).trim() || undefined,
           };
         })
-        .filter(Boolean) as Work["links"]
+        .filter(Boolean) as Work["links"])
     : [];
   const summary = asString(obj.summary).trim() || legacyNotes || "";
   return { summary, onsite, articles, links };
@@ -91,8 +103,11 @@ function shiftMonth(yyyyMmDd: string, deltaMonths: number): string {
 
 function monthLabelHe(yyyyMmDd: string): string {
   try {
-    return new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric", timeZone: "UTC" })
-      .format(new Date(`${yyyyMmDd}T12:00:00Z`));
+    return new Intl.DateTimeFormat("he-IL", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(`${yyyyMmDd}T12:00:00Z`));
   } catch {
     return yyyyMmDd;
   }
@@ -120,7 +135,9 @@ Deno.serve(async (req) => {
 
     const { data: share, error: shareError } = await supabase
       .from("seo_monthly_shares")
-      .select("id, share_token, client_id, month, snapshot, is_active, updated_at")
+      .select(
+        "id, share_token, client_id, month, snapshot, is_active, updated_at",
+      )
       .eq("share_token", shareToken)
       .eq("is_active", true)
       .maybeSingle();
@@ -147,27 +164,33 @@ Deno.serve(async (req) => {
         ? (share.snapshot as Record<string, unknown>)
         : {};
 
-    const [{ data: client }, { data: updates, error: updatesError }] = await Promise.all([
-      supabase.from("clients").select("name, website").eq("id", share.client_id).maybeSingle(),
-      supabase
-        .from("seo_monthly_updates")
-        .select("month, status, notes, work")
-        .eq("client_id", share.client_id)
-        .gte("month", fromMonth)
-        .lte("month", month)
-        .order("month", { ascending: false }),
-    ]);
+    const [{ data: client }, { data: updates, error: updatesError }] =
+      await Promise.all([
+        supabase
+          .from("clients")
+          .select("name, website")
+          .eq("id", share.client_id)
+          .maybeSingle(),
+        supabase
+          .from("seo_monthly_updates")
+          .select("month, status, notes, work")
+          .eq("client_id", share.client_id)
+          .gte("month", fromMonth)
+          .lte("month", month)
+          .order("month", { ascending: false }),
+      ]);
 
     if (updatesError) {
       console.error("seo_monthly_updates lookup failed", updatesError);
     }
 
     const rows = updates || [];
-    const current =
-      rows.find((row) => monthKey(row.month) === month) || null;
+    const current = rows.find((row) => monthKey(row.month) === month) || null;
     const liveWork = parseWork(current?.work, current?.notes);
     const status =
-      current?.status === "up" || current?.status === "down" || current?.status === "stable"
+      current?.status === "up" ||
+      current?.status === "down" ||
+      current?.status === "stable"
         ? current.status
         : (baseSnapshot.status as string) || "stable";
 
@@ -182,7 +205,8 @@ Deno.serve(async (req) => {
     }> = [];
     for (const row of rows) {
       const rowMonth = monthKey(row.month);
-      const work = rowMonth === month ? liveWork : parseWork(row.work, row.notes);
+      const work =
+        rowMonth === month ? liveWork : parseWork(row.work, row.notes);
       for (const link of work.links) {
         const key = link.url.trim().toLowerCase();
         if (!key || seen.has(key)) continue;
@@ -211,7 +235,9 @@ Deno.serve(async (req) => {
       work: liveWork,
       recentLinks,
       metrics: Array.isArray(baseSnapshot.metrics) ? baseSnapshot.metrics : [],
-      keywords: Array.isArray(baseSnapshot.keywords) ? baseSnapshot.keywords : [],
+      keywords: Array.isArray(baseSnapshot.keywords)
+        ? baseSnapshot.keywords
+        : [],
       search: baseSnapshot.search,
       generatedAt: new Date().toISOString(),
     };
@@ -225,7 +251,10 @@ Deno.serve(async (req) => {
       })
       .eq("id", share.id);
     if (persistError) {
-      console.warn("seo_monthly_shares live persist failed", persistError.message);
+      console.warn(
+        "seo_monthly_shares live persist failed",
+        persistError.message,
+      );
     }
 
     return new Response(

@@ -100,7 +100,10 @@ export function dateFilterHasOption(
 }
 
 /** Throws if a combined/shared preset list dropped required week options. */
-export function assertCombinedDateFilters(options: readonly DateFilterOption[], surface: string): void {
+export function assertCombinedDateFilters(
+  options: readonly DateFilterOption[],
+  surface: string,
+): void {
   for (const req of REQUIRED_COMBINED_DATE_FILTERS) {
     if (!dateFilterHasOption(options, req.value, req.label)) {
       throw new Error(
@@ -153,23 +156,50 @@ export function getDashboardDateRange(
       return { startDate: fmt(startLW), endDate: fmt(endLW) };
     }
     case "last_7_days":
-      return { startDate: fmt(subDays(today, 7)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 7)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_14_days":
-      return { startDate: fmt(subDays(today, 14)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 14)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_30_days":
-      return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 30)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_60_days":
-      return { startDate: fmt(subDays(today, 60)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 60)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_70_days":
-      return { startDate: fmt(subDays(today, 70)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 70)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_90_days":
-      return { startDate: fmt(subDays(today, 90)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 90)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_120_days":
-      return { startDate: fmt(subDays(today, 120)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 120)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_180_days":
-      return { startDate: fmt(subDays(today, 180)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 180)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_365_days":
-      return { startDate: fmt(subDays(today, 365)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 365)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "this_month":
       return {
         startDate: fmt(new Date(today.getFullYear(), today.getMonth(), 1)),
@@ -181,9 +211,16 @@ export function getDashboardDateRange(
         endDate: fmt(new Date(today.getFullYear(), today.getMonth(), 0)),
       };
     case "custom":
-      if (customStart && customEnd) return { startDate: customStart, endDate: customEnd };
-      return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
+      if (customStart && customEnd)
+        return { startDate: customStart, endDate: customEnd };
+      return {
+        startDate: fmt(subDays(today, 30)),
+        endDate: fmt(subDays(today, 1)),
+      };
     default:
-      return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 30)),
+        endDate: fmt(subDays(today, 1)),
+      };
   }
 }

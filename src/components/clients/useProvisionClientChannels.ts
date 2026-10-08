@@ -26,7 +26,11 @@ const TABLE_META: Record<
     label: "Google Analytics",
     category: "analytics",
     needsIntegrationId: true,
-    build: (v, iid) => ({ integrationId: iid, propertyId: v, data_source: "direct_api" }),
+    build: (v, iid) => ({
+      integrationId: iid,
+      propertyId: v,
+      data_source: "direct_api",
+    }),
   },
   google_ads: {
     label: "Google Ads",
@@ -58,7 +62,12 @@ const TABLE_META: Record<
     label: "Ahrefs",
     category: "seo",
     needsIntegrationId: true,
-    build: (v, iid) => ({ integrationId: iid, targetDomain: v, reportType: "site_explorer", isExistingReport: false }),
+    build: (v, iid) => ({
+      integrationId: iid,
+      targetDomain: v,
+      reportType: "site_explorer",
+      isExistingReport: false,
+    }),
   },
   google_search_console: {
     label: "Search Console",
@@ -123,7 +132,10 @@ async function resolveActiveIntegrationId(
 async function resolveSeoAccountsFromWebsite(
   client: Record<string, any>,
   tenantId: string | null,
-): Promise<{ updates: Partial<Record<ChannelFieldKey, string>>; resolved: string[] }> {
+): Promise<{
+  updates: Partial<Record<ChannelFieldKey, string>>;
+  resolved: string[];
+}> {
   const updates: Partial<Record<ChannelFieldKey, string>> = {};
   const resolved: string[] = [];
   const domain = normalizeSeoDomain(client.website);
@@ -137,7 +149,10 @@ async function resolveSeoAccountsFromWebsite(
   // Search Console
   if (!String(client.gsc_site_url || "").trim()) {
     try {
-      const gscId = await resolveActiveIntegrationId(tenantId, "google_search_console");
+      const gscId = await resolveActiveIntegrationId(
+        tenantId,
+        "google_search_console",
+      );
       if (gscId) {
         const { data, error } = await supabase.functions.invoke(
           "google-search-console-auth?action=get_sites",
@@ -160,14 +175,19 @@ async function resolveSeoAccountsFromWebsite(
   // Google Analytics — match property display name to the domain
   if (!String(client.ga_property_id || "").trim()) {
     try {
-      const gaId = await resolveActiveIntegrationId(tenantId, "google_analytics");
+      const gaId = await resolveActiveIntegrationId(
+        tenantId,
+        "google_analytics",
+      );
       if (gaId) {
         const { data, error } = await supabase.functions.invoke(
           "google-analytics-auth?action=get_properties",
           { body: { integrationId: gaId } },
         );
         if (!error) {
-          const properties = Array.isArray(data?.properties) ? data.properties : [];
+          const properties = Array.isArray(data?.properties)
+            ? data.properties
+            : [];
           const propertyId = pickGaPropertyForDomain(properties, domain);
           if (propertyId) {
             updates.ga_property_id = propertyId;
@@ -201,7 +221,11 @@ export function useProvisionClientChannels() {
       dashboardCreated: false,
       createDashboard: true,
     };
-    const provisioned: Array<{ id: string; integrationType: string; label: string }> = [];
+    const provisioned: Array<{
+      id: string;
+      integrationType: string;
+      label: string;
+    }> = [];
     try {
       const { data: client, error: clientErr } = await supabase
         .from("clients")
@@ -219,8 +243,15 @@ export function useProvisionClientChannels() {
 
       // SEO clients: auto-resolve GA / GSC / Ahrefs from the website host.
       const wantResolve = options.resolveSeoFromWebsite !== false;
-      if (wantResolve && isSeoClient(services) && String(c.website || "").trim()) {
-        const { updates, resolved } = await resolveSeoAccountsFromWebsite(c, tenantId);
+      if (
+        wantResolve &&
+        isSeoClient(services) &&
+        String(c.website || "").trim()
+      ) {
+        const { updates, resolved } = await resolveSeoAccountsFromWebsite(
+          c,
+          tenantId,
+        );
         if (Object.keys(updates).length > 0) {
           const { error: upErr } = await supabase
             .from("clients")
@@ -276,7 +307,11 @@ export function useProvisionClientChannels() {
         for (const tbl of channel.tables) {
           const meta = TABLE_META[tbl.integrationType];
           if (!meta) continue;
-          const idValue: string = (c[tbl.requiresField as ChannelFieldKey] ?? "").toString().trim();
+          const idValue: string = (
+            c[tbl.requiresField as ChannelFieldKey] ?? ""
+          )
+            .toString()
+            .trim();
           if (!idValue) {
             continue;
           }
@@ -287,22 +322,28 @@ export function useProvisionClientChannels() {
           }
           const settings = meta.build(idValue, integrationId);
 
-          const found = existing.find((t: any) => t.integration_type === tbl.integrationType);
+          const found = existing.find(
+            (t: any) => t.integration_type === tbl.integrationType,
+          );
           if (found) {
             const patch = await supabase.functions.invoke("crm-tables", {
               method: "PATCH",
               body: { table_id: found.id, integration_settings: settings },
             });
-            if (patch.error) summary.skipped.push(`${meta.label}: ${patch.error.message}`);
+            if (patch.error)
+              summary.skipped.push(`${meta.label}: ${patch.error.message}`);
             else {
               summary.updated.push(meta.label);
-              provisioned.push({ id: found.id, integrationType: tbl.integrationType, label: meta.label });
+              provisioned.push({
+                id: found.id,
+                integrationType: tbl.integrationType,
+                label: meta.label,
+              });
             }
             continue;
           }
 
-          const slug =
-            `${tbl.integrationType.replace(/_/g, "-")}-${clientId.slice(0, 8)}-${Date.now().toString(36)}`;
+          const slug = `${tbl.integrationType.replace(/_/g, "-")}-${clientId.slice(0, 8)}-${Date.now().toString(36)}`;
           const create = await supabase.functions.invoke("crm-tables", {
             method: "POST",
             body: {
@@ -315,11 +356,17 @@ export function useProvisionClientChannels() {
               client_id: clientId,
             },
           });
-          if (create.error) summary.skipped.push(`${meta.label}: ${create.error.message}`);
+          if (create.error)
+            summary.skipped.push(`${meta.label}: ${create.error.message}`);
           else {
             summary.created.push(meta.label);
             const newId = (create.data as any)?.id;
-            if (newId) provisioned.push({ id: newId, integrationType: tbl.integrationType, label: meta.label });
+            if (newId)
+              provisioned.push({
+                id: newId,
+                integrationType: tbl.integrationType,
+                label: meta.label,
+              });
           }
         }
       }
@@ -328,7 +375,9 @@ export function useProvisionClientChannels() {
         const syncFn = syncFunctionFor(p.integrationType);
         if (!syncFn) continue;
         try {
-          const res = await supabase.functions.invoke(syncFn, { body: { table_id: p.id } });
+          const res = await supabase.functions.invoke(syncFn, {
+            body: { table_id: p.id },
+          });
           if (!res.error) summary.synced.push(p.label);
         } catch {
           // ignore — manual sync remains available
@@ -348,14 +397,16 @@ export function useProvisionClientChannels() {
             agencyId,
             clientId,
           });
-          const { error: dashErr } = await supabase.from("crm_dashboards").insert({
-            tenant_id: homeTenantId,
-            name: `דשבורד - ${c.name}`,
-            agency_id: agencyId,
-            client_id: clientId,
-            dashboard_type: "client",
-            settings: {},
-          } as never);
+          const { error: dashErr } = await supabase
+            .from("crm_dashboards")
+            .insert({
+              tenant_id: homeTenantId,
+              name: `דשבורד - ${c.name}`,
+              agency_id: agencyId,
+              client_id: clientId,
+              dashboard_type: "client",
+              settings: {},
+            } as never);
           if (!dashErr) summary.dashboardCreated = true;
         }
       }

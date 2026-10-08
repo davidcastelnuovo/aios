@@ -2,11 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   try {
     const { brand_name, keywords, competitors, description } = await req.json();
@@ -52,7 +54,7 @@ ${competitorList ? `- מתחרים בשוק: ${competitorList}` : ""}
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -71,8 +73,19 @@ ${competitorList ? `- מתחרים בשוק: ${competitorList}` : ""}
                     items: {
                       type: "object",
                       properties: {
-                        prompt: { type: "string", description: "The prompt text in Hebrew" },
-                        category: { type: "string", enum: ["recommendation", "comparison", "review", "general"] },
+                        prompt: {
+                          type: "string",
+                          description: "The prompt text in Hebrew",
+                        },
+                        category: {
+                          type: "string",
+                          enum: [
+                            "recommendation",
+                            "comparison",
+                            "review",
+                            "general",
+                          ],
+                        },
                       },
                       required: ["prompt", "category"],
                       additionalProperties: false,
@@ -91,10 +104,15 @@ ${competitorList ? `- מתחרים בשוק: ${competitorList}` : ""}
 
     if (!response.ok) {
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded, please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({
+            error: "Rate limit exceeded, please try again later.",
+          }),
+          {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
       if (response.status === 402) {
         return new Response(JSON.stringify({ error: "Payment required." }), {
@@ -117,9 +135,14 @@ ${competitorList ? `- מתחרים בשוק: ${competitorList}` : ""}
     });
   } catch (e) {
     console.error("generate-ai-prompts error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        error: e instanceof Error ? e.message : "Unknown error",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

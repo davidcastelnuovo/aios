@@ -14,10 +14,22 @@ import { he } from "date-fns/locale";
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { cls: string; label: string }> = {
-    pending: { cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300", label: "ממתין" },
-    approved: { cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", label: "אושר" },
-    rejected: { cls: "bg-red-500/15 text-red-700 dark:text-red-300", label: "נדחה" },
-    executed: { cls: "bg-blue-500/15 text-blue-700 dark:text-blue-300", label: "בוצע" },
+    pending: {
+      cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+      label: "ממתין",
+    },
+    approved: {
+      cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+      label: "אושר",
+    },
+    rejected: {
+      cls: "bg-red-500/15 text-red-700 dark:text-red-300",
+      label: "נדחה",
+    },
+    executed: {
+      cls: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+      label: "בוצע",
+    },
     expired: { cls: "bg-muted text-muted-foreground", label: "פג תוקף" },
   };
   const m = map[status] ?? map.pending;
@@ -30,7 +42,9 @@ function ApprovalCard({ item, canDecide }: { item: any; canDecide: boolean }) {
 
   const decide = useMutation({
     mutationFn: async (decision: "approved" | "rejected") => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       const { error } = await supabase
         .from("agent_approval_queue")
         .update({
@@ -70,21 +84,34 @@ function ApprovalCard({ item, canDecide }: { item: any; canDecide: boolean }) {
             <span className="font-semibold truncate">
               {item.tool_name || item.action_type || item.title}
             </span>
-            <StatusBadge status={expired && item.status === "pending" ? "expired" : item.status} />
+            <StatusBadge
+              status={
+                expired && item.status === "pending" ? "expired" : item.status
+              }
+            />
           </div>
           {item.description && (
-            <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {item.description}
+            </p>
           )}
         </div>
         <div className="text-xs text-muted-foreground whitespace-nowrap flex items-center gap-1">
           <Clock className="h-3 w-3" />
-          {formatDistanceToNow(new Date(item.created_at), { addSuffix: true, locale: he })}
+          {formatDistanceToNow(new Date(item.created_at), {
+            addSuffix: true,
+            locale: he,
+          })}
         </div>
       </div>
 
       {(item.tool_input || item.context || item.proposed_changes) && (
         <pre className="text-xs bg-muted/50 rounded p-2 overflow-auto max-h-48 dir-ltr">
-{JSON.stringify(item.tool_input ?? item.proposed_changes ?? item.context, null, 2)}
+          {JSON.stringify(
+            item.tool_input ?? item.proposed_changes ?? item.context,
+            null,
+            2,
+          )}
         </pre>
       )}
 
@@ -158,14 +185,20 @@ export function ApprovalsTab({ agent }: { agent: any }) {
         <TabsContent value={tab} className="mt-3">
           <ScrollArea className="h-[60vh]">
             <div className="space-y-3 pl-2">
-              {isLoading && <p className="text-sm text-muted-foreground">טוען...</p>}
+              {isLoading && (
+                <p className="text-sm text-muted-foreground">טוען...</p>
+              )}
               {!isLoading && items.length === 0 && (
                 <Card className="p-8 text-center text-muted-foreground">
                   {tab === "pending" ? "אין בקשות ממתינות" : "אין היסטוריה"}
                 </Card>
               )}
               {items.map((it) => (
-                <ApprovalCard key={it.id} item={it} canDecide={tab === "pending"} />
+                <ApprovalCard
+                  key={it.id}
+                  item={it}
+                  canDecide={tab === "pending"}
+                />
               ))}
             </div>
           </ScrollArea>

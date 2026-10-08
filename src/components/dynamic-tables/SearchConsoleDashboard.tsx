@@ -7,7 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatGscCtrPercent } from "@/lib/gscFormat";
-import { gscQueriesMatch, normalizeGscQuery, top20DisplayPosition, trackedPhraseRank } from "@/lib/gscPosition";
+import {
+  gscQueriesMatch,
+  normalizeGscQuery,
+  top20DisplayPosition,
+  trackedPhraseRank,
+} from "@/lib/gscPosition";
 import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 import {
   Select,
@@ -16,7 +21,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, TrendingUp, TrendingDown, MousePointerClick, Eye, Target, ArrowUpDown, ArrowUp, ArrowDown, Minus, Award, Upload, X, FileText } from "lucide-react";
+import {
+  Search,
+  TrendingUp,
+  TrendingDown,
+  MousePointerClick,
+  Eye,
+  Target,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Minus,
+  Award,
+  Upload,
+  X,
+  FileText,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import Papa from "papaparse";
 import { toast } from "sonner";
@@ -40,13 +60,15 @@ interface SearchConsoleDashboardProps {
    * Queries whose Search Console position is inside the top 20.
    * The SEO tab merges these so they show up in Top 20, not only here.
    */
-  onTop20Queries?: (rows: Array<{
-    keyword: string;
-    clicks: number;
-    impressions: number;
-    ctr: number;
-    position: number;
-  }>) => void;
+  onTop20Queries?: (
+    rows: Array<{
+      keyword: string;
+      clicks: number;
+      impressions: number;
+      ctr: number;
+      position: number;
+    }>,
+  ) => void;
 }
 
 interface AggregatedData {
@@ -67,14 +89,15 @@ interface AggregatedData {
   totalRecords: number;
 }
 
-type GscDateFilter = 'last_7_days' | 'last_30_days' | 'last_90_days' | 'last_365_days' | 'all';
+type GscDateFilter =
+  "last_7_days" | "last_30_days" | "last_90_days" | "last_365_days" | "all";
 
 const DATE_FILTER_LABELS: Record<GscDateFilter, string> = {
-  last_7_days: '7 ימים',
-  last_30_days: 'חודש אחרון',
-  last_90_days: '3 חודשים',
-  last_365_days: 'שנה',
-  all: 'הכל',
+  last_7_days: "7 ימים",
+  last_30_days: "חודש אחרון",
+  last_90_days: "3 חודשים",
+  last_365_days: "שנה",
+  all: "הכל",
 };
 
 export function SearchConsoleDashboard({
@@ -92,15 +115,18 @@ export function SearchConsoleDashboard({
   const [searchFilter, setSearchFilter] = useState("");
   const [trackedKeywords, setTrackedKeywords] = useState<string[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
-  const [dateFilter, setDateFilter] = useState<GscDateFilter>('last_7_days');
-  const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? 'all');
+  const [dateFilter, setDateFilter] = useState<GscDateFilter>("last_7_days");
+  const [langFilter, setLangFilterState] = useState<LangFilter>(
+    initialLangFilter ?? "all",
+  );
   const [showTrackedOnly, setShowTrackedOnly] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { forceIrrelevant } = useSeoKeywordRelevance(relevancePersistKey);
   const seedKey = seedTrackedKeywords.join("\u0001");
   const rankOpts = useMemo(
     () => ({
-      tracked: trackedKeywords.length > 0 ? trackedKeywords : seedTrackedKeywords,
+      tracked:
+        trackedKeywords.length > 0 ? trackedKeywords : seedTrackedKeywords,
       forceIrrelevant,
       ahrefsPositions: trackedAhrefsPositions,
     }),
@@ -121,10 +147,14 @@ export function SearchConsoleDashboard({
   useEffect(() => {
     if (!seedTrackedKeywords || seedTrackedKeywords.length === 0) return;
     setTrackedKeywords((prev) => {
-      const merged = [...new Set([
-        ...seedTrackedKeywords.map((k) => String(k || "").trim()).filter(Boolean),
-        ...prev,
-      ])];
+      const merged = [
+        ...new Set([
+          ...seedTrackedKeywords
+            .map((k) => String(k || "").trim())
+            .filter(Boolean),
+          ...prev,
+        ]),
+      ];
       return merged;
     });
     setShowTrackedOnly(true);
@@ -138,33 +168,39 @@ export function SearchConsoleDashboard({
 
   // Fetch aggregated data from the server
   const { data: aggregatedData, isLoading } = useQuery({
-    queryKey: ['search-console-aggregated', tableId, dateFilter],
+    queryKey: ["search-console-aggregated", tableId, dateFilter],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      
-      const params = new URLSearchParams({ 
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const params = new URLSearchParams({
         table_id: tableId,
-        aggregated: 'search_console',
+        aggregated: "search_console",
         date_filter: dateFilter,
       });
-      
-      const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
-        method: 'GET',
-      });
-      
+
+      const response = await supabase.functions.invoke(
+        `crm-records?${params.toString()}`,
+        {
+          method: "GET",
+        },
+      );
+
       if (response.error) throw response.error;
       return response.data as AggregatedData;
     },
     enabled: !!tableId,
   });
 
-  const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
+  const formatNumber = (num: number) =>
+    new Intl.NumberFormat("he-IL").format(num);
 
   // Handle column header click — toggle direction if same column, else smart default
   const handleSortColumn = (col: string) => {
     if (sortBy === col) {
-      setSortOrder(o => o === "asc" ? "desc" : "asc");
+      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
     } else {
       setSortBy(col);
       // position: ascending = best first; everything else: descending = highest first
@@ -180,18 +216,21 @@ export function SearchConsoleDashboard({
     const rows = allQueries.flatMap((q) => {
       const position = top20DisplayPosition(q.position);
       if (position == null || !q.query) return [];
-      return [{
-        keyword: q.query,
-        clicks: q.clicks,
-        impressions: q.impressions,
-        ctr: q.ctr,
-        position,
-      }];
+      return [
+        {
+          keyword: q.query,
+          clicks: q.clicks,
+          impressions: q.impressions,
+          ctr: q.ctr,
+          position,
+        },
+      ];
     });
     onTop20Queries(rows);
   }, [aggregatedData, onTop20Queries]);
   const langCounts = (() => {
-    let he = 0, en = 0;
+    let he = 0,
+      en = 0;
     for (const r of allQueries) {
       const k = r.query || "";
       if (HEBREW_REGEX.test(k)) he++;
@@ -203,25 +242,30 @@ export function SearchConsoleDashboard({
   // Sort + filter queries
   const sortedQueries = (() => {
     let rows = allQueries.slice();
-    if (langFilter !== 'all') {
-      rows = rows.filter(r => {
+    if (langFilter !== "all") {
+      rows = rows.filter((r) => {
         const k = r.query || "";
-        if (langFilter === 'he') return HEBREW_REGEX.test(k);
-        if (langFilter === 'en') return ENGLISH_REGEX.test(k) && !HEBREW_REGEX.test(k);
+        if (langFilter === "he") return HEBREW_REGEX.test(k);
+        if (langFilter === "en")
+          return ENGLISH_REGEX.test(k) && !HEBREW_REGEX.test(k);
         return true;
       });
     }
     if (showTrackedOnly && trackedKeywords.length > 0) {
-      rows = rows.filter((r) => trackedKeywords.some((t) => gscQueriesMatch(r.query, t)));
+      rows = rows.filter((r) =>
+        trackedKeywords.some((t) => gscQueriesMatch(r.query, t)),
+      );
     }
     if (searchFilter.trim()) {
       const q = searchFilter.toLowerCase();
-      rows = rows.filter(r => r.query.toLowerCase().includes(q));
+      rows = rows.filter((r) => r.query.toLowerCase().includes(q));
     }
     rows.sort((a, b) => {
       if (sortBy === "position") {
-        const aShown = trackedPhraseRank(a.query, a.position, rankOpts)?.position ?? null;
-        const bShown = trackedPhraseRank(b.query, b.position, rankOpts)?.position ?? null;
+        const aShown =
+          trackedPhraseRank(a.query, a.position, rankOpts)?.position ?? null;
+        const bShown =
+          trackedPhraseRank(b.query, b.position, rankOpts)?.position ?? null;
         if (aShown == null && bShown == null) return 0;
         if (aShown == null) return 1;
         if (bShown == null) return -1;
@@ -235,16 +279,21 @@ export function SearchConsoleDashboard({
   })();
 
   const SortIcon = ({ col }: { col: string }) => {
-    if (sortBy !== col) return <ArrowUpDown className="h-3 w-3 opacity-30 inline ml-1" />;
-    return sortOrder === "asc"
-      ? <ArrowUp className="h-3 w-3 text-primary inline ml-1" />
-      : <ArrowDown className="h-3 w-3 text-primary inline ml-1" />;
+    if (sortBy !== col)
+      return <ArrowUpDown className="h-3 w-3 opacity-30 inline ml-1" />;
+    return sortOrder === "asc" ? (
+      <ArrowUp className="h-3 w-3 text-primary inline ml-1" />
+    ) : (
+      <ArrowDown className="h-3 w-3 text-primary inline ml-1" />
+    );
   };
 
   // Find tracked keywords in the full GSC set (not the filtered table rows)
-  const trackedKeywordsData = trackedKeywords.map(keyword => {
-    const matchingQuery = allQueries.find((q) => gscQueriesMatch(q.query, keyword));
-    
+  const trackedKeywordsData = trackedKeywords.map((keyword) => {
+    const matchingQuery = allQueries.find((q) =>
+      gscQueriesMatch(q.query, keyword),
+    );
+
     return {
       keyword,
       found: !!matchingQuery,
@@ -260,21 +309,25 @@ export function SearchConsoleDashboard({
       complete: (results) => {
         const keywords: string[] = [];
         results.data.forEach((row: any) => {
-          const keyword = row['keyword'] || row['ביטוי'] || row['query'] || row['מילת מפתח'] || 
-                         (Array.isArray(row) ? row[0] : Object.values(row)[0]);
-          if (keyword && typeof keyword === 'string' && keyword.trim()) {
+          const keyword =
+            row["keyword"] ||
+            row["ביטוי"] ||
+            row["query"] ||
+            row["מילת מפתח"] ||
+            (Array.isArray(row) ? row[0] : Object.values(row)[0]);
+          if (keyword && typeof keyword === "string" && keyword.trim()) {
             keywords.push(keyword.trim());
           }
         });
-        
+
         if (keywords.length > 0) {
-          setTrackedKeywords(prev => {
+          setTrackedKeywords((prev) => {
             const newKeywords = [...new Set([...prev, ...keywords])];
             return newKeywords;
           });
           toast.success(`נטענו ${keywords.length} ביטויים מהקובץ`);
         } else {
-          toast.error('לא נמצאו ביטויים בקובץ');
+          toast.error("לא נמצאו ביטויים בקובץ");
         }
       },
       header: true,
@@ -282,19 +335,19 @@ export function SearchConsoleDashboard({
     });
 
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
   const addKeyword = () => {
     if (newKeyword.trim() && !trackedKeywords.includes(newKeyword.trim())) {
-      setTrackedKeywords(prev => [...prev, newKeyword.trim()]);
+      setTrackedKeywords((prev) => [...prev, newKeyword.trim()]);
       setNewKeyword("");
     }
   };
 
   const removeKeyword = (keyword: string) => {
-    setTrackedKeywords(prev => prev.filter(k => k !== keyword));
+    setTrackedKeywords((prev) => prev.filter((k) => k !== keyword));
   };
 
   const clearAllKeywords = () => {
@@ -340,7 +393,9 @@ export function SearchConsoleDashboard({
   }
 
   if (!aggregatedData || aggregatedData.totalRecords === 0) {
-    const stored = (trackedKeywords.length > 0 ? trackedKeywords : seedTrackedKeywords)
+    const stored = (
+      trackedKeywords.length > 0 ? trackedKeywords : seedTrackedKeywords
+    )
       .map((keyword) => ({
         keyword,
         position: trackedAhrefsPositions[normalizeGscQuery(keyword)] ?? null,
@@ -350,7 +405,10 @@ export function SearchConsoleDashboard({
       <div className="space-y-4" dir="rtl">
         <div className="text-center py-8 text-muted-foreground">
           <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>אין נתוני Search Console מסונכרנים לאינטגרציה. המיקומים נמשכים מהדוחות השמורים.</p>
+          <p>
+            אין נתוני Search Console מסונכרנים לאינטגרציה. המיקומים נמשכים
+            מהדוחות השמורים.
+          </p>
         </div>
         {stored.length > 0 && (
           <Card>
@@ -362,9 +420,14 @@ export function SearchConsoleDashboard({
             </CardHeader>
             <CardContent className="space-y-2">
               {stored.map((row) => (
-                <div key={row.keyword} className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 p-3">
+                <div
+                  key={row.keyword}
+                  className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 p-3"
+                >
                   <span className="text-sm truncate">{row.keyword}</span>
-                  <Badge variant="outline" className="font-mono">{row.position}</Badge>
+                  <Badge variant="outline" className="font-mono">
+                    {row.position}
+                  </Badge>
                 </div>
               ))}
             </CardContent>
@@ -382,9 +445,14 @@ export function SearchConsoleDashboard({
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Search className="h-4 w-4" />
-          <span>טווח: <strong>{DATE_FILTER_LABELS[dateFilter]}</strong></span>
+          <span>
+            טווח: <strong>{DATE_FILTER_LABELS[dateFilter]}</strong>
+          </span>
         </div>
-        <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as GscDateFilter)}>
+        <Select
+          value={dateFilter}
+          onValueChange={(v) => setDateFilter(v as GscDateFilter)}
+        >
           <SelectTrigger className="h-8 text-xs w-full min-w-0 sm:w-[160px]">
             <SelectValue />
           </SelectTrigger>
@@ -406,7 +474,9 @@ export function SearchConsoleDashboard({
               <MousePointerClick className="h-4 w-4 text-primary" />
               <span className="text-sm text-muted-foreground">קליקים</span>
             </div>
-            <p className="text-2xl font-bold mt-1">{formatNumber(totals.clicks)}</p>
+            <p className="text-2xl font-bold mt-1">
+              {formatNumber(totals.clicks)}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -415,7 +485,9 @@ export function SearchConsoleDashboard({
               <Eye className="h-4 w-4 text-blue-500" />
               <span className="text-sm text-muted-foreground">חשיפות</span>
             </div>
-            <p className="text-2xl font-bold mt-1">{formatNumber(totals.impressions)}</p>
+            <p className="text-2xl font-bold mt-1">
+              {formatNumber(totals.impressions)}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -424,17 +496,25 @@ export function SearchConsoleDashboard({
               <Target className="h-4 w-4 text-green-500" />
               <span className="text-sm text-muted-foreground">CTR ממוצע</span>
             </div>
-            <p className="text-2xl font-bold mt-1">{formatGscCtrPercent(totals.avgCtr) ?? "—"}</p>
+            <p className="text-2xl font-bold mt-1">
+              {formatGscCtrPercent(totals.avgCtr) ?? "—"}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
               <Award className="h-4 w-4 text-amber-500" />
-              <span className="text-sm text-muted-foreground">ביטויים בעמוד הראשון</span>
+              <span className="text-sm text-muted-foreground">
+                ביטויים בעמוד הראשון
+              </span>
             </div>
-            <p className="text-2xl font-bold mt-1">{formatNumber(totals.firstPageQueries)}</p>
-            <p className="text-xs text-muted-foreground">מתוך {formatNumber(totals.totalQueries)} ביטויים</p>
+            <p className="text-2xl font-bold mt-1">
+              {formatNumber(totals.firstPageQueries)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              מתוך {formatNumber(totals.totalQueries)} ביטויים
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -470,22 +550,27 @@ export function SearchConsoleDashboard({
               <Upload className="h-4 w-4" />
               טען ביטויים מ-CSV
             </Button>
-            
+
             <div className="flex gap-2 flex-1 min-w-[200px]">
               <Input
                 placeholder="הוסף ביטוי..."
                 value={newKeyword}
                 onChange={(e) => setNewKeyword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addKeyword()}
+                onKeyDown={(e) => e.key === "Enter" && addKeyword()}
                 className="max-w-[300px]"
               />
               <Button onClick={addKeyword} variant="secondary">
                 הוסף
               </Button>
             </div>
-            
+
             {trackedKeywords.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearAllKeywords} className="text-destructive">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAllKeywords}
+                className="text-destructive"
+              >
                 נקה הכל
               </Button>
             )}
@@ -494,22 +579,26 @@ export function SearchConsoleDashboard({
           {/* CSV Format Hint */}
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <FileText className="h-3 w-3" />
-            פורמט CSV: עמודה עם הכותרת "keyword", "ביטוי", "query" או "מילת מפתח"
+            פורמט CSV: עמודה עם הכותרת "keyword", "ביטוי", "query" או "מילת
+            מפתח"
           </p>
 
           {/* Tracked Keywords List */}
           {trackedKeywords.length > 0 ? (
             <div className="space-y-2">
               <div className="text-sm text-muted-foreground mb-2">
-                {trackedKeywordsData.filter(k => k.found).length} מתוך {trackedKeywords.length} ביטויים נמצאו בנתונים
+                {trackedKeywordsData.filter((k) => k.found).length} מתוך{" "}
+                {trackedKeywords.length} ביטויים נמצאו בנתונים
               </div>
-              
+
               <div className="grid gap-2">
                 {trackedKeywordsData.map((item, index) => (
-                  <div 
-                    key={index} 
+                  <div
+                    key={index}
                     className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg transition-colors ${
-                      item.found ? 'bg-muted/30 hover:bg-muted/50' : 'bg-destructive/10 hover:bg-destructive/20'
+                      item.found
+                        ? "bg-muted/30 hover:bg-muted/50"
+                        : "bg-destructive/10 hover:bg-destructive/20"
                     }`}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0 w-full">
@@ -521,24 +610,39 @@ export function SearchConsoleDashboard({
                       >
                         <X className="h-3 w-3" />
                       </Button>
-                      <span className="text-sm truncate flex-1" title={item.keyword}>
+                      <span
+                        className="text-sm truncate flex-1"
+                        title={item.keyword}
+                      >
                         {item.keyword}
                       </span>
                     </div>
-                    
+
                     {item.found && item.data ? (
                       <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm w-full sm:w-auto sm:shrink-0">
                         <div className="text-center min-w-[56px]">
-                          <span className="text-muted-foreground text-xs">חשיפות</span>
-                          <p className="font-medium">{formatNumber(item.data.impressions)}</p>
+                          <span className="text-muted-foreground text-xs">
+                            חשיפות
+                          </span>
+                          <p className="font-medium">
+                            {formatNumber(item.data.impressions)}
+                          </p>
                         </div>
                         <div className="text-center min-w-[48px]">
-                          <span className="text-muted-foreground text-xs">קליקים</span>
-                          <p className="font-medium">{formatNumber(item.data.clicks)}</p>
+                          <span className="text-muted-foreground text-xs">
+                            קליקים
+                          </span>
+                          <p className="font-medium">
+                            {formatNumber(item.data.clicks)}
+                          </p>
                         </div>
                         <div className="text-center min-w-[48px]">
-                          <span className="text-muted-foreground text-xs">CTR</span>
-                          <p className="font-medium">{formatGscCtrPercent(item.data.ctr) ?? "—"}</p>
+                          <span className="text-muted-foreground text-xs">
+                            CTR
+                          </span>
+                          <p className="font-medium">
+                            {formatGscCtrPercent(item.data.ctr) ?? "—"}
+                          </p>
                         </div>
                         <GscRankBadge
                           query={item.keyword}
@@ -549,7 +653,10 @@ export function SearchConsoleDashboard({
                         />
                       </div>
                     ) : (
-                      <Badge variant="outline" className="text-destructive border-destructive">
+                      <Badge
+                        variant="outline"
+                        className="text-destructive border-destructive"
+                      >
                         לא נמצא
                       </Badge>
                     )}
@@ -588,7 +695,8 @@ export function SearchConsoleDashboard({
                   )}
                 >
                   <Target className="h-3.5 w-3.5" />
-                  במעקב בלבד ({trackedKeywordsData.filter((k) => k.found).length})
+                  במעקב בלבד (
+                  {trackedKeywordsData.filter((k) => k.found).length})
                 </button>
               )}
               <div className="inline-flex rounded-md border bg-background p-0.5">
@@ -597,7 +705,9 @@ export function SearchConsoleDashboard({
                   onClick={() => setLangFilter("all")}
                   className={cn(
                     "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
-                    langFilter === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                    langFilter === "all"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted",
                   )}
                 >
                   הכל ({formatNumber(langCounts.all)})
@@ -607,7 +717,9 @@ export function SearchConsoleDashboard({
                   onClick={() => setLangFilter("he")}
                   className={cn(
                     "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
-                    langFilter === "he" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                    langFilter === "he"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted",
                   )}
                 >
                   עברית ({formatNumber(langCounts.he)})
@@ -617,7 +729,9 @@ export function SearchConsoleDashboard({
                   onClick={() => setLangFilter("en")}
                   className={cn(
                     "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
-                    langFilter === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                    langFilter === "en"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted",
                   )}
                 >
                   English ({formatNumber(langCounts.en)})
@@ -667,8 +781,13 @@ export function SearchConsoleDashboard({
               <tbody>
                 {sortedQueries.map((query, index) => (
                   <tr key={index} className="border-b hover:bg-muted/50">
-                    <td className="py-2 px-3 font-medium max-w-[300px] truncate" title={query.query}>
-                      {query.query.length > 60 ? query.query.substring(0, 60) + '...' : query.query}
+                    <td
+                      className="py-2 px-3 font-medium max-w-[300px] truncate"
+                      title={query.query}
+                    >
+                      {query.query.length > 60
+                        ? query.query.substring(0, 60) + "..."
+                        : query.query}
                     </td>
                     <td className="text-center py-2 px-3">
                       <GscRankBadge
@@ -679,9 +798,15 @@ export function SearchConsoleDashboard({
                         ahrefsPositions={rankOpts.ahrefsPositions}
                       />
                     </td>
-                    <td className="text-center py-2 px-3">{formatNumber(query.clicks)}</td>
-                    <td className="text-center py-2 px-3">{formatNumber(query.impressions)}</td>
-                    <td className="text-center py-2 px-3">{formatGscCtrPercent(query.ctr) ?? "—"}</td>
+                    <td className="text-center py-2 px-3">
+                      {formatNumber(query.clicks)}
+                    </td>
+                    <td className="text-center py-2 px-3">
+                      {formatNumber(query.impressions)}
+                    </td>
+                    <td className="text-center py-2 px-3">
+                      {formatGscCtrPercent(query.ctr) ?? "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -706,17 +831,30 @@ function GscRankBadge({
   forceIrrelevant?: string[];
   ahrefsPositions?: Record<string, number>;
 }) {
-  const shown = trackedPhraseRank(query, position, { tracked, forceIrrelevant, ahrefsPositions })?.position ?? null;
+  const shown =
+    trackedPhraseRank(query, position, {
+      tracked,
+      forceIrrelevant,
+      ahrefsPositions,
+    })?.position ?? null;
   if (shown == null) {
-    return <span className="text-xs text-muted-foreground" title="לא בטופ 20">—</span>;
+    return (
+      <span className="text-xs text-muted-foreground" title="לא בטופ 20">
+        —
+      </span>
+    );
   }
   return (
-    <span className={cn(
-      "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium",
-      shown <= 3 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
-      shown <= 10 ? "bg-primary/10 text-primary" :
-      "bg-muted text-muted-foreground",
-    )}>
+    <span
+      className={cn(
+        "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium",
+        shown <= 3
+          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+          : shown <= 10
+            ? "bg-primary/10 text-primary"
+            : "bg-muted text-muted-foreground",
+      )}
+    >
       {shown.toFixed(1)}
     </span>
   );

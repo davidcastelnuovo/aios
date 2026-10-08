@@ -2,7 +2,11 @@ import { useState } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { X, CheckSquare, Trash2, RefreshCw, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -66,7 +70,9 @@ export function ClientsMultiSelectToolbar({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["client-onboarding", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["client-onboarding", tenantId],
+      });
       toast.success(`הסוכנות עודכנה ל-${selectedIds.length} לקוחות`);
       onClearSelection();
     },
@@ -74,7 +80,9 @@ export function ClientsMultiSelectToolbar({
   });
 
   const bulkUpdateStatusMutation = useMutation({
-    mutationFn: async (status: "active" | "onboarding" | "paused" | "ended") => {
+    mutationFn: async (
+      status: "active" | "onboarding" | "paused" | "ended",
+    ) => {
       const { error } = await supabase
         .from("clients")
         .update({ status })
@@ -83,7 +91,9 @@ export function ClientsMultiSelectToolbar({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["client-onboarding", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["client-onboarding", tenantId],
+      });
       toast.success(`הסטטוס עודכן ל-${selectedIds.length} לקוחות`);
       onClearSelection();
     },
@@ -109,7 +119,10 @@ export function ClientsMultiSelectToolbar({
 
   return (
     <>
-      <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg flex-wrap" dir="rtl">
+      <div
+        className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg flex-wrap"
+        dir="rtl"
+      >
         <span className="text-sm font-medium">
           {selectedIds.length} נבחרו מתוך {totalCount}
         </span>
@@ -190,8 +203,8 @@ export function ClientsMultiSelectToolbar({
           <AlertDialogHeader>
             <AlertDialogTitle>אישור מחיקת לקוחות</AlertDialogTitle>
             <AlertDialogDescription>
-              האם אתה בטוח שברצונך למחוק <strong>{selectedIds.length}</strong> לקוחות?
-              פעולה זו תמחק את כל הנתונים הקשורים ולא ניתן לבטל אותה.
+              האם אתה בטוח שברצונך למחוק <strong>{selectedIds.length}</strong>{" "}
+              לקוחות? פעולה זו תמחק את כל הנתונים הקשורים ולא ניתן לבטל אותה.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

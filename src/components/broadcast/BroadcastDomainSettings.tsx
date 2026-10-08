@@ -7,7 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Star, Globe, Loader2, Pencil, Check, X } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Star,
+  Globe,
+  Loader2,
+  Pencil,
+  Check,
+  X,
+} from "lucide-react";
 
 function SenderFields({
   local,
@@ -27,17 +36,40 @@ function SenderFields({
   return (
     <div className="flex flex-wrap items-end gap-2">
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">שם תיבה (לפני @)</Label>
-        <Input value={local} onChange={(e) => onLocalChange(e.target.value)} placeholder="pdpsagot" className="w-32" dir="ltr" />
+        <Label className="text-xs text-muted-foreground">
+          שם תיבה (לפני @)
+        </Label>
+        <Input
+          value={local}
+          onChange={(e) => onLocalChange(e.target.value)}
+          placeholder="pdpsagot"
+          className="w-32"
+          dir="ltr"
+        />
       </div>
       <span className="pb-2 text-muted-foreground">@</span>
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">דומיין מאומת ב-Resend</Label>
-        <Input value={domain} onChange={(e) => onDomainChange(e.target.value)} placeholder="aios.co.il" className="w-48" dir="ltr" />
+        <Label className="text-xs text-muted-foreground">
+          דומיין מאומת ב-Resend
+        </Label>
+        <Input
+          value={domain}
+          onChange={(e) => onDomainChange(e.target.value)}
+          placeholder="aios.co.il"
+          className="w-48"
+          dir="ltr"
+        />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">שם תצוגה (אופציונלי)</Label>
-        <Input value={fromName} onChange={(e) => onFromNameChange(e.target.value)} placeholder="Pd Psagot" className="w-44" />
+        <Label className="text-xs text-muted-foreground">
+          שם תצוגה (אופציונלי)
+        </Label>
+        <Input
+          value={fromName}
+          onChange={(e) => onFromNameChange(e.target.value)}
+          placeholder="Pd Psagot"
+          className="w-44"
+        />
       </div>
     </div>
   );
@@ -65,14 +97,21 @@ export function BroadcastDomainSettings() {
       return;
     }
     try {
-      const result = await add.mutateAsync({ domain, from_name: fromName, default_local: local });
+      const result = await add.mutateAsync({
+        domain,
+        from_name: fromName,
+        default_local: local,
+      });
       showSwapToast(result.wasSwapped);
       setDomain("");
       setFromName("");
       setLocal("noreply");
       toast.success(`נוסף: ${result.email}`);
     } catch (e: any) {
-      toast.error("שגיאה: " + (e?.message?.includes("duplicate") ? "הדומיין כבר קיים" : e?.message));
+      toast.error(
+        "שגיאה: " +
+          (e?.message?.includes("duplicate") ? "הדומיין כבר קיים" : e?.message),
+      );
     }
   };
 
@@ -110,8 +149,9 @@ export function BroadcastDomainSettings() {
   return (
     <div className="space-y-4" dir="rtl">
       <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-        ב-Resend מאמתים רק <strong>דומיין</strong> (למשל <span dir="ltr">aios.co.il</span>) — לא כל תיבה בנפרד.
-        אחרי האימות אפשר לשלוח מכל כתובת <span dir="ltr">something@aios.co.il</span>.
+        ב-Resend מאמתים רק <strong>דומיין</strong> (למשל{" "}
+        <span dir="ltr">aios.co.il</span>) — לא כל תיבה בנפרד. אחרי האימות אפשר
+        לשלוח מכל כתובת <span dir="ltr">something@aios.co.il</span>.
       </div>
 
       <Card>
@@ -126,16 +166,26 @@ export function BroadcastDomainSettings() {
             onFromNameChange={setFromName}
           />
           <Button onClick={handleAdd} disabled={add.isPending}>
-            {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="ml-1 h-4 w-4" />הוסף</>}
+            {add.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Plus className="ml-1 h-4 w-4" />
+                הוסף
+              </>
+            )}
           </Button>
         </CardContent>
       </Card>
 
       {list.isLoading ? (
-        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin" /></div>
+        <div className="flex justify-center py-6">
+          <Loader2 className="h-5 w-5 animate-spin" />
+        </div>
       ) : (list.data || []).length === 0 ? (
         <div className="py-8 text-center text-muted-foreground">
-          <Globe className="mx-auto mb-2 h-7 w-7 opacity-50" /> עדיין לא הוגדרו דומיינים לשליחה.
+          <Globe className="mx-auto mb-2 h-7 w-7 opacity-50" /> עדיין לא הוגדרו
+          דומיינים לשליחה.
         </div>
       ) : (
         <div className="space-y-2">
@@ -152,11 +202,23 @@ export function BroadcastDomainSettings() {
                     onFromNameChange={setEditFromName}
                   />
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={saveEdit} disabled={update.isPending}>
-                      {update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="ml-1 h-4 w-4" />שמור</>}
+                    <Button
+                      size="sm"
+                      onClick={saveEdit}
+                      disabled={update.isPending}
+                    >
+                      {update.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Check className="ml-1 h-4 w-4" />
+                          שמור
+                        </>
+                      )}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={cancelEdit}>
-                      <X className="ml-1 h-4 w-4" />ביטול
+                      <X className="ml-1 h-4 w-4" />
+                      ביטול
                     </Button>
                   </div>
                 </div>
@@ -164,18 +226,45 @@ export function BroadcastDomainSettings() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Globe className="h-4 w-4 text-muted-foreground" />
-                    <span dir="ltr" className="font-medium">{formatSenderEmail(d.default_local, d.domain)}</span>
-                    {d.from_name && <span className="text-sm text-muted-foreground">· {d.from_name}</span>}
-                    {d.is_default && <Badge variant="secondary"><Star className="ml-1 h-3 w-3" />ברירת מחדל</Badge>}
+                    <span dir="ltr" className="font-medium">
+                      {formatSenderEmail(d.default_local, d.domain)}
+                    </span>
+                    {d.from_name && (
+                      <span className="text-sm text-muted-foreground">
+                        · {d.from_name}
+                      </span>
+                    )}
+                    {d.is_default && (
+                      <Badge variant="secondary">
+                        <Star className="ml-1 h-3 w-3" />
+                        ברירת מחדל
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => startEdit(d)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => startEdit(d)}
+                    >
                       <Pencil className="h-4 w-4" />
                     </Button>
                     {!d.is_default && (
-                      <Button variant="ghost" size="sm" onClick={() => setDefault.mutate(d.id)}>קבע כברירת מחדל</Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDefault.mutate(d.id)}
+                      >
+                        קבע כברירת מחדל
+                      </Button>
                     )}
-                    <Button variant="ghost" size="icon" onClick={() => { if (confirm("למחוק את הדומיין?")) remove.mutate(d.id); }}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        if (confirm("למחוק את הדומיין?")) remove.mutate(d.id);
+                      }}
+                    >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>

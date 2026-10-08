@@ -59,17 +59,27 @@ export function useAgentGoalMutations(agentId: string | null) {
   });
 
   const update = useMutation({
-    mutationFn: async ({ id, ...patch }: Partial<AgentGoal> & { id: string }) => {
-      const { error } = await supabase.from("agent_goals" as any).update(patch).eq("id", id);
+    mutationFn: async ({
+      id,
+      ...patch
+    }: Partial<AgentGoal> & { id: string }) => {
+      const { error } = await supabase
+        .from("agent_goals" as any)
+        .update(patch)
+        .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["agent-goals", agentId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["agent-goals", agentId] }),
     onError: (e: any) => toast.error(e.message),
   });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("agent_goals" as any).delete().eq("id", id);
+      const { error } = await supabase
+        .from("agent_goals" as any)
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {

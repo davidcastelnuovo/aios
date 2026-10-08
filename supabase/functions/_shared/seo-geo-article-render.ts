@@ -5,43 +5,65 @@ export type SeoGeoArticleBlock = {
   excerpt?: string;
   content: string[];
   faq?: Array<{ question: string; answer: string }>;
-  infographic?: { title?: string; items?: Array<{ value?: string; label: string; description: string }> };
+  infographic?: {
+    title?: string;
+    items?: Array<{ value?: string; label: string; description: string }>;
+  };
 };
 
 function escapeHtml(value = "") {
-  return String(value).replace(/[&<>"']/g, (char) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char
+  return String(value).replace(
+    /[&<>"']/g,
+    (char) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        char
+      ] ?? char,
   );
 }
 
 export function renderSeoGeoArticleHtml(article: SeoGeoArticleBlock): string {
-  const parts = (article.content ?? []).map((part) => {
-    const text = String(part).trim();
-    if (!text) return "";
-    if (text.startsWith("## ")) return `<h2>${escapeHtml(text.slice(3))}</h2>`;
-    if (text.startsWith("LIST: ")) {
-      const items = text.slice(6).split("|").map((item) => item.trim()).filter(Boolean);
-      return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
-    }
-    if (text.startsWith("TIP: ")) {
-      return `<aside class="aios-tip"><strong>כדאי לדעת</strong><p>${escapeHtml(text.slice(5).trim())}</p></aside>`;
-    }
-    return `<p>${escapeHtml(text)}</p>`;
-  }).join("");
+  const parts = (article.content ?? [])
+    .map((part) => {
+      const text = String(part).trim();
+      if (!text) return "";
+      if (text.startsWith("## "))
+        return `<h2>${escapeHtml(text.slice(3))}</h2>`;
+      if (text.startsWith("LIST: ")) {
+        const items = text
+          .slice(6)
+          .split("|")
+          .map((item) => item.trim())
+          .filter(Boolean);
+        return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+      }
+      if (text.startsWith("TIP: ")) {
+        return `<aside class="aios-tip"><strong>כדאי לדעת</strong><p>${escapeHtml(text.slice(5).trim())}</p></aside>`;
+      }
+      return `<p>${escapeHtml(text)}</p>`;
+    })
+    .join("");
 
   const info = article.infographic;
-  const infoItems = Array.isArray(info?.items) ? info!.items!.filter((i) => i.label && i.description) : [];
+  const infoItems = Array.isArray(info?.items)
+    ? info!.items!.filter((i) => i.label && i.description)
+    : [];
   const infographicHtml = infoItems.length
-    ? `<section class="aios-infographic"><h2>${escapeHtml(info?.title || "הדברים החשובים בקצרה")}</h2><div class="aios-info-grid">${infoItems.map((item) =>
-      `<div class="aios-info-item"><span>${escapeHtml(item.value || "•")}</span><h3>${escapeHtml(item.label)}</h3><p>${escapeHtml(item.description)}</p></div>`
-    ).join("")}</div></section>`
+    ? `<section class="aios-infographic"><h2>${escapeHtml(info?.title || "הדברים החשובים בקצרה")}</h2><div class="aios-info-grid">${infoItems
+        .map(
+          (item) =>
+            `<div class="aios-info-item"><span>${escapeHtml(item.value || "•")}</span><h3>${escapeHtml(item.label)}</h3><p>${escapeHtml(item.description)}</p></div>`,
+        )
+        .join("")}</div></section>`
     : "";
 
   const faq = article.faq ?? [];
   const faqHtml = faq.length
-    ? `<section class="aios-faq"><h2>שאלות נפוצות</h2>${faq.map((item) =>
-      `<details><summary>${escapeHtml(item.question)}</summary><p>${escapeHtml(item.answer)}</p></details>`
-    ).join("")}</section>`
+    ? `<section class="aios-faq"><h2>שאלות נפוצות</h2>${faq
+        .map(
+          (item) =>
+            `<details><summary>${escapeHtml(item.question)}</summary><p>${escapeHtml(item.answer)}</p></details>`,
+        )
+        .join("")}</section>`
     : "";
 
   const css = `
@@ -64,7 +86,9 @@ export function renderSeoGeoArticleHtml(article: SeoGeoArticleBlock): string {
 .aios-seo-article .aios-faq summary{cursor:pointer;font-weight:600}
 `.replace(/\s+/g, " ");
 
-  const lead = article.excerpt ? `<p class="aios-lead">${escapeHtml(article.excerpt)}</p>` : "";
+  const lead = article.excerpt
+    ? `<p class="aios-lead">${escapeHtml(article.excerpt)}</p>`
+    : "";
 
   return `<div class="aios-seo-article"><style>${css}</style>${lead}${parts}${infographicHtml}${faqHtml}</div>`;
 }

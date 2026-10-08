@@ -33,8 +33,19 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2, Users, Check, ChevronsUpDown } from "lucide-react";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
@@ -59,58 +70,67 @@ type FormValues = z.infer<typeof formSchema>;
 
 export function AddClientForm() {
   const [open, setOpen] = useState(false);
-  const [additionalContacts, setAdditionalContacts] = useState<Array<{ contact_name: string; phone: string; email: string; role: string }>>([]);
+  const [additionalContacts, setAdditionalContacts] = useState<
+    Array<{ contact_name: string; phone: string; email: string; role: string }>
+  >([]);
   const [agencyPopoverOpen, setAgencyPopoverOpen] = useState(false);
   const [showAddContact, setShowAddContact] = useState(false);
-  const [newContact, setNewContact] = useState({ contact_name: "", phone: "", email: "", role: "" });
+  const [newContact, setNewContact] = useState({
+    contact_name: "",
+    phone: "",
+    email: "",
+    role: "",
+  });
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
-  const { getFieldLabel } = useCustomFieldLabels('client');
+  const { getFieldLabel } = useCustomFieldLabels("client");
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-client", tenantId],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      
+
       // Get owned agencies
       const { data: ownedAgencies, error: ownedError } = await supabase
         .from("agencies")
         .select("id, name")
         .eq("tenant_id", tenantId)
         .order("name");
-      
+
       if (ownedError) throw ownedError;
-      
+
       // Get shared agencies via agency_tenant_access
       const { data: sharedAccess, error: sharedError } = await supabase
         .from("agency_tenant_access")
-        .select(`
+        .select(
+          `
           agency_id,
           agencies (
             id,
             name
           )
-        `)
+        `,
+        )
         .eq("accessing_tenant_id", tenantId);
-      
+
       if (sharedError) throw sharedError;
-      
+
       // Extract shared agencies
       const shared = (sharedAccess || [])
-        .map(s => s.agencies)
+        .map((s) => s.agencies)
         .filter(Boolean);
-      
+
       // Combine and remove duplicates
       const combined = [...(ownedAgencies || []), ...shared];
       const uniqueMap = new Map();
-      combined.forEach(agency => {
+      combined.forEach((agency) => {
         if (agency && agency.id && !uniqueMap.has(agency.id)) {
           uniqueMap.set(agency.id, agency);
         }
       });
-      
-      return Array.from(uniqueMap.values()).sort((a: any, b: any) => 
-        a.name.localeCompare(b.name, 'he')
+
+      return Array.from(uniqueMap.values()).sort((a: any, b: any) =>
+        a.name.localeCompare(b.name, "he"),
       );
     },
     enabled: !!tenantId,
@@ -150,28 +170,33 @@ export function AddClientForm() {
       }
       // Use RPC so campaigners can also add clients: it bypasses the SELECT-after-INSERT
       // RLS issue and auto-assigns the creator to client_team when they're a campaigner.
-      const { data: newClientId, error } = await supabase.rpc("create_client_with_assignment", {
-        p_tenant_id: tenantId,
-        p_agency_id: values.agency_id,
-        p_name: values.name,
-        p_contact_name: values.contact_name || null,
-        p_phone: values.phone || null,
-        p_email: values.email || null,
-        p_folder_link: values.folder_link || null,
-        p_retainer: values.retainer ? parseFloat(values.retainer) : null,
-        p_monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
-        p_website: values.website || null,
-        p_notes: values.notes || null,
-        p_is_seo_client: values.is_seo_client,
-        p_services: values.services || [],
-        p_meta_ads_account_id: values.meta_ads_account_id || null,
-        p_google_ads_account_id: values.google_ads_account_id || null,
-      });
+      const { data: newClientId, error } = await supabase.rpc(
+        "create_client_with_assignment",
+        {
+          p_tenant_id: tenantId,
+          p_agency_id: values.agency_id,
+          p_name: values.name,
+          p_contact_name: values.contact_name || null,
+          p_phone: values.phone || null,
+          p_email: values.email || null,
+          p_folder_link: values.folder_link || null,
+          p_retainer: values.retainer ? parseFloat(values.retainer) : null,
+          p_monthly_budget: values.monthly_budget
+            ? parseFloat(values.monthly_budget)
+            : null,
+          p_website: values.website || null,
+          p_notes: values.notes || null,
+          p_is_seo_client: values.is_seo_client,
+          p_services: values.services || [],
+          p_meta_ads_account_id: values.meta_ads_account_id || null,
+          p_google_ads_account_id: values.google_ads_account_id || null,
+        },
+      );
       if (error) throw error;
 
       // Save additional contacts
       if (additionalContacts.length > 0 && newClientId) {
-        const contactsToInsert = additionalContacts.map(c => ({
+        const contactsToInsert = additionalContacts.map((c) => ({
           client_id: newClientId as string,
           tenant_id: tenantId,
           contact_name: c.contact_name,
@@ -179,8 +204,11 @@ export function AddClientForm() {
           email: c.email || null,
           role: c.role || null,
         }));
-        const { error: contactsError } = await supabase.from("client_contacts").insert(contactsToInsert);
-        if (contactsError) console.error("Error saving contacts:", contactsError);
+        const { error: contactsError } = await supabase
+          .from("client_contacts")
+          .insert(contactsToInsert);
+        if (contactsError)
+          console.error("Error saving contacts:", contactsError);
       }
     },
     onSuccess: () => {
@@ -207,7 +235,10 @@ export function AddClientForm() {
           הוסף לקוח
         </Button>
       </DialogTrigger>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>הוסף לקוח חדש</DialogTitle>
         </DialogHeader>
@@ -218,7 +249,7 @@ export function AddClientForm() {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{getFieldLabel('name', 'שם הלקוח')}</FormLabel>
+                  <FormLabel>{getFieldLabel("name", "שם הלקוח")}</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -232,25 +263,58 @@ export function AddClientForm() {
               name="agency_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{getFieldLabel('agency_id', 'סוכנות')}</FormLabel>
-                  <Popover open={agencyPopoverOpen} onOpenChange={setAgencyPopoverOpen}>
+                  <FormLabel>{getFieldLabel("agency_id", "סוכנות")}</FormLabel>
+                  <Popover
+                    open={agencyPopoverOpen}
+                    onOpenChange={setAgencyPopoverOpen}
+                  >
                     <PopoverTrigger asChild>
                       <FormControl>
-                        <Button variant="outline" role="combobox" className={cn("w-full justify-between h-10", !field.value && "text-muted-foreground")}>
-                          <span className="text-right flex-1">{field.value ? agencies?.find(a => a.id === field.value)?.name : "בחר סוכנות"}</span>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between h-10",
+                            !field.value && "text-muted-foreground",
+                          )}
+                        >
+                          <span className="text-right flex-1">
+                            {field.value
+                              ? agencies?.find((a) => a.id === field.value)
+                                  ?.name
+                              : "בחר סוכנות"}
+                          </span>
                           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-full p-0 bg-background" align="end" dir="rtl">
+                    <PopoverContent
+                      className="w-full p-0 bg-background"
+                      align="end"
+                      dir="rtl"
+                    >
                       <Command>
                         <CommandInput placeholder="חפש סוכנות..." />
                         <CommandList>
                           <CommandEmpty>לא נמצאו סוכנויות</CommandEmpty>
                           <CommandGroup>
                             {agencies?.map((agency) => (
-                              <CommandItem key={agency.id} value={agency.name} onSelect={() => { field.onChange(agency.id); setAgencyPopoverOpen(false); }}>
-                                <Check className={cn("mr-2 h-4 w-4", field.value === agency.id ? "opacity-100" : "opacity-0")} />
+                              <CommandItem
+                                key={agency.id}
+                                value={agency.name}
+                                onSelect={() => {
+                                  field.onChange(agency.id);
+                                  setAgencyPopoverOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    field.value === agency.id
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
                                 {agency.name}
                               </CommandItem>
                             ))}
@@ -269,7 +333,7 @@ export function AddClientForm() {
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{getFieldLabel('phone', 'טלפון')}</FormLabel>
+                  <FormLabel>{getFieldLabel("phone", "טלפון")}</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -283,7 +347,7 @@ export function AddClientForm() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{getFieldLabel('email', 'אימייל')}</FormLabel>
+                  <FormLabel>{getFieldLabel("email", "אימייל")}</FormLabel>
                   <FormControl>
                     <Input type="email" {...field} />
                   </FormControl>
@@ -297,7 +361,9 @@ export function AddClientForm() {
               name="folder_link"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{getFieldLabel('folder_link', 'קישור לתיקיה')}</FormLabel>
+                  <FormLabel>
+                    {getFieldLabel("folder_link", "קישור לתיקיה")}
+                  </FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -311,7 +377,9 @@ export function AddClientForm() {
               name="retainer"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{getFieldLabel('retainer', 'ריטיינר')} (₪)</FormLabel>
+                  <FormLabel>
+                    {getFieldLabel("retainer", "ריטיינר")} (₪)
+                  </FormLabel>
                   <FormControl>
                     <Input type="number" {...field} />
                   </FormControl>
@@ -325,7 +393,9 @@ export function AddClientForm() {
               name="monthly_budget"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{getFieldLabel('monthly_budget', 'תקציב חודשי')} (₪)</FormLabel>
+                  <FormLabel>
+                    {getFieldLabel("monthly_budget", "תקציב חודשי")} (₪)
+                  </FormLabel>
                   <FormControl>
                     <Input type="number" {...field} />
                   </FormControl>
@@ -339,7 +409,7 @@ export function AddClientForm() {
               name="website"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{getFieldLabel('website', 'אתר')}</FormLabel>
+                  <FormLabel>{getFieldLabel("website", "אתר")}</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -369,22 +439,29 @@ export function AddClientForm() {
                 <FormItem>
                   <FormLabel>שירותים פעילים</FormLabel>
                   <div className="flex flex-col gap-2 mt-1">
-                    {([
-                      { key: "ppc_google", label: "PPC Google" },
-                      { key: "ppc_meta", label: "PPC Meta" },
-                      { key: "seo", label: "SEO" },
-                      { key: "social", label: "Social" },
-                      { key: "full_social", label: "Full Social" },
-                      { key: "social_meta", label: "Social Meta" },
-                      { key: "automation", label: "Automation" },
-                    ] as { key: string; label: string }[]).map((svc) => (
-                      <label key={svc.key} className="flex items-center gap-2 cursor-pointer">
+                    {(
+                      [
+                        { key: "ppc_google", label: "PPC Google" },
+                        { key: "ppc_meta", label: "PPC Meta" },
+                        { key: "seo", label: "SEO" },
+                        { key: "social", label: "Social" },
+                        { key: "full_social", label: "Full Social" },
+                        { key: "social_meta", label: "Social Meta" },
+                        { key: "automation", label: "Automation" },
+                      ] as { key: string; label: string }[]
+                    ).map((svc) => (
+                      <label
+                        key={svc.key}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
                         <Checkbox
                           checked={field.value?.includes(svc.key)}
                           onCheckedChange={(checked) => {
                             const current = field.value || [];
                             field.onChange(
-                              checked ? [...current, svc.key] : current.filter((s: string) => s !== svc.key)
+                              checked
+                                ? [...current, svc.key]
+                                : current.filter((s: string) => s !== svc.key),
                             );
                           }}
                         />
@@ -438,7 +515,7 @@ export function AddClientForm() {
                   </FormControl>
                   <div className="space-y-1 leading-none">
                     <FormLabel className="cursor-pointer">
-                      {getFieldLabel('is_seo_client', 'לקוח SEO')}
+                      {getFieldLabel("is_seo_client", "לקוח SEO")}
                     </FormLabel>
                   </div>
                 </FormItem>
@@ -469,29 +546,56 @@ export function AddClientForm() {
                     <Input
                       placeholder="שם *"
                       value={newContact.contact_name}
-                      onChange={(e) => setNewContact(prev => ({ ...prev, contact_name: e.target.value }))}
+                      onChange={(e) =>
+                        setNewContact((prev) => ({
+                          ...prev,
+                          contact_name: e.target.value,
+                        }))
+                      }
                     />
                     <Input
                       placeholder="תפקיד"
                       value={newContact.role}
-                      onChange={(e) => setNewContact(prev => ({ ...prev, role: e.target.value }))}
+                      onChange={(e) =>
+                        setNewContact((prev) => ({
+                          ...prev,
+                          role: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <Input
                       placeholder="טלפון"
                       value={newContact.phone}
-                      onChange={(e) => setNewContact(prev => ({ ...prev, phone: e.target.value }))}
+                      onChange={(e) =>
+                        setNewContact((prev) => ({
+                          ...prev,
+                          phone: e.target.value,
+                        }))
+                      }
                     />
                     <Input
                       placeholder="אימייל"
                       type="email"
                       value={newContact.email}
-                      onChange={(e) => setNewContact(prev => ({ ...prev, email: e.target.value }))}
+                      onChange={(e) =>
+                        setNewContact((prev) => ({
+                          ...prev,
+                          email: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="flex gap-2 justify-end">
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddContact(false)}>ביטול</Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowAddContact(false)}
+                    >
+                      ביטול
+                    </Button>
                     <Button
                       type="button"
                       size="sm"
@@ -500,8 +604,16 @@ export function AddClientForm() {
                           toast.error("שם איש קשר נדרש");
                           return;
                         }
-                        setAdditionalContacts(prev => [...prev, { ...newContact }]);
-                        setNewContact({ contact_name: "", phone: "", email: "", role: "" });
+                        setAdditionalContacts((prev) => [
+                          ...prev,
+                          { ...newContact },
+                        ]);
+                        setNewContact({
+                          contact_name: "",
+                          phone: "",
+                          email: "",
+                          role: "",
+                        });
                         setShowAddContact(false);
                       }}
                     >
@@ -514,16 +626,31 @@ export function AddClientForm() {
               {additionalContacts.length > 0 && (
                 <div className="space-y-2">
                   {additionalContacts.map((contact, index) => (
-                    <div key={index} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm"
+                    >
                       <div className="flex-1 grid grid-cols-4 gap-2">
-                        <span className="font-medium">{contact.contact_name}</span>
-                        <span className="text-muted-foreground">{contact.role || "—"}</span>
-                        <span className="text-muted-foreground">{contact.phone || "—"}</span>
-                        <span className="text-muted-foreground">{contact.email || "—"}</span>
+                        <span className="font-medium">
+                          {contact.contact_name}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {contact.role || "—"}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {contact.phone || "—"}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {contact.email || "—"}
+                        </span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setAdditionalContacts(prev => prev.filter((_, i) => i !== index))}
+                        onClick={() =>
+                          setAdditionalContacts((prev) =>
+                            prev.filter((_, i) => i !== index),
+                          )
+                        }
                         className="hover:bg-destructive/20 rounded-full p-1"
                       >
                         <Trash2 className="h-3 w-3 text-destructive" />
@@ -534,7 +661,11 @@ export function AddClientForm() {
               )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={mutation.isPending}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={mutation.isPending}
+            >
               {mutation.isPending ? "מוסיף..." : "הוסף לקוח"}
             </Button>
           </form>

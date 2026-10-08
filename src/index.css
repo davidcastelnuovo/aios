@@ -27,7 +27,7 @@ All colors MUST be HSL.
     /* Turquoise Green - Primary accent color */
     --primary: 167 70% 55%;
     --primary-foreground: 0 0% 100%;
-    
+
     /* Light background */
     --secondary: 0 0% 94%;
     --secondary-foreground: 209 59% 10%;
@@ -51,18 +51,32 @@ All colors MUST be HSL.
     --ring: 167 70% 55%;
 
     --radius: 0.75rem;
-    
+
     /* Primary glow - lighter turquoise */
     --primary-glow: 175 65% 70%;
-    
+
     /* Turquoise Green gradient */
-    --gradient-primary: linear-gradient(135deg, hsl(167, 70%, 55%), hsl(195, 70%, 60%));
+    --gradient-primary: linear-gradient(
+      135deg,
+      hsl(167, 70%, 55%),
+      hsl(195, 70%, 60%)
+    );
     /* Success gradient */
-    --gradient-success: linear-gradient(135deg, hsl(167, 70%, 55%), hsl(175, 65%, 60%));
+    --gradient-success: linear-gradient(
+      135deg,
+      hsl(167, 70%, 55%),
+      hsl(175, 65%, 60%)
+    );
     /* Subtle gradient for backgrounds */
-    --gradient-subtle: linear-gradient(180deg, hsl(167, 70%, 97%), hsl(0, 0%, 100%));
-    --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --gradient-subtle: linear-gradient(
+      180deg,
+      hsl(167, 70%, 97%),
+      hsl(0, 0%, 100%)
+    );
+    --shadow-card:
+      0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --shadow-lg:
+      0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
     /* Turquoise sidebar */
     --sidebar-background: 209 59% 10%;
@@ -89,7 +103,7 @@ All colors MUST be HSL.
     /* Turquoise Green - Primary accent in dark mode */
     --primary: 167 70% 55%;
     --primary-foreground: 0 0% 100%;
-    
+
     --secondary: 209 59% 15%;
     --secondary-foreground: 0 0% 100%;
 
@@ -112,12 +126,22 @@ All colors MUST be HSL.
     --ring: 167 70% 55%;
 
     /* Turquoise Green gradient */
-    --gradient-primary: linear-gradient(135deg, hsl(167, 70%, 55%), hsl(195, 70%, 60%));
+    --gradient-primary: linear-gradient(
+      135deg,
+      hsl(167, 70%, 55%),
+      hsl(195, 70%, 60%)
+    );
     /* Success gradient */
-    --gradient-success: linear-gradient(135deg, hsl(167, 70%, 55%), hsl(175, 65%, 60%));
-    --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-    --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
-    
+    --gradient-success: linear-gradient(
+      135deg,
+      hsl(167, 70%, 55%),
+      hsl(175, 65%, 60%)
+    );
+    --shadow-card:
+      0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+    --shadow-lg:
+      0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
+
     /* Turquoise sidebar in dark mode */
     --sidebar-background: 209 59% 8%;
     --sidebar-foreground: 0 0% 100%;
@@ -135,16 +159,21 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
-html {
-  direction: rtl;
-  scrollbar-gutter: stable both-edges;
-}
+  html {
+    direction: rtl;
+    scrollbar-gutter: stable both-edges;
+  }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
-  
-  h1, h2, h3, h4, h5, h6 {
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-semibold;
   }
 }
@@ -153,19 +182,19 @@ html {
   .gradient-primary {
     background: var(--gradient-primary);
   }
-  
+
   .gradient-success {
     background: var(--gradient-success);
   }
-  
+
   .gradient-subtle {
     background: var(--gradient-subtle);
   }
-  
+
   .shadow-card {
     box-shadow: var(--shadow-card);
   }
-  
+
   .shadow-lg {
     box-shadow: var(--shadow-lg);
   }
@@ -180,90 +209,104 @@ html {
   .rbc-calendar {
     font-size: 0.75rem;
   }
-  
+
   .rbc-toolbar {
     flex-direction: column;
     gap: 0.5rem;
     margin-bottom: 0.5rem;
   }
-  
+
   .rbc-toolbar-label {
     font-size: 1rem;
     font-weight: 600;
   }
-  
+
   .rbc-btn-group {
     font-size: 0.75rem;
   }
-  
+
   .rbc-btn-group button {
     padding: 0.25rem 0.5rem;
   }
-  
+
   /* Week view optimizations */
   .rbc-time-view {
     overflow-x: auto;
     min-width: 100%;
   }
-  
+
   .rbc-time-header {
     min-width: 600px;
   }
-  
+
   .rbc-time-content {
     min-width: 600px;
   }
-  
+
   .rbc-header {
     min-width: 85px;
     padding: 0.25rem 0.125rem;
     font-size: 0.7rem;
   }
-  
+
   .rbc-time-slot {
     min-height: 30px;
   }
-  
+
   .rbc-timeslot-group {
     min-height: 60px;
   }
-  
+
   .rbc-event {
     font-size: 0.65rem;
     padding: 1px 3px;
   }
-  
+
   .rbc-event-label {
     font-size: 0.65rem;
   }
-  
+
   .rbc-event-content {
     font-size: 0.65rem;
   }
-  
+
   /* Day view */
   .rbc-day-slot .rbc-time-slot {
     border-top: 1px solid hsl(var(--border));
   }
-  
+
   /* All day events */
   .rbc-allday-cell {
     height: auto;
     min-height: 40px;
   }
-  
+
   .rbc-row-segment {
     padding: 2px 4px;
   }
 }
 
 @keyframes corepulse {
-  0%, 100% { opacity: 0.7; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.02); }
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
 }
 
 @keyframes wiggle {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(-1.5deg); }
-  75% { transform: rotate(1.5deg); }
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-1.5deg);
+  }
+  75% {
+    transform: rotate(1.5deg);
+  }
 }

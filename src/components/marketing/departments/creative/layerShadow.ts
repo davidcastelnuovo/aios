@@ -38,11 +38,18 @@ export const buildLayerTextShadow = ({
     return `${offset}px ${offset}px 0 ${color}`;
   });
   steps.unshift("0 1px 0 rgba(255,255,255,0.35)");
-  steps.push(`${depth + 4}px ${depth + 10}px ${Math.max(blur, 12)}px rgba(15,23,42,0.38)`);
+  steps.push(
+    `${depth + 4}px ${depth + 10}px ${Math.max(blur, 12)}px rgba(15,23,42,0.38)`,
+  );
   return steps.join(", ");
 };
 
-export const withLayerShadow = (shadow: Partial<LayerShadow>): Pick<CreativeLayer, "shadowStyle" | "shadowDepth" | "shadowColor" | "shadowBlur" | "textShadow"> => {
+export const withLayerShadow = (
+  shadow: Partial<LayerShadow>,
+): Pick<
+  CreativeLayer,
+  "shadowStyle" | "shadowDepth" | "shadowColor" | "shadowBlur" | "textShadow"
+> => {
   const next: LayerShadow = {
     shadowStyle: shadow.shadowStyle ?? "none",
     shadowDepth: shadow.shadowDepth ?? 0,
@@ -56,7 +63,8 @@ const hexFromCssColor = (value: string) => {
   const hex = value.match(/#([0-9a-fA-F]{3,8})/);
   if (hex) {
     const raw = hex[1];
-    if (raw.length === 3) return `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`;
+    if (raw.length === 3)
+      return `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`;
     if (raw.length === 8) return `#${raw.slice(0, 6)}`;
     if (raw.length === 6) return `#${raw}`;
   }
@@ -76,8 +84,19 @@ export const inferLayerShadow = (layer: CreativeLayer): LayerShadow => {
     };
   }
   const css = layer.textShadow ?? "";
-  if (!css) return { shadowStyle: "none", shadowDepth: 0, shadowColor: DEFAULT_COLOR, shadowBlur: 8 };
-  if (/-1px 0 0|-?\d+px 0 0/.test(css) && /0 0 \d+px/.test(css) && (css.match(/0 0 \d+px/g)?.length ?? 0) >= 1 && css.includes("-")) {
+  if (!css)
+    return {
+      shadowStyle: "none",
+      shadowDepth: 0,
+      shadowColor: DEFAULT_COLOR,
+      shadowBlur: 8,
+    };
+  if (
+    /-1px 0 0|-?\d+px 0 0/.test(css) &&
+    /0 0 \d+px/.test(css) &&
+    (css.match(/0 0 \d+px/g)?.length ?? 0) >= 1 &&
+    css.includes("-")
+  ) {
     return {
       shadowStyle: "halo",
       shadowDepth: layer.shadowDepth ?? 4,

@@ -23,8 +23,12 @@ export function isValidStaffPhone(raw) {
 }
 
 export function scoreNameMatch(fullName, query) {
-  const name = String(fullName || "").trim().toLowerCase();
-  const q = String(query || "").trim().toLowerCase();
+  const name = String(fullName || "")
+    .trim()
+    .toLowerCase();
+  const q = String(query || "")
+    .trim()
+    .toLowerCase();
   if (!name || !q) return 0;
   if (name === q) return 100;
   if (name.startsWith(q)) return 90;
@@ -38,20 +42,29 @@ export function scoreNameMatch(fullName, query) {
  * Pick a single staff match from candidate rows.
  * @returns {{ match: object|null, ambiguous: object[]|null, reason: string }}
  */
-export function selectStaffMatch(candidates, { id = null, name = null, entityType = "auto" } = {}) {
+export function selectStaffMatch(
+  candidates,
+  { id = null, name = null, entityType = "auto" } = {},
+) {
   const rows = Array.isArray(candidates) ? candidates.filter(Boolean) : [];
-  const wantedType = entityType && entityType !== "auto" ? String(entityType) : null;
+  const wantedType =
+    entityType && entityType !== "auto" ? String(entityType) : null;
 
   if (id) {
     const byId = rows.filter((r) => String(r.id) === String(id));
-    const typed = wantedType ? byId.filter((r) => r.entity_type === wantedType) : byId;
+    const typed = wantedType
+      ? byId.filter((r) => r.entity_type === wantedType)
+      : byId;
     const pool = typed.length ? typed : byId;
-    if (pool.length === 1) return { match: pool[0], ambiguous: null, reason: "id" };
-    if (pool.length > 1) return { match: null, ambiguous: pool, reason: "ambiguous_id" };
+    if (pool.length === 1)
+      return { match: pool[0], ambiguous: null, reason: "id" };
+    if (pool.length > 1)
+      return { match: null, ambiguous: pool, reason: "ambiguous_id" };
     return { match: null, ambiguous: null, reason: "not_found_id" };
   }
 
-  if (!name) return { match: null, ambiguous: null, reason: "missing_selector" };
+  if (!name)
+    return { match: null, ambiguous: null, reason: "missing_selector" };
 
   let scored = rows
     .map((r) => ({ row: r, score: scoreNameMatch(r.full_name, name) }))
@@ -63,7 +76,8 @@ export function selectStaffMatch(candidates, { id = null, name = null, entityTyp
     if (typed.length) scored = typed;
   }
 
-  if (!scored.length) return { match: null, ambiguous: null, reason: "not_found_name" };
+  if (!scored.length)
+    return { match: null, ambiguous: null, reason: "not_found_name" };
   if (scored.length === 1 || scored[0].score > scored[1].score) {
     return { match: scored[0].row, ambiguous: null, reason: "name" };
   }

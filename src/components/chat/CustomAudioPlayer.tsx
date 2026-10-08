@@ -8,7 +8,10 @@ interface CustomAudioPlayerProps {
   className?: string;
 }
 
-export default function CustomAudioPlayer({ src, className = "" }: CustomAudioPlayerProps) {
+export default function CustomAudioPlayer({
+  src,
+  className = "",
+}: CustomAudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -48,7 +51,7 @@ export default function CustomAudioPlayer({ src, className = "" }: CustomAudioPl
   const handleSliderChange = (value: number[]) => {
     const audio = audioRef.current;
     if (!audio) return;
-    
+
     audio.currentTime = value[0];
     setCurrentTime(value[0]);
   };
@@ -61,9 +64,12 @@ export default function CustomAudioPlayer({ src, className = "" }: CustomAudioPl
   };
 
   return (
-    <div className={`flex items-center gap-2 bg-background/50 rounded-lg p-2 ${className}`} dir="rtl">
+    <div
+      className={`flex items-center gap-2 bg-background/50 rounded-lg p-2 ${className}`}
+      dir="rtl"
+    >
       <audio ref={audioRef} src={src} preload="metadata" />
-      
+
       <Button
         variant="ghost"
         size="icon"
@@ -86,7 +92,7 @@ export default function CustomAudioPlayer({ src, className = "" }: CustomAudioPl
           className="flex-1"
           dir="ltr"
         />
-        
+
         <span className="text-xs text-muted-foreground shrink-0 min-w-[45px] text-left">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>

@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 Deno.serve(async (req) => {
@@ -21,13 +22,16 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const { data: { user }, error: authError } = await createClient(
+    const {
+      data: { user },
+      error: authError,
+    } = await createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     ).auth.getUser();
 
     if (authError || !user) {
@@ -40,10 +44,15 @@ Deno.serve(async (req) => {
     const { to_number, lead_id, client_id, tenant_id } = await req.json();
 
     if (!to_number || !tenant_id) {
-      return new Response(JSON.stringify({ error: "Missing required fields: to_number, tenant_id" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Missing required fields: to_number, tenant_id",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Check if Paycall is configured
@@ -57,24 +66,33 @@ Deno.serve(async (req) => {
 
     if (!integration) {
       // Create a log entry with failed status
-      const { data: callLog } = await supabase.from("call_logs").insert({
-        tenant_id,
-        lead_id: lead_id || null,
-        client_id: client_id || null,
-        caller_user_id: user.id,
-        to_number,
-        status: "failed",
-        notes: "Paycall לא מוגדר - יש להגדיר את האינטגרציה בדף הגדרות טלפוניה",
-      }).select().single();
+      const { data: callLog } = await supabase
+        .from("call_logs")
+        .insert({
+          tenant_id,
+          lead_id: lead_id || null,
+          client_id: client_id || null,
+          caller_user_id: user.id,
+          to_number,
+          status: "failed",
+          notes:
+            "Paycall לא מוגדר - יש להגדיר את האינטגרציה בדף הגדרות טלפוניה",
+        })
+        .select()
+        .single();
 
-      return new Response(JSON.stringify({
-        error: "Paycall not configured",
-        message: "יש להגדיר את אינטגרציית Paycall בהגדרות הטלפוניה לפני ביצוע שיחות",
-        call_log: callLog,
-      }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Paycall not configured",
+          message:
+            "יש להגדיר את אינטגרציית Paycall בהגדרות הטלפוניה לפני ביצוע שיחות",
+          call_log: callLog,
+        }),
+        {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Get user's telephony settings
@@ -88,16 +106,20 @@ Deno.serve(async (req) => {
     const fromNumber = settings?.personal_phone || settings?.virtual_number;
 
     // Create call log with initiated status
-    const { data: callLog, error: insertError } = await supabase.from("call_logs").insert({
-      tenant_id,
-      lead_id: lead_id || null,
-      client_id: client_id || null,
-      caller_user_id: user.id,
-      from_number: fromNumber,
-      to_number,
-      status: "initiated",
-      provider: "paycall",
-    }).select().single();
+    const { data: callLog, error: insertError } = await supabase
+      .from("call_logs")
+      .insert({
+        tenant_id,
+        lead_id: lead_id || null,
+        client_id: client_id || null,
+        caller_user_id: user.id,
+        from_number: fromNumber,
+        to_number,
+        status: "initiated",
+        provider: "paycall",
+      })
+      .select()
+      .single();
 
     if (insertError) {
       throw insertError;
@@ -107,14 +129,17 @@ Deno.serve(async (req) => {
     // const paycallApiKey = integration.settings?.api_key;
     // const paycallResponse = await fetch('https://api.paycall.co.il/...', { ... });
 
-    return new Response(JSON.stringify({
-      success: true,
-      message: "שיחה יזומה - בהמתנה לחיבור API של Paycall",
-      call_log: callLog,
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "שיחה יזומה - בהמתנה לחיבור API של Paycall",
+        call_log: callLog,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (error) {
     console.error("Error in make-paycall-call:", error);
     return new Response(JSON.stringify({ error: (error as Error).message }), {

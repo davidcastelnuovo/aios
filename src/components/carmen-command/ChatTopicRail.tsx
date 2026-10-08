@@ -12,18 +12,33 @@ interface ChatTopicRailProps {
   className?: string;
 }
 
-export function ChatTopicRail({ items, routes, activeId, onSelect, onNew, className = "" }: ChatTopicRailProps) {
+export function ChatTopicRail({
+  items,
+  routes,
+  activeId,
+  onSelect,
+  onNew,
+  className = "",
+}: ChatTopicRailProps) {
   return (
     <aside className={`cc-chat-rail ${className}`.trim()}>
       <div className="mb-2 flex shrink-0 items-center justify-between gap-2 px-1">
         <span className="cc-panel-title">צ׳אטים</span>
-        <button type="button" onClick={onNew} className="flex items-center gap-1 text-[11px] text-[var(--cc-accent)] hover:underline">
+        <button
+          type="button"
+          onClick={onNew}
+          className="flex items-center gap-1 text-[11px] text-[var(--cc-accent)] hover:underline"
+        >
           <Plus className="h-3.5 w-3.5" />
           חדש
         </button>
       </div>
       <div className="cc-scroll cc-chat-rail-list">
-        {!items.length && <p className="px-1 py-2 text-xs text-[var(--cc-text-dim)]">אין שיחות עדיין</p>}
+        {!items.length && (
+          <p className="px-1 py-2 text-xs text-[var(--cc-text-dim)]">
+            אין שיחות עדיין
+          </p>
+        )}
         {items.map((conv) => {
           const live = topicIsLive(conv.status);
           const agentLabel = topicAgentLabel(conv, routes);
@@ -45,11 +60,16 @@ export function ChatTopicRail({ items, routes, activeId, onSelect, onNew, classN
                 {live && <span className="cc-chat-topic-dot is-live" />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-right text-[13px]">{topicTitle(conv.title)}</span>
+                <span className="block truncate text-right text-[13px]">
+                  {topicTitle(conv.title)}
+                </span>
                 <span className="mt-0.5 flex items-center justify-end gap-2 text-[10px] text-[var(--cc-text-dim)]">
                   <span className="truncate">{agentLabel}</span>
                   <span className="cc-num shrink-0">
-                    {new Date(conv.updated_at).toLocaleDateString("he-IL", { day: "numeric", month: "numeric" })}
+                    {new Date(conv.updated_at).toLocaleDateString("he-IL", {
+                      day: "numeric",
+                      month: "numeric",
+                    })}
                   </span>
                 </span>
               </span>

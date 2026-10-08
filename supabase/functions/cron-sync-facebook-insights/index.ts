@@ -1,5 +1,5 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
-import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { fireIntegrationAlert } from "../_shared/fireIntegrationAlert.ts";
 import {
   buildAllLevelInsightRecords,
   buildCampaignOptimizationGoalMap,
@@ -11,61 +11,66 @@ import {
   FB_INSIGHTS_FIELD_TYPES,
   fetchLastMetaCampaignActivity,
   latestCampaignUpdatedTime,
-} from '../_shared/fbInsights.ts';
-import { kickNextBatch } from '../_shared/kick-next-batch.ts';
+} from "../_shared/fbInsights.ts";
+import { kickNextBatch } from "../_shared/kick-next-batch.ts";
 import {
   jerusalemToday,
   planScheduledSyncWindows,
   replacedRecordsFilter,
   resolvePruneStart,
   type SyncWindow,
-} from '../_shared/report-sync-window.ts';
-
+} from "../_shared/report-sync-window.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const BATCH_SIZE = 4;
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     // Parse batch params
     let body: any = {};
-    try { body = await req.json(); } catch {}
+    try {
+      body = await req.json();
+    } catch {}
     const batchOffset = body.batch_offset || 0;
     const tableIds: string[] | null = body.table_ids || null;
 
     // Get Facebook Insights tables
     let query = supabase
-      .from('crm_tables')
-      .select('*')
-      .eq('integration_type', 'facebook_insights')
-      .order('id');
+      .from("crm_tables")
+      .select("*")
+      .eq("integration_type", "facebook_insights")
+      .order("id");
 
     if (tableIds && tableIds.length > 0) {
-      query = query.in('id', tableIds);
+      query = query.in("id", tableIds);
     }
 
     const { data: allTables, error: tablesError } = await query;
 
     if (tablesError) {
-      console.error('Error fetching tables:', tablesError);
+      console.error("Error fetching tables:", tablesError);
       throw tablesError;
     }
 
     // Slice for current batch
-    const tables = (allTables || []).slice(batchOffset, batchOffset + BATCH_SIZE);
+    const tables = (allTables || []).slice(
+      batchOffset,
+      batchOffset + BATCH_SIZE,
+    );
     const hasMore = (allTables || []).length > batchOffset + BATCH_SIZE;
 
     const results = {
@@ -80,14 +85,15 @@ Deno.serve(async (req) => {
 
     for (const table of tables || []) {
       try {
-        
         const settings = table.integration_settings || {};
         // Graph API requires the act_ prefix; tolerate rows saved with the bare number.
         const rawAdAccountId = settings.ad_account_id;
-        const adAccountId = rawAdAccountId && !String(rawAdAccountId).startsWith('act_')
-          ? `act_${rawAdAccountId}`
-          : rawAdAccountId;
-        const previousAccountStatus: string | null = settings.account_status || null;
+        const adAccountId =
+          rawAdAccountId && !String(rawAdAccountId).startsWith("act_")
+            ? `act_${rawAdAccountId}`
+            : rawAdAccountId;
+        const previousAccountStatus: string | null =
+          settings.account_status || null;
 
         if (!adAccountId) {
           continue;
@@ -99,30 +105,36 @@ Deno.serve(async (req) => {
         const storedIntegrationId = settings.integration_id || null;
         let { data: integration } = storedIntegrationId
           ? await supabase
-              .from('tenant_integrations')
-              .select('api_key, shared_from_integration_id, connection_visibility')
-              .eq('id', storedIntegrationId)
-              .eq('is_active', true)
+              .from("tenant_integrations")
+              .select(
+                "api_key, shared_from_integration_id, connection_visibility",
+              )
+              .eq("id", storedIntegrationId)
+              .eq("is_active", true)
               .maybeSingle()
           : await supabase
-              .from('tenant_integrations')
-              .select('api_key, shared_from_integration_id, connection_visibility')
-              .eq('tenant_id', table.tenant_id)
-              .in('integration_type', ['facebook', 'facebook_lead_ads'])
-              .eq('is_active', true)
-              .in('connection_visibility', ['org', 'private'])
-              .order('updated_at', { ascending: false })
+              .from("tenant_integrations")
+              .select(
+                "api_key, shared_from_integration_id, connection_visibility",
+              )
+              .eq("tenant_id", table.tenant_id)
+              .in("integration_type", ["facebook", "facebook_lead_ads"])
+              .eq("is_active", true)
+              .in("connection_visibility", ["org", "private"])
+              .order("updated_at", { ascending: false })
               .limit(1)
               .maybeSingle();
         // Fallback: any active integration for this tenant
         if (!integration) {
           const { data: fallback } = await supabase
-            .from('tenant_integrations')
-            .select('api_key, shared_from_integration_id, connection_visibility')
-            .eq('tenant_id', table.tenant_id)
-            .in('integration_type', ['facebook', 'facebook_lead_ads'])
-            .eq('is_active', true)
-            .order('updated_at', { ascending: false })
+            .from("tenant_integrations")
+            .select(
+              "api_key, shared_from_integration_id, connection_visibility",
+            )
+            .eq("tenant_id", table.tenant_id)
+            .in("integration_type", ["facebook", "facebook_lead_ads"])
+            .eq("is_active", true)
+            .order("updated_at", { ascending: false })
             .limit(1)
             .maybeSingle();
           integration = fallback;
@@ -130,16 +142,19 @@ Deno.serve(async (req) => {
         // If shared integration, get source token
         if (integration?.shared_from_integration_id && !integration?.api_key) {
           const { data: sourceIntegration } = await supabase
-            .from('tenant_integrations')
-            .select('api_key')
-            .eq('id', integration.shared_from_integration_id)
-            .eq('is_active', true)
+            .from("tenant_integrations")
+            .select("api_key")
+            .eq("id", integration.shared_from_integration_id)
+            .eq("is_active", true)
             .maybeSingle();
           if (sourceIntegration?.api_key) {
-            integration = { ...integration, api_key: sourceIntegration.api_key };
+            integration = {
+              ...integration,
+              api_key: sourceIntegration.api_key,
+            };
           }
         }
-                if (!integration?.api_key) {
+        if (!integration?.api_key) {
           continue;
         }
 
@@ -147,16 +162,22 @@ Deno.serve(async (req) => {
 
         const plan = planScheduledSyncWindows(
           jerusalemToday(),
-          typeof settings.scheduled_history_from === 'string' ? settings.scheduled_history_from : null,
-          typeof settings.scheduled_synced_through === 'string' ? settings.scheduled_synced_through : null,
-          typeof settings.scheduled_lookback_on === 'string' ? settings.scheduled_lookback_on : null,
+          typeof settings.scheduled_history_from === "string"
+            ? settings.scheduled_history_from
+            : null,
+          typeof settings.scheduled_synced_through === "string"
+            ? settings.scheduled_synced_through
+            : null,
+          typeof settings.scheduled_lookback_on === "string"
+            ? settings.scheduled_lookback_on
+            : null,
         );
 
         // First, fetch campaign statuses to detect real blocks
         const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status,objective,updated_time&limit=500&access_token=${accessToken}`;
         const campaignsResponse = await fetch(campaignsUrl);
         const campaignsData = await campaignsResponse.json();
-        
+
         const campaignStatuses: Record<string, CampaignStatus> = {};
         if (campaignsData.data) {
           for (const campaign of campaignsData.data) {
@@ -177,7 +198,8 @@ Deno.serve(async (req) => {
         // the lead counts matching Facebook instead of inflating them.
         const adsets: any[] = [];
         {
-          let next: string | null = `https://graph.facebook.com/v21.0/${adAccountId}/adsets?fields=campaign_id,optimization_goal,promoted_object&limit=500&access_token=${accessToken}`;
+          let next: string | null =
+            `https://graph.facebook.com/v21.0/${adAccountId}/adsets?fields=campaign_id,optimization_goal,promoted_object&limit=500&access_token=${accessToken}`;
           while (next) {
             const r = await fetch(next);
             const d: any = await r.json();
@@ -186,28 +208,35 @@ Deno.serve(async (req) => {
             next = d.paging?.next || null;
           }
         }
-        const campaignObjectives: Record<string, string | null | undefined> = {};
-        for (const c of Object.values(campaignStatuses)) campaignObjectives[c.id] = c.objective;
-        const resultLeadTypes = buildResultLeadTypeMap(adsets, campaignObjectives);
+        const campaignObjectives: Record<string, string | null | undefined> =
+          {};
+        for (const c of Object.values(campaignStatuses))
+          campaignObjectives[c.id] = c.objective;
+        const resultLeadTypes = buildResultLeadTypeMap(
+          adsets,
+          campaignObjectives,
+        );
         const optimizationGoals = buildCampaignOptimizationGoalMap(adsets);
 
         // Also fetch ad account status
         const accountUrl = `https://graph.facebook.com/v21.0/${adAccountId}?fields=account_status,disable_reason,name&access_token=${accessToken}`;
         const accountResponse = await fetch(accountUrl);
         const accountData = await accountResponse.json();
-        
-        let accountStatus = 'active';
+
+        let accountStatus = "active";
         let accountDisableReason = null;
         if (accountData.account_status) {
           const statusMap: Record<number, string> = {
-            1: 'active',
-            2: 'disabled',
-            3: 'unsettled',
-            7: 'pending_risk_review',
-            9: 'pending_settlement',
-            101: 'closed',
+            1: "active",
+            2: "disabled",
+            3: "unsettled",
+            7: "pending_risk_review",
+            9: "pending_settlement",
+            101: "closed",
           };
-          accountStatus = statusMap[accountData.account_status] || `unknown_${accountData.account_status}`;
+          accountStatus =
+            statusMap[accountData.account_status] ||
+            `unknown_${accountData.account_status}`;
           accountDisableReason = accountData.disable_reason || null;
         }
 
@@ -215,37 +244,56 @@ Deno.serve(async (req) => {
         const fieldKeys = FB_INSIGHTS_FIELD_KEYS;
         const fieldNames = FB_INSIGHTS_FIELD_NAMES;
         const fieldTypes = FB_INSIGHTS_FIELD_TYPES;
-        
+
         // Bulk-ensure fields exist: one read for all keys, one insert for the missing ones.
         const { data: existingFields } = await supabase
-          .from('crm_fields')
-          .select('key')
-          .eq('table_id', table.id);
-        const existingFieldKeys = new Set((existingFields || []).map((f: any) => f.key));
+          .from("crm_fields")
+          .select("key")
+          .eq("table_id", table.id);
+        const existingFieldKeys = new Set(
+          (existingFields || []).map((f: any) => f.key),
+        );
         const fieldsToInsert = fieldKeys
-          .map((key, i) => ({ table_id: table.id, key, name: fieldNames[i], type: fieldTypes[i], position: i }))
+          .map((key, i) => ({
+            table_id: table.id,
+            key,
+            name: fieldNames[i],
+            type: fieldTypes[i],
+            position: i,
+          }))
           .filter((f) => !existingFieldKeys.has(f.key));
         if (fieldsToInsert.length > 0) {
-          await supabase.from('crm_fields').insert(fieldsToInsert);
+          await supabase.from("crm_fields").insert(fieldsToInsert);
         }
 
         const writeWindow = async (syncWindow: SyncWindow) => {
-          const { records: insights, levelCounts } = await buildAllLevelInsightRecords(
-            adAccountId,
-            syncWindow.startDate,
-            syncWindow.endDate,
-            accessToken,
-            campaignStatuses,
-            resultLeadTypes,
-            optimizationGoals,
+          const { records: insights, levelCounts } =
+            await buildAllLevelInsightRecords(
+              adAccountId,
+              syncWindow.startDate,
+              syncWindow.endDate,
+              accessToken,
+              campaignStatuses,
+              resultLeadTypes,
+              optimizationGoals,
+            );
+          console.log(
+            `[cron-sync-facebook-insights] ${table.name}: synced ${insights.length} rows ${syncWindow.startDate}..${syncWindow.endDate}`,
+            levelCounts,
           );
-          console.log(`[cron-sync-facebook-insights] ${table.name}: synced ${insights.length} rows ${syncWindow.startDate}..${syncWindow.endDate}`, levelCounts);
           if (insights.length === 0) return insights;
           const { error: deleteError } = await supabase
-            .from('crm_records')
+            .from("crm_records")
             .delete()
-            .eq('table_id', table.id)
-            .or(replacedRecordsFilter(resolvePruneStart(syncWindow, insights.map((row) => row.date))));
+            .eq("table_id", table.id)
+            .or(
+              replacedRecordsFilter(
+                resolvePruneStart(
+                  syncWindow,
+                  insights.map((row) => row.date),
+                ),
+              ),
+            );
           if (deleteError) throw deleteError;
 
           const recordRows = insights.map((insight) => ({
@@ -256,7 +304,7 @@ Deno.serve(async (req) => {
           const INSERT_CHUNK = 500;
           for (let i = 0; i < recordRows.length; i += INSERT_CHUNK) {
             const { error: insertError } = await supabase
-              .from('crm_records')
+              .from("crm_records")
               .insert(recordRows.slice(i, i + INSERT_CHUNK));
             if (insertError) throw insertError;
           }
@@ -268,23 +316,33 @@ Deno.serve(async (req) => {
           try {
             await writeWindow(plan.catchup);
           } catch (catchupError: any) {
-            historyFrom = typeof settings.scheduled_history_from === 'string'
-              ? settings.scheduled_history_from
-              : plan.refresh.startDate;
-            console.error(`[cron-sync-facebook-insights] ${table.name}: catch-up failed:`, catchupError.message);
+            historyFrom =
+              typeof settings.scheduled_history_from === "string"
+                ? settings.scheduled_history_from
+                : plan.refresh.startDate;
+            console.error(
+              `[cron-sync-facebook-insights] ${table.name}: catch-up failed:`,
+              catchupError.message,
+            );
           }
         }
         const insights = await writeWindow(plan.refresh);
-        const campaignInsights = insights.filter((row) => (row.entity_level || 'campaign') === 'campaign');
+        const campaignInsights = insights.filter(
+          (row) => (row.entity_level || "campaign") === "campaign",
+        );
         const untilStr = plan.refresh.endDate;
 
-        const lastCampaignUpdatedAt = latestCampaignUpdatedTime(campaignStatuses);
-        const lastMetaActivity = await fetchLastMetaCampaignActivity(accessToken, adAccountId);
+        const lastCampaignUpdatedAt =
+          latestCampaignUpdatedTime(campaignStatuses);
+        const lastMetaActivity = await fetchLastMetaCampaignActivity(
+          accessToken,
+          adAccountId,
+        );
 
         const syncedAt = new Date().toISOString();
         // Update last_sync_at on the column and in settings. Health reads the freshest of the two.
         await supabase
-          .from('crm_tables')
+          .from("crm_tables")
           .update({
             last_sync_at: syncedAt,
             integration_settings: {
@@ -298,9 +356,9 @@ Deno.serve(async (req) => {
               last_meta_activity: lastMetaActivity,
               account_status: accountStatus,
               account_disable_reason: accountDisableReason,
-            }
+            },
           })
-          .eq('id', table.id);
+          .eq("id", table.id);
 
         results.synced++;
 
@@ -316,51 +374,61 @@ Deno.serve(async (req) => {
         // === Account-level billing/disable alert ===
         // Trigger when account_status transitions into a problematic state.
         try {
-          const problemStatuses = ['disabled', 'unsettled', 'pending_settlement', 'pending_risk_review', 'closed'];
-          if (problemStatuses.includes(accountStatus) && accountStatus !== previousAccountStatus) {
+          const problemStatuses = [
+            "disabled",
+            "unsettled",
+            "pending_settlement",
+            "pending_risk_review",
+            "closed",
+          ];
+          if (
+            problemStatuses.includes(accountStatus) &&
+            accountStatus !== previousAccountStatus
+          ) {
             const statusLabels: Record<string, string> = {
-              disabled: 'חשבון מושבת',
-              unsettled: 'בעיית חיוב (חוב לא משולם)',
-              pending_settlement: 'ממתין להסדר תשלום',
-              pending_risk_review: 'בבדיקת סיכון',
-              closed: 'חשבון סגור',
+              disabled: "חשבון מושבת",
+              unsettled: "בעיית חיוב (חוב לא משולם)",
+              pending_settlement: "ממתין להסדר תשלום",
+              pending_risk_review: "בבדיקת סיכון",
+              closed: "חשבון סגור",
             };
             const statusLabel = statusLabels[accountStatus] || accountStatus;
             const taskTitle = `🚨 בעיית חיוב/חשבון מודעות — ${table.name}`;
-            const taskDescription = `חשבון המודעות של "${table.name}" (${adAccountId}) נכנס למצב: ${statusLabel}.\nסיבה: ${accountDisableReason || 'לא צוינה'}.\nיש לבדוק את אמצעי התשלום בפייסבוק ולעדכן את הלקוח.`;
+            const taskDescription = `חשבון המודעות של "${table.name}" (${adAccountId}) נכנס למצב: ${statusLabel}.\nסיבה: ${accountDisableReason || "לא צוינה"}.\nיש לבדוק את אמצעי התשלום בפייסבוק ולעדכן את הלקוח.`;
 
             const { data: agent } = await supabase
-              .from('ai_agents')
-              .select('id')
-              .eq('tenant_id', table.tenant_id)
-              .eq('active', true)
+              .from("ai_agents")
+              .select("id")
+              .eq("tenant_id", table.tenant_id)
+              .eq("active", true)
               .limit(1)
               .maybeSingle();
 
             if (agent) {
-              await supabase.from('agent_tasks').insert({
+              await supabase.from("agent_tasks").insert({
                 tenant_id: table.tenant_id,
                 agent_id: agent.id,
                 title: taskTitle,
                 description: taskDescription,
-                status: 'open',
+                status: "open",
                 priority: 1,
-                task_mode: 'anomaly_alert',
+                task_mode: "anomaly_alert",
               });
             }
 
             await fireIntegrationAlert({
               tenant_id: table.tenant_id,
-              provider: 'facebook',
-              alert_type: 'blocked',
+              provider: "facebook",
+              alert_type: "blocked",
               account_id: adAccountId,
               account_name: table.name,
               reason: accountDisableReason || statusLabel,
             });
 
-
             // Direct WhatsApp fallback so the alert always reaches the team
-            await notifyCampaignerWA(`🚨 ${taskTitle}\n${statusLabel}${accountDisableReason ? ` — ${accountDisableReason}` : ''}\nחשבון: ${adAccountId}`);
+            await notifyCampaignerWA(
+              `🚨 ${taskTitle}\n${statusLabel}${accountDisableReason ? ` — ${accountDisableReason}` : ""}\nחשבון: ${adAccountId}`,
+            );
           }
         } catch (billingErr: any) {
           console.error(`[billing-alert] ${table.name}:`, billingErr?.message);
@@ -375,21 +443,41 @@ Deno.serve(async (req) => {
           const sevenDaysAgo = new Date(todayMs - 7 * dayMs).toISOString();
 
           const ignoredStatuses = new Set([
-            'PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED',
-            'ARCHIVED', 'DELETED', 'IN_PROCESS',
+            "PAUSED",
+            "CAMPAIGN_PAUSED",
+            "ADSET_PAUSED",
+            "ARCHIVED",
+            "DELETED",
+            "IN_PROCESS",
           ]);
 
-          const statusAlerts: Array<{ status: string; emoji: string; label: string; campaigns: CampaignStatus[] }> = [];
-          const buckets: Record<string, { emoji: string; label: string; campaigns: CampaignStatus[] }> = {
-            DISAPPROVED: { emoji: '❌', label: 'קמפיין נדחה ע״י פייסבוק', campaigns: [] },
-            PENDING_BILLING_INFO: { emoji: '💳', label: 'חסרים פרטי חיוב', campaigns: [] },
-            WITH_ISSUES: { emoji: '⚠️', label: 'בעיה בקמפיין', campaigns: [] },
+          const statusAlerts: Array<{
+            status: string;
+            emoji: string;
+            label: string;
+            campaigns: CampaignStatus[];
+          }> = [];
+          const buckets: Record<
+            string,
+            { emoji: string; label: string; campaigns: CampaignStatus[] }
+          > = {
+            DISAPPROVED: {
+              emoji: "❌",
+              label: "קמפיין נדחה ע״י פייסבוק",
+              campaigns: [],
+            },
+            PENDING_BILLING_INFO: {
+              emoji: "💳",
+              label: "חסרים פרטי חיוב",
+              campaigns: [],
+            },
+            WITH_ISSUES: { emoji: "⚠️", label: "בעיה בקמפיין", campaigns: [] },
           };
 
           for (const campaign of Object.values(campaignStatuses)) {
             // Only alert if the user actually wants this campaign running.
             // Skip campaigns the user paused/archived themselves.
-            if (campaign.configured_status !== 'ACTIVE') continue;
+            if (campaign.configured_status !== "ACTIVE") continue;
             const status = campaign.effective_status;
             if (ignoredStatuses.has(status)) continue;
             if (buckets[status]) buckets[status].campaigns.push(campaign);
@@ -402,10 +490,10 @@ Deno.serve(async (req) => {
 
           // Find Carmen agent once
           const { data: agent } = await supabase
-            .from('ai_agents')
-            .select('id')
-            .eq('tenant_id', table.tenant_id)
-            .eq('active', true)
+            .from("ai_agents")
+            .select("id")
+            .eq("tenant_id", table.tenant_id)
+            .eq("active", true)
             .limit(1)
             .maybeSingle();
 
@@ -414,46 +502,58 @@ Deno.serve(async (req) => {
               const taskTitle = `${alert.emoji} ${alert.label}: ${campaign.name}`;
               // Dedup: skip if same title open within last 7 days
               const { data: existing } = await supabase
-                .from('agent_tasks')
-                .select('id')
-                .eq('tenant_id', table.tenant_id)
-                .eq('title', taskTitle)
-                .gte('created_at', sevenDaysAgo)
+                .from("agent_tasks")
+                .select("id")
+                .eq("tenant_id", table.tenant_id)
+                .eq("title", taskTitle)
+                .gte("created_at", sevenDaysAgo)
                 .limit(1);
               if (existing && existing.length > 0) continue;
 
-              let extraInfo = '';
-              if (alert.status === 'WITH_ISSUES') {
+              let extraInfo = "";
+              if (alert.status === "WITH_ISSUES") {
                 try {
                   const issuesRes = await fetch(
-                    `https://graph.facebook.com/v21.0/${campaign.id}?fields=issues_info&access_token=${accessToken}`
+                    `https://graph.facebook.com/v21.0/${campaign.id}?fields=issues_info&access_token=${accessToken}`,
                   );
                   const issuesData = await issuesRes.json();
-                  if (Array.isArray(issuesData?.issues_info) && issuesData.issues_info.length > 0) {
-                    extraInfo = '\n\nפרטי הבעיה: ' +
+                  if (
+                    Array.isArray(issuesData?.issues_info) &&
+                    issuesData.issues_info.length > 0
+                  ) {
+                    extraInfo =
+                      "\n\nפרטי הבעיה: " +
                       issuesData.issues_info
-                        .map((i: any) => i.error_summary || i.error_message || i.level)
+                        .map(
+                          (i: any) =>
+                            i.error_summary || i.error_message || i.level,
+                        )
                         .filter(Boolean)
-                        .join(' | ');
+                        .join(" | ");
                   }
-                } catch { /* ignore */ }
+                } catch {
+                  /* ignore */
+                }
               }
 
               if (agent) {
-                await supabase.from('agent_tasks').insert({
+                await supabase.from("agent_tasks").insert({
                   tenant_id: table.tenant_id,
                   agent_id: agent.id,
                   title: taskTitle,
                   description: `הקמפיין "${campaign.name}" (${campaign.id}) בחשבון "${table.name}" במצב: ${alert.label} (${alert.status}).${extraInfo}\n\nזהו אות סטטוס רשמי מפייסבוק. בדקי ועדכני את הצוות.`,
-                  status: 'open',
+                  status: "open",
                   priority: 1,
-                  task_mode: 'anomaly_alert',
+                  task_mode: "anomaly_alert",
                 });
               }
             }
           }
         } catch (statusErr: any) {
-          console.error(`[campaign-status-alert] ${table.name}:`, statusErr?.message);
+          console.error(
+            `[campaign-status-alert] ${table.name}:`,
+            statusErr?.message,
+          );
         }
 
         // === Soft spend-drop alert (account-level, weekly dedup) ===
@@ -461,7 +561,7 @@ Deno.serve(async (req) => {
         try {
           const todayMs = Date.now();
           const dayMs = 24 * 60 * 60 * 1000;
-          const fmt = (d: Date) => d.toISOString().split('T')[0];
+          const fmt = (d: Date) => d.toISOString().split("T")[0];
           const recentStart = fmt(new Date(todayMs - 3 * dayMs));
           const recentEnd = fmt(new Date(todayMs - 1 * dayMs));
           const priorStart = fmt(new Date(todayMs - 10 * dayMs));
@@ -470,16 +570,29 @@ Deno.serve(async (req) => {
 
           const activeCampaignIds = new Set(
             Object.values(campaignStatuses)
-              .filter((c) => c.configured_status === 'ACTIVE' && c.effective_status === 'ACTIVE')
-              .map((c) => c.id)
+              .filter(
+                (c) =>
+                  c.configured_status === "ACTIVE" &&
+                  c.effective_status === "ACTIVE",
+              )
+              .map((c) => c.id),
           );
 
-          const perCampaign: Record<string, { name: string; recent: number; prior: number }> = {};
+          const perCampaign: Record<
+            string,
+            { name: string; recent: number; prior: number }
+          > = {};
           for (const ins of campaignInsights) {
             if (!activeCampaignIds.has(ins.campaign_id)) continue;
-            const c = perCampaign[ins.campaign_id] ||= { name: ins.campaign_name, recent: 0, prior: 0 };
-            if (ins.date >= recentStart && ins.date <= recentEnd) c.recent += ins.spend;
-            else if (ins.date >= priorStart && ins.date <= priorEnd) c.prior += ins.spend;
+            const c = (perCampaign[ins.campaign_id] ||= {
+              name: ins.campaign_name,
+              recent: 0,
+              prior: 0,
+            });
+            if (ins.date >= recentStart && ins.date <= recentEnd)
+              c.recent += ins.spend;
+            else if (ins.date >= priorStart && ins.date <= priorEnd)
+              c.prior += ins.spend;
           }
 
           const stoppedCampaigns = Object.entries(perCampaign)
@@ -489,34 +602,37 @@ Deno.serve(async (req) => {
           if (stoppedCampaigns.length > 0) {
             const taskTitle = `📉 ירידה חדה בהוצאה — חשבון ${table.name}`;
             const { data: existing } = await supabase
-              .from('agent_tasks')
-              .select('id')
-              .eq('tenant_id', table.tenant_id)
-              .eq('title', taskTitle)
-              .gte('created_at', sevenDaysAgo)
+              .from("agent_tasks")
+              .select("id")
+              .eq("tenant_id", table.tenant_id)
+              .eq("title", taskTitle)
+              .gte("created_at", sevenDaysAgo)
               .limit(1);
 
             if (!existing || existing.length === 0) {
               const { data: agent } = await supabase
-                .from('ai_agents')
-                .select('id')
-                .eq('tenant_id', table.tenant_id)
-                .eq('active', true)
+                .from("ai_agents")
+                .select("id")
+                .eq("tenant_id", table.tenant_id)
+                .eq("active", true)
                 .limit(1)
                 .maybeSingle();
 
               if (agent) {
                 const list = stoppedCampaigns
-                  .map((c) => `• ${c.name} (הוציא ${c.prior.toFixed(2)} בשבוע הקודם)`)
-                  .join('\n');
-                await supabase.from('agent_tasks').insert({
+                  .map(
+                    (c) =>
+                      `• ${c.name} (הוציא ${c.prior.toFixed(2)} בשבוע הקודם)`,
+                  )
+                  .join("\n");
+                await supabase.from("agent_tasks").insert({
                   tenant_id: table.tenant_id,
                   agent_id: agent.id,
                   title: taskTitle,
                   description: `${stoppedCampaigns.length} קמפיינים פעילים בחשבון "${table.name}" הפסיקו להוציא בימים האחרונים (3 ימים שלמים מול 7 ימים קודמים):\n\n${list}\n\nכדאי לבדוק שהתקציב והאשראי תקינים.`,
-                  status: 'open',
+                  status: "open",
                   priority: 2,
-                  task_mode: 'anomaly_alert',
+                  task_mode: "anomaly_alert",
                 });
               }
             }
@@ -528,26 +644,45 @@ Deno.serve(async (req) => {
         // === Check report_alerts and trigger automations ===
         try {
           const { data: alerts } = await supabase
-            .from('report_alerts')
-            .select('*')
-            .eq('table_id', table.id)
-            .eq('tenant_id', table.tenant_id)
-            .eq('is_active', true);
+            .from("report_alerts")
+            .select("*")
+            .eq("table_id", table.id)
+            .eq("tenant_id", table.tenant_id)
+            .eq("is_active", true);
 
           if (alerts && alerts.length > 0) {
-
             // Aggregate campaign data for alert evaluation
-            const campaignAggregates: Record<string, { spend: number; leads: number; cost_per_lead: number; impressions: number; clicks: number; effective_status: string; campaign_name: string }> = {};
+            const campaignAggregates: Record<
+              string,
+              {
+                spend: number;
+                leads: number;
+                cost_per_lead: number;
+                impressions: number;
+                clicks: number;
+                effective_status: string;
+                campaign_name: string;
+              }
+            > = {};
             for (const insight of campaignInsights) {
               if (!campaignAggregates[insight.campaign_id]) {
-                campaignAggregates[insight.campaign_id] = { spend: 0, leads: 0, cost_per_lead: 0, impressions: 0, clicks: 0, effective_status: insight.effective_status || '', campaign_name: insight.campaign_name };
+                campaignAggregates[insight.campaign_id] = {
+                  spend: 0,
+                  leads: 0,
+                  cost_per_lead: 0,
+                  impressions: 0,
+                  clicks: 0,
+                  effective_status: insight.effective_status || "",
+                  campaign_name: insight.campaign_name,
+                };
               }
               const agg = campaignAggregates[insight.campaign_id];
               agg.spend += insight.spend;
               agg.leads += insight.leads;
               agg.impressions += insight.impressions;
               agg.clicks += insight.clicks;
-              agg.effective_status = insight.effective_status || agg.effective_status;
+              agg.effective_status =
+                insight.effective_status || agg.effective_status;
             }
             // Compute CPL
             for (const cid of Object.keys(campaignAggregates)) {
@@ -559,20 +694,29 @@ Deno.serve(async (req) => {
               // Rate-limit: once per 24h per alert
               if (alert.last_triggered_at) {
                 const lastTriggered = new Date(alert.last_triggered_at);
-                const hoursSince = (Date.now() - lastTriggered.getTime()) / (1000 * 60 * 60);
+                const hoursSince =
+                  (Date.now() - lastTriggered.getTime()) / (1000 * 60 * 60);
                 if (hoursSince < 24) {
                   continue;
                 }
               }
 
               // Evaluate alert against each campaign
-              for (const [campaignId, agg] of Object.entries(campaignAggregates)) {
+              for (const [campaignId, agg] of Object.entries(
+                campaignAggregates,
+              )) {
                 const metric = alert.metric; // e.g. 'cost_per_lead', 'spend', 'effective_status'
                 let currentValue: number | string = 0;
 
-                if (metric === 'effective_status') {
+                if (metric === "effective_status") {
                   // Status-based alert: check for blocked/paused campaigns
-                  const problemStatuses = ['DISAPPROVED', 'WITH_ISSUES', 'PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED'];
+                  const problemStatuses = [
+                    "DISAPPROVED",
+                    "WITH_ISSUES",
+                    "PAUSED",
+                    "CAMPAIGN_PAUSED",
+                    "ADSET_PAUSED",
+                  ];
                   if (!problemStatuses.includes(agg.effective_status)) continue;
                   currentValue = agg.effective_status;
                 } else {
@@ -580,31 +724,41 @@ Deno.serve(async (req) => {
                   const threshold = alert.threshold;
                   const op = alert.operator; // '>', '<', '>=', '<='
                   let triggered = false;
-                  if (op === '>' && (currentValue as number) > threshold) triggered = true;
-                  if (op === '<' && (currentValue as number) < threshold) triggered = true;
-                  if (op === '>=' && (currentValue as number) >= threshold) triggered = true;
-                  if (op === '<=' && (currentValue as number) <= threshold) triggered = true;
+                  if (op === ">" && (currentValue as number) > threshold)
+                    triggered = true;
+                  if (op === "<" && (currentValue as number) < threshold)
+                    triggered = true;
+                  if (op === ">=" && (currentValue as number) >= threshold)
+                    triggered = true;
+                  if (op === "<=" && (currentValue as number) <= threshold)
+                    triggered = true;
                   if (!triggered) continue;
                 }
-
 
                 // Get table name for context
                 const tableName = table.name;
 
                 // Determine alert type description
-                let alertType = metric === 'effective_status' ? 'חסימת קמפיין' : metric === 'cost_per_lead' ? 'עלייה בעלות לליד' : metric === 'spend' ? 'חריגה בהוצאות' : metric;
+                let alertType =
+                  metric === "effective_status"
+                    ? "חסימת קמפיין"
+                    : metric === "cost_per_lead"
+                      ? "עלייה בעלות לליד"
+                      : metric === "spend"
+                        ? "חריגה בהוצאות"
+                        : metric;
 
                 // Call trigger-automation
-                const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-                const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+                const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+                const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
                 await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-                  method: 'POST',
+                  method: "POST",
                   headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${supabaseKey}`,
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${supabaseKey}`,
                   },
                   body: JSON.stringify({
-                    trigger_type: 'report_alert_triggered',
+                    trigger_type: "report_alert_triggered",
                     tenant_id: table.tenant_id,
                     data: {
                       alert_name: alert.name,
@@ -612,8 +766,8 @@ Deno.serve(async (req) => {
                       campaign_id: campaignId,
                       alert_type: alertType,
                       current_value: String(currentValue),
-                      previous_value: '',
-                      change_percent: '',
+                      previous_value: "",
+                      change_percent: "",
                       table_name: tableName,
                       metric,
                       spend: agg.spend,
@@ -625,7 +779,7 @@ Deno.serve(async (req) => {
 
                 // Update last_triggered_at
                 await supabase
-                  .from('report_alerts')
+                  .from("report_alerts")
                   .update({
                     last_triggered_at: new Date().toISOString(),
                     last_triggered_data: {
@@ -636,7 +790,7 @@ Deno.serve(async (req) => {
                       triggered_at: new Date().toISOString(),
                     },
                   })
-                  .eq('id', alert.id);
+                  .eq("id", alert.id);
 
                 // Break after first triggered campaign per alert to avoid spam
                 break;
@@ -644,57 +798,72 @@ Deno.serve(async (req) => {
             }
           }
         } catch (alertError: any) {
-          console.error(`⚠️ Error checking alerts for ${table.name}:`, alertError.message);
+          console.error(
+            `⚠️ Error checking alerts for ${table.name}:`,
+            alertError.message,
+          );
         }
-
       } catch (tableError: any) {
-        console.error(`❌ Error syncing table ${table.name}:`, tableError.message);
+        console.error(
+          `❌ Error syncing table ${table.name}:`,
+          tableError.message,
+        );
         results.failed++;
         results.errors.push(`${table.name}: ${tableError.message}`);
       }
     }
 
-
     // Auto-invoke next batch if there are more tables
     if (hasMore && !tableIds) {
       const nextOffset = batchOffset + BATCH_SIZE;
       console.log(`🔄 Triggering next batch at offset ${nextOffset}...`);
-      await kickNextBatch(supabase, 'cron-sync-facebook-insights', { batch_offset: nextOffset });
+      await kickNextBatch(supabase, "cron-sync-facebook-insights", {
+        batch_offset: nextOffset,
+      });
     } else if (!tableIds) {
       // The twice-daily sync has finished. Calculate and optionally deliver the
       // pulse from the CRM rows we just stored. This performs no extra Meta API
       // call and does not invoke run-ai-agent/Carmen.
-      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
       // Refresh snapshots only — WA link is delivered by the 07:30 morning cron.
-      const pulseResponse = await fetch(`${supabaseUrl}/functions/v1/campaign-pulse-snapshot`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${serviceKey}`,
+      const pulseResponse = await fetch(
+        `${supabaseUrl}/functions/v1/campaign-pulse-snapshot`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({
+            deliver: false,
+            source: "post_facebook_sync",
+          }),
         },
-        body: JSON.stringify({ deliver: false, source: 'post_facebook_sync' }),
-      });
+      );
       if (!pulseResponse.ok) {
-        console.error('Failed to calculate deterministic campaign pulse:', await pulseResponse.text());
+        console.error(
+          "Failed to calculate deterministic campaign pulse:",
+          await pulseResponse.text(),
+        );
       }
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      ...results,
-      completed_at: new Date().toISOString()
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        ...results,
+        completed_at: new Date().toISOString(),
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (error: any) {
-    console.error('❌ Cron sync error:', error);
+    console.error("❌ Cron sync error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
-
-

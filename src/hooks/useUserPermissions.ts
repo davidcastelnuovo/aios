@@ -12,7 +12,14 @@ import { useUserRole } from "./useUserRole";
 export type ModulePermission = string;
 
 export function useUserPermissions() {
-  const { isOwner, isSuperAdmin, isCampaigner, isTeamManager, isAgencyOwner, userId } = useUserRole();
+  const {
+    isOwner,
+    isSuperAdmin,
+    isCampaigner,
+    isTeamManager,
+    isAgencyOwner,
+    userId,
+  } = useUserRole();
   const hasManagementAccess = isOwner || isTeamManager || isAgencyOwner;
 
   const {
@@ -103,7 +110,8 @@ export function useUserPermissions() {
       // Hub permission id is `integrations`; legacy rows may only have `lead_integrations`.
       if (module === "integrations") {
         return (
-          permissions?.integrations === true || permissions?.lead_integrations === true
+          permissions?.integrations === true ||
+          permissions?.lead_integrations === true
         );
       }
       return permissions?.[module] === true;

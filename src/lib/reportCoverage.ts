@@ -20,7 +20,7 @@ export type ReportCoverageGap = {
 const DEFAULT_MIN_UNCOVERED_DAYS = 3;
 
 function normalizeDate(value: string | null | undefined): string | null {
-  const date = typeof value === 'string' ? value.slice(0, 10) : '';
+  const date = typeof value === "string" ? value.slice(0, 10) : "";
   return ISO_DATE.test(date) ? date : null;
 }
 
@@ -40,7 +40,9 @@ export function getReportCoverageGap(
   }
   if (!earliest || earliest <= start) return null;
 
-  const uncoveredDays = Math.round((Date.parse(earliest) - Date.parse(start)) / 86_400_000);
+  const uncoveredDays = Math.round(
+    (Date.parse(earliest) - Date.parse(start)) / 86_400_000,
+  );
   if (uncoveredDays < minUncoveredDays) return null;
 
   return { earliestAvailable: earliest, uncoveredDays };
@@ -48,6 +50,6 @@ export function getReportCoverageGap(
 
 /** `yyyy-mm-dd` as the `dd/MM/yyyy` the reports display. */
 export function formatReportDate(date: string): string {
-  const [year, month, day] = date.split('-');
+  const [year, month, day] = date.split("-");
   return `${day}/${month}/${year}`;
 }

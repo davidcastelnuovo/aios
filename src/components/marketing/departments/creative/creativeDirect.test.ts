@@ -29,7 +29,13 @@ test("standing skill is a file plus Carmen skin, not a per-job lecture", () => {
 });
 
 test("standing skill file tells the image chat to honor the four-fact job brief", async () => {
-  const skill = await readFile(new URL("../../../../../.cursor/skills/creative-direct/SKILL.md", import.meta.url), "utf8");
+  const skill = await readFile(
+    new URL(
+      "../../../../../.cursor/skills/creative-direct/SKILL.md",
+      import.meta.url,
+    ),
+    "utf8",
+  );
   assert.match(skill, /JOB BRIEF/);
   assert.match(skill, /Critical reference URLs/);
   assert.match(skill, /Project style/);
@@ -37,6 +43,12 @@ test("standing skill file tells the image chat to honor the four-fact job brief"
 });
 
 test("sticky lookup marker is distinct from per-job dispatches", () => {
-  assert.equal(CREATIVE_DIRECT_OPEN_MARKER, "[CREATIVE AGENT] opened Creative Direct");
-  assert.equal(CREATIVE_DIRECT_OPEN_MARKER.startsWith("[CREATIVE AGENT]"), true);
+  assert.equal(
+    CREATIVE_DIRECT_OPEN_MARKER,
+    "[CREATIVE AGENT] opened Creative Direct",
+  );
+  assert.equal(
+    CREATIVE_DIRECT_OPEN_MARKER.startsWith("[CREATIVE AGENT]"),
+    true,
+  );
 });

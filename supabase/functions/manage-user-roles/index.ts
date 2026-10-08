@@ -17,7 +17,10 @@ async function findExistingStaff(
     .select("id, email, full_name, active, created_at")
     .eq("tenant_id", tenantId);
   if (error || !data) return null;
-  return pickExistingTeamMember(data as TeamMemberCandidate[], { email, fullName });
+  return pickExistingTeamMember(data as TeamMemberCandidate[], {
+    email,
+    fullName,
+  });
 }
 
 const corsHeaders = {
@@ -56,7 +59,10 @@ serve(async (req: Request) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseAdmin.auth.getUser(token);
 
     if (userError || !user) {
       throw new Error("Unauthorized");
@@ -72,19 +78,22 @@ serve(async (req: Request) => {
       throw new Error("Error checking user roles");
     }
 
-    const isSuperAdmin = roles?.some(r => r.role === "super_admin" && r.tenant_id === null);
+    const isSuperAdmin = roles?.some(
+      (r) => r.role === "super_admin" && r.tenant_id === null,
+    );
 
-    if (!isSuperAdmin && !roles?.some(r => r.role === "owner")) {
+    if (!isSuperAdmin && !roles?.some((r) => r.role === "owner")) {
       throw new Error("Only owners or super admins can manage user roles");
     }
 
-    const { userId, role, tenantId, action }: ManageRolesRequest = await req.json();
+    const { userId, role, tenantId, action }: ManageRolesRequest =
+      await req.json();
 
     // SECURITY: Verify the requester is owner of the SPECIFIC tenant being managed
     // (not just any tenant). Super admins bypass this check.
     if (!isSuperAdmin) {
       const isOwnerOfTargetTenant = roles?.some(
-        r => r.role === "owner" && r.tenant_id === tenantId
+        (r) => r.role === "owner" && r.tenant_id === tenantId,
       );
       if (!isOwnerOfTargetTenant) {
         throw new Error("You are not an owner of the specified tenant");
@@ -96,11 +105,17 @@ serve(async (req: Request) => {
     }
 
     // Validate role
-    const validRoles = ["owner", "team_manager", "campaigner", "sales_person", "super_admin", "seo"];
+    const validRoles = [
+      "owner",
+      "team_manager",
+      "campaigner",
+      "sales_person",
+      "super_admin",
+      "seo",
+    ];
     if (!validRoles.includes(role)) {
       throw new Error("Invalid role");
     }
-
 
     let teamMemberCreated = false;
     let teamMemberType: string | null = null;
@@ -125,7 +140,7 @@ serve(async (req: Request) => {
           {
             status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          },
         );
       }
 
@@ -154,7 +169,7 @@ serve(async (req: Request) => {
           if (role === "sales_person" && !profile.sales_person_id) {
             // Check if there's an existing sales_person in this tenant with same email
             let salesPersonId: string | null = null;
-            
+
             const existingSalesPerson = await findExistingStaff(
               supabaseAdmin,
               "sales_people",
@@ -168,7 +183,8 @@ serve(async (req: Request) => {
               reusedExisting = true;
 
               const spPatch: Record<string, any> = {};
-              if (!existingSalesPerson.email && profile.email) spPatch.email = profile.email;
+              if (!existingSalesPerson.email && profile.email)
+                spPatch.email = profile.email;
               if (
                 (!existingSalesPerson.full_name ||
                   existingSalesPerson.full_name === "" ||
@@ -179,51 +195,63 @@ serve(async (req: Request) => {
               }
               if (existingSalesPerson.active === false) spPatch.active = true;
               if (Object.keys(spPatch).length > 0) {
-                await supabaseAdmin.from("sales_people").update(spPatch).eq("id", salesPersonId);
+                await supabaseAdmin
+                  .from("sales_people")
+                  .update(spPatch)
+                  .eq("id", salesPersonId);
               }
             }
 
             if (!salesPersonId) {
               // Need to create a new sales_person - first get a default agency
-              const { data: agencies, error: agenciesError } = await supabaseAdmin
-                .from("agencies")
-                .select("id, name")
-                .eq("tenant_id", tenantId)
-                .order("created_at", { ascending: true })
-                .limit(1);
+              const { data: agencies, error: agenciesError } =
+                await supabaseAdmin
+                  .from("agencies")
+                  .select("id, name")
+                  .eq("tenant_id", tenantId)
+                  .order("created_at", { ascending: true })
+                  .limit(1);
 
               if (agenciesError || !agencies || agencies.length === 0) {
-                console.error("No agencies found in tenant for sales_person creation");
+                console.error(
+                  "No agencies found in tenant for sales_person creation",
+                );
                 // Don't throw - role was added, just can't auto-create sales_person
                 // Return with a warning
                 return new Response(
                   JSON.stringify({
                     success: true,
-                    message: "Role added, but could not auto-create sales person - no agencies exist in this organization",
+                    message:
+                      "Role added, but could not auto-create sales person - no agencies exist in this organization",
                     warning: "NO_AGENCIES",
                     teamMemberCreated: false,
                   }),
                   {
                     status: 200,
-                    headers: { ...corsHeaders, "Content-Type": "application/json" },
-                  }
+                    headers: {
+                      ...corsHeaders,
+                      "Content-Type": "application/json",
+                    },
+                  },
                 );
               }
 
               const defaultAgencyId = agencies[0].id;
 
               // Create sales_person
-              const { data: newSalesPerson, error: createError } = await supabaseAdmin
-                .from("sales_people")
-                .insert({
-                  tenant_id: tenantId,
-                  agency_id: defaultAgencyId,
-                  full_name: profile.full_name || profile.email || "איש מכירות",
-                  email: profile.email,
-                  active: true,
-                })
-                .select("id")
-                .single();
+              const { data: newSalesPerson, error: createError } =
+                await supabaseAdmin
+                  .from("sales_people")
+                  .insert({
+                    tenant_id: tenantId,
+                    agency_id: defaultAgencyId,
+                    full_name:
+                      profile.full_name || profile.email || "איש מכירות",
+                    email: profile.email,
+                    active: true,
+                  })
+                  .select("id")
+                  .single();
 
               if (createError) {
                 console.error("Error creating sales_person:", createError);
@@ -233,12 +261,10 @@ serve(async (req: Request) => {
                 teamMemberType = "sales_person";
 
                 // Also add to sales_person_agencies junction table
-                await supabaseAdmin
-                  .from("sales_person_agencies")
-                  .insert({
-                    sales_person_id: salesPersonId,
-                    agency_id: defaultAgencyId,
-                  });
+                await supabaseAdmin.from("sales_person_agencies").insert({
+                  sales_person_id: salesPersonId,
+                  agency_id: defaultAgencyId,
+                });
               }
             }
 
@@ -250,7 +276,10 @@ serve(async (req: Request) => {
                 .eq("id", userId);
 
               if (linkError) {
-                console.error("Error linking sales_person to profile:", linkError);
+                console.error(
+                  "Error linking sales_person to profile:",
+                  linkError,
+                );
               } else {
                 if (reusedExisting) {
                   teamMemberCreated = true;
@@ -275,7 +304,8 @@ serve(async (req: Request) => {
               reusedExisting = true;
 
               const cPatch: Record<string, any> = {};
-              if (!existingCampaigner.email && profile.email) cPatch.email = profile.email;
+              if (!existingCampaigner.email && profile.email)
+                cPatch.email = profile.email;
               if (
                 (!existingCampaigner.full_name ||
                   existingCampaigner.full_name === "" ||
@@ -286,23 +316,27 @@ serve(async (req: Request) => {
               }
               if (existingCampaigner.active === false) cPatch.active = true;
               if (Object.keys(cPatch).length > 0) {
-                await supabaseAdmin.from("campaigners").update(cPatch).eq("id", campaignerId);
+                await supabaseAdmin
+                  .from("campaigners")
+                  .update(cPatch)
+                  .eq("id", campaignerId);
               }
             }
 
             if (!campaignerId) {
               // Create new campaigner
 
-              const { data: newCampaigner, error: createError } = await supabaseAdmin
-                .from("campaigners")
-                .insert({
-                  tenant_id: tenantId,
-                  full_name: profile.full_name || profile.email || "קמפיינר",
-                  email: profile.email,
-                  active: true,
-                })
-                .select("id")
-                .single();
+              const { data: newCampaigner, error: createError } =
+                await supabaseAdmin
+                  .from("campaigners")
+                  .insert({
+                    tenant_id: tenantId,
+                    full_name: profile.full_name || profile.email || "קמפיינר",
+                    email: profile.email,
+                    active: true,
+                  })
+                  .select("id")
+                  .single();
 
               if (createError) {
                 console.error("Error creating campaigner:", createError);
@@ -321,7 +355,10 @@ serve(async (req: Request) => {
                 .eq("id", userId);
 
               if (linkError) {
-                console.error("Error linking campaigner to profile:", linkError);
+                console.error(
+                  "Error linking campaigner to profile:",
+                  linkError,
+                );
               } else {
                 if (reusedExisting) {
                   teamMemberCreated = true;
@@ -353,7 +390,7 @@ serve(async (req: Request) => {
           .from("user_managed_agencies")
           .delete()
           .eq("user_id", userId);
-        
+
         if (cleanupError) {
           console.error("Error cleaning up managed agencies:", cleanupError);
           // Don't throw - this is cleanup, not critical
@@ -375,7 +412,7 @@ serve(async (req: Request) => {
             .from("profiles")
             .update({ campaigner_id: null })
             .eq("id", userId);
-          
+
           if (unlinkError) {
             console.error("Error unlinking campaigner:", unlinkError);
           }
@@ -397,7 +434,7 @@ serve(async (req: Request) => {
             .from("profiles")
             .update({ sales_person_id: null })
             .eq("id", userId);
-          
+
           if (unlinkError) {
             console.error("Error unlinking sales_person:", unlinkError);
           }
@@ -416,7 +453,7 @@ serve(async (req: Request) => {
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error: any) {
     console.error("Error in manage-user-roles function:", error);
@@ -426,9 +463,13 @@ serve(async (req: Request) => {
         error: error.message,
       }),
       {
-        status: error.message === "Unauthorized" || error.message.includes("Only owners") ? 403 : 500,
+        status:
+          error.message === "Unauthorized" ||
+          error.message.includes("Only owners")
+            ? 403
+            : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

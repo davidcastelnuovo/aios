@@ -11,53 +11,68 @@ import {
 } from "../_shared/gscKeywords.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const authHeader = req.headers.get('Authorization');
+  const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(
-      JSON.stringify({ error: 'Missing authorization header' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: "Missing authorization header" }),
+      {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
-  const clientId = Deno.env.get('GOOGLE_CLIENT_ID') || '';
-  const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET') || '';
+  const clientId = Deno.env.get("GOOGLE_CLIENT_ID") || "";
+  const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
 
   try {
-    const { integrationId, siteUrl, startDate, endDate, keywords, aggregateAll, forceLive } = await req.json();
+    const {
+      integrationId,
+      siteUrl,
+      startDate,
+      endDate,
+      keywords,
+      aggregateAll,
+      forceLive,
+    } = await req.json();
 
     if (!integrationId || !siteUrl) {
       return new Response(
-        JSON.stringify({ error: 'Missing integrationId or siteUrl' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Missing integrationId or siteUrl" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     // Get integration
     const { data: integration, error: intErr } = await supabase
-      .from('tenant_integrations')
-      .select('*')
-      .eq('id', integrationId)
+      .from("tenant_integrations")
+      .select("*")
+      .eq("id", integrationId)
       .single();
 
     if (intErr || !integration) {
-      return new Response(
-        JSON.stringify({ error: 'Integration not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: "Integration not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Refresh token if needed
@@ -65,32 +80,41 @@ serve(async (req) => {
     const settings = integration.settings as any;
     const ownerEmail = settings?.google_email || null;
 
-    const refreshAccessToken = async (): Promise<{ ok: boolean; reason?: string }> => {
-      if (!settings?.refresh_token) return { ok: false, reason: 'missing_refresh_token' };
-      const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          refresh_token: settings.refresh_token,
-          grant_type: 'refresh_token',
-        }),
-      });
+    const refreshAccessToken = async (): Promise<{
+      ok: boolean;
+      reason?: string;
+    }> => {
+      if (!settings?.refresh_token)
+        return { ok: false, reason: "missing_refresh_token" };
+      const refreshResponse = await fetch(
+        "https://oauth2.googleapis.com/token",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: settings.refresh_token,
+            grant_type: "refresh_token",
+          }),
+        },
+      );
       const refreshData = await refreshResponse.json().catch(() => ({}));
       if (refreshData.access_token) {
         accessToken = refreshData.access_token;
-        const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+        const newExpiresAt = new Date(
+          Date.now() + refreshData.expires_in * 1000,
+        ).toISOString();
         await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update({
             api_key: accessToken,
             settings: { ...settings, expires_at: newExpiresAt },
           })
-          .eq('id', integration.id);
+          .eq("id", integration.id);
         return { ok: true };
       }
-      return { ok: false, reason: refreshData.error || 'refresh_failed' };
+      return { ok: false, reason: refreshData.error || "refresh_failed" };
     };
 
     if (settings?.expires_at && new Date(settings.expires_at) < new Date()) {
@@ -98,8 +122,12 @@ serve(async (req) => {
     }
 
     // Default date range: last 28 days
-    const end = endDate || new Date().toISOString().split('T')[0];
-    const start = startDate || new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const end = endDate || new Date().toISOString().split("T")[0];
+    const start =
+      startDate ||
+      new Date(Date.now() - 28 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0];
 
     // Serve from daily snapshot cache when the requested window matches a known period.
     if (!forceLive) {
@@ -117,8 +145,12 @@ serve(async (req) => {
         if (cachedRows?.length) {
           let filteredRows = cachedRows;
           if (keywords && Array.isArray(keywords) && keywords.length > 0) {
-            const keywordSet = new Set(keywords.map((k: string) => k.toLowerCase().trim()));
-            filteredRows = cachedRows.filter((r) => keywordSet.has(r.keyword.toLowerCase().trim()));
+            const keywordSet = new Set(
+              keywords.map((k: string) => k.toLowerCase().trim()),
+            );
+            filteredRows = cachedRows.filter((r) =>
+              keywordSet.has(r.keyword.toLowerCase().trim()),
+            );
           }
           return new Response(
             JSON.stringify({
@@ -128,7 +160,7 @@ serve(async (req) => {
               from_cache: true,
               synced_at: snapshotBundle?.synced_at || null,
             }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
       }
@@ -138,9 +170,9 @@ serve(async (req) => {
     const requestBody: any = {
       startDate: start,
       endDate: end,
-      dimensions: ['query'],
+      dimensions: ["query"],
       rowLimit: 1000,
-      dataState: 'final',
+      dataState: "final",
     };
 
     // If specific keywords provided, filter by them
@@ -160,15 +192,20 @@ serve(async (req) => {
     const collectedRows: any[] = [];
 
     for (let page = 0; page < maxPages; page++) {
-      const pagedBody = { ...requestBody, rowLimit: pageSize, startRow: page * pageSize };
-      const doFetch = () => fetch(gscApiUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(pagedBody),
-      });
+      const pagedBody = {
+        ...requestBody,
+        rowLimit: pageSize,
+        startRow: page * pageSize,
+      };
+      const doFetch = () =>
+        fetch(gscApiUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(pagedBody),
+        });
 
       let gscResponse = await doFetch();
       let gscData = await gscResponse.json().catch(() => ({}));
@@ -177,7 +214,9 @@ serve(async (req) => {
       const looksUnauthorized =
         gscResponse.status === 401 ||
         gscData?.error?.code === 401 ||
-        /invalid.*credential|invalid_grant|unauthorized/i.test(gscData?.error?.message || '');
+        /invalid.*credential|invalid_grant|unauthorized/i.test(
+          gscData?.error?.message || "",
+        );
 
       if (looksUnauthorized) {
         const refreshResult = await refreshAccessToken();
@@ -191,20 +230,22 @@ serve(async (req) => {
               totalRows: 0,
               needs_reconnect: true,
               owner_email: ownerEmail,
-              reason: refreshResult.reason || 'token_revoked',
+              reason: refreshResult.reason || "token_revoked",
               siteUrl,
             }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
       }
 
       if (!gscResponse.ok) {
-        console.error('GSC API error:', gscData);
+        console.error("GSC API error:", gscData);
         const stillUnauthorized =
           gscResponse.status === 401 ||
           gscData?.error?.code === 401 ||
-          /invalid.*credential|invalid_grant|unauthorized/i.test(gscData?.error?.message || '');
+          /invalid.*credential|invalid_grant|unauthorized/i.test(
+            gscData?.error?.message || "",
+          );
         if (stillUnauthorized) {
           return new Response(
             JSON.stringify({
@@ -212,21 +253,24 @@ serve(async (req) => {
               totalRows: 0,
               needs_reconnect: true,
               owner_email: ownerEmail,
-              reason: 'token_revoked',
+              reason: "token_revoked",
               siteUrl,
             }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
         const isPermissionDenied = gscResponse.status === 403;
         return new Response(
           JSON.stringify({
-            error: gscData.error?.message || 'GSC API error',
+            error: gscData.error?.message || "GSC API error",
             permissionDenied: isPermissionDenied,
             siteUrl,
             details: gscData,
           }),
-          { status: gscResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          {
+            status: gscResponse.status,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
 
@@ -239,7 +283,7 @@ serve(async (req) => {
 
     // Transform response
     const rows = collectedRows.map((row: any) => ({
-      keyword: row.keys?.[0] || '',
+      keyword: row.keys?.[0] || "",
       clicks: row.clicks || 0,
       impressions: row.impressions || 0,
       ctr: row.ctr ? Math.round(row.ctr * 10000) / 100 : 0,
@@ -249,8 +293,12 @@ serve(async (req) => {
     // Filter by specific keywords if provided
     let filteredRows = rows;
     if (keywords && Array.isArray(keywords) && keywords.length > 0) {
-      const keywordSet = new Set(keywords.map((k: string) => k.toLowerCase().trim()));
-      filteredRows = rows.filter((r: any) => keywordSet.has(r.keyword.toLowerCase().trim()));
+      const keywordSet = new Set(
+        keywords.map((k: string) => k.toLowerCase().trim()),
+      );
+      filteredRows = rows.filter((r: any) =>
+        keywordSet.has(r.keyword.toLowerCase().trim()),
+      );
     }
 
     return new Response(
@@ -259,14 +307,14 @@ serve(async (req) => {
         totalRows: filteredRows.length,
         dateRange: { start, end },
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error('Error fetching GSC data:', msg);
-    return new Response(
-      JSON.stringify({ error: msg }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error("Error fetching GSC data:", msg);
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

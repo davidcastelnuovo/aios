@@ -1,7 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 
 interface SendSignatureActionConfigProps {
@@ -49,7 +55,9 @@ export default function SendSignatureActionConfig({
           </SelectTrigger>
           <SelectContent>
             {templates.length === 0 ? (
-              <SelectItem value="__none" disabled>אין תבניות — שמור מסמך כתבנית בחתימות דיגיטליות</SelectItem>
+              <SelectItem value="__none" disabled>
+                אין תבניות — שמור מסמך כתבנית בחתימות דיגיטליות
+              </SelectItem>
             ) : (
               templates.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
@@ -65,7 +73,9 @@ export default function SendSignatureActionConfig({
         <Label className="text-right block">שם החותם (שדה מהטריגר)</Label>
         <Input
           value={configuration?.recipient_name_field || "contact_name"}
-          onChange={(e) => onConfigChange("recipient_name_field", e.target.value)}
+          onChange={(e) =>
+            onConfigChange("recipient_name_field", e.target.value)
+          }
           placeholder="contact_name"
           className="text-right font-mono text-sm"
           dir="ltr"
@@ -76,7 +86,9 @@ export default function SendSignatureActionConfig({
         <Label className="text-right block">אימייל החותם (שדה מהטריגר)</Label>
         <Input
           value={configuration?.recipient_email_field || "email"}
-          onChange={(e) => onConfigChange("recipient_email_field", e.target.value)}
+          onChange={(e) =>
+            onConfigChange("recipient_email_field", e.target.value)
+          }
           placeholder="email"
           className="text-right font-mono text-sm"
           dir="ltr"
@@ -87,7 +99,9 @@ export default function SendSignatureActionConfig({
         <Label className="text-right block">שם המסמך (אופציונלי)</Label>
         <Input
           value={configuration?.document_title_template || ""}
-          onChange={(e) => onConfigChange("document_title_template", e.target.value)}
+          onChange={(e) =>
+            onConfigChange("document_title_template", e.target.value)
+          }
           placeholder="חוזה - {{company_name}}"
           className="text-right"
         />

@@ -1,7 +1,14 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, TrendingUp, TrendingDown, Ban, CreditCard, ShieldAlert } from "lucide-react";
+import {
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+  Ban,
+  CreditCard,
+  ShieldAlert,
+} from "lucide-react";
 import { format, subDays } from "date-fns";
 
 interface TableCardAlertsProps {
@@ -38,23 +45,26 @@ interface TriggeredAlert {
 
 // Statuses that indicate a real block by Meta (not manually paused)
 const BLOCKED_STATUSES = [
-  'WITH_ISSUES',
-  'DISAPPROVED',
-  'PENDING_BILLING_INFO',
-  'ADSET_PAUSED',
-  'CAMPAIGN_PAUSED',
+  "WITH_ISSUES",
+  "DISAPPROVED",
+  "PENDING_BILLING_INFO",
+  "ADSET_PAUSED",
+  "CAMPAIGN_PAUSED",
 ];
 
 // Account statuses that indicate issues
 const BLOCKED_ACCOUNT_STATUSES = [
-  'disabled',
-  'unsettled',
-  'pending_risk_review',
-  'pending_settlement',
-  'closed',
+  "disabled",
+  "unsettled",
+  "pending_risk_review",
+  "pending_settlement",
+  "closed",
 ];
 
-export function TableCardAlerts({ tableId, integrationSettings }: TableCardAlertsProps) {
+export function TableCardAlerts({
+  tableId,
+  integrationSettings,
+}: TableCardAlertsProps) {
   // Fetch alerts for this table
   const { data: alerts = [] } = useQuery({
     queryKey: ["report-alerts", tableId],
@@ -75,14 +85,19 @@ export function TableCardAlerts({ tableId, integrationSettings }: TableCardAlert
   const { data: records = [] } = useQuery({
     queryKey: ["crm-records-mini", tableId],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) return [];
-      
-      const response = await supabase.functions.invoke(`crm-records?table_id=${tableId}&date_filter=last_30_days`, {
-        method: 'GET',
-      });
+
+      const response = await supabase.functions.invoke(
+        `crm-records?table_id=${tableId}&date_filter=last_30_days`,
+        {
+          method: "GET",
+        },
+      );
       if (response.error) return [];
-      return Array.isArray(response.data) ? response.data as CrmRecord[] : [];
+      return Array.isArray(response.data) ? (response.data as CrmRecord[]) : [];
     },
     enabled: !!tableId && alerts.length > 0,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -95,7 +110,9 @@ export function TableCardAlerts({ tableId, integrationSettings }: TableCardAlert
     // Check account-level blocking first
     const accountStatus = integrationSettings?.account_status;
     if (accountStatus && BLOCKED_ACCOUNT_STATUSES.includes(accountStatus)) {
-      const blockingAlert = alerts.find(a => a.comparison_type === "no_data" || a.operator === "no_data_days");
+      const blockingAlert = alerts.find(
+        (a) => a.comparison_type === "no_data" || a.operator === "no_data_days",
+      );
       if (blockingAlert) {
         triggered.push({
           alert: blockingAlert,
@@ -118,16 +135,21 @@ export function TableCardAlerts({ tableId, integrationSettings }: TableCardAlert
 
     for (const alert of alerts) {
       // Handle blocking/no-data alerts - check campaign effective_status
-      if (alert.comparison_type === "no_data" || alert.operator === "no_data_days") {
-        for (const [campaignId, campaignRecords] of Object.entries(campaignGroups)) {
+      if (
+        alert.comparison_type === "no_data" ||
+        alert.operator === "no_data_days"
+      ) {
+        for (const [campaignId, campaignRecords] of Object.entries(
+          campaignGroups,
+        )) {
           const latestRecord = getLatestRecord(campaignRecords as CrmRecord[]);
           const effectiveStatus = latestRecord?.data?.effective_status;
           const configuredStatus = latestRecord?.data?.configured_status;
-          
+
           // Only show alert if BLOCKED by Meta (not manually paused)
           if (effectiveStatus && BLOCKED_STATUSES.includes(effectiveStatus)) {
-            if (configuredStatus === 'PAUSED') continue;
-            
+            if (configuredStatus === "PAUSED") continue;
+
             triggered.push({
               alert,
               campaignName: getCampaignName(campaignRecords as CrmRecord[]),
@@ -160,8 +182,13 @@ export function TableCardAlerts({ tableId, integrationSettings }: TableCardAlert
         previousPeriodStart = subDays(today, 60);
       } else {
         // vs_target
-        const currentMetrics = calculateMetric(records, subDays(today, 7), today, alert.metric);
-        
+        const currentMetrics = calculateMetric(
+          records,
+          subDays(today, 7),
+          today,
+          alert.metric,
+        );
+
         if (
           (alert.operator === "above" && currentMetrics > alert.threshold) ||
           (alert.operator === "below" && currentMetrics < alert.threshold)
@@ -170,33 +197,51 @@ export function TableCardAlerts({ tableId, integrationSettings }: TableCardAlert
             alert,
             currentValue: currentMetrics,
             previousValue: alert.threshold,
-            changePercent: ((currentMetrics - alert.threshold) / alert.threshold) * 100,
-            isNegative: alert.operator === "above" ? 
-              (alert.metric === "cost_per_lead" || alert.metric === "cpm") : 
-              (alert.metric !== "cost_per_lead" && alert.metric !== "cpm"),
+            changePercent:
+              ((currentMetrics - alert.threshold) / alert.threshold) * 100,
+            isNegative:
+              alert.operator === "above"
+                ? alert.metric === "cost_per_lead" || alert.metric === "cpm"
+                : alert.metric !== "cost_per_lead" && alert.metric !== "cpm",
             isBlocking: false,
           });
         }
         continue;
       }
 
-      const currentValue = calculateMetric(records, currentPeriodStart, currentPeriodEnd, alert.metric);
-      const previousValue = calculateMetric(records, previousPeriodStart, previousPeriodEnd, alert.metric);
+      const currentValue = calculateMetric(
+        records,
+        currentPeriodStart,
+        currentPeriodEnd,
+        alert.metric,
+      );
+      const previousValue = calculateMetric(
+        records,
+        previousPeriodStart,
+        previousPeriodEnd,
+        alert.metric,
+      );
 
       if (previousValue === 0) continue;
 
-      const changePercent = ((currentValue - previousValue) / previousValue) * 100;
+      const changePercent =
+        ((currentValue - previousValue) / previousValue) * 100;
 
       let shouldTrigger = false;
       if (alert.operator === "increase" && changePercent > alert.threshold) {
         shouldTrigger = true;
-      } else if (alert.operator === "decrease" && changePercent < -alert.threshold) {
+      } else if (
+        alert.operator === "decrease" &&
+        changePercent < -alert.threshold
+      ) {
         shouldTrigger = true;
       }
 
       if (shouldTrigger) {
         const isNegative =
-          (alert.metric === "cost_per_lead" || alert.metric === "cpm" || alert.metric === "spend") &&
+          (alert.metric === "cost_per_lead" ||
+            alert.metric === "cpm" ||
+            alert.metric === "spend") &&
           alert.operator === "increase";
 
         triggered.push({
@@ -216,25 +261,28 @@ export function TableCardAlerts({ tableId, integrationSettings }: TableCardAlert
   if (triggeredAlerts.length === 0) return null;
 
   // Show compact version for card
-  const blockingAlerts = triggeredAlerts.filter(t => t.isBlocking);
-  const performanceAlerts = triggeredAlerts.filter(t => !t.isBlocking);
+  const blockingAlerts = triggeredAlerts.filter((t) => t.isBlocking);
+  const performanceAlerts = triggeredAlerts.filter((t) => !t.isBlocking);
 
   return (
     <div className="flex flex-wrap gap-1 mt-2">
       {blockingAlerts.map((item, idx) => (
-        <div 
+        <div
           key={`block-${idx}`}
           className="flex items-center gap-1 px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full text-xs"
           title={item.blockingReason}
         >
-          {item.blockingReason?.includes('אשראי') || item.blockingReason?.includes('תשלום') ? (
+          {item.blockingReason?.includes("אשראי") ||
+          item.blockingReason?.includes("תשלום") ? (
             <CreditCard className="h-3 w-3" />
-          ) : item.blockingReason?.includes('מדיניות') ? (
+          ) : item.blockingReason?.includes("מדיניות") ? (
             <ShieldAlert className="h-3 w-3" />
           ) : (
             <Ban className="h-3 w-3" />
           )}
-          <span>{item.campaignName ? `חסימה: ${item.campaignName}` : 'חסימה'}</span>
+          <span>
+            {item.campaignName ? `חסימה: ${item.campaignName}` : "חסימה"}
+          </span>
         </div>
       ))}
       {performanceAlerts.map((item, idx) => (
@@ -265,32 +313,32 @@ export function TableCardAlerts({ tableId, integrationSettings }: TableCardAlert
 
 function getAccountBlockReason(status: string): string {
   switch (status) {
-    case 'disabled':
-      return 'חשבון פרסום מושבת - הפרת מדיניות';
-    case 'unsettled':
-      return 'בעיית תשלום - יש להסדיר את האשראי';
-    case 'pending_risk_review':
-      return 'החשבון בבדיקת אבטחה';
-    case 'pending_settlement':
-      return 'ממתין להסדר תשלום';
-    case 'closed':
-      return 'חשבון הפרסום נסגר';
+    case "disabled":
+      return "חשבון פרסום מושבת - הפרת מדיניות";
+    case "unsettled":
+      return "בעיית תשלום - יש להסדיר את האשראי";
+    case "pending_risk_review":
+      return "החשבון בבדיקת אבטחה";
+    case "pending_settlement":
+      return "ממתין להסדר תשלום";
+    case "closed":
+      return "חשבון הפרסום נסגר";
     default:
-      return 'בעיה בחשבון הפרסום';
+      return "בעיה בחשבון הפרסום";
   }
 }
 
 function getCampaignBlockReason(effectiveStatus: string): string {
   switch (effectiveStatus) {
-    case 'WITH_ISSUES':
-      return 'קמפיין עם בעיות';
-    case 'DISAPPROVED':
-      return 'הפרת מדיניות';
-    case 'PENDING_BILLING_INFO':
-      return 'בעיית אשראי';
-    case 'ADSET_PAUSED':
-      return 'מערך מודעות מושהה';
-    case 'CAMPAIGN_PAUSED':
+    case "WITH_ISSUES":
+      return "קמפיין עם בעיות";
+    case "DISAPPROVED":
+      return "הפרת מדיניות";
+    case "PENDING_BILLING_INFO":
+      return "בעיית אשראי";
+    case "ADSET_PAUSED":
+      return "מערך מודעות מושהה";
+    case "CAMPAIGN_PAUSED":
       return 'קמפיין מושהה ע"י המערכת';
     default:
       return `קמפיין חסום`;
@@ -300,16 +348,22 @@ function getCampaignBlockReason(effectiveStatus: string): string {
 function getLatestRecord(records: CrmRecord[]): CrmRecord | null {
   if (records.length === 0) return null;
   return records.reduce((latest, record) => {
-    const recordDate = record.data?.date || record.data?.Date || '';
-    const latestDate = latest?.data?.date || latest?.data?.Date || '';
+    const recordDate = record.data?.date || record.data?.Date || "";
+    const latestDate = latest?.data?.date || latest?.data?.Date || "";
     return recordDate > latestDate ? record : latest;
   }, records[0]);
 }
 
-function groupRecordsByCampaign(records: CrmRecord[]): Record<string, CrmRecord[]> {
+function groupRecordsByCampaign(
+  records: CrmRecord[],
+): Record<string, CrmRecord[]> {
   const groups: Record<string, CrmRecord[]> = {};
   for (const record of records) {
-    const campaignId = record.data?.campaign_id || record.data?.campaignId || record.data?.campaign_name || "unknown";
+    const campaignId =
+      record.data?.campaign_id ||
+      record.data?.campaignId ||
+      record.data?.campaign_name ||
+      "unknown";
     if (!groups[campaignId]) groups[campaignId] = [];
     groups[campaignId].push(record);
   }
@@ -325,7 +379,7 @@ function calculateMetric(
   records: CrmRecord[],
   startDate: Date,
   endDate: Date,
-  metric: string
+  metric: string,
 ): number {
   const startStr = format(startDate, "yyyy-MM-dd");
   const endStr = format(endDate, "yyyy-MM-dd");
@@ -343,14 +397,22 @@ function calculateMetric(
   if (metric === "cost_per_lead") {
     let totalSpend = 0;
     let totalLeads = 0;
-    
+
     for (const record of filtered) {
-      const spend = parseFloat(record.data?.spend) || parseFloat(record.data?.amount_spent) || parseFloat(record.data?.Spend) || 0;
-      const leads = parseFloat(record.data?.leads) || parseFloat(record.data?.results) || parseFloat(record.data?.Leads) || 0;
+      const spend =
+        parseFloat(record.data?.spend) ||
+        parseFloat(record.data?.amount_spent) ||
+        parseFloat(record.data?.Spend) ||
+        0;
+      const leads =
+        parseFloat(record.data?.leads) ||
+        parseFloat(record.data?.results) ||
+        parseFloat(record.data?.Leads) ||
+        0;
       totalSpend += spend;
       totalLeads += leads;
     }
-    
+
     if (totalLeads === 0) return 0;
     return totalSpend / totalLeads;
   }
@@ -359,14 +421,21 @@ function calculateMetric(
   if (metric === "cpm") {
     let totalSpend = 0;
     let totalImpressions = 0;
-    
+
     for (const record of filtered) {
-      const spend = parseFloat(record.data?.spend) || parseFloat(record.data?.amount_spent) || parseFloat(record.data?.Spend) || 0;
-      const impressions = parseFloat(record.data?.impressions) || parseFloat(record.data?.Impressions) || 0;
+      const spend =
+        parseFloat(record.data?.spend) ||
+        parseFloat(record.data?.amount_spent) ||
+        parseFloat(record.data?.Spend) ||
+        0;
+      const impressions =
+        parseFloat(record.data?.impressions) ||
+        parseFloat(record.data?.Impressions) ||
+        0;
       totalSpend += spend;
       totalImpressions += impressions;
     }
-    
+
     if (totalImpressions === 0) return 0;
     return (totalSpend / totalImpressions) * 1000;
   }
@@ -375,14 +444,21 @@ function calculateMetric(
   if (metric === "ctr") {
     let totalClicks = 0;
     let totalImpressions = 0;
-    
+
     for (const record of filtered) {
-      const clicks = parseFloat(record.data?.clicks) || parseFloat(record.data?.link_clicks) || parseFloat(record.data?.Clicks) || 0;
-      const impressions = parseFloat(record.data?.impressions) || parseFloat(record.data?.Impressions) || 0;
+      const clicks =
+        parseFloat(record.data?.clicks) ||
+        parseFloat(record.data?.link_clicks) ||
+        parseFloat(record.data?.Clicks) ||
+        0;
+      const impressions =
+        parseFloat(record.data?.impressions) ||
+        parseFloat(record.data?.Impressions) ||
+        0;
       totalClicks += clicks;
       totalImpressions += impressions;
     }
-    
+
     if (totalImpressions === 0) return 0;
     return (totalClicks / totalImpressions) * 100;
   }

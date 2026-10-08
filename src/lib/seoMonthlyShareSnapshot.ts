@@ -77,22 +77,30 @@ export type SeoMonthlyShareSnapshot = {
   generatedAt: string;
 };
 
-export const STATUS_LABELS: Record<SeoMonthlyShareSnapshot["status"], string> = {
-  up: "עלייה",
-  stable: "יציב",
-  down: "ירידה",
-};
+export const STATUS_LABELS: Record<SeoMonthlyShareSnapshot["status"], string> =
+  {
+    up: "עלייה",
+    stable: "יציב",
+    down: "ירידה",
+  };
 
-function getNum(obj: Record<string, unknown>, ...keys: string[]): number | undefined {
+function getNum(
+  obj: Record<string, unknown>,
+  ...keys: string[]
+): number | undefined {
   for (const k of keys) {
     const v = obj[k];
     if (typeof v === "number" && Number.isFinite(v)) return v;
-    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
+    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)))
+      return Number(v);
   }
   return undefined;
 }
 
-function countAtOrBelow(kws: Array<{ position?: number | null }>, maxPos: number): number {
+function countAtOrBelow(
+  kws: Array<{ position?: number | null }>,
+  maxPos: number,
+): number {
   let n = 0;
   for (const kw of kws) {
     const p = kw.position;
@@ -156,14 +164,19 @@ function normalizeKeywordRow(kw: any): SeoShareKeyword | null {
   if (!keyword) return null;
   const positionRaw = kw?.position ?? kw?.best_position;
   const position =
-    typeof positionRaw === "number" && Number.isFinite(positionRaw) ? positionRaw : null;
+    typeof positionRaw === "number" && Number.isFinite(positionRaw)
+      ? positionRaw
+      : null;
   const volumeRaw = kw?.volume ?? kw?.search_volume;
   const volume =
-    typeof volumeRaw === "number" && Number.isFinite(volumeRaw) ? volumeRaw : null;
+    typeof volumeRaw === "number" && Number.isFinite(volumeRaw)
+      ? volumeRaw
+      : null;
   const prevRaw = kw?.position_prev_month;
   const prevPosition =
     typeof prevRaw === "number" && Number.isFinite(prevRaw) ? prevRaw : null;
-  const url = String(kw?.url || kw?.best_position_url || "").trim() || undefined;
+  const url =
+    String(kw?.url || kw?.best_position_url || "").trim() || undefined;
   return { keyword, position, volume, prevPosition, url };
 }
 
@@ -199,14 +212,18 @@ export function buildSeoMonthlyShareSnapshot(opts: {
 }): SeoMonthlyShareSnapshot {
   const work = sanitizeSeoMonthlyWork(opts.work);
   const rd = (opts.reportData || {}) as Record<string, unknown>;
-  const snapshot = (rd.snapshot && typeof rd.snapshot === "object"
-    ? (rd.snapshot as Record<string, unknown>)
-    : {}) as Record<string, unknown>;
-  const prev = (rd.snapshot_prev_month && typeof rd.snapshot_prev_month === "object"
-    ? (rd.snapshot_prev_month as Record<string, unknown>)
-    : rd.snapshot_prev && typeof rd.snapshot_prev === "object"
-      ? (rd.snapshot_prev as Record<string, unknown>)
-      : {}) as Record<string, unknown>;
+  const snapshot = (
+    rd.snapshot && typeof rd.snapshot === "object"
+      ? (rd.snapshot as Record<string, unknown>)
+      : {}
+  ) as Record<string, unknown>;
+  const prev = (
+    rd.snapshot_prev_month && typeof rd.snapshot_prev_month === "object"
+      ? (rd.snapshot_prev_month as Record<string, unknown>)
+      : rd.snapshot_prev && typeof rd.snapshot_prev === "object"
+        ? (rd.snapshot_prev as Record<string, unknown>)
+        : {}
+  ) as Record<string, unknown>;
 
   const tracked = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
   const organic = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
@@ -268,20 +285,32 @@ export function buildSeoMonthlyShareSnapshot(opts: {
       key: "top20",
       label: "מילות מפתח Top 20",
       keys: ["org_keywords_top20"],
-      value: allKeywords.length > 0 ? liveTop20 : getNum(snapshot, "org_keywords_top20"),
+      value:
+        allKeywords.length > 0
+          ? liveTop20
+          : getNum(snapshot, "org_keywords_top20"),
     },
-    { key: "keywords_total", label: "סה״כ מילות מפתח", keys: ["org_keywords_total"] },
+    {
+      key: "keywords_total",
+      label: "סה״כ מילות מפתח",
+      keys: ["org_keywords_total"],
+    },
     {
       key: "referring_domains",
       label: "דומיינים מפנים",
       keys: ["referring_domains", "referring_domains_all_time"],
     },
-    { key: "backlinks_live", label: "קישורים נכנסים", keys: ["backlinks_live"] },
+    {
+      key: "backlinks_live",
+      label: "קישורים נכנסים",
+      keys: ["backlinks_live"],
+    },
   ];
 
   const metrics: SeoShareMetric[] = [];
   for (const def of metricDefs) {
-    const value = def.value !== undefined ? def.value : getNum(snapshot, ...def.keys);
+    const value =
+      def.value !== undefined ? def.value : getNum(snapshot, ...def.keys);
     if (value === undefined) continue;
     const prevValue = getNum(prev, ...def.keys);
     metrics.push({
@@ -307,11 +336,15 @@ export function buildSeoMonthlyShareSnapshot(opts: {
       totals: gscTotals(gscCurrent),
       prev: gscPrev.length ? gscTotals(gscPrev) : undefined,
       base: gscBase.length ? gscTotals(gscBase) : undefined,
-      baseLabel: opts.gsc?.baselineMonth ? toMonthLabel(opts.gsc.baselineMonth) : undefined,
+      baseLabel: opts.gsc?.baselineMonth
+        ? toMonthLabel(opts.gsc.baselineMonth)
+        : undefined,
     };
 
     const baseByKw = new Map(gscBase.map((r) => [r.keyword.toLowerCase(), r]));
-    const ahrefsByKw = new Map(allKeywords.map((k) => [k.keyword.toLowerCase(), k]));
+    const ahrefsByKw = new Map(
+      allKeywords.map((k) => [k.keyword.toLowerCase(), k]),
+    );
     for (const row of gscCurrent) {
       const key = row.keyword.toLowerCase();
       const base = baseByKw.get(key);
@@ -352,21 +385,38 @@ export function buildSeoMonthlyShareSnapshot(opts: {
         )
         .slice(0, limit)
     : merged
-        .filter((k) => k.position != null && k.position >= 1 && k.position <= 30)
+        .filter(
+          (k) => k.position != null && k.position >= 1 && k.position <= 30,
+        )
         .sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
         .slice(0, limit);
 
   // Search Console reflects reality for clicks/impressions; Ahrefs positions stay
   // the source of truth for Top 3 / Top 20 (GSC query positions are a different metric).
   if (search) {
-    const upsert = (key: string, label: string, value: number, prevValue?: number) => {
+    const upsert = (
+      key: string,
+      label: string,
+      value: number,
+      prevValue?: number,
+    ) => {
       const idx = metrics.findIndex((m) => m.key === key);
       const entry: SeoShareMetric = { key, label, value, prevValue };
       if (idx >= 0) metrics[idx] = entry;
       else metrics.push(entry);
     };
-    upsert("gsc_clicks", "קליקים מגוגל", search.totals.clicks, search.prev?.clicks);
-    upsert("gsc_impressions", "חשיפות בגוגל", search.totals.impressions, search.prev?.impressions);
+    upsert(
+      "gsc_clicks",
+      "קליקים מגוגל",
+      search.totals.clicks,
+      search.prev?.clicks,
+    );
+    upsert(
+      "gsc_impressions",
+      "חשיפות בגוגל",
+      search.totals.impressions,
+      search.prev?.impressions,
+    );
 
     const order = [
       "gsc_clicks",
@@ -406,10 +456,16 @@ export function onsiteKindLabel(kind: string): string {
   return ONSITE_KIND_LABELS[kind as keyof typeof ONSITE_KIND_LABELS] || kind;
 }
 
-export function isSeoMonthlyShareSnapshot(raw: unknown): raw is SeoMonthlyShareSnapshot {
+export function isSeoMonthlyShareSnapshot(
+  raw: unknown,
+): raw is SeoMonthlyShareSnapshot {
   if (!raw || typeof raw !== "object") return false;
   const o = raw as Record<string, unknown>;
-  return o.version === 1 && typeof o.clientName === "string" && typeof o.month === "string";
+  return (
+    o.version === 1 &&
+    typeof o.clientName === "string" &&
+    typeof o.month === "string"
+  );
 }
 
 /**
@@ -454,7 +510,9 @@ function fmtHe(n: number): string {
  * Compact recap from real GSC/keyword movement, then clear next-month plans.
  * The free-text "סיכום כללי" belongs on the cover (הקדמה), not here.
  */
-export function buildSeoPerformanceSummary(snapshot: SeoMonthlyShareSnapshot): string {
+export function buildSeoPerformanceSummary(
+  snapshot: SeoMonthlyShareSnapshot,
+): string {
   const search = snapshot.search;
   const sentences: string[] = [];
 
@@ -483,7 +541,9 @@ export function buildSeoPerformanceSummary(snapshot: SeoMonthlyShareSnapshot): s
   const clickDelta =
     search?.prev != null ? search.totals.clicks - search.prev.clicks : null;
   const impressionDelta =
-    search?.prev != null ? search.totals.impressions - search.prev.impressions : null;
+    search?.prev != null
+      ? search.totals.impressions - search.prev.impressions
+      : null;
   const top20Delta =
     search?.prev != null ? search.totals.top20 - search.prev.top20 : null;
 
@@ -511,9 +571,12 @@ export function buildSeoPerformanceSummary(snapshot: SeoMonthlyShareSnapshot): s
 
   if (search) {
     const bits: string[] = [];
-    if (search.totals.impressions > 0) bits.push(`${fmtHe(search.totals.impressions)} חשיפות`);
-    if (search.totals.clicks > 0) bits.push(`${fmtHe(search.totals.clicks)} קליקים`);
-    if (search.totals.top20 > 0) bits.push(`${fmtHe(search.totals.top20)} ב-Top 20`);
+    if (search.totals.impressions > 0)
+      bits.push(`${fmtHe(search.totals.impressions)} חשיפות`);
+    if (search.totals.clicks > 0)
+      bits.push(`${fmtHe(search.totals.clicks)} קליקים`);
+    if (search.totals.top20 > 0)
+      bits.push(`${fmtHe(search.totals.top20)} ב-Top 20`);
     if (bits.length) sentences.push(`החודש נמדדו ${bits.join(" · ")}.`);
 
     const highlights: string[] = [];
@@ -528,7 +591,9 @@ export function buildSeoPerformanceSummary(snapshot: SeoMonthlyShareSnapshot): s
     }
     if (improved > 0) {
       highlights.push(
-        improved === 1 ? "שיפור במיקום בביטוי מרכזי" : `שיפור מיקום ב־${fmtHe(improved)} ביטויים`,
+        improved === 1
+          ? "שיפור במיקום בביטוי מרכזי"
+          : `שיפור מיקום ב־${fmtHe(improved)} ביטויים`,
       );
     }
     if (highlights.length) sentences.push(`${highlights.join(", ")}.`);

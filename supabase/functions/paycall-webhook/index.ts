@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 Deno.serve(async (req) => {
@@ -14,32 +15,30 @@ Deno.serve(async (req) => {
   const expectedSecret = Deno.env.get("PAYCALL_WEBHOOK_SECRET");
   if (!expectedSecret) {
     return new Response(JSON.stringify({ error: "Server misconfigured" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const provided = req.headers.get("x-webhook-secret")
-    ?? new URL(req.url).searchParams.get("secret");
+  const provided =
+    req.headers.get("x-webhook-secret") ??
+    new URL(req.url).searchParams.get("secret");
   if (provided !== expectedSecret) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
     const payload = await req.json();
 
-    const {
-      call_id,
-      status,
-      duration,
-      recording_url,
-      recording_duration,
-    } = payload;
+    const { call_id, status, duration, recording_url, recording_duration } =
+      payload;
 
     if (!call_id) {
       return new Response(JSON.stringify({ error: "Missing call_id" }), {
@@ -61,7 +60,8 @@ Deno.serve(async (req) => {
       if (status) updateData.status = status;
       if (duration !== undefined) updateData.duration = duration;
       if (recording_url) updateData.recording_url = recording_url;
-      if (recording_duration !== undefined) updateData.recording_duration = recording_duration;
+      if (recording_duration !== undefined)
+        updateData.recording_duration = recording_duration;
 
       await supabase
         .from("call_logs")

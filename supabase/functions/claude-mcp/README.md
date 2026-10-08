@@ -4,8 +4,8 @@ This edge function is an **MCP server** that lets Carmen (and any AIOS agent)
 talk directly to **Claude the developer/assistant** over MCP — the same way
 David asks Claude to build things, fix bugs, or do research.
 
-Carmen already speaks MCP as a *client* (see `agent_mcp_connections`,
-`mcp-connect`, `_shared/mcp-tools.ts`). This function is the *server* side:
+Carmen already speaks MCP as a _client_ (see `agent_mcp_connections`,
+`mcp-connect`, `_shared/mcp-tools.ts`). This function is the _server_ side:
 Carmen connects to it like any other MCP server, and each tool call fires a
 **real Claude Code on the web cloud session** via the
 [Routines `/fire` API](https://platform.claude.com/docs/en/api/claude-code/routines-fire).
@@ -13,10 +13,10 @@ Claude then works on the repo autonomously and opens a pull request.
 
 ## Tools exposed
 
-| Tool | What it does |
-| --- | --- |
+| Tool               | What it does                                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
 | `request_dev_task` | Code/feature/bugfix work. Claude reads the repo, implements the change on a branch, and opens a PR. |
-| `ask_claude` | Any general request — research, analysis, writing, planning, investigation. |
+| `ask_claude`       | Any general request — research, analysis, writing, planning, investigation.                         |
 
 Both are **asynchronous**: the call returns a Claude Code session URL
 immediately; the actual work (and the PR) lands when the session finishes. The
@@ -45,14 +45,14 @@ returned session URL is what Carmen reports back so David can watch the run.
 
 ### 2. Set Supabase secrets (project `zvoijyneresvkadpprel`)
 
-| Secret | Required | Value |
-| --- | --- | --- |
-| `CLAUDE_ROUTINE_ID` | ✅ | the `trig_…` routine id |
-| `CLAUDE_ROUTINE_TOKEN` | ✅ | the `sk-ant-oat01-…` per-routine token |
-| `CLAUDE_MCP_BEARER` | ✅ | any strong random string; protects this endpoint |
-| `CLAUDE_DEV_ROUTINE_ID` | optional | separate routine id for dev tasks |
-| `CLAUDE_DEV_ROUTINE_TOKEN` | optional | token for the dev routine |
-| `CLAUDE_ROUTINE_BETA` | optional | override the experimental beta header |
+| Secret                     | Required | Value                                                                                                 |
+| -------------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| `CLAUDE_ROUTINE_ID`        | ✅       | the `trig_…` routine id                                                                               |
+| `CLAUDE_ROUTINE_TOKEN`     | ✅       | the `sk-ant-oat01-…` per-routine token                                                                |
+| `CLAUDE_MCP_BEARER`        | ✅       | any strong random string; protects this endpoint                                                      |
+| `CLAUDE_DEV_ROUTINE_ID`    | optional | separate routine id for dev tasks                                                                     |
+| `CLAUDE_DEV_ROUTINE_TOKEN` | optional | token for the dev routine                                                                             |
+| `CLAUDE_ROUTINE_BETA`      | optional | override the experimental beta header                                                                 |
 | `CLAUDE_DEFAULT_TENANT_ID` | optional | fallback tenant for the "teach Carmen a skin" step when it can't be resolved from the caller's bearer |
 
 ## Teach + update + fix-on-fail loop
@@ -121,7 +121,7 @@ isn't blind to what came before:
   (tool, request text, context, session URL, status). This is the record behind a
   future "Carmen ↔ Claude" view and the source for the memory recall below.
 - **Immediate WhatsApp ping.** Right after firing, David gets a guaranteed
-  WhatsApp message — *what Carmen asked* + the **live session link** — via the
+  WhatsApp message — _what Carmen asked_ + the **live session link** — via the
   `claude-notify` path, independent of Carmen's async session. Together with the
   on-completion `claude_notify_david()` ping, David sees both ends: start (what +
   where to watch) and finish (result + PR).
@@ -135,7 +135,7 @@ swallowed and the session still fires.
 
 ## Notes & limits
 
-- **Async only.** `/fire` returns once the session is *created*; it does not
+- **Async only.** `/fire` returns once the session is _created_; it does not
   stream output or wait. Carmen gets a session URL, not the final result.
 - **No idempotency.** Each call creates a new session — don't retry blindly.
 - **Auth.** This endpoint can launch real Claude sessions, so `CLAUDE_MCP_BEARER`

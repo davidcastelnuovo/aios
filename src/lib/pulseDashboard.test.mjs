@@ -132,7 +132,10 @@ test("keeps warning status when other flags remain after call is logged", () => 
 
 test("last_week bounds are previous Sun–Sat (Jerusalem calendar)", () => {
   // Wednesday 2026-08-05 Asia/Jerusalem → last week Sun 2026-07-26 .. Sat 2026-08-01
-  const bounds = getPulsePeriodBounds("last_week", new Date("2026-08-05T12:00:00+03:00"));
+  const bounds = getPulsePeriodBounds(
+    "last_week",
+    new Date("2026-08-05T12:00:00+03:00"),
+  );
   assert.equal(bounds.startDate, "2026-07-26");
   assert.equal(bounds.endDate, "2026-08-01");
   assert.equal(bounds.prevStartDate, "2026-07-19");
@@ -142,13 +145,19 @@ test("last_week bounds are previous Sun–Sat (Jerusalem calendar)", () => {
 });
 
 test("this_week bounds start on Sunday through today", () => {
-  const bounds = getPulsePeriodBounds("this_week", new Date("2026-08-05T12:00:00+03:00"));
+  const bounds = getPulsePeriodBounds(
+    "this_week",
+    new Date("2026-08-05T12:00:00+03:00"),
+  );
   assert.equal(bounds.startDate, "2026-08-02");
   assert.equal(bounds.endDate, "2026-08-05");
 });
 
 test("aggregates period metrics and CPL change vs prior window", () => {
-  const bounds = getPulsePeriodBounds("last_week", new Date("2026-08-05T12:00:00+03:00"));
+  const bounds = getPulsePeriodBounds(
+    "last_week",
+    new Date("2026-08-05T12:00:00+03:00"),
+  );
   const records = [
     { data: { date: "2026-07-28", spend: 200, leads: 4 } },
     { data: { date: "2026-07-30", spend: 100, leads: 1 } },
@@ -202,7 +211,10 @@ test("applyPeriodMetricsToSnapshot keeps meta fields", () => {
 });
 
 test("expands pulse rows per platform when Meta and Google tables exist", () => {
-  const bounds = getPulsePeriodBounds("last_7_days", new Date("2026-08-05T12:00:00+03:00"));
+  const bounds = getPulsePeriodBounds(
+    "last_7_days",
+    new Date("2026-08-05T12:00:00+03:00"),
+  );
   const snapshot = {
     client_id: "c1",
     agency_id: null,
@@ -232,12 +244,25 @@ test("expands pulse rows per platform when Meta and Google tables exist", () => 
     last_client_call_by: null,
   };
   const tables = [
-    { id: "t-meta", client_id: "c1", integration_type: "facebook_insights", campaign_active: true },
-    { id: "t-google", client_id: "c1", integration_type: "google_ads", campaign_active: true },
+    {
+      id: "t-meta",
+      client_id: "c1",
+      integration_type: "facebook_insights",
+      campaign_active: true,
+    },
+    {
+      id: "t-google",
+      client_id: "c1",
+      integration_type: "google_ads",
+      campaign_active: true,
+    },
   ];
   const records = [
     { table_id: "t-meta", data: { date: "2026-08-04", spend: 100, leads: 4 } },
-    { table_id: "t-google", data: { date: "2026-08-04", spend: 200, leads: 6 } },
+    {
+      table_id: "t-google",
+      data: { date: "2026-08-04", spend: 200, leads: 6 },
+    },
   ];
   const rows = expandPulseToPlatformGoalRows({
     snapshot,
@@ -247,15 +272,25 @@ test("expands pulse rows per platform when Meta and Google tables exist", () => 
     bounds,
   });
   assert.equal(rows.length, 2);
-  assert.deepEqual(rows.map((row) => row.platformLabel).sort(), ["Google", "Meta"]);
-  assert.equal(platformGoalLabel(rows[0]), rows[0].platformLabel + " · " + (rows[0].goal === "ecommerce" ? "איקומרס" : "לידים"));
+  assert.deepEqual(rows.map((row) => row.platformLabel).sort(), [
+    "Google",
+    "Meta",
+  ]);
+  assert.equal(
+    platformGoalLabel(rows[0]),
+    rows[0].platformLabel +
+      " · " +
+      (rows[0].goal === "ecommerce" ? "איקומרס" : "לידים"),
+  );
 });
 
 test("prefers stored snapshot breakdown and only rebuilds clients without it", () => {
   const snapshots = [
     {
       client_id: "c1",
-      campaign_breakdown: [{ campaign_key: "meta:id:1", client_id: "c1", goal: "leads" }],
+      campaign_breakdown: [
+        { campaign_key: "meta:id:1", client_id: "c1", goal: "leads" },
+      ],
     },
     { client_id: "c2" },
   ];
@@ -263,25 +298,39 @@ test("prefers stored snapshot breakdown and only rebuilds clients without it", (
     { id: "t1", client_id: "c1", integration_type: "facebook_insights" },
     { id: "t2", client_id: "c2", integration_type: "google_ads" },
   ];
-  assert.deepEqual(collectCampaignBreakdownFromSnapshots(snapshots), snapshots[0].campaign_breakdown);
-  assert.deepEqual(pulseClientsNeedingRecordBuild({ snapshots, tables }), ["c2"]);
+  assert.deepEqual(
+    collectCampaignBreakdownFromSnapshots(snapshots),
+    snapshots[0].campaign_breakdown,
+  );
+  assert.deepEqual(pulseClientsNeedingRecordBuild({ snapshots, tables }), [
+    "c2",
+  ]);
   const paused = rehydrateCampaignBreakdownRows(
-    [{
-      campaign_key: "meta:id:1",
-      client_id: "c1",
-      table_id: "t1",
-      campaign_id: "1",
-      platform: "meta",
-      goal: "leads",
-      status: "critical",
-      status_tier: "exception",
-      status_reason: "old",
-      alert_eligible: true,
-      spend_7d: 100,
-      outcomes_7d: 0,
-    }],
+    [
+      {
+        campaign_key: "meta:id:1",
+        client_id: "c1",
+        table_id: "t1",
+        campaign_id: "1",
+        platform: "meta",
+        goal: "leads",
+        status: "critical",
+        status_tier: "exception",
+        status_reason: "old",
+        alert_eligible: true,
+        spend_7d: 100,
+        outcomes_7d: 0,
+      },
+    ],
     tables,
-    [{ table_id: "t1", campaign_id: "1", effective_status: "PAUSED", date: "2026-09-17" }],
+    [
+      {
+        table_id: "t1",
+        campaign_id: "1",
+        effective_status: "PAUSED",
+        date: "2026-09-17",
+      },
+    ],
   );
   assert.equal(paused[0].delivery_status, "paused");
   assert.equal(paused[0].status, "healthy");
@@ -372,16 +421,26 @@ test("rolls per-campaign rows into one client card per platform and goal", () =>
       },
     ],
   ]);
-  const rollups = rollupCampaignRowsByClientGoal({ campaignRows, snapshotsByClient: snapshots });
+  const rollups = rollupCampaignRowsByClientGoal({
+    campaignRows,
+    snapshotsByClient: snapshots,
+  });
   assert.equal(rollups.length, 2);
-  const metaLeads = rollups.find((row) => row.platform === "meta" && row.goal === "leads");
+  const metaLeads = rollups.find(
+    (row) => row.platform === "meta" && row.goal === "leads",
+  );
   assert.equal(metaLeads.campaigns.length, 2);
   assert.equal(metaLeads.status, "critical");
   assert.equal(metaLeads.spend_7d, 150);
   assert.equal(metaLeads.last_campaign_change_at, "2026-09-13T10:00:00.000Z");
   assert.equal(metaLeads.last_client_call_at, "2026-09-15T12:00:00.000Z");
-  const googleEngagement = rollups.find((row) => row.platform === "google" && row.goal === "engagement");
-  assert.equal(googleEngagement.last_campaign_change_at, "2026-09-11T07:00:00.000Z");
+  const googleEngagement = rollups.find(
+    (row) => row.platform === "google" && row.goal === "engagement",
+  );
+  assert.equal(
+    googleEngagement.last_campaign_change_at,
+    "2026-09-11T07:00:00.000Z",
+  );
 });
 
 test("rollup: paused-unknown critical does not flash red before Meta hints land", () => {
@@ -423,7 +482,8 @@ test("rollup: paused-unknown critical does not flash red before Meta hints land"
   ];
 
   assert.equal(
-    rollupStatusFromCampaigns(beforeHints, { deliveryHintsPending: true }).status,
+    rollupStatusFromCampaigns(beforeHints, { deliveryHintsPending: true })
+      .status,
     "warning",
   );
   assert.equal(rollupStatusFromCampaigns(beforeHints).status, "warning");

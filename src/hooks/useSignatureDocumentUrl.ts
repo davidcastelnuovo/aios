@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { resolveSignatureDocumentUrl } from "@/lib/resolveSignatureDocumentUrl";
 
-export function useSignatureDocumentUrl(fileUrlOrPath: string | null | undefined) {
+export function useSignatureDocumentUrl(
+  fileUrlOrPath: string | null | undefined,
+) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

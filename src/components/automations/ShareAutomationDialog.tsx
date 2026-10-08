@@ -26,7 +26,11 @@ interface ShareAutomationDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareAutomationDialogProps) {
+export function ShareAutomationDialog({
+  automation,
+  open,
+  onOpenChange,
+}: ShareAutomationDialogProps) {
   const { toast } = useToast();
   const { userId } = useCurrentUser();
   const { tenantId: sourceTenantId } = useCurrentTenant();
@@ -52,15 +56,19 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
 
   const clonedTenantIds = useMemo(
     () => new Set((existingClones || []).map((c: any) => c.tenant_id)),
-    [existingClones]
+    [existingClones],
   );
 
   const availableTenants = useMemo(() => {
-    const list = (userTenants || []).filter((t: any) => t.id !== sourceTenantId);
+    const list = (userTenants || []).filter(
+      (t: any) => t.id !== sourceTenantId,
+    );
     if (!search.trim()) return list;
     const q = search.trim().toLowerCase();
-    return list.filter((t: any) =>
-      (t.name || "").toLowerCase().includes(q) || (t.slug || "").toLowerCase().includes(q)
+    return list.filter(
+      (t: any) =>
+        (t.name || "").toLowerCase().includes(q) ||
+        (t.slug || "").toLowerCase().includes(q),
     );
   }, [userTenants, sourceTenantId, search]);
 
@@ -77,23 +85,29 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
     if (selected.size === 0) return;
     setSubmitting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const { data, error } = await supabase.functions.invoke("clone-automation-to-tenant", {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
-        body: {
-          automation_id: automation.id,
-          target_tenant_ids: Array.from(selected),
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke(
+        "clone-automation-to-tenant",
+        {
+          headers: { Authorization: `Bearer ${session?.access_token}` },
+          body: {
+            automation_id: automation.id,
+            target_tenant_ids: Array.from(selected),
+          },
         },
-      });
+      );
       if (error) throw error;
       const results = (data as any)?.results || [];
       const ok = results.filter((r: any) => r.success).length;
       const failed = results.filter((r: any) => !r.success);
       toast({
         title: ok > 0 ? `שותף ל-${ok} ארגונים` : "השיתוף נכשל",
-        description: failed.length > 0
-          ? `נכשל ב-${failed.length}: ${failed.map((f: any) => f.error).join(", ")}`
-          : "הארגונים החדשים רואים את האוטומציה כצפייה בלבד (read-only). היא תמשיך לרוץ פעם אחת מהארגון הנוכחי.",
+        description:
+          failed.length > 0
+            ? `נכשל ב-${failed.length}: ${failed.map((f: any) => f.error).join(", ")}`
+            : "הארגונים החדשים רואים את האוטומציה כצפייה בלבד (read-only). היא תמשיך לרוץ פעם אחת מהארגון הנוכחי.",
         variant: ok === 0 ? "destructive" : "default",
       });
       if (ok > 0) {
@@ -101,7 +115,11 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
         onOpenChange(false);
       }
     } catch (e: any) {
-      toast({ title: "שגיאה בשכפול", description: e.message, variant: "destructive" });
+      toast({
+        title: "שגיאה בשכפול",
+        description: e.message,
+        variant: "destructive",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -113,8 +131,10 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
         <DialogHeader>
           <DialogTitle>שתף אוטומציה עם ארגון אחר</DialogTitle>
           <DialogDescription>
-            שיתוף "{automation?.name}" כמראה (Mirror) לארגונים נבחרים. האוטומציה עצמה תמשיך לרוץ פעם אחת בלבד מהארגון
-            הנוכחי — הארגונים האחרים יראו אותה כצפייה בלבד (read-only) ולא יקבלו טריגר נפרד, כך שלא נוצרות הפעלות כפולות.
+            שיתוף "{automation?.name}" כמראה (Mirror) לארגונים נבחרים. האוטומציה
+            עצמה תמשיך לרוץ פעם אחת בלבד מהארגון הנוכחי — הארגונים האחרים יראו
+            אותה כצפייה בלבד (read-only) ולא יקבלו טריגר נפרד, כך שלא נוצרות
+            הפעלות כפולות.
           </DialogDescription>
         </DialogHeader>
 
@@ -154,7 +174,9 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{t.name}</p>
                         {t.slug && (
-                          <p className="text-xs text-muted-foreground truncate">{t.slug}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {t.slug}
+                          </p>
                         )}
                       </div>
                       {alreadyCloned && (
@@ -171,10 +193,17 @@ export function ShareAutomationDialog({ automation, open, onOpenChange }: ShareA
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
+          >
             ביטול
           </Button>
-          <Button onClick={handleClone} disabled={selected.size === 0 || submitting}>
+          <Button
+            onClick={handleClone}
+            disabled={selected.size === 0 || submitting}
+          >
             {submitting && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
             שכפל ל-{selected.size} ארגונים
           </Button>

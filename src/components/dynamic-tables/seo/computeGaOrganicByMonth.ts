@@ -17,7 +17,12 @@ export interface GaOrganicMonth {
 
 const isPaidChannel = (cg: string) => {
   const v = cg.toLowerCase();
-  return v.startsWith("paid") || v === "cross-network" || v === "display" || v.includes("paid");
+  return (
+    v.startsWith("paid") ||
+    v === "cross-network" ||
+    v === "display" ||
+    v.includes("paid")
+  );
 };
 
 const isPaidMedium = (sm: string) => {
@@ -25,11 +30,15 @@ const isPaidMedium = (sm: string) => {
   return /\b(cpc|ppc|paid|cpm|cpv|paidsearch|display)\b/.test(v);
 };
 
-export function computeGaOrganicByMonth(gaRecords: GaRecord[] | null | undefined): GaOrganicMonth[] {
+export function computeGaOrganicByMonth(
+  gaRecords: GaRecord[] | null | undefined,
+): GaOrganicMonth[] {
   if (!gaRecords || gaRecords.length === 0) return [];
 
   // 1. monthly_channel
-  const monthlyChannelRows = gaRecords.filter((r: any) => r.data?.report_type === "monthly_channel");
+  const monthlyChannelRows = gaRecords.filter(
+    (r: any) => r.data?.report_type === "monthly_channel",
+  );
   if (monthlyChannelRows.length > 0) {
     const monthMap = new Map<string, number>();
     for (const r of monthlyChannelRows as any[]) {
@@ -48,7 +57,9 @@ export function computeGaOrganicByMonth(gaRecords: GaRecord[] | null | undefined
   }
 
   // 2. daily_source
-  const dailySourceRows = gaRecords.filter((r: any) => r.data?.report_type === "daily_source");
+  const dailySourceRows = gaRecords.filter(
+    (r: any) => r.data?.report_type === "daily_source",
+  );
   if (dailySourceRows.length > 0) {
     const monthMap = new Map<string, number>();
     for (const r of dailySourceRows as any[]) {
@@ -70,6 +81,9 @@ export function computeGaOrganicByMonth(gaRecords: GaRecord[] | null | undefined
   // 3. monthly_organic
   return (gaRecords as any[])
     .filter((r: any) => r.data?.report_type === "monthly_organic")
-    .map((r: any) => ({ month: r.data.month as string, sessions: Number(r.data.sessions) || 0 }))
+    .map((r: any) => ({
+      month: r.data.month as string,
+      sessions: Number(r.data.sessions) || 0,
+    }))
     .sort((a, b) => a.month.localeCompare(b.month));
 }

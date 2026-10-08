@@ -3,7 +3,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -18,7 +24,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Unlink, RefreshCw, CheckCircle2, AlertCircle, ArrowLeft, Loader2, Copy, ExternalLink, Webhook, Settings, Plug, Search, Share2 } from "lucide-react";
+import {
+  Unlink,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  ArrowLeft,
+  Loader2,
+  Copy,
+  ExternalLink,
+  Webhook,
+  Settings,
+  Plug,
+  Search,
+  Share2,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
@@ -32,18 +52,28 @@ import {
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-6 w-6" }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12.316 3.051a1.5 1.5 0 0 1 2.183 0l7.495 8.099a1.5 1.5 0 0 1-.168 2.169l-7.495 6.084a1.5 1.5 0 0 1-2.183-.168l-7.495-8.099a1.5 1.5 0 0 1 .168-2.169l7.495-5.916z" fill="#4285F4"/>
-    <circle cx="17.5" cy="18.5" r="2.5" fill="#34A853"/>
-    <path d="M3.5 14.5l5 5.5L4 21.5l-1.5-5z" fill="#FBBC04"/>
-    <path d="M7 3l6 6.5L10 12 4 6z" fill="#EA4335"/>
+    <path
+      d="M12.316 3.051a1.5 1.5 0 0 1 2.183 0l7.495 8.099a1.5 1.5 0 0 1-.168 2.169l-7.495 6.084a1.5 1.5 0 0 1-2.183-.168l-7.495-8.099a1.5 1.5 0 0 1 .168-2.169l7.495-5.916z"
+      fill="#4285F4"
+    />
+    <circle cx="17.5" cy="18.5" r="2.5" fill="#34A853" />
+    <path d="M3.5 14.5l5 5.5L4 21.5l-1.5-5z" fill="#FBBC04" />
+    <path d="M7 3l6 6.5L10 12 4 6z" fill="#EA4335" />
   </svg>
 );
 
 // Make.com icon
 const MakeIcon = ({ className = "h-6 w-6" }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="12" cy="12" r="10" fill="#6D29D9"/>
-    <path d="M8 12l3 3 5-6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="12" cy="12" r="10" fill="#6D29D9" />
+    <path
+      d="M8 12l3 3 5-6"
+      stroke="white"
+      strokeWidth="2"
+      fill="none"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
@@ -70,47 +100,51 @@ export default function GoogleAdsSettings() {
   const [activeTab, setActiveTab] = useState("make-api");
   const [selectedConnection, setSelectedConnection] = useState<string>("");
   // Per-connection sharing dialog state (mirrors Google Analytics settings)
-  const [sharingIntegrationId, setSharingIntegrationId] = useState<string | null>(null);
-  const [sharingIntegrationName, setSharingIntegrationName] = useState<string>("");
+  const [sharingIntegrationId, setSharingIntegrationId] = useState<
+    string | null
+  >(null);
+  const [sharingIntegrationName, setSharingIntegrationName] =
+    useState<string>("");
   const [sharingOwnerId, setSharingOwnerId] = useState<string | null>(null);
 
   // All Google Ads connections in this tenant the user can see (own + shared),
   // each tagged with _isOwn / _sharedByName — this is what enables per-user
   // connections + sharing, exactly like the Google Analytics settings page.
-  const { data: adsConnections = [], isLoading: loadingAdsConnections } = useUserIntegrations(
-    currentTenant?.id,
-    'google_ads'
-  );
+  const { data: adsConnections = [], isLoading: loadingAdsConnections } =
+    useUserIntegrations(currentTenant?.id, "google_ads");
   const hasAnyDirectConnection = (adsConnections as any[]).length > 0;
-  const hasOwnDirectConnection = (adsConnections as any[]).some((i: any) => i._isOwn);
+  const hasOwnDirectConnection = (adsConnections as any[]).some(
+    (i: any) => i._isOwn,
+  );
 
   // Fetch Google Ads integration (direct API)
-  const { data: googleAdsIntegration, isLoading: loadingIntegration } = useQuery({
-    queryKey: ['google-ads-integration', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant?.id) return null;
-      const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select(CLIENT_INTEGRATION_COLUMNS)
-        .eq('tenant_id', currentTenant.id)
-        .eq('integration_type', 'google_ads')
-        .maybeSingle();
-      if (error) throw error;
-      return data ? toClientIntegration(data) : null;
-    },
-    enabled: !!currentTenant?.id,
-  });
+  const { data: googleAdsIntegration, isLoading: loadingIntegration } =
+    useQuery({
+      queryKey: ["google-ads-integration", currentTenant?.id],
+      queryFn: async () => {
+        if (!currentTenant?.id) return null;
+        const { data, error } = await supabase
+          .from("tenant_integrations")
+          .select(CLIENT_INTEGRATION_COLUMNS)
+          .eq("tenant_id", currentTenant.id)
+          .eq("integration_type", "google_ads")
+          .maybeSingle();
+        if (error) throw error;
+        return data ? toClientIntegration(data) : null;
+      },
+      enabled: !!currentTenant?.id,
+    });
 
   // Fetch Make API integration (to get credentials)
   const { data: makeApiIntegration } = useQuery({
-    queryKey: ['make-api-integration', currentTenant?.id],
+    queryKey: ["make-api-integration", currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant?.id) return null;
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('integration_type', 'make_api')
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenant.id)
+        .eq("integration_type", "make_api")
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -119,15 +153,18 @@ export default function GoogleAdsSettings() {
   });
 
   // Fetch Google Ads via Make integration
-  const { data: googleAdsViaMakeIntegration, refetch: refetchGoogleAdsViaMake } = useQuery({
-    queryKey: ['google-ads-via-make-integration', currentTenant?.id],
+  const {
+    data: googleAdsViaMakeIntegration,
+    refetch: refetchGoogleAdsViaMake,
+  } = useQuery({
+    queryKey: ["google-ads-via-make-integration", currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant?.id) return null;
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('integration_type', 'google_ads_via_make')
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenant.id)
+        .eq("integration_type", "google_ads_via_make")
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -137,14 +174,14 @@ export default function GoogleAdsSettings() {
 
   // Fetch Make Webhook integration (legacy)
   const { data: makeIntegration } = useQuery({
-    queryKey: ['google-ads-make-integration', currentTenant?.id],
+    queryKey: ["google-ads-make-integration", currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant?.id) return null;
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('integration_type', 'google_ads_make')
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenant.id)
+        .eq("integration_type", "google_ads_make")
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -152,55 +189,69 @@ export default function GoogleAdsSettings() {
     enabled: !!currentTenant?.id,
   });
 
-  const makeApiSettings = makeApiIntegration?.settings as { 
-    api_token?: string; 
-    team_id?: string; 
+  const makeApiSettings = makeApiIntegration?.settings as {
+    api_token?: string;
+    team_id?: string;
     region?: string;
   } | null;
 
-  const isMakeApiConnected = makeApiIntegration?.is_active && makeApiSettings?.api_token;
+  const isMakeApiConnected =
+    makeApiIntegration?.is_active && makeApiSettings?.api_token;
 
   // Fetch Google Ads connections from Make.com
-  const { data: googleAdsConnectionsResult, isLoading: loadingConnections, refetch: refetchConnections } = useQuery({
-    queryKey: ['make-google-ads-connections', currentTenant?.id],
+  const {
+    data: googleAdsConnectionsResult,
+    isLoading: loadingConnections,
+    refetch: refetchConnections,
+  } = useQuery({
+    queryKey: ["make-google-ads-connections", currentTenant?.id],
     queryFn: async () => {
       if (!makeApiSettings?.api_token || !makeApiSettings?.team_id) {
         return { connections: [], error: null } satisfies MakeConnectionsResult;
       }
-      
+
       try {
-        const { data, error } = await supabase.functions.invoke('make-api', {
+        const { data, error } = await supabase.functions.invoke("make-api", {
           body: {
-            action: 'list_google_ads_connections',
+            action: "list_google_ads_connections",
             api_token: makeApiSettings.api_token,
             team_id: makeApiSettings.team_id,
-            region: makeApiSettings.region || 'eu1',
+            region: makeApiSettings.region || "eu1",
           },
         });
 
         if (error) {
-          const msg = error.message || 'שגיאה לא ידועה';
-          const is403 = msg.includes('403') || msg.includes('SC403') || msg.toLowerCase().includes('permission');
+          const msg = error.message || "שגיאה לא ידועה";
+          const is403 =
+            msg.includes("403") ||
+            msg.includes("SC403") ||
+            msg.toLowerCase().includes("permission");
           return {
             connections: [],
             error: is403
-              ? 'אין הרשאה לקרוא Connections ב‑Make.com. ודא שה‑API Token כולל הרשאות connections:read ושאתה משתמש ב‑Team ID הנכון.'
+              ? "אין הרשאה לקרוא Connections ב‑Make.com. ודא שה‑API Token כולל הרשאות connections:read ושאתה משתמש ב‑Team ID הנכון."
               : msg,
           } satisfies MakeConnectionsResult;
         }
 
         if (data?.error) {
           const msg = String(data.error);
-          const is403 = msg.includes('403') || msg.includes('SC403') || msg.toLowerCase().includes('permission');
+          const is403 =
+            msg.includes("403") ||
+            msg.includes("SC403") ||
+            msg.toLowerCase().includes("permission");
           return {
             connections: [],
             error: is403
-              ? 'אין הרשאה לקרוא Connections ב‑Make.com. ודא שה‑API Token כולל הרשאות connections:read ושאתה משתמש ב‑Team ID הנכון.'
+              ? "אין הרשאה לקרוא Connections ב‑Make.com. ודא שה‑API Token כולל הרשאות connections:read ושאתה משתמש ב‑Team ID הנכון."
               : msg,
           } satisfies MakeConnectionsResult;
         }
 
-        return { connections: data?.connections || [], error: null } satisfies MakeConnectionsResult;
+        return {
+          connections: data?.connections || [],
+          error: null,
+        } satisfies MakeConnectionsResult;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return { connections: [], error: msg } satisfies MakeConnectionsResult;
@@ -209,12 +260,16 @@ export default function GoogleAdsSettings() {
     enabled: !!isMakeApiConnected,
   });
 
-  const googleAdsConnections = (googleAdsConnectionsResult as any)?.connections ?? [];
-  const makeConnectionsError = (googleAdsConnectionsResult as any)?.error as string | null | undefined;
+  const googleAdsConnections =
+    (googleAdsConnectionsResult as any)?.connections ?? [];
+  const makeConnectionsError = (googleAdsConnectionsResult as any)?.error as
+    string | null | undefined;
 
   // Pre-select connection if already saved
   useEffect(() => {
-    const savedSettings = googleAdsViaMakeIntegration?.settings as { connection_id?: string } | null;
+    const savedSettings = googleAdsViaMakeIntegration?.settings as {
+      connection_id?: string;
+    } | null;
     if (savedSettings?.connection_id) {
       setSelectedConnection(savedSettings.connection_id);
     }
@@ -224,85 +279,92 @@ export default function GoogleAdsSettings() {
   const saveGoogleAdsViaMakeMutation = useMutation({
     mutationFn: async () => {
       if (!currentTenant?.id || !user?.id || !selectedConnection) {
-        throw new Error('Missing required data');
+        throw new Error("Missing required data");
       }
 
       const selectedConn = (googleAdsConnections as MakeConnection[])?.find(
-        c => c.id.toString() === selectedConnection
+        (c) => c.id.toString() === selectedConnection,
       );
 
       const settings = {
         connection_id: selectedConnection,
-        connection_name: selectedConn?.name || selectedConn?.accountName || '',
+        connection_name: selectedConn?.name || selectedConn?.accountName || "",
         make_team_id: makeApiSettings?.team_id,
-        make_region: makeApiSettings?.region || 'eu1',
+        make_region: makeApiSettings?.region || "eu1",
         configured_at: new Date().toISOString(),
       };
 
       if (googleAdsViaMakeIntegration?.id) {
         const { error } = await supabase
-          .from('tenant_integrations')
-          .update({ 
-            settings, 
+          .from("tenant_integrations")
+          .update({
+            settings,
             is_active: true,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', googleAdsViaMakeIntegration.id);
+          .eq("id", googleAdsViaMakeIntegration.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('tenant_integrations')
-          .insert({
-            tenant_id: currentTenant.id,
-            integration_type: 'google_ads_via_make',
-            is_active: true,
-            settings,
-            user_id: user.id
-          });
+        const { error } = await supabase.from("tenant_integrations").insert({
+          tenant_id: currentTenant.id,
+          integration_type: "google_ads_via_make",
+          is_active: true,
+          settings,
+          user_id: user.id,
+        });
         if (error) throw error;
       }
     },
     onSuccess: () => {
-      toast.success('חיבור Google Ads דרך Make נשמר בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['google-ads-via-make-integration', currentTenant?.id] });
+      toast.success("חיבור Google Ads דרך Make נשמר בהצלחה");
+      queryClient.invalidateQueries({
+        queryKey: ["google-ads-via-make-integration", currentTenant?.id],
+      });
     },
     onError: (error) => {
-      toast.error('שגיאה בשמירת החיבור: ' + (error as Error).message);
+      toast.error("שגיאה בשמירת החיבור: " + (error as Error).message);
     },
   });
 
   // Disconnect Google Ads via Make
   const disconnectViaMakeMutation = useMutation({
     mutationFn: async () => {
-      if (!googleAdsViaMakeIntegration?.id) throw new Error('No integration found');
+      if (!googleAdsViaMakeIntegration?.id)
+        throw new Error("No integration found");
       const { error } = await supabase
-        .from('tenant_integrations')
+        .from("tenant_integrations")
         .update({ is_active: false })
-        .eq('id', googleAdsViaMakeIntegration.id);
+        .eq("id", googleAdsViaMakeIntegration.id);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('החיבור נותק בהצלחה');
+      toast.success("החיבור נותק בהצלחה");
       setSelectedConnection("");
-      queryClient.invalidateQueries({ queryKey: ['google-ads-via-make-integration', currentTenant?.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["google-ads-via-make-integration", currentTenant?.id],
+      });
     },
     onError: (error) => {
-      toast.error('שגיאה בניתוק: ' + (error as Error).message);
+      toast.error("שגיאה בניתוק: " + (error as Error).message);
     },
   });
 
   // Generate or get webhook secret for legacy webhook method
-  const makeSettings = makeIntegration?.settings as { webhook_secret?: string } | null;
-  const webhookSecret = makeSettings?.webhook_secret || 
+  const makeSettings = makeIntegration?.settings as {
+    webhook_secret?: string;
+  } | null;
+  const webhookSecret =
+    makeSettings?.webhook_secret ||
     `make_${currentTenant?.id?.substring(0, 8)}_${Date.now().toString(36)}`;
-  
+
   const webhookUrl = `https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-google-ads-sync`;
 
   // Save Make webhook settings (legacy)
   const saveMakeSettingsMutation = useMutation({
     mutationFn: async () => {
-      if (!currentTenant?.id || !user?.id) throw new Error('Missing tenant or user');
-      
+      if (!currentTenant?.id || !user?.id)
+        throw new Error("Missing tenant or user");
+
       const settings = {
         webhook_secret: webhookSecret,
         configured_at: new Date().toISOString(),
@@ -310,33 +372,33 @@ export default function GoogleAdsSettings() {
 
       if (makeIntegration?.id) {
         const { error } = await supabase
-          .from('tenant_integrations')
-          .update({ 
-            settings, 
+          .from("tenant_integrations")
+          .update({
+            settings,
             is_active: true,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', makeIntegration.id);
+          .eq("id", makeIntegration.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('tenant_integrations')
-          .insert({
-            tenant_id: currentTenant.id,
-            integration_type: 'google_ads_make',
-            is_active: true,
-            settings,
-            user_id: user.id
-          });
+        const { error } = await supabase.from("tenant_integrations").insert({
+          tenant_id: currentTenant.id,
+          integration_type: "google_ads_make",
+          is_active: true,
+          settings,
+          user_id: user.id,
+        });
         if (error) throw error;
       }
     },
     onSuccess: () => {
-      toast.success('הגדרות Make נשמרו בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['google-ads-make-integration', currentTenant?.id] });
+      toast.success("הגדרות Make נשמרו בהצלחה");
+      queryClient.invalidateQueries({
+        queryKey: ["google-ads-make-integration", currentTenant?.id],
+      });
     },
     onError: (error) => {
-      toast.error('שגיאה בשמירת הגדרות: ' + (error as Error).message);
+      toast.error("שגיאה בשמירת הגדרות: " + (error as Error).message);
     },
   });
 
@@ -344,80 +406,94 @@ export default function GoogleAdsSettings() {
   const connectMutation = useMutation({
     mutationFn: async () => {
       const redirectUri = `${window.location.origin}/t/${currentTenant?.slug}/integrations`;
-      
-      const { data, error } = await supabase.functions.invoke('google-ads-auth?action=get_auth_url', {
-        body: {
-          tenant_id: currentTenant?.id,
-          user_id: user?.id,
-          redirect_uri: redirectUri,
-          origin: window.location.origin,
+
+      const { data, error } = await supabase.functions.invoke(
+        "google-ads-auth?action=get_auth_url",
+        {
+          body: {
+            tenant_id: currentTenant?.id,
+            user_id: user?.id,
+            redirect_uri: redirectUri,
+            origin: window.location.origin,
+          },
         },
-      });
+      );
 
       if (error) throw error;
-      
+
       if (data?.auth_url) {
         window.location.href = data.auth_url;
       } else {
-        throw new Error('No auth URL received');
+        throw new Error("No auth URL received");
       }
-      
+
       return data;
     },
     onError: (error) => {
-      toast.error('שגיאה בהתחברות ל-Google Ads: ' + (error as Error).message);
+      toast.error("שגיאה בהתחברות ל-Google Ads: " + (error as Error).message);
     },
   });
 
   // Disconnect mutation (direct API) — per connection id (multi-connection safe)
   const disconnectMutation = useMutation({
     mutationFn: async (integrationId: string) => {
-      if (!integrationId) throw new Error('No integration found');
+      if (!integrationId) throw new Error("No integration found");
       const { error } = await supabase
-        .from('tenant_integrations')
+        .from("tenant_integrations")
         .update({ is_active: false, api_key: null })
-        .eq('id', integrationId);
+        .eq("id", integrationId);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('החיבור ל-Google Ads נותק בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['google-ads-integration', currentTenant?.id] });
-      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
+      toast.success("החיבור ל-Google Ads נותק בהצלחה");
+      queryClient.invalidateQueries({
+        queryKey: ["google-ads-integration", currentTenant?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["user-integrations", currentTenant?.id],
+      });
     },
     onError: (error) => {
-      toast.error('שגיאה בניתוק: ' + (error as Error).message);
+      toast.error("שגיאה בניתוק: " + (error as Error).message);
     },
   });
 
   // Check status mutation (direct API)
   const checkStatusMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('google-ads-auth?action=check_status', {
-        body: {
-          tenant_id: currentTenant?.id,
-          user_id: user?.id,
+      const { data, error } = await supabase.functions.invoke(
+        "google-ads-auth?action=check_status",
+        {
+          body: {
+            tenant_id: currentTenant?.id,
+            user_id: user?.id,
+          },
         },
-      });
+      );
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
       if (data?.is_connected && !data?.is_expired) {
         const count = data?.integration_count ?? 1;
-        const expiresAt = data?.expires_at ? new Date(data.expires_at).toLocaleString('he-IL') : null;
+        const expiresAt = data?.expires_at
+          ? new Date(data.expires_at).toLocaleString("he-IL")
+          : null;
         toast.success(
-          `החיבור ל-Google Ads פעיל${count > 1 ? ` (${count} חיבורים)` : ''}` +
-            (expiresAt ? ` — תוקף הטוקן: ${expiresAt}` : '')
+          `החיבור ל-Google Ads פעיל${count > 1 ? ` (${count} חיבורים)` : ""}` +
+            (expiresAt ? ` — תוקף הטוקן: ${expiresAt}` : ""),
         );
       } else if (data?.is_connected && data?.is_expired) {
-        toast.warning('הטוקן של Google Ads פג תוקף — נדרש חיבור מחדש');
+        toast.warning("הטוקן של Google Ads פג תוקף — נדרש חיבור מחדש");
       } else {
-        toast.warning('לא נמצא חיבור פעיל ל-Google Ads');
+        toast.warning("לא נמצא חיבור פעיל ל-Google Ads");
       }
-      queryClient.invalidateQueries({ queryKey: ['google-ads-integration', currentTenant?.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["google-ads-integration", currentTenant?.id],
+      });
     },
     onError: (error) => {
-      toast.error('שגיאה בבדיקת סטטוס: ' + (error as Error).message);
+      toast.error("שגיאה בבדיקת סטטוס: " + (error as Error).message);
     },
   });
 
@@ -430,18 +506,24 @@ export default function GoogleAdsSettings() {
   const isMakeConfigured = makeIntegration?.is_active;
   const isViaMakeConnected = googleAdsViaMakeIntegration?.is_active;
   const settings = googleAdsIntegration?.settings as any;
-  const viaMakeSettings = googleAdsViaMakeIntegration?.settings as { connection_name?: string } | null;
-  const needsReauth = Boolean(settings?.needs_reauth) || (
-    googleAdsIntegration &&
-    googleAdsIntegration.is_active === false &&
-    googleAdsIntegration.has_credential
-  );
+  const viaMakeSettings = googleAdsViaMakeIntegration?.settings as {
+    connection_name?: string;
+  } | null;
+  const needsReauth =
+    Boolean(settings?.needs_reauth) ||
+    (googleAdsIntegration &&
+      googleAdsIntegration.is_active === false &&
+      googleAdsIntegration.has_credential);
   const lastAuthError = settings?.last_auth_error as string | undefined;
 
   return (
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(buildPath('/integrations'))}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate(buildPath("/integrations"))}
+        >
           <ArrowLeft className="h-5 w-5 rotate-180" />
         </Button>
         <div>
@@ -477,12 +559,18 @@ export default function GoogleAdsSettings() {
             <CardHeader>
               <CardTitle className="flex items-center justify-between flex-row-reverse">
                 {isViaMakeConnected ? (
-                  <Badge variant="default" className="bg-purple-500 flex items-center gap-1">
+                  <Badge
+                    variant="default"
+                    className="bg-purple-500 flex items-center gap-1"
+                  >
                     <CheckCircle2 className="h-3 w-3" />
                     מחובר
                   </Badge>
                 ) : (
-                  <Badge variant="secondary" className="flex items-center gap-1">
+                  <Badge
+                    variant="secondary"
+                    className="flex items-center gap-1"
+                  >
                     <Plug className="h-3 w-3" />
                     לא מחובר
                   </Badge>
@@ -493,20 +581,26 @@ export default function GoogleAdsSettings() {
                 </span>
               </CardTitle>
               <CardDescription className="text-right">
-                בחר חשבון Google Ads מתוך החיבורים שלך ב-Make.com - ללא צורך ב-Developer Token
+                בחר חשבון Google Ads מתוך החיבורים שלך ב-Make.com - ללא צורך
+                ב-Developer Token
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {!isMakeApiConnected ? (
                 <Alert className="border-amber-200 bg-amber-50 text-right">
                   <AlertCircle className="h-4 w-4 text-amber-600" />
-                  <AlertTitle className="text-amber-800">נדרש חיבור Make.com</AlertTitle>
+                  <AlertTitle className="text-amber-800">
+                    נדרש חיבור Make.com
+                  </AlertTitle>
                   <AlertDescription className="text-amber-700">
-                    <p>כדי להשתמש בשיטה זו, יש להגדיר תחילה את אינטגרציית Make.com.</p>
-                    <Button 
-                      variant="link" 
+                    <p>
+                      כדי להשתמש בשיטה זו, יש להגדיר תחילה את אינטגרציית
+                      Make.com.
+                    </p>
+                    <Button
+                      variant="link"
                       className="p-0 h-auto text-amber-800 underline"
-                      onClick={() => navigate(buildPath('/make-settings'))}
+                      onClick={() => navigate(buildPath("/make-settings"))}
                     >
                       עבור להגדרות Make.com
                     </Button>
@@ -516,12 +610,17 @@ export default function GoogleAdsSettings() {
                 <div className="space-y-4">
                   <Alert className="border-green-200 bg-green-50 text-right">
                     <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <AlertTitle className="text-green-800">מחובר בהצלחה</AlertTitle>
+                    <AlertTitle className="text-green-800">
+                      מחובר בהצלחה
+                    </AlertTitle>
                     <AlertDescription className="text-green-700">
-                      <span>חשבון: {viaMakeSettings?.connection_name || 'Google Ads'}</span>
+                      <span>
+                        חשבון:{" "}
+                        {viaMakeSettings?.connection_name || "Google Ads"}
+                      </span>
                     </AlertDescription>
                   </Alert>
-                  
+
                   <div className="flex gap-2 flex-wrap">
                     <Button
                       variant="outline"
@@ -550,9 +649,12 @@ export default function GoogleAdsSettings() {
                 <div className="space-y-4">
                   <Alert className="border-purple-200 bg-purple-50 text-right">
                     <MakeIcon className="h-4 w-4" />
-                    <AlertTitle className="text-purple-800">בחר חשבון Google Ads</AlertTitle>
+                    <AlertTitle className="text-purple-800">
+                      בחר חשבון Google Ads
+                    </AlertTitle>
                     <AlertDescription className="text-purple-700">
-                      בחר את חשבון Google Ads שברצונך לחבר מתוך החיבורים שלך ב-Make.com
+                      בחר את חשבון Google Ads שברצונך לחבר מתוך החיבורים שלך
+                      ב-Make.com
                     </AlertDescription>
                   </Alert>
 
@@ -564,17 +666,29 @@ export default function GoogleAdsSettings() {
                   ) : makeConnectionsError ? (
                     <Alert className="border-amber-200 bg-amber-50 text-right">
                       <AlertCircle className="h-4 w-4 text-amber-600" />
-                      <AlertTitle className="text-amber-800">אין הרשאה ל-Make API</AlertTitle>
+                      <AlertTitle className="text-amber-800">
+                        אין הרשאה ל-Make API
+                      </AlertTitle>
                       <AlertDescription className="text-amber-700">
                         <p>{makeConnectionsError}</p>
                         <p className="mt-2">פתרון מהיר:</p>
                         <ol className="list-decimal list-inside mt-1 space-y-1">
-                          <li>ב-Make.com צור Token חדש עם הרשאות connections:read</li>
-                          <li>ודא שה-Team ID הוא של אותו Team שבו נמצאים החיבורים</li>
+                          <li>
+                            ב-Make.com צור Token חדש עם הרשאות connections:read
+                          </li>
+                          <li>
+                            ודא שה-Team ID הוא של אותו Team שבו נמצאים החיבורים
+                          </li>
                           <li>שמור בהגדרות Make במערכת וחזור לכאן</li>
                         </ol>
                         <div className="mt-3">
-                          <Button variant="outline" className="gap-2" onClick={() => navigate(buildPath('/make-settings'))}>
+                          <Button
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() =>
+                              navigate(buildPath("/make-settings"))
+                            }
+                          >
                             <Settings className="h-4 w-4" />
                             פתח הגדרות Make
                           </Button>
@@ -584,22 +698,24 @@ export default function GoogleAdsSettings() {
                   ) : !googleAdsConnections?.length ? (
                     <Alert className="border-amber-200 bg-amber-50 text-right">
                       <AlertCircle className="h-4 w-4 text-amber-600" />
-                      <AlertTitle className="text-amber-800">לא נמצאו חיבורי Google Ads</AlertTitle>
+                      <AlertTitle className="text-amber-800">
+                        לא נמצאו חיבורי Google Ads
+                      </AlertTitle>
                       <AlertDescription className="text-amber-700">
                         <p>לא נמצאו חיבורי Google Ads בחשבון Make.com שלך.</p>
-                        <p className="mt-2">
-                          כדי ליצור חיבור:
-                        </p>
+                        <p className="mt-2">כדי ליצור חיבור:</p>
                         <ol className="list-decimal list-inside mt-1 space-y-1">
                           <li>היכנס ל-Make.com</li>
                           <li>צור Scenario חדש עם מודול Google Ads</li>
                           <li>התחבר לחשבון Google שלך</li>
                           <li>חזור לכאן ולחץ "רענן"</li>
                         </ol>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           className="mt-3 gap-2"
-                          onClick={() => window.open('https://www.make.com/', '_blank')}
+                          onClick={() =>
+                            window.open("https://www.make.com/", "_blank")
+                          }
                         >
                           <ExternalLink className="h-4 w-4" />
                           עבור ל-Make.com
@@ -610,17 +726,27 @@ export default function GoogleAdsSettings() {
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label>בחר חשבון Google Ads</Label>
-                        <Select value={selectedConnection} onValueChange={setSelectedConnection}>
+                        <Select
+                          value={selectedConnection}
+                          onValueChange={setSelectedConnection}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="בחר חשבון..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {(googleAdsConnections as MakeConnection[]).map((conn) => (
-                              <SelectItem key={conn.id} value={conn.id.toString()}>
-                                {conn.name || conn.accountName || `חיבור ${conn.id}`}
-                                {conn.valid === false && ' (לא פעיל)'}
-                              </SelectItem>
-                            ))}
+                            {(googleAdsConnections as MakeConnection[]).map(
+                              (conn) => (
+                                <SelectItem
+                                  key={conn.id}
+                                  value={conn.id.toString()}
+                                >
+                                  {conn.name ||
+                                    conn.accountName ||
+                                    `חיבור ${conn.id}`}
+                                  {conn.valid === false && " (לא פעיל)"}
+                                </SelectItem>
+                              ),
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -628,7 +754,10 @@ export default function GoogleAdsSettings() {
                       <div className="flex gap-2">
                         <Button
                           onClick={() => saveGoogleAdsViaMakeMutation.mutate()}
-                          disabled={saveGoogleAdsViaMakeMutation.isPending || !selectedConnection}
+                          disabled={
+                            saveGoogleAdsViaMakeMutation.isPending ||
+                            !selectedConnection
+                          }
                           className="gap-2"
                         >
                           {saveGoogleAdsViaMakeMutation.isPending ? (
@@ -658,7 +787,9 @@ export default function GoogleAdsSettings() {
                 <ol className="list-decimal list-inside space-y-2 text-right text-sm text-muted-foreground">
                   <li>בחר חשבון Google Ads מהרשימה למעלה</li>
                   <li>צור טבלה דינמית מסוג Google Ads בדף "טבלאות דינמיות"</li>
-                  <li>ב-Make.com, צור Scenario שמסנכרן נתונים ושולח ל-Webhook</li>
+                  <li>
+                    ב-Make.com, צור Scenario שמסנכרן נתונים ושולח ל-Webhook
+                  </li>
                   <li>הנתונים יסונכרנו אוטומטית לטבלה שיצרת</li>
                 </ol>
               </div>
@@ -672,12 +803,18 @@ export default function GoogleAdsSettings() {
             <CardHeader>
               <CardTitle className="flex items-center justify-between flex-row-reverse">
                 {isMakeConfigured ? (
-                  <Badge variant="default" className="bg-purple-500 flex items-center gap-1">
+                  <Badge
+                    variant="default"
+                    className="bg-purple-500 flex items-center gap-1"
+                  >
                     <CheckCircle2 className="h-3 w-3" />
                     מוגדר
                   </Badge>
                 ) : (
-                  <Badge variant="secondary" className="flex items-center gap-1">
+                  <Badge
+                    variant="secondary"
+                    className="flex items-center gap-1"
+                  >
                     <Settings className="h-3 w-3" />
                     טרם הוגדר
                   </Badge>
@@ -698,27 +835,27 @@ export default function GoogleAdsSettings() {
                   למה Webhook?
                 </AlertTitle>
                 <AlertDescription className="text-purple-700 text-right">
-                  שיטה זו מאפשרת גמישות מלאה בהגדרת ה-Scenario ב-Make.com.
-                  מתאים למשתמשים מתקדמים שרוצים שליטה מלאה על הנתונים.
+                  שיטה זו מאפשרת גמישות מלאה בהגדרת ה-Scenario ב-Make.com. מתאים
+                  למשתמשים מתקדמים שרוצים שליטה מלאה על הנתונים.
                 </AlertDescription>
               </Alert>
 
               <div className="space-y-4 border rounded-lg p-4">
                 <h3 className="font-semibold text-right">פרטי Webhook</h3>
-                
+
                 <div className="space-y-2">
                   <Label className="text-right block">Webhook URL</Label>
                   <div className="flex gap-2">
-                    <Input 
-                      value={webhookUrl} 
-                      readOnly 
+                    <Input
+                      value={webhookUrl}
+                      readOnly
                       className="font-mono text-sm"
                       dir="ltr"
                     />
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="icon"
-                      onClick={() => copyToClipboard(webhookUrl, 'Webhook URL')}
+                      onClick={() => copyToClipboard(webhookUrl, "Webhook URL")}
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
@@ -728,16 +865,18 @@ export default function GoogleAdsSettings() {
                 <div className="space-y-2">
                   <Label className="text-right block">Webhook Secret</Label>
                   <div className="flex gap-2">
-                    <Input 
-                      value={webhookSecret} 
-                      readOnly 
+                    <Input
+                      value={webhookSecret}
+                      readOnly
                       className="font-mono text-sm"
                       dir="ltr"
                     />
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="icon"
-                      onClick={() => copyToClipboard(webhookSecret, 'Webhook Secret')}
+                      onClick={() =>
+                        copyToClipboard(webhookSecret, "Webhook Secret")
+                      }
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
@@ -747,7 +886,7 @@ export default function GoogleAdsSettings() {
                   </p>
                 </div>
 
-                <Button 
+                <Button
                   onClick={() => saveMakeSettingsMutation.mutate()}
                   disabled={saveMakeSettingsMutation.isPending}
                   className="gap-2"
@@ -762,58 +901,76 @@ export default function GoogleAdsSettings() {
               </div>
 
               <div className="space-y-4 border rounded-lg p-4">
-                <h3 className="font-semibold text-right">הוראות הגדרה ב-Make</h3>
-                
+                <h3 className="font-semibold text-right">
+                  הוראות הגדרה ב-Make
+                </h3>
+
                 <ol className="list-decimal list-inside space-y-3 text-right text-sm">
                   <li>
                     <strong>צור Scenario חדש ב-Make</strong>
-                    <Button 
-                      variant="link" 
+                    <Button
+                      variant="link"
                       className="p-0 h-auto mr-2"
-                      onClick={() => window.open('https://www.make.com/en/register', '_blank')}
+                      onClick={() =>
+                        window.open(
+                          "https://www.make.com/en/register",
+                          "_blank",
+                        )
+                      }
                     >
                       <ExternalLink className="h-3 w-3 ml-1" />
                       הרשמה ל-Make
                     </Button>
                   </li>
-                  
+
                   <li>
                     <strong>הוסף Trigger מסוג Schedule</strong>
                     <p className="text-muted-foreground mr-4">
                       הגדר את התדירות: כל שעה, יום או שבוע
                     </p>
                   </li>
-                  
+
                   <li>
-                    <strong>הוסף מודול Google Ads - Get Campaign Performance</strong>
+                    <strong>
+                      הוסף מודול Google Ads - Get Campaign Performance
+                    </strong>
                     <ul className="list-disc list-inside mr-4 text-muted-foreground">
                       <li>התחבר לחשבון Google Ads שלך</li>
                       <li>בחר את החשבון/קמפיינים הרלוונטיים</li>
                       <li>הגדר טווח תאריכים (למשל: 30 ימים אחרונים)</li>
                     </ul>
                   </li>
-                  
+
                   <li>
                     <strong>הוסף Iterator</strong>
                     <p className="text-muted-foreground mr-4">
                       כדי לעבור על כל הקמפיינים שהתקבלו
                     </p>
                   </li>
-                  
+
                   <li>
                     <strong>הוסף Array Aggregator</strong>
                     <p className="text-muted-foreground mr-4">
                       לאיחוד כל הנתונים למערך אחד
                     </p>
                   </li>
-                  
+
                   <li>
                     <strong>הוסף מודול HTTP - Make a Request</strong>
                     <ul className="list-disc list-inside mr-4 text-muted-foreground">
-                      <li><strong>URL:</strong> {webhookUrl}</li>
-                      <li><strong>Method:</strong> POST</li>
-                      <li><strong>Headers:</strong> x-webhook-secret: {webhookSecret}</li>
-                      <li><strong>Body:</strong> JSON עם table_id ו-records</li>
+                      <li>
+                        <strong>URL:</strong> {webhookUrl}
+                      </li>
+                      <li>
+                        <strong>Method:</strong> POST
+                      </li>
+                      <li>
+                        <strong>Headers:</strong> x-webhook-secret:{" "}
+                        {webhookSecret}
+                      </li>
+                      <li>
+                        <strong>Body:</strong> JSON עם table_id ו-records
+                      </li>
                     </ul>
                   </li>
                 </ol>
@@ -821,7 +978,7 @@ export default function GoogleAdsSettings() {
                 <div className="bg-muted p-3 rounded-lg text-right">
                   <Label className="font-semibold">דוגמת Body לבקשה:</Label>
                   <pre className="text-xs mt-2 overflow-x-auto" dir="ltr">
-{`{
+                    {`{
   "table_id": "YOUR_TABLE_ID",
   "records": [
     {
@@ -850,13 +1007,19 @@ export default function GoogleAdsSettings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between flex-row-reverse">
-                <Badge variant={hasAnyDirectConnection ? "default" : "secondary"} className={hasAnyDirectConnection ? "bg-green-500" : ""}>
-                  {hasAnyDirectConnection ? `${(adsConnections as any[]).length} חשבונות מחוברים` : "לא מחובר"}
+                <Badge
+                  variant={hasAnyDirectConnection ? "default" : "secondary"}
+                  className={hasAnyDirectConnection ? "bg-green-500" : ""}
+                >
+                  {hasAnyDirectConnection
+                    ? `${(adsConnections as any[]).length} חשבונות מחוברים`
+                    : "לא מחובר"}
                 </Badge>
                 <span className="text-right">Google Ads API</span>
               </CardTitle>
               <CardDescription className="text-right">
-                כל משתמש יכול לחבר את חשבון Google Ads שלו, ולבחור לשתף אותו עם הצוות או להשאירו פרטי. חיבור ישיר דורש Developer Token מאושר.
+                כל משתמש יכול לחבר את חשבון Google Ads שלו, ולבחור לשתף אותו עם
+                הצוות או להשאירו פרטי. חיבור ישיר דורש Developer Token מאושר.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -868,12 +1031,18 @@ export default function GoogleAdsSettings() {
                 <div className="space-y-4">
                   {(adsConnections as any[]).map((integ: any) => {
                     const s = integ.settings as Record<string, any> | null;
-                    const email = (s?.google_email as string) || (s?.customer_name as string) || 'חשבון Google Ads';
+                    const email =
+                      (s?.google_email as string) ||
+                      (s?.customer_name as string) ||
+                      "חשבון Google Ads";
                     const isOwn = integ._isOwn;
                     const sharedByName = integ._sharedByName;
                     const needsReauthRow = Boolean(s?.needs_reauth);
                     return (
-                      <div key={integ.id} className={`flex items-center justify-between p-3 border rounded-lg ${needsReauthRow ? 'bg-destructive/10 border-destructive/40' : 'bg-muted/30'}`}>
+                      <div
+                        key={integ.id}
+                        className={`flex items-center justify-between p-3 border rounded-lg ${needsReauthRow ? "bg-destructive/10 border-destructive/40" : "bg-muted/30"}`}
+                      >
                         <div className="flex items-center gap-3">
                           {needsReauthRow ? (
                             <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
@@ -885,21 +1054,31 @@ export default function GoogleAdsSettings() {
                               <p className="font-medium text-sm">{email}</p>
                               {!isOwn && (
                                 <Badge variant="secondary" className="text-xs">
-                                  שותף {sharedByName ? `ע"י ${sharedByName}` : ''}
+                                  שותף{" "}
+                                  {sharedByName ? `ע"י ${sharedByName}` : ""}
                                 </Badge>
                               )}
                               {needsReauthRow && (
-                                <Badge variant="destructive" className="text-xs">נדרש חיבור מחדש</Badge>
+                                <Badge
+                                  variant="destructive"
+                                  className="text-xs"
+                                >
+                                  נדרש חיבור מחדש
+                                </Badge>
                               )}
                             </div>
                             {s?.connected_at && (
                               <p className="text-xs text-muted-foreground">
-                                חובר: {new Date(s.connected_at as string).toLocaleDateString('he-IL')}
+                                חובר:{" "}
+                                {new Date(
+                                  s.connected_at as string,
+                                ).toLocaleDateString("he-IL")}
                               </p>
                             )}
                             {needsReauthRow && (
                               <p className="text-xs text-destructive mt-1">
-                                החיבור לגוגל בוטל או פג תוקף. לחץ "חבר מחדש" כדי לחדש את הגישה.
+                                החיבור לגוגל בוטל או פג תוקף. לחץ "חבר מחדש" כדי
+                                לחדש את הגישה.
                               </p>
                             )}
                           </div>
@@ -912,7 +1091,11 @@ export default function GoogleAdsSettings() {
                               onClick={() => connectMutation.mutate()}
                               disabled={connectMutation.isPending}
                             >
-                              {connectMutation.isPending ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <ExternalLink className="h-4 w-4 ml-1" />}
+                              {connectMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 ml-1 animate-spin" />
+                              ) : (
+                                <ExternalLink className="h-4 w-4 ml-1" />
+                              )}
                               חבר מחדש
                             </Button>
                           )}
@@ -924,7 +1107,11 @@ export default function GoogleAdsSettings() {
                               setSharingIntegrationName(email);
                               setSharingOwnerId(integ.user_id);
                             }}
-                            title={isOwn ? "שתף עם חברי צוות" : "צפה בשיתופים (חיבור משותף בארגון)"}
+                            title={
+                              isOwn
+                                ? "שתף עם חברי צוות"
+                                : "צפה בשיתופים (חיבור משותף בארגון)"
+                            }
                           >
                             <Share2 className="h-4 w-4 ml-1" />
                             {isOwn ? "שתף" : "שיתופים"}
@@ -933,7 +1120,9 @@ export default function GoogleAdsSettings() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => disconnectMutation.mutate(integ.id)}
+                              onClick={() =>
+                                disconnectMutation.mutate(integ.id)
+                              }
                               disabled={disconnectMutation.isPending}
                             >
                               נתק
@@ -952,7 +1141,11 @@ export default function GoogleAdsSettings() {
                         disabled={connectMutation.isPending}
                         className="border-dashed gap-2"
                       >
-                        {connectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                        {connectMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ExternalLink className="h-4 w-4" />
+                        )}
                         + חבר את חשבון Google Ads שלי
                       </Button>
                     )}
@@ -962,7 +1155,11 @@ export default function GoogleAdsSettings() {
                       disabled={checkStatusMutation.isPending}
                       className="gap-2"
                     >
-                      {checkStatusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                      {checkStatusMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
                       בדוק חיבור
                     </Button>
                   </div>
@@ -975,9 +1172,15 @@ export default function GoogleAdsSettings() {
                       התחבר ל-Google Ads
                     </AlertTitle>
                     <AlertDescription className="text-right">
-                      <p>לחץ למטה כדי לאשר גישה לחשבונות Google Ads שלך. כל משתמש מתחבר עם החשבון שלו; אחרי החיבור אפשר לשתף אותו עם הצוות.</p>
+                      <p>
+                        לחץ למטה כדי לאשר גישה לחשבונות Google Ads שלך. כל משתמש
+                        מתחבר עם החשבון שלו; אחרי החיבור אפשר לשתף אותו עם
+                        הצוות.
+                      </p>
                       <p className="text-amber-600 mt-2">
-                        <strong>שים לב:</strong> חיבור זה דורש Developer Token מאושר. אם עדיין לא קיבלת אישור, השתמש ב"חיבור דרך Make API".
+                        <strong>שים לב:</strong> חיבור זה דורש Developer Token
+                        מאושר. אם עדיין לא קיבלת אישור, השתמש ב"חיבור דרך Make
+                        API".
                       </p>
                     </AlertDescription>
                   </Alert>
@@ -993,7 +1196,7 @@ export default function GoogleAdsSettings() {
                         מתחבר...
                       </>
                     ) : (
-                      'התחבר עם Google'
+                      "התחבר עם Google"
                     )}
                   </Button>
                 </div>
@@ -1006,7 +1209,9 @@ export default function GoogleAdsSettings() {
       {/* Info about usage */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-right">איך ליצור טבלת Google Ads?</CardTitle>
+          <CardTitle className="text-right">
+            איך ליצור טבלת Google Ads?
+          </CardTitle>
         </CardHeader>
         <CardContent className="text-right space-y-2 text-muted-foreground">
           <p>1. הגדר חיבור באחת מהלשוניות למעלה (מומלץ: חיבור דרך Make API)</p>
@@ -1019,8 +1224,10 @@ export default function GoogleAdsSettings() {
       {/* Share Integration Dialog (per-connection permissions) */}
       <ManageIntegrationPermissionsDialog
         open={!!sharingIntegrationId}
-        onOpenChange={(open) => { if (!open) setSharingIntegrationId(null); }}
-        integrationId={sharingIntegrationId || ''}
+        onOpenChange={(open) => {
+          if (!open) setSharingIntegrationId(null);
+        }}
+        integrationId={sharingIntegrationId || ""}
         integrationName={`Google Ads - ${sharingIntegrationName}`}
         integrationOwnerId={sharingOwnerId}
       />

@@ -48,10 +48,11 @@ function DraggableTask({
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onClick: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: task.id,
-    data: { task },
-  });
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: task.id,
+      data: { task },
+    });
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -68,7 +69,7 @@ function DraggableTask({
       className={cn(
         "p-2 rounded-lg border bg-card cursor-grab active:cursor-grabbing transition-all",
         isDragging && "opacity-50 shadow-lg",
-        isCompleted && "opacity-60"
+        isCompleted && "opacity-60",
       )}
     >
       <div className="flex items-start gap-2">
@@ -84,7 +85,7 @@ function DraggableTask({
           <p
             className={cn(
               "text-sm font-medium truncate",
-              isCompleted && "line-through text-muted-foreground"
+              isCompleted && "line-through text-muted-foreground",
             )}
           >
             {task.title}
@@ -144,7 +145,7 @@ function TimeSlot({
       ref={setNodeRef}
       className={cn(
         "flex border-b min-h-[50px] transition-colors",
-        isOver && "bg-accent/50"
+        isOver && "bg-accent/50",
       )}
     >
       <div className="w-16 flex-shrink-0 p-2 border-l text-xs text-muted-foreground font-medium">

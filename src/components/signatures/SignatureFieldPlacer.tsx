@@ -1,7 +1,13 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Minus, Plus, X, Crosshair } from "lucide-react";
 import { isFieldRequired } from "@/lib/signatureFieldGuide";
 import {
@@ -44,7 +50,14 @@ interface SignatureFieldPlacerProps {
   fullScreen?: boolean;
 }
 
-const COLORS = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899"];
+const COLORS = [
+  "#3B82F6",
+  "#EF4444",
+  "#10B981",
+  "#F59E0B",
+  "#8B5CF6",
+  "#EC4899",
+];
 const DRAG_THRESHOLD_PX = 4;
 const MIN_FIELD_WIDTH = 2;
 const MIN_FIELD_HEIGHT = 0.8;
@@ -70,7 +83,9 @@ export default function SignatureFieldPlacer({
   fieldsRef.current = fields;
 
   const [containerHeight, setContainerHeight] = useState(600);
-  const [selectedType, setSelectedType] = useState<SignatureFieldType | null>(null);
+  const [selectedType, setSelectedType] = useState<SignatureFieldType | null>(
+    null,
+  );
   const [selectedRecipient, setSelectedRecipient] = useState(0);
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null);
@@ -80,7 +95,14 @@ export default function SignatureFieldPlacer({
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const activeDragIdRef = useRef<string | null>(null);
   const activeResizeIdRef = useRef<string | null>(null);
-  const resizeStartRef = useRef<{ x: number; y: number; w: number; h: number; fieldX: number; fieldY: number } | null>(null);
+  const resizeStartRef = useRef<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    fieldX: number;
+    fieldY: number;
+  } | null>(null);
   const placePointerRef = useRef<{ x: number; y: number } | null>(null);
 
   const isPlacing = selectedType !== null;
@@ -111,7 +133,8 @@ export default function SignatureFieldPlacer({
   }, [fileUrl, fullScreen, currentPage]);
 
   const getRecipientColorForField = (recipientIndex = 0) =>
-    recipients.find((r) => r.index === recipientIndex)?.color ?? getRecipientColor(recipientIndex);
+    recipients.find((r) => r.index === recipientIndex)?.color ??
+    getRecipientColor(recipientIndex);
 
   const toggleFieldType = (type: SignatureFieldType) => {
     setSelectedType((prev) => (prev === type ? null : type));
@@ -191,8 +214,13 @@ export default function SignatureFieldPlacer({
     };
   };
 
-  const setAutofill = (fieldId: string, autofill: DocumentField["autofill"]) => {
-    onFieldsChange(fieldsRef.current.map((f) => (f.id === fieldId ? { ...f, autofill } : f)));
+  const setAutofill = (
+    fieldId: string,
+    autofill: DocumentField["autofill"],
+  ) => {
+    onFieldsChange(
+      fieldsRef.current.map((f) => (f.id === fieldId ? { ...f, autofill } : f)),
+    );
   };
 
   const toggleRequired = (fieldId: string) => {
@@ -209,11 +237,17 @@ export default function SignatureFieldPlacer({
         if (f.id !== fieldId) return f;
         const newW = Math.max(
           MIN_FIELD_WIDTH,
-          Math.min(MAX_FIELD_WIDTH, Math.min(100 - f.position.x, f.position.width + delta)),
+          Math.min(
+            MAX_FIELD_WIDTH,
+            Math.min(100 - f.position.x, f.position.width + delta),
+          ),
         );
         const newH = Math.max(
           MIN_FIELD_HEIGHT,
-          Math.min(MAX_FIELD_HEIGHT, Math.min(100 - f.position.y, f.position.height + delta * 0.4)),
+          Math.min(
+            MAX_FIELD_HEIGHT,
+            Math.min(100 - f.position.y, f.position.height + delta * 0.4),
+          ),
         );
         return { ...f, position: { ...f.position, width: newW, height: newH } };
       }),
@@ -250,8 +284,14 @@ export default function SignatureFieldPlacer({
         const start = resizeStartRef.current;
         const dx = ((e.clientX - start.x) / rect.width) * 100;
         const dy = ((e.clientY - start.y) / rect.height) * 100;
-        const maxW = Math.min(MAX_FIELD_WIDTH, Math.max(MIN_FIELD_WIDTH, 100 - start.fieldX));
-        const maxH = Math.min(MAX_FIELD_HEIGHT, Math.max(MIN_FIELD_HEIGHT, 100 - start.fieldY));
+        const maxW = Math.min(
+          MAX_FIELD_WIDTH,
+          Math.max(MIN_FIELD_WIDTH, 100 - start.fieldX),
+        );
+        const maxH = Math.min(
+          MAX_FIELD_HEIGHT,
+          Math.max(MIN_FIELD_HEIGHT, 100 - start.fieldY),
+        );
         const newW = Math.max(MIN_FIELD_WIDTH, Math.min(maxW, start.w + dx));
         const newH = Math.max(MIN_FIELD_HEIGHT, Math.min(maxH, start.h + dy));
 
@@ -266,11 +306,15 @@ export default function SignatureFieldPlacer({
       }
 
       if (!activeDragIdRef.current) return;
-      const field = fieldsRef.current.find((f) => f.id === activeDragIdRef.current);
+      const field = fieldsRef.current.find(
+        (f) => f.id === activeDragIdRef.current,
+      );
       if (!field) return;
 
-      const xPct = ((e.clientX - rect.left - dragOffsetRef.current.x) / rect.width) * 100;
-      const yPct = ((e.clientY - rect.top - dragOffsetRef.current.y) / rect.height) * 100;
+      const xPct =
+        ((e.clientX - rect.left - dragOffsetRef.current.x) / rect.width) * 100;
+      const yPct =
+        ((e.clientY - rect.top - dragOffsetRef.current.y) / rect.height) * 100;
 
       onFieldsChange(
         fieldsRef.current.map((f) =>
@@ -330,21 +374,28 @@ export default function SignatureFieldPlacer({
         {isPlacing ? (
           <span className="text-sm text-primary font-medium flex items-center gap-1">
             <Crosshair className="h-4 w-4" />
-            מצב הצבה: {getFieldLabel(selectedType!)} בעמוד {currentPage} — לחץ על מקום ריק להוספה
+            מצב הצבה: {getFieldLabel(selectedType!)} בעמוד {currentPage} — לחץ
+            על מקום ריק להוספה
           </span>
         ) : (
           <span className="text-sm text-muted-foreground">
             בחר שדה מימין והצב על העמוד הפעיל, או גרור שדה קיים
           </span>
         )}
-        <SignaturePageNavigation page={currentPage} count={numPages} onChange={goToPage} />
+        <SignaturePageNavigation
+          page={currentPage}
+          count={numPages}
+          onChange={goToPage}
+        />
       </div>
 
       <div className={`flex gap-3 items-start`}>
         {/* Right sidebar (RTL: first = right): fields + page thumbs */}
         <aside className="w-36 sm:w-52 shrink-0 sticky top-2 self-start max-h-[calc(100dvh-8rem)] overflow-y-auto overscroll-contain space-y-3 z-20">
           <div className="rounded-xl border bg-background/95 shadow-md backdrop-blur-sm p-3 space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">שדות להצבה</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              שדות להצבה
+            </p>
             <div className="flex flex-col gap-1.5">
               {SIGNATURE_FIELD_OPTIONS.map((opt) => (
                 <Button
@@ -368,11 +419,16 @@ export default function SignatureFieldPlacer({
                     key={r.index}
                     type="button"
                     size="sm"
-                    variant={selectedRecipient === r.index ? "default" : "outline"}
+                    variant={
+                      selectedRecipient === r.index ? "default" : "outline"
+                    }
                     className="justify-start w-full"
                     onClick={() => setSelectedRecipient(r.index)}
                   >
-                    <span className="w-2 h-2 rounded-full ml-1 shrink-0" style={{ backgroundColor: r.color }} />
+                    <span
+                      className="w-2 h-2 rounded-full ml-1 shrink-0"
+                      style={{ backgroundColor: r.color }}
+                    />
                     <span className="truncate">{r.name}</span>
                   </Button>
                 ))}
@@ -401,13 +457,19 @@ export default function SignatureFieldPlacer({
                   key={f.id}
                   type="button"
                   className={`flex items-center gap-1 text-xs border rounded px-2 py-1 transition-colors ${
-                    selectedFieldId === f.id ? "border-primary bg-primary/10" : ""
+                    selectedFieldId === f.id
+                      ? "border-primary bg-primary/10"
+                      : ""
                   }`}
                   onClick={() => selectField(f)}
                 >
                   <div
                     className="w-2 h-2 rounded"
-                    style={{ backgroundColor: getRecipientColorForField(f.recipient_index) }}
+                    style={{
+                      backgroundColor: getRecipientColorForField(
+                        f.recipient_index,
+                      ),
+                    }}
                   />
                   <span>{f.label || getFieldPlacerLabel(f.type)}</span>
                   <span className="text-muted-foreground">
@@ -448,24 +510,38 @@ export default function SignatureFieldPlacer({
                   </Button>
                   <label className="flex items-center gap-1.5 text-xs mr-2 cursor-pointer">
                     <Switch
-                      checked={isFieldRequired(selectedField ?? { required: false })}
+                      checked={isFieldRequired(
+                        selectedField ?? { required: false },
+                      )}
                       onCheckedChange={() => toggleRequired(selectedFieldId)}
                     />
-                    <span>{isFieldRequired(selectedField ?? { required: false }) ? "שדה חובה" : "לא חובה"}</span>
+                    <span>
+                      {isFieldRequired(selectedField ?? { required: false })
+                        ? "שדה חובה"
+                        : "לא חובה"}
+                    </span>
                   </label>
-                  {selectedField && !isSignatureFieldType(selectedField.type) && (
-                    <Select
-                      value={selectedField.autofill || "none"}
-                      onValueChange={(value) => setAutofill(selectedField.id, value as DocumentField["autofill"])}
-                    >
-                      <SelectTrigger className="h-7 w-36 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">נשאר ריק</SelectItem>
-                        <SelectItem value="full_name">שם הליד</SelectItem>
-                        <SelectItem value="company_name">שם החברה</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
+                  {selectedField &&
+                    !isSignatureFieldType(selectedField.type) && (
+                      <Select
+                        value={selectedField.autofill || "none"}
+                        onValueChange={(value) =>
+                          setAutofill(
+                            selectedField.id,
+                            value as DocumentField["autofill"],
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-7 w-36 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">נשאר ריק</SelectItem>
+                          <SelectItem value="full_name">שם הליד</SelectItem>
+                          <SelectItem value="company_name">שם החברה</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                 </div>
               )}
             </div>
@@ -500,7 +576,11 @@ export default function SignatureFieldPlacer({
                   key={f.id}
                   data-sig-field={f.id}
                   className={`absolute border-2 rounded flex items-center justify-center font-medium group z-10 cursor-move touch-none ${
-                    isSelected ? "ring-2 ring-offset-1" : isHovered ? "ring-1 ring-offset-1" : ""
+                    isSelected
+                      ? "ring-2 ring-offset-1"
+                      : isHovered
+                        ? "ring-1 ring-offset-1"
+                        : ""
                   }`}
                   style={{
                     left: `${f.position.x}%`,
@@ -514,7 +594,9 @@ export default function SignatureFieldPlacer({
                   }}
                   onPointerDown={(e) => startDrag(e, f.id)}
                   onPointerEnter={() => setHoveredFieldId(f.id)}
-                  onPointerLeave={() => setHoveredFieldId((id) => (id === f.id ? null : id))}
+                  onPointerLeave={() =>
+                    setHoveredFieldId((id) => (id === f.id ? null : id))
+                  }
                 >
                   <span
                     style={{ color, fontSize }}
@@ -551,7 +633,11 @@ export default function SignatureFieldPlacer({
               );
             })}
           </SignatureDocumentViewer>
-          <SignaturePageNavigation page={currentPage} count={numPages} onChange={goToPage} />
+          <SignaturePageNavigation
+            page={currentPage}
+            count={numPages}
+            onChange={goToPage}
+          />
         </div>
       </div>
     </div>

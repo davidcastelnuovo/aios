@@ -29,7 +29,10 @@ test("parseClientFilter maps a missing param to every client, not unassigned-onl
 
 test("creative list filter never treats a missing client as unassigned-only", () => {
   assert.equal(resolveCreativeListFilter(null), ALL_CLIENTS_FILTER);
-  assert.equal(resolveCreativeListFilter(ALL_CLIENTS_FILTER), ALL_CLIENTS_FILTER);
+  assert.equal(
+    resolveCreativeListFilter(ALL_CLIENTS_FILTER),
+    ALL_CLIENTS_FILTER,
+  );
   assert.equal(resolveCreativeListFilter("client-1"), "client-1");
 });
 

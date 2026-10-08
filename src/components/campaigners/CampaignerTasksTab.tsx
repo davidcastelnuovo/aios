@@ -23,7 +23,10 @@ interface CampaignerTasksTabProps {
 
 type DateFilter = "week" | "month" | "all";
 
-export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerTasksTabProps) {
+export function CampaignerTasksTab({
+  campaignerId,
+  campaignerName,
+}: CampaignerTasksTabProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
   const [editingTask, setEditingTask] = useState<any>(null);
   const queryClient = useQueryClient();
@@ -31,7 +34,13 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
 
   const { data: tasks, isLoading } = useQuery({
-    queryKey: ["campaigner-tasks", tenantId, campaignerId, dateFilter, crossTenantAgencyIds.join(",")],
+    queryKey: [
+      "campaigner-tasks",
+      tenantId,
+      campaignerId,
+      dateFilter,
+      crossTenantAgencyIds.join(","),
+    ],
     queryFn: async () => {
       const TASK_SELECT = `
           *,
@@ -45,12 +54,16 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
         .from("task_collaborators")
         .select("task_id")
         .eq("campaigner_id", campaignerId);
-      const collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
+      const collaboratorTaskIds = Array.from(
+        new Set((collabRows || []).map((row) => row.task_id)),
+      );
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const applyTabFilters = (q: any) => {
         if (crossTenantAgencyIds.length > 0) {
-          q = q.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+          q = q.or(
+            `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+          );
         } else {
           q = q.eq("tenant_id", tenantId!);
         }
@@ -94,7 +107,13 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ taskId, status }: { taskId: string; status: "open" | "in_progress" | "done" }) => {
+    mutationFn: async ({
+      taskId,
+      status,
+    }: {
+      taskId: string;
+      status: "open" | "in_progress" | "done";
+    }) => {
       const { error } = await supabase
         .from("tasks")
         .update({ status })
@@ -102,7 +121,9 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaigner-tasks", tenantId, campaignerId] });
+      queryClient.invalidateQueries({
+        queryKey: ["campaigner-tasks", tenantId, campaignerId],
+      });
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("סטטוס המשימה עודכן");
     },
@@ -111,11 +132,17 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
     },
   });
 
-  const inProgressTasks = tasks?.filter(t => t.status === "open" || t.status === "in_progress") || [];
-  const completedTasks = tasks?.filter(t => t.status === "done") || [];
+  const inProgressTasks =
+    tasks?.filter((t) => t.status === "open" || t.status === "in_progress") ||
+    [];
+  const completedTasks = tasks?.filter((t) => t.status === "done") || [];
 
   if (isLoading) {
-    return <div className="text-center py-8 text-muted-foreground">טוען משימות...</div>;
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        טוען משימות...
+      </div>
+    );
   }
 
   return (
@@ -131,18 +158,28 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
           }
         />
 
-        <RadioGroup value={dateFilter} onValueChange={(value) => setDateFilter(value as DateFilter)} className="flex gap-4">
+        <RadioGroup
+          value={dateFilter}
+          onValueChange={(value) => setDateFilter(value as DateFilter)}
+          className="flex gap-4"
+        >
           <div className="flex items-center space-x-2 space-x-reverse">
             <RadioGroupItem value="week" id="camp-week" />
-            <Label htmlFor="camp-week" className="cursor-pointer">שבוע אחרון</Label>
+            <Label htmlFor="camp-week" className="cursor-pointer">
+              שבוע אחרון
+            </Label>
           </div>
           <div className="flex items-center space-x-2 space-x-reverse">
             <RadioGroupItem value="month" id="camp-month" />
-            <Label htmlFor="camp-month" className="cursor-pointer">חודש אחרון</Label>
+            <Label htmlFor="camp-month" className="cursor-pointer">
+              חודש אחרון
+            </Label>
           </div>
           <div className="flex items-center space-x-2 space-x-reverse">
             <RadioGroupItem value="all" id="camp-all" />
-            <Label htmlFor="camp-all" className="cursor-pointer">כל הזמן</Label>
+            <Label htmlFor="camp-all" className="cursor-pointer">
+              כל הזמן
+            </Label>
           </div>
         </RadioGroup>
       </div>
@@ -161,13 +198,18 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
 
           <div className="space-y-3 max-h-[500px] overflow-y-auto">
             {inProgressTasks.length > 0 ? (
-              inProgressTasks.map(task => (
+              inProgressTasks.map((task) => (
                 <EntityTaskCard
                   key={task.id}
                   task={task}
                   isCompleted={false}
                   onEdit={() => setEditingTask(task)}
-                  onToggleComplete={() => updateStatusMutation.mutate({ taskId: task.id, status: "done" })}
+                  onToggleComplete={() =>
+                    updateStatusMutation.mutate({
+                      taskId: task.id,
+                      status: "done",
+                    })
+                  }
                 />
               ))
             ) : (
@@ -194,13 +236,18 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
 
           <div className="space-y-3 max-h-[500px] overflow-y-auto">
             {completedTasks.length > 0 ? (
-              completedTasks.map(task => (
+              completedTasks.map((task) => (
                 <EntityTaskCard
                   key={task.id}
                   task={task}
                   isCompleted
                   onEdit={() => setEditingTask(task)}
-                  onToggleComplete={() => updateStatusMutation.mutate({ taskId: task.id, status: "open" })}
+                  onToggleComplete={() =>
+                    updateStatusMutation.mutate({
+                      taskId: task.id,
+                      status: "open",
+                    })
+                  }
                 />
               ))
             ) : (

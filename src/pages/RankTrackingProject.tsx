@@ -11,22 +11,71 @@ const useBuildPath = () => {
   return buildPath;
 };
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { 
-  Search, Plus, ArrowLeft, RefreshCw, TrendingUp, TrendingDown, Minus, 
-  Trash2, ExternalLink, Play, Download, Upload, LineChart, History, FileUp, FileText
+import {
+  Search,
+  Plus,
+  ArrowLeft,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Trash2,
+  ExternalLink,
+  Play,
+  Download,
+  Upload,
+  LineChart,
+  History,
+  FileUp,
+  FileText,
 } from "lucide-react";
-import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  LineChart as RechartsLineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { format, subDays } from "date-fns";
 import { he } from "date-fns/locale";
 
@@ -59,8 +108,10 @@ export default function RankTrackingProject() {
   const { tenantId } = useCurrentTenant();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newKeywords, setNewKeywords] = useState("");
-  const [selectedKeywordId, setSelectedKeywordId] = useState<string | null>(null);
-  
+  const [selectedKeywordId, setSelectedKeywordId] = useState<string | null>(
+    null,
+  );
+
   // File import states
   const [inputMode, setInputMode] = useState<"manual" | "file">("manual");
   const [parsedKeywords, setParsedKeywords] = useState<string[]>([]);
@@ -68,7 +119,7 @@ export default function RankTrackingProject() {
   const [selectedColumn, setSelectedColumn] = useState<string>("");
   const [allCsvData, setAllCsvData] = useState<Record<string, string>[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Scan progress state for batching
   const [scanProgress, setScanProgress] = useState<{
     current: number;
@@ -131,7 +182,7 @@ export default function RankTrackingProject() {
     mutationFn: async (keywordsList: string[]) => {
       if (!projectId) throw new Error("No project");
 
-      const keywordsToInsert = keywordsList.map(keyword => ({
+      const keywordsToInsert = keywordsList.map((keyword) => ({
         project_id: projectId,
         keyword: keyword.trim(),
       }));
@@ -146,7 +197,9 @@ export default function RankTrackingProject() {
       toast.success("ביטויים נוספו בהצלחה!");
       setIsAddOpen(false);
       setNewKeywords("");
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", projectId] });
+      queryClient.invalidateQueries({
+        queryKey: ["rank-tracking-keywords", projectId],
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message || "שגיאה בהוספת ביטויים");
@@ -164,7 +217,9 @@ export default function RankTrackingProject() {
     },
     onSuccess: () => {
       toast.success("ביטוי נמחק");
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", projectId] });
+      queryClient.invalidateQueries({
+        queryKey: ["rank-tracking-keywords", projectId],
+      });
     },
     onError: () => {
       toast.error("שגיאה במחיקת ביטוי");
@@ -182,10 +237,12 @@ export default function RankTrackingProject() {
   // Scan mutation with batching to avoid timeout
   // Reduced to 5 keywords per batch to stay well under 60s timeout with 1.5s delay per keyword
   const BATCH_SIZE = 5;
-  
+
   const scanMutation = useMutation({
     mutationFn: async (keywordIds?: string[]) => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       let idsToScan: string[] = [];
@@ -193,10 +250,11 @@ export default function RankTrackingProject() {
 
       // If scanning all (no specific keywordIds provided), filter out keywords already scanned today
       if (!keywordIds) {
-        const notScannedToday = keywords?.filter(k => !isScannedToday(k)) || [];
-        idsToScan = notScannedToday.map(k => k.id);
+        const notScannedToday =
+          keywords?.filter((k) => !isScannedToday(k)) || [];
+        idsToScan = notScannedToday.map((k) => k.id);
         skippedCount = (keywords?.length || 0) - idsToScan.length;
-        
+
         if (skippedCount > 0) {
           toast.info(`דילוג על ${skippedCount} ביטויים שכבר נסרקו היום`);
         }
@@ -204,7 +262,7 @@ export default function RankTrackingProject() {
         // Scanning specific keywords (manual selection) - don't filter
         idsToScan = keywordIds;
       }
-      
+
       if (idsToScan.length === 0) {
         throw new Error("כל הביטויים כבר נסרקו היום");
       }
@@ -240,11 +298,11 @@ export default function RankTrackingProject() {
               projectId,
               keywordIds: batches[i],
             }),
-          }
+          },
         );
 
         const data = await response.json();
-        
+
         if (!response.ok) {
           console.error(`Batch ${i + 1} failed:`, data.error);
           totalErrors += batches[i].length;
@@ -254,20 +312,28 @@ export default function RankTrackingProject() {
         }
 
         // Refresh keywords data after each batch to show live progress
-        queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", projectId] });
+        queryClient.invalidateQueries({
+          queryKey: ["rank-tracking-keywords", projectId],
+        });
       }
 
       return { totalChecked, totalErrors, skippedCount };
     },
     onSuccess: (data) => {
       setScanProgress(null);
-      const skippedMsg = data.skippedCount > 0 ? ` (דולגו ${data.skippedCount})` : '';
-      const message = data.totalErrors > 0
-        ? `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים (${data.totalErrors} שגיאות)${skippedMsg}`
-        : `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים${skippedMsg}`;
+      const skippedMsg =
+        data.skippedCount > 0 ? ` (דולגו ${data.skippedCount})` : "";
+      const message =
+        data.totalErrors > 0
+          ? `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים (${data.totalErrors} שגיאות)${skippedMsg}`
+          : `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים${skippedMsg}`;
       toast.success(message);
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-project", projectId] });
+      queryClient.invalidateQueries({
+        queryKey: ["rank-tracking-keywords", projectId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["rank-tracking-project", projectId],
+      });
     },
     onError: (error: Error) => {
       setScanProgress(null);
@@ -277,12 +343,12 @@ export default function RankTrackingProject() {
 
   const handleAddKeywords = () => {
     let keywordsList: string[] = [];
-    
+
     if (inputMode === "manual") {
       keywordsList = newKeywords
         .split("\n")
-        .map(k => k.trim())
-        .filter(k => k.length > 0);
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0);
     } else {
       keywordsList = parsedKeywords;
     }
@@ -299,24 +365,24 @@ export default function RankTrackingProject() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const fileExtension = file.name.split('.').pop()?.toLowerCase();
-    
-    if (fileExtension === 'txt') {
+    const fileExtension = file.name.split(".").pop()?.toLowerCase();
+
+    if (fileExtension === "txt") {
       // Handle TXT file
       const reader = new FileReader();
       reader.onload = (event) => {
         const text = event.target?.result as string;
         const keywords = text
-          .split('\n')
-          .map(line => line.trim())
-          .filter(line => line.length > 0);
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
         setParsedKeywords(keywords);
         setCsvColumns([]);
         setAllCsvData([]);
         toast.success(`נטענו ${keywords.length} ביטויים`);
       };
       reader.readAsText(file);
-    } else if (fileExtension === 'csv') {
+    } else if (fileExtension === "csv") {
       // Handle CSV file
       Papa.parse(file, {
         header: true,
@@ -327,30 +393,33 @@ export default function RankTrackingProject() {
             toast.error("הקובץ ריק");
             return;
           }
-          
+
           const columns = Object.keys(data[0] || {});
           setCsvColumns(columns);
           setAllCsvData(data);
-          
+
           // Auto-select "keyword" column if exists
-          const keywordCol = columns.find(c => 
-            c.toLowerCase().includes('keyword') || 
-            c.toLowerCase().includes('ביטוי') ||
-            c.toLowerCase() === 'query'
+          const keywordCol = columns.find(
+            (c) =>
+              c.toLowerCase().includes("keyword") ||
+              c.toLowerCase().includes("ביטוי") ||
+              c.toLowerCase() === "query",
           );
-          
+
           if (keywordCol) {
             setSelectedColumn(keywordCol);
             const keywords = data
-              .map(row => row[keywordCol]?.trim())
+              .map((row) => row[keywordCol]?.trim())
               .filter((k): k is string => !!k && k.length > 0);
             setParsedKeywords(keywords);
-            toast.success(`נטענו ${keywords.length} ביטויים מעמודת "${keywordCol}"`);
+            toast.success(
+              `נטענו ${keywords.length} ביטויים מעמודת "${keywordCol}"`,
+            );
           } else if (columns.length === 1) {
             // Single column - use it
             setSelectedColumn(columns[0]);
             const keywords = data
-              .map(row => row[columns[0]]?.trim())
+              .map((row) => row[columns[0]]?.trim())
               .filter((k): k is string => !!k && k.length > 0);
             setParsedKeywords(keywords);
             toast.success(`נטענו ${keywords.length} ביטויים`);
@@ -361,12 +430,12 @@ export default function RankTrackingProject() {
         },
         error: () => {
           toast.error("שגיאה בקריאת הקובץ");
-        }
+        },
       });
     } else {
       toast.error("יש להעלות קובץ CSV או TXT");
     }
-    
+
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -376,7 +445,7 @@ export default function RankTrackingProject() {
   const handleColumnSelect = (column: string) => {
     setSelectedColumn(column);
     const keywords = allCsvData
-      .map(row => row[column]?.trim())
+      .map((row) => row[column]?.trim())
       .filter((k): k is string => !!k && k.length > 0);
     setParsedKeywords(keywords);
   };
@@ -397,16 +466,30 @@ export default function RankTrackingProject() {
     }
   };
 
-  const getPositionBadge = (position: number | null, lastChecked: string | null) => {
+  const getPositionBadge = (
+    position: number | null,
+    lastChecked: string | null,
+  ) => {
     if (!lastChecked) {
-      return <Badge variant="outline" className="bg-gray-50 text-gray-500">ממתין</Badge>;
+      return (
+        <Badge variant="outline" className="bg-gray-50 text-gray-500">
+          ממתין
+        </Badge>
+      );
     }
     if (position === null) {
-      return <Badge variant="outline" className="bg-orange-50 text-orange-600">לא נמצא</Badge>;
+      return (
+        <Badge variant="outline" className="bg-orange-50 text-orange-600">
+          לא נמצא
+        </Badge>
+      );
     }
-    if (position <= 3) return <Badge className="bg-green-500">{position}</Badge>;
-    if (position <= 10) return <Badge className="bg-blue-500">{position}</Badge>;
-    if (position <= 20) return <Badge className="bg-amber-500">{position}</Badge>;
+    if (position <= 3)
+      return <Badge className="bg-green-500">{position}</Badge>;
+    if (position <= 10)
+      return <Badge className="bg-blue-500">{position}</Badge>;
+    if (position <= 20)
+      return <Badge className="bg-amber-500">{position}</Badge>;
     return <Badge variant="secondary">{position}</Badge>;
   };
 
@@ -417,8 +500,7 @@ export default function RankTrackingProject() {
     if (change > 0) {
       return (
         <span className="flex items-center text-green-600 gap-1">
-          <TrendingUp className="h-4 w-4" />
-          +{change}
+          <TrendingUp className="h-4 w-4" />+{change}
         </span>
       );
     }
@@ -430,28 +512,40 @@ export default function RankTrackingProject() {
     );
   };
 
-  const currentKeywordCount = inputMode === "manual" 
-    ? newKeywords.split("\n").filter(k => k.trim()).length 
-    : parsedKeywords.length;
+  const currentKeywordCount =
+    inputMode === "manual"
+      ? newKeywords.split("\n").filter((k) => k.trim()).length
+      : parsedKeywords.length;
 
   // Calculate stats
   const stats = {
     total: keywords?.length || 0,
-    tracked: keywords?.filter(k => k.current_position !== null).length || 0,
-    top3: keywords?.filter(k => k.current_position && k.current_position <= 3).length || 0,
-    top10: keywords?.filter(k => k.current_position && k.current_position <= 10).length || 0,
-    top20: keywords?.filter(k => k.current_position && k.current_position <= 20).length || 0,
+    tracked: keywords?.filter((k) => k.current_position !== null).length || 0,
+    top3:
+      keywords?.filter((k) => k.current_position && k.current_position <= 3)
+        .length || 0,
+    top10:
+      keywords?.filter((k) => k.current_position && k.current_position <= 10)
+        .length || 0,
+    top20:
+      keywords?.filter((k) => k.current_position && k.current_position <= 20)
+        .length || 0,
     avgPosition: (() => {
-      const positions = keywords
-        ?.map(k => k.current_position)
-        .filter((p): p is number => p !== null) || [];
+      const positions =
+        keywords
+          ?.map((k) => k.current_position)
+          .filter((p): p is number => p !== null) || [];
       if (positions.length === 0) return null;
-      return Math.round(positions.reduce((a, b) => a + b, 0) / positions.length * 10) / 10;
+      return (
+        Math.round(
+          (positions.reduce((a, b) => a + b, 0) / positions.length) * 10,
+        ) / 10
+      );
     })(),
   };
 
   // Prepare chart data
-  const chartData = keywordHistory?.map(h => ({
+  const chartData = keywordHistory?.map((h) => ({
     date: format(new Date(h.checked_at), "dd/MM"),
     position: h.position ?? 101, // Show 101 for not found
   }));
@@ -494,7 +588,8 @@ export default function RankTrackingProject() {
         <div className="flex gap-2 items-center">
           {scanProgress && (
             <span className="text-sm text-muted-foreground">
-              קבוצה {scanProgress.current}/{scanProgress.total} • נסרקו {scanProgress.scanned}
+              קבוצה {scanProgress.current}/{scanProgress.total} • נסרקו{" "}
+              {scanProgress.scanned}
             </span>
           )}
           <Button
@@ -505,7 +600,10 @@ export default function RankTrackingProject() {
             {scanMutation.isPending ? (
               <>
                 <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
-                סורק... {scanProgress ? `${scanProgress.current}/${scanProgress.total}` : ""}
+                סורק...{" "}
+                {scanProgress
+                  ? `${scanProgress.current}/${scanProgress.total}`
+                  : ""}
               </>
             ) : (
               <>
@@ -528,13 +626,19 @@ export default function RankTrackingProject() {
                   הוסף ביטויים ידנית או ייבא מקובץ CSV/TXT
                 </DialogDescription>
               </DialogHeader>
-              
-              <Tabs value={inputMode} onValueChange={(v) => {
-                setInputMode(v as "manual" | "file");
-                if (v === "manual") resetFileState();
-              }}>
+
+              <Tabs
+                value={inputMode}
+                onValueChange={(v) => {
+                  setInputMode(v as "manual" | "file");
+                  if (v === "manual") resetFileState();
+                }}
+              >
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="manual" className="flex items-center gap-2">
+                  <TabsTrigger
+                    value="manual"
+                    className="flex items-center gap-2"
+                  >
                     <FileText className="h-4 w-4" />
                     הקלדה ידנית
                   </TabsTrigger>
@@ -543,7 +647,7 @@ export default function RankTrackingProject() {
                     העלאת קובץ
                   </TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="manual" className="mt-4 space-y-4">
                   <div className="space-y-2">
                     <Label>ביטויים (כל שורה = ביטוי אחד)</Label>
@@ -555,7 +659,7 @@ export default function RankTrackingProject() {
                     />
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="file" className="mt-4 space-y-4">
                   <div className="space-y-4">
                     <div
@@ -575,14 +679,20 @@ export default function RankTrackingProject() {
                             const dt = new DataTransfer();
                             dt.items.add(file);
                             input.files = dt.files;
-                            handleFileUpload({ target: input } as React.ChangeEvent<HTMLInputElement>);
+                            handleFileUpload({
+                              target: input,
+                            } as React.ChangeEvent<HTMLInputElement>);
                           }
                         }
                       }}
                     >
                       <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm font-medium">גרור קובץ לכאן או לחץ לבחירה</p>
-                      <p className="text-xs text-muted-foreground mt-1">תומך ב-CSV ו-TXT</p>
+                      <p className="text-sm font-medium">
+                        גרור קובץ לכאן או לחץ לבחירה
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        תומך ב-CSV ו-TXT
+                      </p>
                     </div>
                     <input
                       ref={fileInputRef}
@@ -591,35 +701,47 @@ export default function RankTrackingProject() {
                       className="hidden"
                       onChange={handleFileUpload}
                     />
-                    
+
                     {/* Column selector for CSV */}
                     {csvColumns.length > 1 && (
                       <div className="space-y-2">
                         <Label>בחר עמודה עם הביטויים</Label>
-                        <Select value={selectedColumn} onValueChange={handleColumnSelect}>
+                        <Select
+                          value={selectedColumn}
+                          onValueChange={handleColumnSelect}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="בחר עמודה" />
                           </SelectTrigger>
                           <SelectContent>
-                            {csvColumns.map(col => (
-                              <SelectItem key={col} value={col}>{col}</SelectItem>
+                            {csvColumns.map((col) => (
+                              <SelectItem key={col} value={col}>
+                                {col}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
                     )}
-                    
+
                     {/* Preview loaded keywords */}
                     {parsedKeywords.length > 0 && (
                       <div className="space-y-2">
-                        <Label>תצוגה מקדימה ({parsedKeywords.length} ביטויים)</Label>
+                        <Label>
+                          תצוגה מקדימה ({parsedKeywords.length} ביטויים)
+                        </Label>
                         <ScrollArea className="h-[200px] rounded-md border p-3">
                           <div className="space-y-1">
-                            {parsedKeywords.slice(0, 100).map((keyword, idx) => (
-                              <div key={idx} className="text-sm py-1 border-b last:border-0">
-                                {keyword}
-                              </div>
-                            ))}
+                            {parsedKeywords
+                              .slice(0, 100)
+                              .map((keyword, idx) => (
+                                <div
+                                  key={idx}
+                                  className="text-sm py-1 border-b last:border-0"
+                                >
+                                  {keyword}
+                                </div>
+                              ))}
                             {parsedKeywords.length > 100 && (
                               <p className="text-xs text-muted-foreground pt-2">
                                 ...ועוד {parsedKeywords.length - 100} ביטויים
@@ -632,18 +754,23 @@ export default function RankTrackingProject() {
                   </div>
                 </TabsContent>
               </Tabs>
-              
+
               <div className="flex items-center justify-between pt-4 border-t">
                 <p className="text-sm text-muted-foreground">
                   {currentKeywordCount} ביטויים
                 </p>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => handleDialogClose(false)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDialogClose(false)}
+                  >
                     ביטול
                   </Button>
-                  <Button 
-                    onClick={handleAddKeywords} 
-                    disabled={addKeywordsMutation.isPending || currentKeywordCount === 0}
+                  <Button
+                    onClick={handleAddKeywords}
+                    disabled={
+                      addKeywordsMutation.isPending || currentKeywordCount === 0
+                    }
                   >
                     {addKeywordsMutation.isPending ? (
                       <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
@@ -675,19 +802,25 @@ export default function RankTrackingProject() {
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-green-600">{stats.top3}</div>
+            <div className="text-2xl font-bold text-green-600">
+              {stats.top3}
+            </div>
             <p className="text-xs text-muted-foreground">Top 3</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-blue-600">{stats.top10}</div>
+            <div className="text-2xl font-bold text-blue-600">
+              {stats.top10}
+            </div>
             <p className="text-xs text-muted-foreground">Top 10</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-amber-600">{stats.top20}</div>
+            <div className="text-2xl font-bold text-amber-600">
+              {stats.top20}
+            </div>
             <p className="text-xs text-muted-foreground">Top 20</p>
           </CardContent>
         </Card>
@@ -734,15 +867,22 @@ export default function RankTrackingProject() {
                 </TableHeader>
                 <TableBody>
                   {keywords.map((keyword) => (
-                    <TableRow 
+                    <TableRow
                       key={keyword.id}
-                      className={selectedKeywordId === keyword.id ? "bg-muted/50" : ""}
+                      className={
+                        selectedKeywordId === keyword.id ? "bg-muted/50" : ""
+                      }
                       onClick={() => setSelectedKeywordId(keyword.id)}
                       style={{ cursor: "pointer" }}
                     >
-                      <TableCell className="font-medium text-right">{keyword.keyword}</TableCell>
+                      <TableCell className="font-medium text-right">
+                        {keyword.keyword}
+                      </TableCell>
                       <TableCell className="text-center">
-                        {getPositionBadge(keyword.current_position, keyword.last_checked_at)}
+                        {getPositionBadge(
+                          keyword.current_position,
+                          keyword.last_checked_at,
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         {getChangeIndicator(keyword.position_change)}
@@ -758,7 +898,11 @@ export default function RankTrackingProject() {
                       </TableCell>
                       <TableCell className="text-center text-xs text-muted-foreground">
                         {keyword.last_checked_at
-                          ? format(new Date(keyword.last_checked_at), "dd/MM HH:mm", { locale: he })
+                          ? format(
+                              new Date(keyword.last_checked_at),
+                              "dd/MM HH:mm",
+                              { locale: he },
+                            )
                           : "-"}
                       </TableCell>
                       <TableCell className="text-right">
@@ -804,7 +948,7 @@ export default function RankTrackingProject() {
                   היסטוריית מיקום
                 </CardTitle>
                 <CardDescription>
-                  {keywords?.find(k => k.id === selectedKeywordId)?.keyword}
+                  {keywords?.find((k) => k.id === selectedKeywordId)?.keyword}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -814,14 +958,17 @@ export default function RankTrackingProject() {
                       <RechartsLineChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="date" />
-                        <YAxis 
-                          reversed 
-                          domain={[1, Math.max(...chartData.map(d => d.position), 20)]}
+                        <YAxis
+                          reversed
+                          domain={[
+                            1,
+                            Math.max(...chartData.map((d) => d.position), 20),
+                          ]}
                         />
                         <Tooltip
                           formatter={(value: number) => [
                             value > 100 ? "לא נמצא" : value,
-                            "מיקום"
+                            "מיקום",
                           ]}
                         />
                         <Line

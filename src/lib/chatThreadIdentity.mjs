@@ -10,7 +10,9 @@ export function normalizeChatThreadPhone(phone) {
   if (/[a-zA-Z]/.test(raw)) return "";
 
   const digits = raw.replace(/\D/g, "").replace(/^00/, "");
-  const withoutCountryCode = digits.startsWith("972") ? digits.slice(3) : digits;
+  const withoutCountryCode = digits.startsWith("972")
+    ? digits.slice(3)
+    : digits;
   const local = withoutCountryCode.replace(/^0/, "");
   return local.length >= 9 ? local.slice(-9) : "";
 }
@@ -24,8 +26,7 @@ export function buildChatThreadFilter({ contactId, contactType, phone }) {
   if (contactType === "unknown") return phoneFilter;
 
   const entityColumn = contactType === "client" ? "client_id" : "lead_id";
-  return [
-    `${entityColumn}.eq.${contactId}`,
-    phoneFilter,
-  ].filter(Boolean).join(",");
+  return [`${entityColumn}.eq.${contactId}`, phoneFilter]
+    .filter(Boolean)
+    .join(",");
 }

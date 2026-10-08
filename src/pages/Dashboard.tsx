@@ -2,8 +2,22 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, Users, Megaphone, DollarSign, TrendingUp, TrendingDown, CheckSquare } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Building2,
+  Users,
+  Megaphone,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  CheckSquare,
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -16,10 +30,21 @@ export default function Dashboard() {
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
   const { userAgencyIds } = useUserAgencies();
-  const { isOwner, isTeamManager, isSuperAdmin, isCampaigner, isSeo, campaignerId } = useUserRole();
+  const {
+    isOwner,
+    isTeamManager,
+    isSuperAdmin,
+    isCampaigner,
+    isSeo,
+    campaignerId,
+  } = useUserRole();
   const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
   const isRestrictedCampaignerViewer =
-    isCampaigner && !isSeoOnlyViewer && !isTeamManager && !isOwner && !isSuperAdmin;
+    isCampaigner &&
+    !isSeoOnlyViewer &&
+    !isTeamManager &&
+    !isOwner &&
+    !isSuperAdmin;
   const { t } = useTerminology();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const [selectedClient, setSelectedClient] = useState<string>("all");
@@ -31,92 +56,106 @@ export default function Dashboard() {
     if (!tenantId) return;
 
     const channel = supabase
-      .channel('dashboard-changes')
+      .channel("dashboard-changes")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'clients',
-          filter: `tenant_id=eq.${tenantId}`
+          event: "*",
+          schema: "public",
+          table: "clients",
+          filter: `tenant_id=eq.${tenantId}`,
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
-          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
-        }
+          queryClient.invalidateQueries({
+            queryKey: ["dashboard-stats", tenantId],
+          });
+        },
       )
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'agencies',
-          filter: `tenant_id=eq.${tenantId}`
+          event: "*",
+          schema: "public",
+          table: "agencies",
+          filter: `tenant_id=eq.${tenantId}`,
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ["agencies", tenantId] });
-          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
-        }
+          queryClient.invalidateQueries({
+            queryKey: ["dashboard-stats", tenantId],
+          });
+        },
       )
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'tasks',
-          filter: `tenant_id=eq.${tenantId}`
+          event: "*",
+          schema: "public",
+          table: "tasks",
+          filter: `tenant_id=eq.${tenantId}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
-        }
+          queryClient.invalidateQueries({
+            queryKey: ["dashboard-stats", tenantId],
+          });
+        },
       )
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'leads',
-          filter: `tenant_id=eq.${tenantId}`
+          event: "*",
+          schema: "public",
+          table: "leads",
+          filter: `tenant_id=eq.${tenantId}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
-        }
+          queryClient.invalidateQueries({
+            queryKey: ["dashboard-stats", tenantId],
+          });
+        },
       )
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'finance',
-          filter: `tenant_id=eq.${tenantId}`
+          event: "*",
+          schema: "public",
+          table: "finance",
+          filter: `tenant_id=eq.${tenantId}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
-        }
+          queryClient.invalidateQueries({
+            queryKey: ["dashboard-stats", tenantId],
+          });
+        },
       )
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'campaigners',
-          filter: `tenant_id=eq.${tenantId}`
+          event: "*",
+          schema: "public",
+          table: "campaigners",
+          filter: `tenant_id=eq.${tenantId}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
-        }
+          queryClient.invalidateQueries({
+            queryKey: ["dashboard-stats", tenantId],
+          });
+        },
       )
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'client_tenant_financial_data',
-          filter: `tenant_id=eq.${tenantId}`
+          event: "*",
+          schema: "public",
+          table: "client_tenant_financial_data",
+          filter: `tenant_id=eq.${tenantId}`,
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
-        }
+          queryClient.invalidateQueries({
+            queryKey: ["dashboard-stats", tenantId],
+          });
+        },
       )
       .subscribe();
 
@@ -145,13 +184,19 @@ export default function Dashboard() {
     queryKey: ["clients", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      let query = supabase.from("clients").select("id, name, agency_id, is_seo_client, services");
+      let query = supabase
+        .from("clients")
+        .select("id, name, agency_id, is_seo_client, services");
       if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
         query = query.eq("tenant_id", tenantId);
       }
-      const { data, error } = await query.in("status", ["active", "onboarding"]).order("name");
+      const { data, error } = await query
+        .in("status", ["active", "onboarding"])
+        .order("name");
       if (error) throw error;
       return data;
     },
@@ -188,34 +233,72 @@ export default function Dashboard() {
   });
 
   const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats", tenantId, selectedAgency, selectedClient, selectedSupplier, isSeoOnlyViewer, isRestrictedCampaignerViewer, assignedClientIds.join(","), crossTenantAgencyIds],
+    queryKey: [
+      "dashboard-stats",
+      tenantId,
+      selectedAgency,
+      selectedClient,
+      selectedSupplier,
+      isSeoOnlyViewer,
+      isRestrictedCampaignerViewer,
+      assignedClientIds.join(","),
+      crossTenantAgencyIds,
+    ],
     queryFn: async () => {
       if (!tenantId) return null;
-      let agencyQuery = supabase.from("agencies").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
-      let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true });
+      let agencyQuery = supabase
+        .from("agencies")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenantId);
+      let clientQuery = supabase
+        .from("clients")
+        .select("*", { count: "exact", head: true });
       if (crossTenantAgencyIds.length > 0) {
-        clientQuery = clientQuery.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        clientQuery = clientQuery.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
         clientQuery = clientQuery.eq("tenant_id", tenantId);
       }
-      let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
-      let taskQuery = supabase.from("tasks").select("*").eq("tenant_id", tenantId).eq("status", "open");
-      let activeClientsQuery = supabase.from("clients").select("id, agency_id, retainer");
+      let campaignerQuery = supabase
+        .from("campaigners")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenantId);
+      let taskQuery = supabase
+        .from("tasks")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("status", "open");
+      let activeClientsQuery = supabase
+        .from("clients")
+        .select("id, agency_id, retainer");
       if (crossTenantAgencyIds.length > 0) {
-        activeClientsQuery = activeClientsQuery.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        activeClientsQuery = activeClientsQuery.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
         activeClientsQuery = activeClientsQuery.eq("tenant_id", tenantId);
       }
-      activeClientsQuery = activeClientsQuery.in("status", ["active", "onboarding"]);
-      let leadsQuery = supabase.from("leads").select("estimated_deal_value, monthly_budget, three_month_budget, status").eq("tenant_id", tenantId);
-      
+      activeClientsQuery = activeClientsQuery.in("status", [
+        "active",
+        "onboarding",
+      ]);
+      let leadsQuery = supabase
+        .from("leads")
+        .select(
+          "estimated_deal_value, monthly_budget, three_month_budget, status",
+        )
+        .eq("tenant_id", tenantId);
+
       // אם בחרנו ספק, נמצא את הקמפיינר הקשור אליו
       let relatedCampaignerId = null;
       if (selectedSupplier !== "all") {
-        const selectedSupplierData = suppliers?.find(s => s.id === selectedSupplier);
+        const selectedSupplierData = suppliers?.find(
+          (s) => s.id === selectedSupplier,
+        );
         relatedCampaignerId = selectedSupplierData?.related_campaigner_id;
       }
-      
+
       // קודם כל מביאים את client_team אם צריך לסנן לפי ספק (דרך הקמפיינר)
       let clientTeamData = null;
       if (relatedCampaignerId) {
@@ -243,7 +326,10 @@ export default function Dashboard() {
           clientQuery = clientQuery.in("id", assignedClientIds);
           taskQuery = taskQuery.in("client_id", assignedClientIds);
           activeClientsQuery = activeClientsQuery.in("id", assignedClientIds);
-          leadsQuery = leadsQuery.eq("id", "00000000-0000-0000-0000-000000000000");
+          leadsQuery = leadsQuery.eq(
+            "id",
+            "00000000-0000-0000-0000-000000000000",
+          );
         } else {
           const emptyId = "00000000-0000-0000-0000-000000000000";
           clientQuery = clientQuery.eq("id", emptyId);
@@ -252,8 +338,12 @@ export default function Dashboard() {
           leadsQuery = leadsQuery.eq("id", emptyId);
         }
       } else if (isSeoOnlyViewer) {
-        clientQuery = clientQuery.or("is_seo_client.eq.true,services.cs.[\"seo\"]");
-        activeClientsQuery = activeClientsQuery.or("is_seo_client.eq.true,services.cs.[\"seo\"]");
+        clientQuery = clientQuery.or(
+          'is_seo_client.eq.true,services.cs.["seo"]',
+        );
+        activeClientsQuery = activeClientsQuery.or(
+          'is_seo_client.eq.true,services.cs.["seo"]',
+        );
         const emptyId = "00000000-0000-0000-0000-000000000000";
         taskQuery = taskQuery.eq("client_id", emptyId);
         leadsQuery = leadsQuery.eq("id", emptyId);
@@ -261,15 +351,22 @@ export default function Dashboard() {
 
       if (selectedSupplier !== "all" && clientTeamData) {
         taskQuery = taskQuery.eq("campaigner_id", relatedCampaignerId);
-        
+
         // סינון לקוחות לפי client_team
         if (clientTeamData.length > 0) {
-          const campaignerClientIds = clientTeamData.map(ct => ct.client_id);
+          const campaignerClientIds = clientTeamData.map((ct) => ct.client_id);
           activeClientsQuery = activeClientsQuery.in("id", campaignerClientIds);
         }
       }
 
-      const [agenciesData, clientsData, campaignersData, tasks, activeClients, leads] = await Promise.all([
+      const [
+        agenciesData,
+        clientsData,
+        campaignersData,
+        tasks,
+        activeClients,
+        leads,
+      ] = await Promise.all([
         agencyQuery,
         clientQuery,
         campaignerQuery,
@@ -279,17 +376,28 @@ export default function Dashboard() {
       ]);
 
       // חישוב שווי לידים פעילים (לא closed)
-      const activeLeads = leads.data?.filter(l => l.status !== "closed") || [];
+      const activeLeads =
+        leads.data?.filter((l) => l.status !== "closed") || [];
       const leadsValue = activeLeads.reduce((sum, lead) => {
-        return sum + (Number(lead.estimated_deal_value || 0) || Number(lead.monthly_budget || 0) || Number(lead.three_month_budget || 0));
+        return (
+          sum +
+          (Number(lead.estimated_deal_value || 0) ||
+            Number(lead.monthly_budget || 0) ||
+            Number(lead.three_month_budget || 0))
+        );
       }, 0);
 
       // Compute activeClientIds now (needed for queries below)
-      const activeClientsList = Array.isArray(activeClients.data) ? activeClients.data : [];
+      const activeClientsList = Array.isArray(activeClients.data)
+        ? activeClients.data
+        : [];
       const activeClientIds = activeClientsList.map((c) => c.id);
 
       // Build finance query (uses state + clientTeamData from before step-1, not step-1 results)
-      let financeQuery = supabase.from("finance").select("type, amount, client_id").eq("tenant_id", tenantId);
+      let financeQuery = supabase
+        .from("finance")
+        .select("type, amount, client_id")
+        .eq("tenant_id", tenantId);
       if (selectedAgency !== "all") {
         financeQuery = financeQuery.eq("agency_id", selectedAgency);
       }
@@ -299,27 +407,38 @@ export default function Dashboard() {
         if (assignedClientIds.length > 0) {
           financeQuery = financeQuery.in("client_id", assignedClientIds);
         } else {
-          financeQuery = financeQuery.eq("client_id", "00000000-0000-0000-0000-000000000000");
+          financeQuery = financeQuery.eq(
+            "client_id",
+            "00000000-0000-0000-0000-000000000000",
+          );
         }
       } else if (isSeoOnlyViewer) {
         if (activeClientIds.length > 0) {
           financeQuery = financeQuery.in("client_id", activeClientIds);
         } else {
-          financeQuery = financeQuery.eq("client_id", "00000000-0000-0000-0000-000000000000");
+          financeQuery = financeQuery.eq(
+            "client_id",
+            "00000000-0000-0000-0000-000000000000",
+          );
         }
       } else if (selectedSupplier !== "all") {
         if (clientTeamData && clientTeamData.length > 0) {
-          const campaignerClientIds = clientTeamData.map(ct => ct.client_id);
+          const campaignerClientIds = clientTeamData.map((ct) => ct.client_id);
           financeQuery = financeQuery.in("client_id", campaignerClientIds);
         } else {
-          financeQuery = financeQuery.eq("client_id", "00000000-0000-0000-0000-000000000000");
+          financeQuery = financeQuery.eq(
+            "client_id",
+            "00000000-0000-0000-0000-000000000000",
+          );
         }
       }
 
       // Build suppliers query (fully independent)
       let suppliersQuery = supabase
         .from("suppliers")
-        .select("id, payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3")
+        .select(
+          "id, payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3",
+        )
         .eq("tenant_id", tenantId);
       if (selectedSupplier !== "all") {
         suppliersQuery = suppliersQuery.eq("id", selectedSupplier);
@@ -335,15 +454,28 @@ export default function Dashboard() {
         financeQuery,
         suppliersQuery,
         activeClientIds.length > 0
-          ? supabase.from("client_tenant_financial_data").select("client_id, retainer").eq("tenant_id", tenantId).in("client_id", activeClientIds)
+          ? supabase
+              .from("client_tenant_financial_data")
+              .select("client_id, retainer")
+              .eq("tenant_id", tenantId)
+              .in("client_id", activeClientIds)
           : Promise.resolve({ data: null as any }),
         activeClientIds.length > 0
-          ? supabase.from("client_team").select("campaigner_payment, client_id").in("client_id", activeClientIds)
+          ? supabase
+              .from("client_team")
+              .select("campaigner_payment, client_id")
+              .in("client_id", activeClientIds)
           : Promise.resolve({ data: null as any }),
       ]);
 
-      const financeIncome = financeData?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
-      const financeExpense = financeData?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+      const financeIncome =
+        financeData
+          ?.filter((f) => f.type === "income")
+          .reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+      const financeExpense =
+        financeData
+          ?.filter((f) => f.type === "expense")
+          .reduce((sum, f) => sum + Number(f.amount), 0) || 0;
 
       // Retainers: prefer client_tenant_financial_data when exists, fallback to legacy clients.retainer
       const hasFinancialRow = new Set<string>();
@@ -353,25 +485,36 @@ export default function Dashboard() {
         retainerByClient.set(row.client_id, Number(row.retainer || 0));
       });
       const retainers = activeClientsList.reduce((sum, client) => {
-        if (hasFinancialRow.has(client.id)) return sum + (retainerByClient.get(client.id) || 0);
+        if (hasFinancialRow.has(client.id))
+          return sum + (retainerByClient.get(client.id) || 0);
         return sum + Number(client.retainer || 0);
       }, 0);
 
       let manualSupplierPayments = 0;
       suppliersData?.forEach((supplier: any) => {
         if (selectedAgency === "all") {
-          manualSupplierPayments += Number(supplier.payment_1 || 0) + Number(supplier.payment_2 || 0) + Number(supplier.payment_3 || 0);
+          manualSupplierPayments +=
+            Number(supplier.payment_1 || 0) +
+            Number(supplier.payment_2 || 0) +
+            Number(supplier.payment_3 || 0);
         } else {
-          if (supplier.agency_id_1 === selectedAgency) manualSupplierPayments += Number(supplier.payment_1 || 0);
-          if (supplier.agency_id_2 === selectedAgency) manualSupplierPayments += Number(supplier.payment_2 || 0);
-          if (supplier.agency_id_3 === selectedAgency) manualSupplierPayments += Number(supplier.payment_3 || 0);
+          if (supplier.agency_id_1 === selectedAgency)
+            manualSupplierPayments += Number(supplier.payment_1 || 0);
+          if (supplier.agency_id_2 === selectedAgency)
+            manualSupplierPayments += Number(supplier.payment_2 || 0);
+          if (supplier.agency_id_3 === selectedAgency)
+            manualSupplierPayments += Number(supplier.payment_3 || 0);
         }
       });
 
-      const campaignerPayments = (clientTeamPaymentsData || []).reduce((sum: number, ct: any) => sum + Number(ct.campaigner_payment || 0), 0);
+      const campaignerPayments = (clientTeamPaymentsData || []).reduce(
+        (sum: number, ct: any) => sum + Number(ct.campaigner_payment || 0),
+        0,
+      );
 
       const totalIncome = financeIncome + retainers;
-      const totalExpense = financeExpense + manualSupplierPayments + campaignerPayments;
+      const totalExpense =
+        financeExpense + manualSupplierPayments + campaignerPayments;
 
       return {
         agenciesCount: agenciesData.count || 0,
@@ -404,7 +547,7 @@ export default function Dashboard() {
       bg: "bg-accent/10",
     },
     {
-      title: t('role_campaigner', true),
+      title: t("role_campaigner", true),
       value: stats?.campaignersCount || 0,
       icon: Megaphone,
       color: "text-success",
@@ -436,9 +579,10 @@ export default function Dashboard() {
         : clients;
 
   // Then filter by selected agency
-  const filteredClients = selectedAgency === "all" 
-    ? accessibleClients 
-    : accessibleClients?.filter(c => c.agency_id === selectedAgency);
+  const filteredClients =
+    selectedAgency === "all"
+      ? accessibleClients
+      : accessibleClients?.filter((c) => c.agency_id === selectedAgency);
 
   return (
     <div className="space-y-6 p-6">
@@ -453,11 +597,13 @@ export default function Dashboard() {
           </SelectTrigger>
           <SelectContent className="bg-background">
             <SelectItem value="all">כל הלקוחות</SelectItem>
-            {filteredClients?.filter(client => client.id).map((client) => (
-              <SelectItem key={client.id} value={client.id}>
-                {client.name}
-              </SelectItem>
-            ))}
+            {filteredClients
+              ?.filter((client) => client.id)
+              .map((client) => (
+                <SelectItem key={client.id} value={client.id}>
+                  {client.name}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
 
@@ -467,20 +613,27 @@ export default function Dashboard() {
           </SelectTrigger>
           <SelectContent className="bg-background">
             <SelectItem value="all">כל הספקים</SelectItem>
-            {suppliers?.filter(supplier => supplier.id).map((supplier) => (
-              <SelectItem key={supplier.id} value={supplier.id}>
-                {supplier.name}
-              </SelectItem>
-            ))}
+            {suppliers
+              ?.filter((supplier) => supplier.id)
+              .map((supplier) => (
+                <SelectItem key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         {statCards.map((stat) => (
-          <Card key={stat.title} className="shadow-card hover:shadow-lg transition-shadow">
+          <Card
+            key={stat.title}
+            className="shadow-card hover:shadow-lg transition-shadow"
+          >
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {stat.title}
+              </CardTitle>
               <div className={`p-2 rounded-lg ${stat.bg}`}>
                 <stat.icon className={`h-4 w-4 ${stat.color}`} />
               </div>
@@ -493,11 +646,13 @@ export default function Dashboard() {
       </div>
 
       {/* Financial Overview */}
-      {(
+      {
         <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
           <Card className="shadow-card min-w-0">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">הכנסות חודשיות</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                הכנסות חודשיות
+              </CardTitle>
               <TrendingUp className="h-4 w-4 text-success" />
             </CardHeader>
             <CardContent>
@@ -509,7 +664,9 @@ export default function Dashboard() {
 
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">הוצאות חודשיות</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                הוצאות חודשיות
+              </CardTitle>
               <TrendingDown className="h-4 w-4 text-destructive" />
             </CardHeader>
             <CardContent>
@@ -525,13 +682,15 @@ export default function Dashboard() {
               <DollarSign className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${(stats?.profit || 0) >= 0 ? 'text-primary' : 'text-destructive'}`}>
+              <div
+                className={`text-2xl font-bold ${(stats?.profit || 0) >= 0 ? "text-primary" : "text-destructive"}`}
+              >
                 ₪{stats?.profit.toLocaleString() || 0}
               </div>
             </CardContent>
           </Card>
         </div>
-      )}
+      }
     </div>
   );
 }

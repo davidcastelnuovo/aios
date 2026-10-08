@@ -1,11 +1,35 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ListTodo, MessageSquare, Users, CalendarDays, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical, Megaphone, Check, UserRound } from "lucide-react";
+import {
+  ListTodo,
+  MessageSquare,
+  Users,
+  CalendarDays,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  AlertTriangle,
+  GripVertical,
+  Megaphone,
+  Check,
+  UserRound,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { embedCount } from "@/lib/embedCount";
 import { useState } from "react";
@@ -71,10 +95,11 @@ function DraggableBacklogTask({
 }) {
   const [clientOpen, setClientOpen] = useState(false);
   const [campaignerOpen, setCampaignerOpen] = useState(false);
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: task.id,
-    data: { task },
-  });
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: task.id,
+      data: { task },
+    });
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -90,7 +115,7 @@ function DraggableBacklogTask({
         "p-2 rounded-lg border bg-card transition-all",
         isDragging && "opacity-50 shadow-lg",
         isCompleted && "opacity-60",
-        isOverdue && "border-destructive/50 bg-destructive/5"
+        isOverdue && "border-destructive/50 bg-destructive/5",
       )}
     >
       <div className="flex items-start gap-2">
@@ -114,7 +139,7 @@ function DraggableBacklogTask({
             <p
               className={cn(
                 "text-sm font-medium whitespace-normal break-words",
-                isCompleted && "line-through text-muted-foreground"
+                isCompleted && "line-through text-muted-foreground",
               )}
             >
               {task.title}
@@ -124,13 +149,23 @@ function DraggableBacklogTask({
                 {task.due_date && (
                   <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1.5 py-0.5">
                     <CalendarDays className="h-3 w-3" />
-                    ביצוע {new Date(task.due_date).toLocaleDateString("he-IL", { day: "numeric", month: "numeric" })}
-                    {task.due_time ? ` ${String(task.due_time).substring(0, 5)}` : ""}
+                    ביצוע{" "}
+                    {new Date(task.due_date).toLocaleDateString("he-IL", {
+                      day: "numeric",
+                      month: "numeric",
+                    })}
+                    {task.due_time
+                      ? ` ${String(task.due_time).substring(0, 5)}`
+                      : ""}
                   </span>
                 )}
                 {task.target_date && (
                   <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-800 dark:text-amber-200">
-                    יעד {new Date(task.target_date).toLocaleDateString("he-IL", { day: "numeric", month: "numeric" })}
+                    יעד{" "}
+                    {new Date(task.target_date).toLocaleDateString("he-IL", {
+                      day: "numeric",
+                      month: "numeric",
+                    })}
                   </span>
                 )}
               </div>
@@ -139,28 +174,62 @@ function DraggableBacklogTask({
 
           {/* Inline client & campaigner selectors */}
           {(onUpdateClient || onUpdateCampaigner) && (
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="flex items-center gap-2 mt-1.5 flex-wrap"
+              onClick={(e) => e.stopPropagation()}
+            >
               {onUpdateClient && clientsList && (
                 <Popover open={clientOpen} onOpenChange={setClientOpen}>
                   <PopoverTrigger asChild>
                     <button className="flex items-center gap-1 h-6 text-[11px] w-[110px] px-1.5 rounded-md border bg-background hover:bg-accent/50 truncate">
                       <Users className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="truncate">{task.client_id ? clientsList.find(c => c.id === task.client_id)?.name || "לקוח" : "ללא לקוח"}</span>
+                      <span className="truncate">
+                        {task.client_id
+                          ? clientsList.find((c) => c.id === task.client_id)
+                              ?.name || "לקוח"
+                          : "ללא לקוח"}
+                      </span>
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[200px] p-0 z-50" align="start">
                     <Command>
-                      <CommandInput placeholder="חיפוש לקוח..." className="h-8 text-xs" />
+                      <CommandInput
+                        placeholder="חיפוש לקוח..."
+                        className="h-8 text-xs"
+                      />
                       <CommandList>
                         <CommandEmpty>לא נמצא</CommandEmpty>
                         <CommandGroup>
-                          <CommandItem onSelect={() => { onUpdateClient(task.id, null); setClientOpen(false); }}>
-                            <Check className={cn("h-3 w-3 mr-1", !task.client_id ? "opacity-100" : "opacity-0")} />
+                          <CommandItem
+                            onSelect={() => {
+                              onUpdateClient(task.id, null);
+                              setClientOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "h-3 w-3 mr-1",
+                                !task.client_id ? "opacity-100" : "opacity-0",
+                              )}
+                            />
                             ללא לקוח
                           </CommandItem>
                           {clientsList.map((c) => (
-                            <CommandItem key={c.id} onSelect={() => { onUpdateClient(task.id, c.id); setClientOpen(false); }}>
-                              <Check className={cn("h-3 w-3 mr-1", task.client_id === c.id ? "opacity-100" : "opacity-0")} />
+                            <CommandItem
+                              key={c.id}
+                              onSelect={() => {
+                                onUpdateClient(task.id, c.id);
+                                setClientOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "h-3 w-3 mr-1",
+                                  task.client_id === c.id
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
                               {c.name}
                             </CommandItem>
                           ))}
@@ -175,22 +244,56 @@ function DraggableBacklogTask({
                   <PopoverTrigger asChild>
                     <button className="flex items-center gap-1 h-6 text-[11px] w-[110px] px-1.5 rounded-md border bg-background hover:bg-accent/50 truncate">
                       <Megaphone className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="truncate">{task.campaigner_id ? campaignersList.find(c => c.id === task.campaigner_id)?.full_name || "קמפיינר" : "ללא קמפיינר"}</span>
+                      <span className="truncate">
+                        {task.campaigner_id
+                          ? campaignersList.find(
+                              (c) => c.id === task.campaigner_id,
+                            )?.full_name || "קמפיינר"
+                          : "ללא קמפיינר"}
+                      </span>
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[200px] p-0 z-50" align="start">
                     <Command>
-                      <CommandInput placeholder="חיפוש קמפיינר..." className="h-8 text-xs" />
+                      <CommandInput
+                        placeholder="חיפוש קמפיינר..."
+                        className="h-8 text-xs"
+                      />
                       <CommandList>
                         <CommandEmpty>לא נמצא</CommandEmpty>
                         <CommandGroup>
-                          <CommandItem onSelect={() => { onUpdateCampaigner(task.id, null); setCampaignerOpen(false); }}>
-                            <Check className={cn("h-3 w-3 mr-1", !task.campaigner_id ? "opacity-100" : "opacity-0")} />
+                          <CommandItem
+                            onSelect={() => {
+                              onUpdateCampaigner(task.id, null);
+                              setCampaignerOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "h-3 w-3 mr-1",
+                                !task.campaigner_id
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />
                             ללא קמפיינר
                           </CommandItem>
                           {campaignersList.map((c) => (
-                            <CommandItem key={c.id} onSelect={() => { onUpdateCampaigner(task.id, c.id); setCampaignerOpen(false); }}>
-                              <Check className={cn("h-3 w-3 mr-1", task.campaigner_id === c.id ? "opacity-100" : "opacity-0")} />
+                            <CommandItem
+                              key={c.id}
+                              onSelect={() => {
+                                onUpdateCampaigner(task.id, c.id);
+                                setCampaignerOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "h-3 w-3 mr-1",
+                                  task.campaigner_id === c.id
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
                               {c.full_name}
                             </CommandItem>
                           ))}
@@ -203,7 +306,10 @@ function DraggableBacklogTask({
             </div>
           )}
 
-          <div className="flex items-center gap-1 mt-1 flex-wrap" onClick={onClick}>
+          <div
+            className="flex items-center gap-1 mt-1 flex-wrap"
+            onClick={onClick}
+          >
             {task.clients?.name && !onUpdateClient && (
               <Badge variant="secondary" className="text-xs">
                 {task.clients.name}
@@ -223,7 +329,11 @@ function DraggableBacklogTask({
             )}
             {task.created_at && (
               <span className="text-[11px] text-muted-foreground">
-                נוצר {new Date(task.created_at).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })}
+                נוצר{" "}
+                {new Date(task.created_at).toLocaleDateString("he-IL", {
+                  day: "2-digit",
+                  month: "2-digit",
+                })}
               </span>
             )}
             {task.due_date && (
@@ -233,11 +343,14 @@ function DraggableBacklogTask({
                   "text-xs",
                   isOverdue
                     ? "text-destructive border-destructive/50"
-                    : "text-muted-foreground"
+                    : "text-muted-foreground",
                 )}
               >
                 <CalendarDays className="h-3 w-3 mr-1" />
-                {new Date(task.due_date).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })}
+                {new Date(task.due_date).toLocaleDateString("he-IL", {
+                  day: "2-digit",
+                  month: "2-digit",
+                })}
               </Badge>
             )}
             {embedCount(task.task_updates) > 0 && (
@@ -276,7 +389,7 @@ export function TaskBacklogPanel({
   // Start collapsed if no tasks, expanded if there are tasks
   const [isExpanded, setIsExpanded] = useState(true);
   const showExpanded = isMobileFull || isExpanded;
-  
+
   const { setNodeRef, isOver } = useDroppable({
     id: "backlog",
   });
@@ -294,19 +407,23 @@ export function TaskBacklogPanel({
     if (bTime !== aTime) return bTime - aTime;
     return b.id.localeCompare(a.id);
   };
-  
+
   const overdueTasks = tasks
     .filter((t) => isTaskOverdue(t, today))
     .sort(sortNewestFirst);
 
-  const untimedTasks = tasks.filter((t) => {
-    if (!t.due_date || isTaskOverdue(t, today)) return false;
-    const dueDate = new Date(t.due_date);
-    return dueDate >= today && !t.due_time;
-  }).sort(sortNewestFirst);
-  
-  const unscheduledTasks = tasks.filter(t => !t.due_date).sort(sortNewestFirst);
-  
+  const untimedTasks = tasks
+    .filter((t) => {
+      if (!t.due_date || isTaskOverdue(t, today)) return false;
+      const dueDate = new Date(t.due_date);
+      return dueDate >= today && !t.due_time;
+    })
+    .sort(sortNewestFirst);
+
+  const unscheduledTasks = tasks
+    .filter((t) => !t.due_date)
+    .sort(sortNewestFirst);
+
   const overdueCount = overdueTasks.length;
   const untimedCount = untimedTasks.length;
   const unscheduledCount = unscheduledTasks.length;
@@ -319,8 +436,8 @@ export function TaskBacklogPanel({
       ref={setNodeRef}
       className={cn(
         "flex flex-col rounded-xl border transition-all duration-200 shadow-lg",
-        overdueCount > 0 
-          ? "bg-destructive/5 border-destructive/30" 
+        overdueCount > 0
+          ? "bg-destructive/5 border-destructive/30"
           : "bg-background border-border",
         isMobileFull
           ? "w-full min-w-0 h-full min-h-0 shrink"
@@ -328,15 +445,15 @@ export function TaskBacklogPanel({
               "shrink-0 h-fit",
               isExpanded ? "min-w-[33vw] w-[33vw]" : "w-[60px]",
             ),
-        isOver && (overdueCount > 0 ? "bg-destructive/10" : "bg-accent/50")
+        isOver && (overdueCount > 0 ? "bg-destructive/10" : "bg-accent/50"),
       )}
     >
       {/* Header */}
-      <div 
+      <div
         className={cn(
           "p-3 border-b rounded-t-xl shrink-0",
-          overdueCount > 0 
-            ? "border-destructive/30 bg-destructive/10" 
+          overdueCount > 0
+            ? "border-destructive/30 bg-destructive/10"
             : "border-border bg-muted/50",
           showExpanded ? "text-center" : "flex flex-col items-center",
           !isMobileFull && "cursor-pointer",
@@ -368,8 +485,11 @@ export function TaskBacklogPanel({
               {overdueCount > 0 && (
                 <span className="text-destructive">{overdueCount} באיחור</span>
               )}
-              {overdueCount > 0 && (untimedCount > 0 || unscheduledCount > 0) && " | "}
-              {(untimedCount + unscheduledCount) > 0 && `${untimedCount + unscheduledCount} ללא זמן`}
+              {overdueCount > 0 &&
+                (untimedCount > 0 || unscheduledCount > 0) &&
+                " | "}
+              {untimedCount + unscheduledCount > 0 &&
+                `${untimedCount + unscheduledCount} ללא זמן`}
             </p>
           </>
         ) : (
@@ -411,7 +531,9 @@ export function TaskBacklogPanel({
             <>
               <div className="flex items-center gap-1 px-1">
                 <Clock className="h-3 w-3 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">ללא תאריך</span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  ללא תאריך
+                </span>
               </div>
               {unscheduledTasks.map((task) => (
                 <DraggableBacklogTask
@@ -434,7 +556,9 @@ export function TaskBacklogPanel({
             <>
               <div className="flex items-center gap-1 px-1 mt-2">
                 <Clock className="h-3 w-3 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">ממתין לזמן</span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  ממתין לזמן
+                </span>
               </div>
               {untimedTasks.map((task) => (
                 <DraggableBacklogTask
@@ -457,7 +581,9 @@ export function TaskBacklogPanel({
             <>
               <div className="flex items-center gap-1 px-1 mt-2">
                 <AlertTriangle className="h-3 w-3 text-destructive" />
-                <span className="text-xs font-medium text-destructive">באיחור</span>
+                <span className="text-xs font-medium text-destructive">
+                  באיחור
+                </span>
               </div>
               {overdueTasks.map((task) => (
                 <DraggableBacklogTask
@@ -474,7 +600,7 @@ export function TaskBacklogPanel({
               ))}
             </>
           )}
-          
+
           {/* Empty state message */}
           {totalCount === 0 && (
             <p className="text-center text-sm text-muted-foreground py-4">

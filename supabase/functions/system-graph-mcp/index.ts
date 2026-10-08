@@ -2,7 +2,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const REQUIRED_BEARER = Deno.env.get("AIOS_GRAPH_MCP_BEARER") || Deno.env.get("CLAUDE_MCP_BEARER") || "";
+const REQUIRED_BEARER =
+  Deno.env.get("AIOS_GRAPH_MCP_BEARER") ||
+  Deno.env.get("CLAUDE_MCP_BEARER") ||
+  "";
 const SERVER_INFO = { name: "aios-system-graph", version: "1.0.0" };
 const PROTOCOL_VERSION = "2024-11-05";
 
@@ -15,11 +18,16 @@ const corsHeaders = {
 const tools = [
   {
     name: "query_system_graph",
-    description: "Search the current AIOS architecture graph and return nearby code, database, Edge Function, Carmen, skin, skill, tool, and dependency nodes. Use before modifying the system to avoid duplication and identify impact.",
+    description:
+      "Search the current AIOS architecture graph and return nearby code, database, Edge Function, Carmen, skin, skill, tool, and dependency nodes. Use before modifying the system to avoid duplication and identify impact.",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Component, concept, file, function, table, or architecture question." },
+        query: {
+          type: "string",
+          description:
+            "Component, concept, file, function, table, or architecture question.",
+        },
         depth: { type: "integer", minimum: 0, maximum: 3, default: 2 },
         limit: { type: "integer", minimum: 1, maximum: 80, default: 40 },
       },
@@ -28,7 +36,8 @@ const tools = [
   },
   {
     name: "graph_status",
-    description: "Return the active AIOS graph version, source commit, node count, edge count, and activation time.",
+    description:
+      "Return the active AIOS graph version, source commit, node count, edge count, and activation time.",
     inputSchema: { type: "object", properties: {} },
   },
 ];
@@ -45,21 +54,28 @@ function rpcResult(id: unknown, result: unknown) {
 }
 
 function rpcError(id: unknown, code: number, message: string, status = 200) {
-  return response({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }, status);
+  return response(
+    { jsonrpc: "2.0", id: id ?? null, error: { code, message } },
+    status,
+  );
 }
 
 function bearer(req: Request) {
-  const match = (req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
+  const match = (req.headers.get("authorization") || "").match(
+    /^Bearer\s+(.+)$/i,
+  );
   return match?.[1]?.trim() || "";
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
   if (!REQUIRED_BEARER || bearer(req) !== REQUIRED_BEARER) {
     return response({ error: "Unauthorized" }, 401);
   }
   if (req.method === "GET") return response({ ok: true, server: SERVER_INFO });
-  if (req.method !== "POST") return response({ error: "Method not allowed" }, 405);
+  if (req.method !== "POST")
+    return response({ error: "Method not allowed" }, 405);
 
   let body: any;
   try {
@@ -76,13 +92,16 @@ Deno.serve(async (req: Request) => {
       serverInfo: SERVER_INFO,
     });
   }
-  if (method === "notifications/initialized") return new Response(null, { status: 204, headers: corsHeaders });
+  if (method === "notifications/initialized")
+    return new Response(null, { status: 204, headers: corsHeaders });
   if (method === "tools/list") return rpcResult(id, { tools });
   if (method !== "tools/call") return rpcError(id, -32601, "Method not found");
 
   const name = params?.name;
   const args = params?.arguments || {};
-  const sb = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+  const sb = createClient(SUPABASE_URL, SERVICE_KEY, {
+    auth: { persistSession: false },
+  });
 
   try {
     if (name === "query_system_graph") {
@@ -96,7 +115,9 @@ Deno.serve(async (req: Request) => {
         p_limit: limit,
       });
       if (error) throw error;
-      return rpcResult(id, { content: [{ type: "text", text: JSON.stringify(data || []) }] });
+      return rpcResult(id, {
+        content: [{ type: "text", text: JSON.stringify(data || []) }],
+      });
     }
 
     if (name === "graph_status") {
@@ -106,14 +127,21 @@ Deno.serve(async (req: Request) => {
         .eq("status", "active")
         .maybeSingle();
       if (error) throw error;
-      return rpcResult(id, { content: [{ type: "text", text: JSON.stringify(data || null) }] });
+      return rpcResult(id, {
+        content: [{ type: "text", text: JSON.stringify(data || null) }],
+      });
     }
 
     return rpcError(id, -32602, `Unknown tool: ${String(name)}`);
   } catch (error) {
     console.error("[system-graph-mcp]", error);
     return rpcResult(id, {
-      content: [{ type: "text", text: `System graph error: ${error instanceof Error ? error.message : String(error)}` }],
+      content: [
+        {
+          type: "text",
+          text: `System graph error: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
       isError: true,
     });
   }

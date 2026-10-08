@@ -91,25 +91,35 @@ export function buildBrandedEmailHtml(opts: EmailTemplateOptions): string {
           </tr>
 
           <!-- Message -->
-          ${safeMessage ? `
+          ${
+            safeMessage
+              ? `
           <tr>
             <td style="padding:16px 32px 8px;text-align:right;">
               <div style="color:${textMain};font-size:15px;line-height:1.7;white-space:pre-wrap;">${safeMessage}</div>
             </td>
           </tr>
-          ` : ""}
+          `
+              : ""
+          }
 
           <!-- Inline embedded image -->
-          ${inlineImageCid ? `
+          ${
+            inlineImageCid
+              ? `
           <tr>
             <td style="padding:16px 32px 8px;text-align:center;">
               <img src="cid:${escapeHtml(inlineImageCid)}" alt="${escapeHtml(inlineImageAlt || title)}" style="display:block;max-width:100%;height:auto;width:100%;border:1px solid ${border};border-radius:8px;" />
             </td>
           </tr>
-          ` : ""}
+          `
+              : ""
+          }
 
           <!-- Attachment note -->
-          ${hasAttachment ? `
+          ${
+            hasAttachment
+              ? `
           <tr>
             <td style="padding:16px 32px 8px;text-align:right;">
               <div style="background-color:${bgSoft};border-right:3px solid ${brandPrimary};border-radius:6px;padding:12px 16px;">
@@ -119,10 +129,14 @@ export function buildBrandedEmailHtml(opts: EmailTemplateOptions): string {
               </div>
             </td>
           </tr>
-          ` : ""}
+          `
+              : ""
+          }
 
           <!-- CTA Button -->
-          ${ctaUrl ? `
+          ${
+            ctaUrl
+              ? `
           <tr>
             <td style="padding:24px 32px 8px;text-align:center;">
               <a href="${escapeHtml(ctaUrl)}"
@@ -131,7 +145,9 @@ export function buildBrandedEmailHtml(opts: EmailTemplateOptions): string {
               </a>
             </td>
           </tr>
-          ` : ""}
+          `
+              : ""
+          }
 
           <!-- Divider -->
           <tr>

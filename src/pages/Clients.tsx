@@ -6,7 +6,32 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { isQueryResolving } from "@/lib/queryUi";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download, Filter, FileSpreadsheet, Upload, Copy, Wand2, CheckCircle2, XCircle, Loader2 as Loader2Icon } from "lucide-react";
+import {
+  Users,
+  Building2,
+  Globe,
+  Coins,
+  Phone,
+  Mail,
+  LayoutGrid,
+  Table as TableIcon,
+  MessageCircle,
+  Edit,
+  Search,
+  Plus,
+  Trash2,
+  FolderOpen,
+  ExternalLink,
+  Download,
+  Filter,
+  FileSpreadsheet,
+  Upload,
+  Copy,
+  Wand2,
+  CheckCircle2,
+  XCircle,
+  Loader2 as Loader2Icon,
+} from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
@@ -77,14 +102,29 @@ export default function Clients() {
   const { selectedAgency, setSelectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
-  const { campaignerId, isCampaigner, isSeo, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
+  const {
+    campaignerId,
+    isCampaigner,
+    isSeo,
+    isTeamManager,
+    isOwner,
+    isSuperAdmin,
+  } = useUserRole();
   // SEO viewer takes precedence over campaigner: any user with SEO role sees all SEO-tagged clients
   // (unless they're also team_manager / owner / super_admin who already see everything)
   const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
   // Restricted viewer: pure campaigner (no SEO / team_manager / owner / super_admin)
-  const isRestrictedClientViewer = isCampaigner && !isSeoOnlyViewer && !isTeamManager && !isOwner && !isSuperAdmin;
+  const isRestrictedClientViewer =
+    isCampaigner &&
+    !isSeoOnlyViewer &&
+    !isTeamManager &&
+    !isOwner &&
+    !isSuperAdmin;
   useEffect(() => {
-    if ((isOwner || isSuperAdmin || isSeoOnlyViewer) && !clientsAgencyDefaultApplied) {
+    if (
+      (isOwner || isSuperAdmin || isSeoOnlyViewer) &&
+      !clientsAgencyDefaultApplied
+    ) {
       clientsAgencyDefaultApplied = true;
       setSelectedAgency("all");
     }
@@ -92,9 +132,12 @@ export default function Clients() {
   // Deep-link support: ?clientId=xxx&tab=updates (from DMMDashboard navigation)
   const [searchParams] = useSearchParams();
   const deepLinkClientId = searchParams.get("clientId") ?? undefined;
-  const deepLinkTab = (searchParams.get("tab") as "updates" | "details" | undefined) ?? undefined;
+  const deepLinkTab =
+    (searchParams.get("tab") as "updates" | "details" | undefined) ?? undefined;
   const [viewMode, setViewMode] = useState<"grid" | "table" | "chat">("chat");
-  const [pendingChatClientId, setPendingChatClientId] = useState<string | null>(null);
+  const [pendingChatClientId, setPendingChatClientId] = useState<string | null>(
+    null,
+  );
 
   // Editing a client opens the chat view focused on that client, instead of a modal dialog.
   const openClientInChat = (clientId: string) => {
@@ -108,11 +151,17 @@ export default function Clients() {
   const [selectedMoodStatus, setSelectedMoodStatus] = useState<string>("all");
   const [selectedService, setSelectedService] = useState<string>("all");
   const [deletingClient, setDeletingClient] = useState<any>(null);
-  const [duplicatingClient, setDuplicatingClient] = useState<{ id: string; name: string } | null>(null);
-  const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
+  const [duplicatingClient, setDuplicatingClient] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [editingFolderLink, setEditingFolderLink] = useState<{
+    clientId: string;
+    link: string;
+  } | null>(null);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
-  const { getFieldLabel } = useCustomFieldLabels('client');
+  const { getFieldLabel } = useCustomFieldLabels("client");
   const [showFiltersDialog, setShowFiltersDialog] = useState(false);
   const [showImportCSV, setShowImportCSV] = useState(false);
   const [showImportSheet, setShowImportSheet] = useState(false);
@@ -121,12 +170,14 @@ export default function Clients() {
   // Bulk Meta page sync
   const [showBulkMetaSync, setShowBulkMetaSync] = useState(false);
   const [bulkMetaSyncRunning, setBulkMetaSyncRunning] = useState(false);
-  const [bulkMetaSyncResults, setBulkMetaSyncResults] = useState<Array<{
-    clientId: string;
-    clientName: string;
-    status: 'success' | 'error' | 'skipped';
-    message: string;
-  }>>([]);
+  const [bulkMetaSyncResults, setBulkMetaSyncResults] = useState<
+    Array<{
+      clientId: string;
+      clientName: string;
+      status: "success" | "error" | "skipped";
+      message: string;
+    }>
+  >([]);
 
   const runBulkMetaSync = async () => {
     if (!tenantId || !clients) return;
@@ -140,41 +191,44 @@ export default function Clients() {
     const results: typeof bulkMetaSyncResults = [];
     for (const client of withMeta) {
       try {
-        const { data, error } = await supabase.functions.invoke("resolve-meta-page-from-ad-account", {
-          body: {
-            tenant_id: tenantId,
-            client_id: client.id,
-            ad_account_id: client.meta_ads_account_id,
-            auto_upsert: true,
+        const { data, error } = await supabase.functions.invoke(
+          "resolve-meta-page-from-ad-account",
+          {
+            body: {
+              tenant_id: tenantId,
+              client_id: client.id,
+              ad_account_id: client.meta_ads_account_id,
+              auto_upsert: true,
+            },
           },
-        });
+        );
         if (error || data?.error) {
           results.push({
             clientId: client.id,
             clientName: client.name,
-            status: 'error',
-            message: data?.message || error?.message || 'שגיאה לא ידועה',
+            status: "error",
+            message: data?.message || error?.message || "שגיאה לא ידועה",
           });
         } else {
           results.push({
             clientId: client.id,
             clientName: client.name,
-            status: 'success',
-            message: `${data.page_name || data.page_id}${data.ig_username ? ` + @${data.ig_username}` : ''}`,
+            status: "success",
+            message: `${data.page_name || data.page_id}${data.ig_username ? ` + @${data.ig_username}` : ""}`,
           });
         }
       } catch (err: unknown) {
         results.push({
           clientId: client.id,
           clientName: client.name,
-          status: 'error',
-          message: (err as Error)?.message || 'שגיאה',
+          status: "error",
+          message: (err as Error)?.message || "שגיאה",
         });
       }
       setBulkMetaSyncResults([...results]);
     }
     setBulkMetaSyncRunning(false);
-    const successCount = results.filter(r => r.status === 'success').length;
+    const successCount = results.filter((r) => r.status === "success").length;
     toast.success(`שויכו ${successCount} מתוך ${withMeta.length} לקוחות`);
   };
 
@@ -192,38 +246,38 @@ export default function Clients() {
     queryKey: ["agencies", tenantId],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      
+
       // Get owned agencies
       const { data: ownedAgencies, error: ownedError } = await supabase
         .from("agencies")
         .select("id, name")
         .eq("tenant_id", tenantId)
         .order("name");
-      
+
       if (ownedError) throw ownedError;
-      
+
       // Get shared agencies via agency_tenant_access
       const { data: sharedAccess, error: sharedError } = await supabase
         .from("agency_tenant_access")
         .select("agency_id, agencies(id, name)")
         .eq("accessing_tenant_id", tenantId);
-      
+
       if (sharedError) throw sharedError;
-      
+
       // Combine owned and shared agencies
-      const shared = sharedAccess?.map(s => s.agencies).filter(Boolean) || [];
+      const shared = sharedAccess?.map((s) => s.agencies).filter(Boolean) || [];
       const combined = [...(ownedAgencies || []), ...shared];
-      
+
       // Remove duplicates
       const uniqueMap = new Map();
-      combined.forEach(agency => {
+      combined.forEach((agency) => {
         if (agency && agency.id) {
           uniqueMap.set(agency.id, agency);
         }
       });
-      
-      return Array.from(uniqueMap.values()).sort((a, b) => 
-        a.name.localeCompare(b.name)
+
+      return Array.from(uniqueMap.values()).sort((a, b) =>
+        a.name.localeCompare(b.name),
       );
     },
     enabled: !!tenantId,
@@ -262,14 +316,18 @@ export default function Clients() {
   });
 
   const getClientFinancialData = (clientId: string) => {
-    return clientFinancialData?.find((f: any) => f.client_id === clientId) || null;
+    return (
+      clientFinancialData?.find((f: any) => f.client_id === clientId) || null
+    );
   };
 
   // For super admins: fetch all tenant IDs they own so we can show cross-tenant clients
   const { data: superAdminTenantIds } = useQuery({
     queryKey: ["super-admin-tenant-ids", isSuperAdmin],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session?.user?.id) return [];
       const { data, error } = await supabase
         .from("user_roles")
@@ -278,14 +336,29 @@ export default function Clients() {
         .eq("role", "owner")
         .not("tenant_id", "is", null);
       if (error) throw error;
-      return data?.map(r => r.tenant_id).filter(Boolean) || [];
+      return data?.map((r) => r.tenant_id).filter(Boolean) || [];
     },
     enabled: isSuperAdmin,
     staleTime: 1000 * 60 * 10,
   });
 
-  const { data: clients, isLoading, isPending, isFetching } = useQuery({
-    queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, isSuperAdmin, selectedAgency, (agencies?.length || 0)],
+  const {
+    data: clients,
+    isLoading,
+    isPending,
+    isFetching,
+  } = useQuery({
+    queryKey: [
+      "clients",
+      tenantId,
+      campaignerId,
+      isCampaigner,
+      isTeamManager,
+      isOwner,
+      isSuperAdmin,
+      selectedAgency,
+      agencies?.length || 0,
+    ],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       const selectStr = CLIENT_LIST_SELECT;
@@ -297,10 +370,14 @@ export default function Clients() {
 
       // 🔒 Always scope to current tenant — cross-tenant only via shared agencies
       if (selectedAgency && selectedAgency !== "all") {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`,
+        );
       } else if (agencies && agencies.length > 0) {
         const ids = agencies.map((a: any) => a.id);
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${ids.join(',')})`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${ids.join(",")})`,
+        );
       } else {
         query = query.eq("tenant_id", tenantId);
       }
@@ -319,9 +396,9 @@ export default function Clients() {
   // 🔒 SECURITY GUARD: Filter clients by current tenant and accessible agencies
   const secureFilteredClients = useMemo(() => {
     if (!clients || !tenantId) return [];
-    
+
     // 🔒 Strict tenant isolation: current tenant OR shared agency only
-    return clients.filter(client => {
+    return clients.filter((client) => {
       const isTenantMatch = client.tenant_id === tenantId;
       if (isTenantMatch) return true;
       // Allow cross-tenant only if agency is explicitly shared with this tenant
@@ -332,8 +409,8 @@ export default function Clients() {
   }, [clients, tenantId, userAgencyIds, isOwner, isSuperAdmin]);
 
   // Never show "no clients" while the list is still on its way.
-  const clientsResolving = !clients && isQueryResolving(isPending, isLoading, isFetching);
-
+  const clientsResolving =
+    !clients && isQueryResolving(isPending, isLoading, isFetching);
 
   const { data: campaigners } = useAssignableCampaigners({ activeOnly: true });
 
@@ -360,13 +437,19 @@ export default function Clients() {
         .from("client_team")
         .select("client_id")
         .eq("campaigner_id", campaignerId);
-      return data?.map(ct => ct.client_id) || [];
+      return data?.map((ct) => ct.client_id) || [];
     },
     enabled: !!campaignerId && isRestrictedClientViewer,
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ clientId, status }: { clientId: string; status: "active" | "paused" | "ended" | "onboarding" }) => {
+    mutationFn: async ({
+      clientId,
+      status,
+    }: {
+      clientId: string;
+      status: "active" | "paused" | "ended" | "onboarding";
+    }) => {
       const { error } = await supabase
         .from("clients")
         .update({ status })
@@ -376,7 +459,9 @@ export default function Clients() {
     onSuccess: () => {
       toast.success("הסטטוס עודכן בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["client-onboarding", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["client-onboarding", tenantId],
+      });
     },
     onError: () => {
       toast.error("שגיאה בעדכון הסטטוס");
@@ -384,7 +469,13 @@ export default function Clients() {
   });
 
   const updateMoodStatusMutation = useMutation({
-    mutationFn: async ({ clientId, moodStatus }: { clientId: string; moodStatus: "happy" | "wavering" | "churn_risk" | "not_progressing" }) => {
+    mutationFn: async ({
+      clientId,
+      moodStatus,
+    }: {
+      clientId: string;
+      moodStatus: "happy" | "wavering" | "churn_risk" | "not_progressing";
+    }) => {
       const { error } = await supabase
         .from("clients")
         .update({ mood_status: moodStatus })
@@ -401,7 +492,13 @@ export default function Clients() {
   });
 
   const assignCampaignerMutation = useMutation({
-    mutationFn: async ({ clientId, campaignerId }: { clientId: string; campaignerId: string }) => {
+    mutationFn: async ({
+      clientId,
+      campaignerId,
+    }: {
+      clientId: string;
+      campaignerId: string;
+    }) => {
       // First, check if already assigned
       const { data: existing } = await supabase
         .from("client_team")
@@ -416,12 +513,10 @@ export default function Clients() {
       }
 
       // Add new assignment
-      const { error } = await supabase
-        .from("client_team")
-        .insert({
-          client_id: clientId,
-          campaigner_id: campaignerId,
-        });
+      const { error } = await supabase.from("client_team").insert({
+        client_id: clientId,
+        campaigner_id: campaignerId,
+      });
 
       if (error) throw error;
     },
@@ -453,7 +548,13 @@ export default function Clients() {
   });
 
   const updateFolderLinkMutation = useMutation({
-    mutationFn: async ({ clientId, folderLink }: { clientId: string; folderLink: string }) => {
+    mutationFn: async ({
+      clientId,
+      folderLink,
+    }: {
+      clientId: string;
+      folderLink: string;
+    }) => {
       const { error } = await supabase
         .from("clients")
         .update({ folder_link: folderLink })
@@ -473,20 +574,22 @@ export default function Clients() {
   // Filter logic:
   // 1. Role-based access control
   // 2. Then apply global agency filter (selectedAgency)
-  
+
   let accessibleClients = clients;
 
   if (!isOwner && !isSuperAdmin) {
     if (isRestrictedClientViewer) {
       // Pure campaigners see only their assigned clients
       const ids = Array.isArray(campaignerClientIds) ? campaignerClientIds : [];
-      accessibleClients = clients?.filter(client => ids.includes(client.id));
+      accessibleClients = clients?.filter((client) => ids.includes(client.id));
     } else if (isSeoOnlyViewer) {
-      accessibleClients = clients?.filter((client: any) => isSeoTaggedClient(client));
+      accessibleClients = clients?.filter((client: any) =>
+        isSeoTaggedClient(client),
+      );
     } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
       // Team managers see all clients in their agencies
-      accessibleClients = clients?.filter(client =>
-        userAgencyIds.includes(client.agency_id)
+      accessibleClients = clients?.filter((client) =>
+        userAgencyIds.includes(client.agency_id),
       );
     }
   }
@@ -495,52 +598,66 @@ export default function Clients() {
   // Global agency filter applies to ALL roles (including campaigners and team managers)
   if (selectedAgency && selectedAgency !== "all") {
     accessibleClients = accessibleClients?.filter(
-      (client) => client.agency_id === selectedAgency
+      (client) => client.agency_id === selectedAgency,
     );
   }
 
   const filteredClients = accessibleClients;
 
   // Filter by selected campaigner (only for team managers and owners)
-  const campaignerFilteredClients = selectedCampaigner && selectedCampaigner !== "all"
-    ? filteredClients?.filter(client => {
-        // Use client_team data from the client object (already fetched with the client)
-        const hasMatch = client.client_team?.some((ct: any) => ct.campaigner_id === selectedCampaigner);
-        return !!hasMatch;
-      })
-    : filteredClients;
+  const campaignerFilteredClients =
+    selectedCampaigner && selectedCampaigner !== "all"
+      ? filteredClients?.filter((client) => {
+          // Use client_team data from the client object (already fetched with the client)
+          const hasMatch = client.client_team?.some(
+            (ct: any) => ct.campaigner_id === selectedCampaigner,
+          );
+          return !!hasMatch;
+        })
+      : filteredClients;
 
   // Filter by mood status
-  const moodFilteredClients = selectedMoodStatus && selectedMoodStatus !== "all"
-    ? campaignerFilteredClients?.filter(client => client.mood_status === selectedMoodStatus)
-    : campaignerFilteredClients;
+  const moodFilteredClients =
+    selectedMoodStatus && selectedMoodStatus !== "all"
+      ? campaignerFilteredClients?.filter(
+          (client) => client.mood_status === selectedMoodStatus,
+        )
+      : campaignerFilteredClients;
 
   // Filter by product/service tag
-  const serviceFilteredClients = selectedService && selectedService !== "all"
-    ? moodFilteredClients?.filter((client: any) => {
-        const services: string[] = Array.isArray(client.services) ? client.services : [];
-        if (selectedService === "seo") {
-          return isSeoTaggedClient(client);
-        }
-        return services.includes(selectedService);
-      })
-    : moodFilteredClients;
+  const serviceFilteredClients =
+    selectedService && selectedService !== "all"
+      ? moodFilteredClients?.filter((client: any) => {
+          const services: string[] = Array.isArray(client.services)
+            ? client.services
+            : [];
+          if (selectedService === "seo") {
+            return isSeoTaggedClient(client);
+          }
+          return services.includes(selectedService);
+        })
+      : moodFilteredClients;
 
-  const searchedClients = searchTerm 
-    ? serviceFilteredClients?.filter(client => 
-        client.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const searchedClients = searchTerm
+    ? serviceFilteredClients?.filter((client) =>
+        client.name.toLowerCase().includes(searchTerm.toLowerCase()),
       )
     : serviceFilteredClients;
 
   // Explicit status selection overrides "hide inactive" — otherwise picking
   // "מושהה"/"עזב" would always show an empty list
-  const hideInactiveFiltered = hideInactive && statusFilter === "all"
-    ? searchedClients?.filter(client => client.status === "active" || client.status === "onboarding")
-    : searchedClients;
+  const hideInactiveFiltered =
+    hideInactive && statusFilter === "all"
+      ? searchedClients?.filter(
+          (client) =>
+            client.status === "active" || client.status === "onboarding",
+        )
+      : searchedClients;
 
-  const visibleClients = statusFilter !== "all"
-    ? hideInactiveFiltered?.filter(client => client.status === statusFilter)
-    : hideInactiveFiltered;
+  const visibleClients =
+    statusFilter !== "all"
+      ? hideInactiveFiltered?.filter((client) => client.status === statusFilter)
+      : hideInactiveFiltered;
 
   const handleExportToExcel = () => {
     if (!visibleClients || visibleClients.length === 0) {
@@ -550,15 +667,16 @@ export default function Clients() {
     import("xlsx").then((XLSX) => {
       const exportData = visibleClients.map((client: any) => ({
         "שם הלקוח": client.name,
-        "סוכנות": agencies?.find((a: any) => a.id === client.agency_id)?.name || "",
-        "סטטוס": getStatusText(client.status),
-        "ריטיינר": client.retainer || "",
+        סוכנות:
+          agencies?.find((a: any) => a.id === client.agency_id)?.name || "",
+        סטטוס: getStatusText(client.status),
+        ריטיינר: client.retainer || "",
         "תקציב חודשי": client.monthly_budget || "",
-        "טלפון": client.phone || "",
-        "אימייל": client.email || "",
-        "אתר": client.website || "",
+        טלפון: client.phone || "",
+        אימייל: client.email || "",
+        אתר: client.website || "",
         "איש קשר": client.contact_name || "",
-        "הערות": client.notes || "",
+        הערות: client.notes || "",
       }));
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
@@ -601,15 +719,35 @@ export default function Clients() {
   const getMoodStatusDisplay = (moodStatus: string | null) => {
     switch (moodStatus) {
       case "happy":
-        return { emoji: "😊", text: "לקוח מבסוט", color: "text-green-600 bg-green-50 border-green-200" };
+        return {
+          emoji: "😊",
+          text: "לקוח מבסוט",
+          color: "text-green-600 bg-green-50 border-green-200",
+        };
       case "wavering":
-        return { emoji: "😐", text: "לקוח מתנדנד", color: "text-yellow-600 bg-surface-status-yellow border-yellow-200" };
+        return {
+          emoji: "😐",
+          text: "לקוח מתנדנד",
+          color: "text-yellow-600 bg-surface-status-yellow border-yellow-200",
+        };
       case "churn_risk":
-        return { emoji: "😟", text: "סכנת נטישה", color: "text-red-600 bg-surface-status-red border-red-200" };
+        return {
+          emoji: "😟",
+          text: "סכנת נטישה",
+          color: "text-red-600 bg-surface-status-red border-red-200",
+        };
       case "not_progressing":
-        return { emoji: "😔", text: "לא מתקדם", color: "text-orange-600 bg-orange-50 border-orange-200" };
+        return {
+          emoji: "😔",
+          text: "לא מתקדם",
+          color: "text-orange-600 bg-orange-50 border-orange-200",
+        };
       default:
-        return { emoji: "😊", text: "לקוח מבסוט", color: "text-green-600 bg-green-50 border-green-200" };
+        return {
+          emoji: "😊",
+          text: "לקוח מבסוט",
+          color: "text-green-600 bg-green-50 border-green-200",
+        };
     }
   };
 
@@ -618,143 +756,171 @@ export default function Clients() {
       <div className="flex items-center gap-2 flex-wrap">
         <h2 className="text-2xl font-bold">לקוחות</h2>
 
-          {/* Inline quick filters — visible next to the page title */}
-          <div className="flex items-center gap-2 flex-wrap ml-auto">
-            {(isTeamManager || isOwner) && (
-              <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
-                <SelectTrigger className="h-9 w-[150px]">
-                  <SelectValue placeholder="קמפיינר" />
-                </SelectTrigger>
-                <SelectContent className="bg-background">
-                  <SelectItem value="all">כל הקמפיינרים</SelectItem>
-                  {campaigners?.map((campaigner) => (
-                    <SelectItem key={campaigner.id} value={campaigner.id}>
-                      {campaigner.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 w-[130px]">
-                <SelectValue placeholder="סטטוס" />
+        {/* Inline quick filters — visible next to the page title */}
+        <div className="flex items-center gap-2 flex-wrap ml-auto">
+          {(isTeamManager || isOwner) && (
+            <Select
+              value={selectedCampaigner}
+              onValueChange={setSelectedCampaigner}
+            >
+              <SelectTrigger className="h-9 w-[150px]">
+                <SelectValue placeholder="קמפיינר" />
               </SelectTrigger>
               <SelectContent className="bg-background">
-                <SelectItem value="all">כל הסטטוסים</SelectItem>
-                <SelectItem value="active">פעיל</SelectItem>
-                <SelectItem value="onboarding">בקליטה</SelectItem>
-                <SelectItem value="paused">מושהה</SelectItem>
-                <SelectItem value="ended">עזב</SelectItem>
+                <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                {campaigners?.map((campaigner) => (
+                  <SelectItem key={campaigner.id} value={campaigner.id}>
+                    {campaigner.full_name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-
-            <Select value={selectedService} onValueChange={setSelectedService}>
-              <SelectTrigger className="h-9 w-[140px]">
-                <SelectValue placeholder="סוג לקוח" />
-              </SelectTrigger>
-              <SelectContent className="bg-background">
-                <SelectItem value="all">כל סוגי הלקוחות</SelectItem>
-                <SelectItem value="seo">SEO</SelectItem>
-                <SelectItem value="ppc_google">PPC Google</SelectItem>
-                <SelectItem value="ppc_meta">PPC Meta</SelectItem>
-                <SelectItem value="social">Social</SelectItem>
-                <SelectItem value="full_social">Full Social</SelectItem>
-                <SelectItem value="social_meta">Social Meta</SelectItem>
-                <SelectItem value="automation">Automation</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Toolbar search is redundant in chat view — the chat sidebar has its own search */}
-          {viewMode !== "chat" && (
-            <div className="relative min-w-[180px]">
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="חפש לקוח..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pr-9 h-9"
-              />
-            </div>
           )}
 
-          {/* Filters button */}
-          <Button variant="outline" size="sm" className="h-9 relative" onClick={() => setShowFiltersDialog(true)}>
-            <Filter className="h-4 w-4" />
-            {activeFilterCount > 0 && (
-              <Badge className="absolute -top-1.5 -left-1.5 h-4 w-4 p-0 flex items-center justify-center text-[10px]">
-                {activeFilterCount}
-              </Badge>
-            )}
-          </Button>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-9 w-[130px]">
+              <SelectValue placeholder="סטטוס" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">כל הסטטוסים</SelectItem>
+              <SelectItem value="active">פעיל</SelectItem>
+              <SelectItem value="onboarding">בקליטה</SelectItem>
+              <SelectItem value="paused">מושהה</SelectItem>
+              <SelectItem value="ended">עזב</SelectItem>
+            </SelectContent>
+          </Select>
 
-          {/* View mode toggle */}
-          <div className="flex gap-1 border rounded-md p-1">
-            <Button
-              variant={viewMode === "grid" ? "default" : "ghost"}
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setViewMode("grid")}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === "table" ? "default" : "ghost"}
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setViewMode("table")}
-            >
-              <TableIcon className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === "chat" ? "default" : "ghost"}
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setViewMode("chat")}
-              title="תצוגת צ'אט"
-            >
-              <MessageCircle className="h-4 w-4" />
-            </Button>
+          <Select value={selectedService} onValueChange={setSelectedService}>
+            <SelectTrigger className="h-9 w-[140px]">
+              <SelectValue placeholder="סוג לקוח" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">כל סוגי הלקוחות</SelectItem>
+              <SelectItem value="seo">SEO</SelectItem>
+              <SelectItem value="ppc_google">PPC Google</SelectItem>
+              <SelectItem value="ppc_meta">PPC Meta</SelectItem>
+              <SelectItem value="social">Social</SelectItem>
+              <SelectItem value="full_social">Full Social</SelectItem>
+              <SelectItem value="social_meta">Social Meta</SelectItem>
+              <SelectItem value="automation">Automation</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Toolbar search is redundant in chat view — the chat sidebar has its own search */}
+        {viewMode !== "chat" && (
+          <div className="relative min-w-[180px]">
+            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="חפש לקוח..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pr-9 h-9"
+            />
           </div>
+        )}
 
-          {/* Import/Export dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="h-9 w-9" title="ייבוא/ייצוא">
-                <FileSpreadsheet className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="bg-background">
-              <DropdownMenuItem onClick={handleExportToExcel}>
-                <Download className="ml-2 h-4 w-4" />
-                ייצוא לאקסל
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setShowImportCSV(true)}>
-                <Upload className="ml-2 h-4 w-4" />
-                ייבוא מ-CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setShowImportSheet(true)}>
-                <FileSpreadsheet className="ml-2 h-4 w-4" />
-                ייבוא מגוגל שיטס
-              </DropdownMenuItem>
-              {(isOwner || isSuperAdmin || isTeamManager) && (
-                <DropdownMenuItem onSelect={() => { setBulkMetaSyncResults([]); setShowBulkMetaSync(true); }}>
-                  <Wand2 className="ml-2 h-4 w-4" />
-                  שייך עמודי Meta לכל הלקוחות
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+        {/* Filters button */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 relative"
+          onClick={() => setShowFiltersDialog(true)}
+        >
+          <Filter className="h-4 w-4" />
+          {activeFilterCount > 0 && (
+            <Badge className="absolute -top-1.5 -left-1.5 h-4 w-4 p-0 flex items-center justify-center text-[10px]">
+              {activeFilterCount}
+            </Badge>
+          )}
+        </Button>
 
-          {/* Add client */}
-          <AddClientForm />
+        {/* View mode toggle */}
+        <div className="flex gap-1 border rounded-md p-1">
+          <Button
+            variant={viewMode === "grid" ? "default" : "ghost"}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setViewMode("grid")}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "table" ? "default" : "ghost"}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setViewMode("table")}
+          >
+            <TableIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "chat" ? "default" : "ghost"}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setViewMode("chat")}
+            title="תצוגת צ'אט"
+          >
+            <MessageCircle className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Import/Export dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              title="ייבוא/ייצוא"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="bg-background">
+            <DropdownMenuItem onClick={handleExportToExcel}>
+              <Download className="ml-2 h-4 w-4" />
+              ייצוא לאקסל
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setShowImportCSV(true)}>
+              <Upload className="ml-2 h-4 w-4" />
+              ייבוא מ-CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setShowImportSheet(true)}>
+              <FileSpreadsheet className="ml-2 h-4 w-4" />
+              ייבוא מגוגל שיטס
+            </DropdownMenuItem>
+            {(isOwner || isSuperAdmin || isTeamManager) && (
+              <DropdownMenuItem
+                onSelect={() => {
+                  setBulkMetaSyncResults([]);
+                  setShowBulkMetaSync(true);
+                }}
+              >
+                <Wand2 className="ml-2 h-4 w-4" />
+                שייך עמודי Meta לכל הלקוחות
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Add client */}
+        <AddClientForm />
       </div>
 
       {/* Import dialogs opened from dropdown */}
-      {showImportCSV && <ImportClientsCSV externalOpen={showImportCSV} onExternalOpenChange={setShowImportCSV} />}
-      {showImportSheet && <ImportClientsSheet externalOpen={showImportSheet} onExternalOpenChange={setShowImportSheet} />}
+      {showImportCSV && (
+        <ImportClientsCSV
+          externalOpen={showImportCSV}
+          onExternalOpenChange={setShowImportCSV}
+        />
+      )}
+      {showImportSheet && (
+        <ImportClientsSheet
+          externalOpen={showImportSheet}
+          onExternalOpenChange={setShowImportSheet}
+        />
+      )}
 
       {/* Filters Dialog */}
       <Dialog open={showFiltersDialog} onOpenChange={setShowFiltersDialog}>
@@ -767,7 +933,10 @@ export default function Clients() {
             {(isTeamManager || isOwner) && (
               <div className="space-y-2">
                 <Label>קמפיינר</Label>
-                <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+                <Select
+                  value={selectedCampaigner}
+                  onValueChange={setSelectedCampaigner}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="כל הקמפיינרים" />
                   </SelectTrigger>
@@ -786,7 +955,10 @@ export default function Clients() {
             {/* Mood Status Filter */}
             <div className="space-y-2">
               <Label>מצב לקוח</Label>
-              <Select value={selectedMoodStatus} onValueChange={setSelectedMoodStatus}>
+              <Select
+                value={selectedMoodStatus}
+                onValueChange={setSelectedMoodStatus}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="כל המצבים" />
                 </SelectTrigger>
@@ -823,7 +995,10 @@ export default function Clients() {
             {/* Product / Service filter */}
             <div className="space-y-2">
               <Label>מוצר / שירות</Label>
-              <Select value={selectedService} onValueChange={setSelectedService}>
+              <Select
+                value={selectedService}
+                onValueChange={setSelectedService}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -889,391 +1064,180 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
-      <div className={viewMode === "chat" ? "flex-1 min-h-0 overflow-hidden" : "flex-1 min-h-0 overflow-y-auto"}>
-      {clientsResolving ? (
-        <CarmenLoadingScreen
-          variant="card"
-          messages={["כרמן אוספת את רשימת הלקוחות…", "מסדרת לפי סוכנות…"]}
-        />
-      ) : viewMode === "chat" ? (
-        <ClientsChatView
-          key={pendingChatClientId ?? deepLinkClientId ?? "chat"}
-          clients={visibleClients || []}
-          agencies={agencies}
-          canViewFinance={canViewFinance()}
-          getClientFinancialData={getClientFinancialData}
-          initialClientId={pendingChatClientId ?? deepLinkClientId}
-          initialTab={deepLinkTab}
-        />
-      ) : viewMode === "grid" ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {visibleClients?.map((client) => (
-          <Card 
-            key={client.id} 
-            className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer group relative"
-            onClick={() => openClientInChat(client.id)}
-          >
-            <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-              <Button size="sm" variant="secondary">
-                <Edit className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDuplicatingClient({ id: client.id, name: client.name });
-                }}
-                title="שכפל לקוח"
+      <div
+        className={
+          viewMode === "chat"
+            ? "flex-1 min-h-0 overflow-hidden"
+            : "flex-1 min-h-0 overflow-y-auto"
+        }
+      >
+        {clientsResolving ? (
+          <CarmenLoadingScreen
+            variant="card"
+            messages={["כרמן אוספת את רשימת הלקוחות…", "מסדרת לפי סוכנות…"]}
+          />
+        ) : viewMode === "chat" ? (
+          <ClientsChatView
+            key={pendingChatClientId ?? deepLinkClientId ?? "chat"}
+            clients={visibleClients || []}
+            agencies={agencies}
+            canViewFinance={canViewFinance()}
+            getClientFinancialData={getClientFinancialData}
+            initialClientId={pendingChatClientId ?? deepLinkClientId}
+            initialTab={deepLinkTab}
+          />
+        ) : viewMode === "grid" ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {visibleClients?.map((client) => (
+              <Card
+                key={client.id}
+                className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer group relative"
+                onClick={() => openClientInChat(client.id)}
               >
-                <Copy className="h-4 w-4" />
-              </Button>
-              <Button
-                  size="sm" 
-                  variant="destructive"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeletingClient(client);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-accent/10">
-                    <Users className="h-5 w-5 text-accent" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg line-clamp-2 direction-ltr text-right">{client.name}</CardTitle>
-                    {client.agencies && (
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
-                        <Building2 className="h-3 w-3" />
-                        {client.agencies.name}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1 items-end">
-                  <Badge variant="outline" className={getStatusColor(client.status)}>
-                    {getStatusText(client.status)}
-                  </Badge>
-                  <Badge variant="outline" className={getMoodStatusDisplay(client.mood_status).color}>
-                    {getMoodStatusDisplay(client.mood_status).emoji} {getMoodStatusDisplay(client.mood_status).text}
-                  </Badge>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {client.website && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Globe className="h-4 w-4" />
-                  <a href={client.website} target="_blank" rel="noopener noreferrer" className="hover:text-primary">
-                    {client.website}
-                  </a>
-                </div>
-              )}
-
-              {client.phone && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Phone className="h-4 w-4" />
-                  <a href={`tel:${client.phone}`} className="hover:text-primary">
-                    {client.phone}
-                  </a>
-                </div>
-              )}
-
-              {client.email && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Mail className="h-4 w-4" />
-                  <a href={`mailto:${client.email}`} className="hover:text-primary">
-                    {client.email}
-                  </a>
-                </div>
-              )}
-
-              {client.client_team && client.client_team.length > 0 && (
-                <div className="pt-2 border-t">
-                  <p className="text-sm text-muted-foreground mb-1">קמפיינרים משויכים:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {client.client_team.map((ct: any, index: number) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        {ct?.campaigners?.full_name ?? "—"}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-                <p className="text-sm text-muted-foreground">שנה סטטוס:</p>
-                <Select
-                  value={client.status}
-                  onValueChange={(value: "active" | "paused" | "ended" | "onboarding") => 
-                    updateStatusMutation.mutate({ clientId: client.id, status: value })
-                  }
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background" align="end">
-                    <SelectItem value="active">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-success"></div>
-                        פעיל
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="onboarding">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-                        בקליטה
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="paused">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
-                        מושהה
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="ended">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-muted-foreground"></div>
-                        הסתיים
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-                <p className="text-sm text-muted-foreground">מצב לקוח:</p>
-                <Select
-                  value={client.mood_status || "happy"}
-                  onValueChange={(value: "happy" | "wavering" | "churn_risk" | "not_progressing") => 
-                    updateMoodStatusMutation.mutate({ clientId: client.id, moodStatus: value })
-                  }
-                >
-                  <SelectTrigger className={`h-9 ${getMoodStatusDisplay(client.mood_status).color}`}>
-                    <SelectValue>
-                      <span className="flex items-center gap-2">
-                        <span>{getMoodStatusDisplay(client.mood_status).emoji}</span>
-                        <span>{getMoodStatusDisplay(client.mood_status).text}</span>
-                      </span>
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="bg-background" align="end">
-                    <SelectItem value="happy">
-                      <div className="flex items-center gap-2">
-                        <span>😊</span>
-                        <span className="text-green-600">לקוח מבסוט</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="wavering">
-                      <div className="flex items-center gap-2">
-                        <span>😐</span>
-                        <span className="text-yellow-600">לקוח מתנדנד</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="churn_risk">
-                      <div className="flex items-center gap-2">
-                        <span>😟</span>
-                        <span className="text-red-600">סכנת נטישה</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="not_progressing">
-                      <div className="flex items-center gap-2">
-                        <span>😔</span>
-                        <span className="text-orange-600">לא מתקדם</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="pt-2 border-t space-y-2">
-                <p className="text-sm text-muted-foreground">קישור לתיקיה:</p>
-                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                  <Input
-                    type="text"
-                    placeholder="הזן קישור לתיקיה..."
-                    value={editingFolderLink?.clientId === client.id ? editingFolderLink.link : (client.folder_link || "")}
-                    onChange={(e) => setEditingFolderLink({ clientId: client.id, link: e.target.value })}
-                    className="h-9 text-sm"
-                  />
-                  {editingFolderLink?.clientId === client.id && editingFolderLink.link !== (client.folder_link || "") && (
-                    <Button
-                      size="sm"
-                      onClick={() => updateFolderLinkMutation.mutate({ 
-                        clientId: client.id, 
-                        folderLink: editingFolderLink.link 
-                      })}
-                      disabled={updateFolderLinkMutation.isPending}
-                    >
-                      שמור
-                    </Button>
-                  )}
-                  {client.folder_link && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => window.open(client.folder_link, "_blank")}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Hide add campaigner option for pure campaigners */}
-              {!(isCampaigner && !isTeamManager && !isOwner) && (
-                <div className="pt-2 border-t space-y-2">
-                  <p className="text-sm text-muted-foreground">הוסף קמפיינר:</p>
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <CampaignerAssignmentPicker
-                      assignedCampaignerIds={(client.client_team || []).map(
-                        (assignment: any) => assignment.campaigner_id
-                      )}
-                      triggerClassName="h-9 w-full"
-                      onAssign={(campaignerId) =>
-                        assignCampaignerMutation.mutateAsync({
-                          clientId: client.id,
-                          campaignerId,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-              
-              <div className="pt-2 border-t" onClick={(e) => e.stopPropagation()}>
-                <AddTaskForm 
-                  clientId={client.id} 
-                  agencyId={client.agency_id}
-                  triggerButton={
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="w-full gap-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                      הוסף משימה
-                    </Button>
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-        </div>
-      ) : (
-        <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
-          {selectedClientIds.length > 0 && (
-            <div className="p-2">
-              <ClientsMultiSelectToolbar
-                selectedIds={selectedClientIds}
-                onClearSelection={() => setSelectedClientIds([])}
-                onSelectAll={() => setSelectedClientIds((visibleClients || []).map(c => c.id))}
-                totalCount={visibleClients?.length || 0}
-                tenantId={tenantId}
-              />
-            </div>
-          )}
-          <Table className="relative">
-            <TableHeader>
-              <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={visibleClients && visibleClients.length > 0 && selectedClientIds.length === visibleClients.length}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedClientIds((visibleClients || []).map(c => c.id));
-                      } else {
-                        setSelectedClientIds([]);
-                      }
+                <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                  <Button size="sm" variant="secondary">
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDuplicatingClient({
+                        id: client.id,
+                        name: client.name,
+                      });
                     }}
-                  />
-                </TableHead>
-                <TableHead className="text-right font-semibold h-12">פעולות</TableHead>
-                <TableHead className="text-right font-semibold">{getFieldLabel('name', 'שם')}</TableHead>
-                <TableHead className="text-right font-semibold">{getFieldLabel('agency_id', 'סוכנות')}</TableHead>
-                <TableHead className="text-right font-semibold">{getFieldLabel('status', 'סטטוס')}</TableHead>
-                <TableHead className="text-right font-semibold">{getFieldLabel('retainer', 'ריטיינר')}</TableHead>
-                <TableHead className="text-right font-semibold">{getFieldLabel('monthly_budget', 'תקציב חודשי')}</TableHead>
-                <TableHead className="text-right font-semibold">{getFieldLabel('phone', 'טלפון')}</TableHead>
-                <TableHead className="text-right font-semibold">{getFieldLabel('email', 'אימייל')}</TableHead>
-                <TableHead className="text-right font-semibold">{getFieldLabel('website', 'אתר')}</TableHead>
-                <TableHead className="text-right font-semibold">{getFieldLabel('folder_link', 'תיקיה')}</TableHead>
-                <TableHead className="text-right font-semibold">{getFieldLabel('campaigners', 'קמפיינרים')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleClients?.map((client) => (
-                <TableRow 
-                  key={client.id}
-                  className={`hover:bg-accent/5 transition-colors border-b border-border/50 ${selectedClientIds.includes(client.id) ? 'bg-primary/5' : ''}`}
-                >
-                  <TableCell className="py-4 w-10">
-                    <Checkbox
-                      checked={selectedClientIds.includes(client.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedClientIds(prev => [...prev, client.id]);
-                        } else {
-                          setSelectedClientIds(prev => prev.filter(id => id !== client.id));
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        onClick={() => openClientInChat(client.id)}
-                        className="h-8 w-8 p-0 hover:bg-accent/20"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setDuplicatingClient({ id: client.id, name: client.name })}
-                        className="h-8 w-8 p-0 hover:bg-accent/20"
-                        title="שכפל לקוח"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm" 
-                        variant="ghost"
-                        onClick={() => setDeletingClient(client)}
-                        className="h-8 w-8 p-0 hover:bg-destructive/20 hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-semibold py-4 line-clamp-2 max-w-[200px] direction-ltr text-right">{client.name}</TableCell>
-                  <TableCell className="py-4">
-                    {client.agencies ? (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Building2 className="h-4 w-4" />
-                        <span>{client.agencies.name}</span>
+                    title="שכפל לקוח"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingClient(client);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-accent/10">
+                        <Users className="h-5 w-5 text-accent" />
                       </div>
-                    ) : <span className="text-muted-foreground">-</span>}
-                  </TableCell>
-                  <TableCell className="py-4">
+                      <div>
+                        <CardTitle className="text-lg line-clamp-2 direction-ltr text-right">
+                          {client.name}
+                        </CardTitle>
+                        {client.agencies && (
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <Building2 className="h-3 w-3" />
+                            {client.agencies.name}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1 items-end">
+                      <Badge
+                        variant="outline"
+                        className={getStatusColor(client.status)}
+                      >
+                        {getStatusText(client.status)}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className={
+                          getMoodStatusDisplay(client.mood_status).color
+                        }
+                      >
+                        {getMoodStatusDisplay(client.mood_status).emoji}{" "}
+                        {getMoodStatusDisplay(client.mood_status).text}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {client.website && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Globe className="h-4 w-4" />
+                      <a
+                        href={client.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-primary"
+                      >
+                        {client.website}
+                      </a>
+                    </div>
+                  )}
+
+                  {client.phone && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Phone className="h-4 w-4" />
+                      <a
+                        href={`tel:${client.phone}`}
+                        className="hover:text-primary"
+                      >
+                        {client.phone}
+                      </a>
+                    </div>
+                  )}
+
+                  {client.email && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Mail className="h-4 w-4" />
+                      <a
+                        href={`mailto:${client.email}`}
+                        className="hover:text-primary"
+                      >
+                        {client.email}
+                      </a>
+                    </div>
+                  )}
+
+                  {client.client_team && client.client_team.length > 0 && (
+                    <div className="pt-2 border-t">
+                      <p className="text-sm text-muted-foreground mb-1">
+                        קמפיינרים משויכים:
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {client.client_team.map((ct: any, index: number) => (
+                          <Badge
+                            key={index}
+                            variant="secondary"
+                            className="text-xs"
+                          >
+                            {ct?.campaigners?.full_name ?? "—"}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div
+                    className="space-y-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p className="text-sm text-muted-foreground">שנה סטטוס:</p>
                     <Select
                       value={client.status}
-                      onValueChange={(value: "active" | "paused" | "ended" | "onboarding") => 
-                        updateStatusMutation.mutate({ clientId: client.id, status: value })
+                      onValueChange={(
+                        value: "active" | "paused" | "ended" | "onboarding",
+                      ) =>
+                        updateStatusMutation.mutate({
+                          clientId: client.id,
+                          status: value,
+                        })
                       }
                     >
-                      <SelectTrigger className="w-[140px] h-9 bg-background hover:bg-accent/10 transition-colors">
+                      <SelectTrigger className="h-9">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-background">
+                      <SelectContent className="bg-background" align="end">
                         <SelectItem value="active">
                           <div className="flex items-center gap-2">
                             <div className="h-2 w-2 rounded-full bg-success"></div>
@@ -1300,123 +1264,137 @@ export default function Clients() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    {(() => {
-                      const financialData = getClientFinancialData(client.id);
-                      const retainerValue = financialData?.retainer || (ownedAgencyIds.includes(client.agency_id) ? client.retainer : null);
-                      return canViewFinance() && retainerValue ? (
-                        <div className="flex items-center gap-1 font-medium">
-                          <Coins className="h-4 w-4 text-muted-foreground" />
-                          <span>₪{Number(retainerValue).toLocaleString()}</span>
-                        </div>
-                      ) : canViewFinance() ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>;
-                    })()}
-                  </TableCell>
+                  </div>
 
-                  <TableCell className="py-4">
-                    {(() => {
-                      const financialData = getClientFinancialData(client.id);
-                      const budgetValue = financialData?.monthly_budget || (ownedAgencyIds.includes(client.agency_id) ? client.monthly_budget : null);
-                      return canViewFinance() && budgetValue ? (
-                        <div className="flex items-center gap-1 font-medium">
-                          <Coins className="h-4 w-4 text-muted-foreground" />
-                          <span>₪{Number(budgetValue).toLocaleString()}</span>
-                        </div>
-                      ) : canViewFinance() ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>;
-                    })()}
-                  </TableCell>
-                  <TableCell className="py-4">
-                    {client.phone ? (
-                      <a 
-                        href={`tel:${client.phone}`} 
-                        className="flex items-center gap-2 hover:text-primary transition-colors text-sm"
+                  <div
+                    className="space-y-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p className="text-sm text-muted-foreground">מצב לקוח:</p>
+                    <Select
+                      value={client.mood_status || "happy"}
+                      onValueChange={(
+                        value:
+                          | "happy"
+                          | "wavering"
+                          | "churn_risk"
+                          | "not_progressing",
+                      ) =>
+                        updateMoodStatusMutation.mutate({
+                          clientId: client.id,
+                          moodStatus: value,
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        className={`h-9 ${getMoodStatusDisplay(client.mood_status).color}`}
                       >
-                        <Phone className="h-4 w-4" />
-                        <span>{client.phone}</span>
-                      </a>
-                    ) : <span className="text-muted-foreground">-</span>}
-                  </TableCell>
-                  <TableCell className="py-4">
-                    {client.email ? (
-                      <a 
-                        href={`mailto:${client.email}`} 
-                        className="flex items-center gap-2 hover:text-primary transition-colors text-sm"
-                      >
-                        <Mail className="h-4 w-4" />
-                        <span>{client.email}</span>
-                      </a>
-                    ) : <span className="text-muted-foreground">-</span>}
-                  </TableCell>
-                  <TableCell className="py-4">
-                    {client.website ? (
-                      <a 
-                        href={client.website} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="flex items-center gap-2 hover:text-primary transition-colors text-sm"
-                      >
-                        <Globe className="h-4 w-4" />
-                        <span>קישור</span>
-                      </a>
-                    ) : <span className="text-muted-foreground">-</span>}
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="flex gap-2 min-w-[200px]">
+                        <SelectValue>
+                          <span className="flex items-center gap-2">
+                            <span>
+                              {getMoodStatusDisplay(client.mood_status).emoji}
+                            </span>
+                            <span>
+                              {getMoodStatusDisplay(client.mood_status).text}
+                            </span>
+                          </span>
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="bg-background" align="end">
+                        <SelectItem value="happy">
+                          <div className="flex items-center gap-2">
+                            <span>😊</span>
+                            <span className="text-green-600">לקוח מבסוט</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="wavering">
+                          <div className="flex items-center gap-2">
+                            <span>😐</span>
+                            <span className="text-yellow-600">לקוח מתנדנד</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="churn_risk">
+                          <div className="flex items-center gap-2">
+                            <span>😟</span>
+                            <span className="text-red-600">סכנת נטישה</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="not_progressing">
+                          <div className="flex items-center gap-2">
+                            <span>😔</span>
+                            <span className="text-orange-600">לא מתקדם</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="pt-2 border-t space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      קישור לתיקיה:
+                    </p>
+                    <div
+                      className="flex gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Input
                         type="text"
-                        placeholder="קישור לתיקיה..."
-                        value={editingFolderLink?.clientId === client.id ? editingFolderLink.link : (client.folder_link || "")}
-                        onChange={(e) => setEditingFolderLink({ clientId: client.id, link: e.target.value })}
-                        className="h-8 text-sm"
+                        placeholder="הזן קישור לתיקיה..."
+                        value={
+                          editingFolderLink?.clientId === client.id
+                            ? editingFolderLink.link
+                            : client.folder_link || ""
+                        }
+                        onChange={(e) =>
+                          setEditingFolderLink({
+                            clientId: client.id,
+                            link: e.target.value,
+                          })
+                        }
+                        className="h-9 text-sm"
                       />
-                      {editingFolderLink?.clientId === client.id && editingFolderLink.link !== (client.folder_link || "") && (
-                        <Button
-                          size="sm"
-                          onClick={() => updateFolderLinkMutation.mutate({ 
-                            clientId: client.id, 
-                            folderLink: editingFolderLink.link 
-                          })}
-                          disabled={updateFolderLinkMutation.isPending}
-                          className="h-8"
-                        >
-                          שמור
-                        </Button>
-                      )}
+                      {editingFolderLink?.clientId === client.id &&
+                        editingFolderLink.link !==
+                          (client.folder_link || "") && (
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              updateFolderLinkMutation.mutate({
+                                clientId: client.id,
+                                folderLink: editingFolderLink.link,
+                              })
+                            }
+                            disabled={updateFolderLinkMutation.isPending}
+                          >
+                            שמור
+                          </Button>
+                        )}
                       {client.folder_link && (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => window.open(client.folder_link, "_blank")}
-                          className="h-8 w-8 p-0"
+                          onClick={() =>
+                            window.open(client.folder_link, "_blank")
+                          }
                         >
                           <ExternalLink className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="flex flex-col gap-2 min-w-[180px]">
-                      {client.client_team && client.client_team.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {client.client_team.map((ct: any, idx: number) => (
-                            <Badge 
-                              key={idx} 
-                              variant="secondary" 
-                              className="text-xs bg-primary/10 text-primary hover:bg-primary/20"
-                            >
-                              {ct.campaigners.full_name}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      {/* Hide add campaigner option for pure campaigners */}
-                      {!(isCampaigner && !isTeamManager && !isOwner) && (
+                  </div>
+
+                  {/* Hide add campaigner option for pure campaigners */}
+                  {!(isCampaigner && !isTeamManager && !isOwner) && (
+                    <div className="pt-2 border-t space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        הוסף קמפיינר:
+                      </p>
+                      <div onClick={(e) => e.stopPropagation()}>
                         <CampaignerAssignmentPicker
                           assignedCampaignerIds={(client.client_team || []).map(
-                            (assignment: any) => assignment.campaigner_id
+                            (assignment: any) => assignment.campaigner_id,
                           )}
-                          triggerClassName="h-8 w-full text-xs"
+                          triggerClassName="h-9 w-full"
                           onAssign={(campaignerId) =>
                             assignCampaignerMutation.mutateAsync({
                               clientId: client.id,
@@ -1424,15 +1402,395 @@ export default function Clients() {
                             })
                           }
                         />
-                      )}
+                      </div>
                     </div>
-                  </TableCell>
+                  )}
+
+                  <div
+                    className="pt-2 border-t"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <AddTaskForm
+                      clientId={client.id}
+                      agencyId={client.agency_id}
+                      triggerButton={
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          הוסף משימה
+                        </Button>
+                      }
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
+            {selectedClientIds.length > 0 && (
+              <div className="p-2">
+                <ClientsMultiSelectToolbar
+                  selectedIds={selectedClientIds}
+                  onClearSelection={() => setSelectedClientIds([])}
+                  onSelectAll={() =>
+                    setSelectedClientIds(
+                      (visibleClients || []).map((c) => c.id),
+                    )
+                  }
+                  totalCount={visibleClients?.length || 0}
+                  tenantId={tenantId}
+                />
+              </div>
+            )}
+            <Table className="relative">
+              <TableHeader>
+                <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={
+                        visibleClients &&
+                        visibleClients.length > 0 &&
+                        selectedClientIds.length === visibleClients.length
+                      }
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedClientIds(
+                            (visibleClients || []).map((c) => c.id),
+                          );
+                        } else {
+                          setSelectedClientIds([]);
+                        }
+                      }}
+                    />
+                  </TableHead>
+                  <TableHead className="text-right font-semibold h-12">
+                    פעולות
+                  </TableHead>
+                  <TableHead className="text-right font-semibold">
+                    {getFieldLabel("name", "שם")}
+                  </TableHead>
+                  <TableHead className="text-right font-semibold">
+                    {getFieldLabel("agency_id", "סוכנות")}
+                  </TableHead>
+                  <TableHead className="text-right font-semibold">
+                    {getFieldLabel("status", "סטטוס")}
+                  </TableHead>
+                  <TableHead className="text-right font-semibold">
+                    {getFieldLabel("retainer", "ריטיינר")}
+                  </TableHead>
+                  <TableHead className="text-right font-semibold">
+                    {getFieldLabel("monthly_budget", "תקציב חודשי")}
+                  </TableHead>
+                  <TableHead className="text-right font-semibold">
+                    {getFieldLabel("phone", "טלפון")}
+                  </TableHead>
+                  <TableHead className="text-right font-semibold">
+                    {getFieldLabel("email", "אימייל")}
+                  </TableHead>
+                  <TableHead className="text-right font-semibold">
+                    {getFieldLabel("website", "אתר")}
+                  </TableHead>
+                  <TableHead className="text-right font-semibold">
+                    {getFieldLabel("folder_link", "תיקיה")}
+                  </TableHead>
+                  <TableHead className="text-right font-semibold">
+                    {getFieldLabel("campaigners", "קמפיינרים")}
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+              </TableHeader>
+              <TableBody>
+                {visibleClients?.map((client) => (
+                  <TableRow
+                    key={client.id}
+                    className={`hover:bg-accent/5 transition-colors border-b border-border/50 ${selectedClientIds.includes(client.id) ? "bg-primary/5" : ""}`}
+                  >
+                    <TableCell className="py-4 w-10">
+                      <Checkbox
+                        checked={selectedClientIds.includes(client.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedClientIds((prev) => [
+                              ...prev,
+                              client.id,
+                            ]);
+                          } else {
+                            setSelectedClientIds((prev) =>
+                              prev.filter((id) => id !== client.id),
+                            );
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openClientInChat(client.id)}
+                          className="h-8 w-8 p-0 hover:bg-accent/20"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setDuplicatingClient({
+                              id: client.id,
+                              name: client.name,
+                            })
+                          }
+                          className="h-8 w-8 p-0 hover:bg-accent/20"
+                          title="שכפל לקוח"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeletingClient(client)}
+                          className="h-8 w-8 p-0 hover:bg-destructive/20 hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-semibold py-4 line-clamp-2 max-w-[200px] direction-ltr text-right">
+                      {client.name}
+                    </TableCell>
+                    <TableCell className="py-4">
+                      {client.agencies ? (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Building2 className="h-4 w-4" />
+                          <span>{client.agencies.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Select
+                        value={client.status}
+                        onValueChange={(
+                          value: "active" | "paused" | "ended" | "onboarding",
+                        ) =>
+                          updateStatusMutation.mutate({
+                            clientId: client.id,
+                            status: value,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-[140px] h-9 bg-background hover:bg-accent/10 transition-colors">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background">
+                          <SelectItem value="active">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 rounded-full bg-success"></div>
+                              פעיל
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="onboarding">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                              בקליטה
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="paused">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                              מושהה
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="ended">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 rounded-full bg-muted-foreground"></div>
+                              הסתיים
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      {(() => {
+                        const financialData = getClientFinancialData(client.id);
+                        const retainerValue =
+                          financialData?.retainer ||
+                          (ownedAgencyIds.includes(client.agency_id)
+                            ? client.retainer
+                            : null);
+                        return canViewFinance() && retainerValue ? (
+                          <div className="flex items-center gap-1 font-medium">
+                            <Coins className="h-4 w-4 text-muted-foreground" />
+                            <span>
+                              ₪{Number(retainerValue).toLocaleString()}
+                            </span>
+                          </div>
+                        ) : canViewFinance() ? (
+                          <span className="text-muted-foreground">-</span>
+                        ) : (
+                          <span className="text-muted-foreground">מוסתר</span>
+                        );
+                      })()}
+                    </TableCell>
+
+                    <TableCell className="py-4">
+                      {(() => {
+                        const financialData = getClientFinancialData(client.id);
+                        const budgetValue =
+                          financialData?.monthly_budget ||
+                          (ownedAgencyIds.includes(client.agency_id)
+                            ? client.monthly_budget
+                            : null);
+                        return canViewFinance() && budgetValue ? (
+                          <div className="flex items-center gap-1 font-medium">
+                            <Coins className="h-4 w-4 text-muted-foreground" />
+                            <span>₪{Number(budgetValue).toLocaleString()}</span>
+                          </div>
+                        ) : canViewFinance() ? (
+                          <span className="text-muted-foreground">-</span>
+                        ) : (
+                          <span className="text-muted-foreground">מוסתר</span>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell className="py-4">
+                      {client.phone ? (
+                        <a
+                          href={`tel:${client.phone}`}
+                          className="flex items-center gap-2 hover:text-primary transition-colors text-sm"
+                        >
+                          <Phone className="h-4 w-4" />
+                          <span>{client.phone}</span>
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-4">
+                      {client.email ? (
+                        <a
+                          href={`mailto:${client.email}`}
+                          className="flex items-center gap-2 hover:text-primary transition-colors text-sm"
+                        >
+                          <Mail className="h-4 w-4" />
+                          <span>{client.email}</span>
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-4">
+                      {client.website ? (
+                        <a
+                          href={client.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 hover:text-primary transition-colors text-sm"
+                        >
+                          <Globe className="h-4 w-4" />
+                          <span>קישור</span>
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div className="flex gap-2 min-w-[200px]">
+                        <Input
+                          type="text"
+                          placeholder="קישור לתיקיה..."
+                          value={
+                            editingFolderLink?.clientId === client.id
+                              ? editingFolderLink.link
+                              : client.folder_link || ""
+                          }
+                          onChange={(e) =>
+                            setEditingFolderLink({
+                              clientId: client.id,
+                              link: e.target.value,
+                            })
+                          }
+                          className="h-8 text-sm"
+                        />
+                        {editingFolderLink?.clientId === client.id &&
+                          editingFolderLink.link !==
+                            (client.folder_link || "") && (
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                updateFolderLinkMutation.mutate({
+                                  clientId: client.id,
+                                  folderLink: editingFolderLink.link,
+                                })
+                              }
+                              disabled={updateFolderLinkMutation.isPending}
+                              className="h-8"
+                            >
+                              שמור
+                            </Button>
+                          )}
+                        {client.folder_link && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              window.open(client.folder_link, "_blank")
+                            }
+                            className="h-8 w-8 p-0"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div className="flex flex-col gap-2 min-w-[180px]">
+                        {client.client_team &&
+                          client.client_team.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {client.client_team.map(
+                                (ct: any, idx: number) => (
+                                  <Badge
+                                    key={idx}
+                                    variant="secondary"
+                                    className="text-xs bg-primary/10 text-primary hover:bg-primary/20"
+                                  >
+                                    {ct.campaigners.full_name}
+                                  </Badge>
+                                ),
+                              )}
+                            </div>
+                          )}
+                        {/* Hide add campaigner option for pure campaigners */}
+                        {!(isCampaigner && !isTeamManager && !isOwner) && (
+                          <CampaignerAssignmentPicker
+                            assignedCampaignerIds={(
+                              client.client_team || []
+                            ).map(
+                              (assignment: any) => assignment.campaigner_id,
+                            )}
+                            triggerClassName="h-8 w-full text-xs"
+                            onAssign={(campaignerId) =>
+                              assignCampaignerMutation.mutateAsync({
+                                clientId: client.id,
+                                campaignerId,
+                              })
+                            }
+                          />
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
 
       {!clientsResolving && visibleClients?.length === 0 && (
@@ -1444,7 +1802,6 @@ export default function Clients() {
           </CardContent>
         </Card>
       )}
-      
 
       <DuplicateClientDialog
         open={!!duplicatingClient}
@@ -1453,7 +1810,12 @@ export default function Clients() {
       />
 
       {/* Bulk Meta Page Sync Dialog */}
-      <Dialog open={showBulkMetaSync} onOpenChange={(open) => { if (!bulkMetaSyncRunning) setShowBulkMetaSync(open); }}>
+      <Dialog
+        open={showBulkMetaSync}
+        onOpenChange={(open) => {
+          if (!bulkMetaSyncRunning) setShowBulkMetaSync(open);
+        }}
+      >
         <DialogContent dir="rtl" className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1463,24 +1825,38 @@ export default function Clients() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              הפעולה תעבור על כל הלקוחות שיש להם Meta Ads Account ID ותשייך אוטומטית את עמוד הפייסבוק/אינסטגרם המתאים.
+              הפעולה תעבור על כל הלקוחות שיש להם Meta Ads Account ID ותשייך
+              אוטומטית את עמוד הפייסבוק/אינסטגרם המתאים.
             </p>
             {bulkMetaSyncResults.length === 0 && !bulkMetaSyncRunning && (
               <div className="text-sm text-muted-foreground">
                 לקוחות עם Meta Ads Account ID:{" "}
-                <strong>{(clients || []).filter((c: any) => c.meta_ads_account_id?.trim()).length}</strong>
+                <strong>
+                  {
+                    (clients || []).filter((c: any) =>
+                      c.meta_ads_account_id?.trim(),
+                    ).length
+                  }
+                </strong>
               </div>
             )}
             {(bulkMetaSyncRunning || bulkMetaSyncResults.length > 0) && (
               <div className="max-h-72 overflow-y-auto space-y-1 rounded-md border p-2">
                 {bulkMetaSyncResults.map((r) => (
-                  <div key={r.clientId} className="flex items-start gap-2 text-sm py-1">
-                    {r.status === 'success'
-                      ? <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-                      : <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />}
+                  <div
+                    key={r.clientId}
+                    className="flex items-start gap-2 text-sm py-1"
+                  >
+                    {r.status === "success" ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                    )}
                     <div>
                       <span className="font-medium">{r.clientName}</span>
-                      <span className="text-muted-foreground mr-2 text-xs">{r.message}</span>
+                      <span className="text-muted-foreground mr-2 text-xs">
+                        {r.message}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -1493,32 +1869,52 @@ export default function Clients() {
               </div>
             )}
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowBulkMetaSync(false)} disabled={bulkMetaSyncRunning}>
+              <Button
+                variant="outline"
+                onClick={() => setShowBulkMetaSync(false)}
+                disabled={bulkMetaSyncRunning}
+              >
                 סגור
               </Button>
-              <Button onClick={runBulkMetaSync} disabled={bulkMetaSyncRunning} className="gap-2">
-                {bulkMetaSyncRunning
-                  ? <><Loader2Icon className="h-4 w-4 animate-spin" /> מעבד...</>
-                  : <><Wand2 className="h-4 w-4" /> הפעל שיוך</>}
+              <Button
+                onClick={runBulkMetaSync}
+                disabled={bulkMetaSyncRunning}
+                className="gap-2"
+              >
+                {bulkMetaSyncRunning ? (
+                  <>
+                    <Loader2Icon className="h-4 w-4 animate-spin" /> מעבד...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="h-4 w-4" /> הפעל שיוך
+                  </>
+                )}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deletingClient} onOpenChange={(open) => !open && setDeletingClient(null)}>
+      <AlertDialog
+        open={!!deletingClient}
+        onOpenChange={(open) => !open && setDeletingClient(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>אישור מחיקת לקוח</AlertDialogTitle>
             <AlertDialogDescription>
-              האם אתה בטוח שברצונך למחוק את הלקוח <strong>{deletingClient?.name}</strong>?
-              פעולה זו תמחק גם את כל המשימות והנתונים הקשורים ללקוח זה ולא ניתן לבטל אותה.
+              האם אתה בטוח שברצונך למחוק את הלקוח{" "}
+              <strong>{deletingClient?.name}</strong>? פעולה זו תמחק גם את כל
+              המשימות והנתונים הקשורים ללקוח זה ולא ניתן לבטל אותה.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>ביטול</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={() => deletingClient && deleteClientMutation.mutate(deletingClient.id)}
+            <AlertDialogAction
+              onClick={() =>
+                deletingClient && deleteClientMutation.mutate(deletingClient.id)
+              }
               className="bg-destructive hover:bg-destructive/90"
             >
               מחק לקוח

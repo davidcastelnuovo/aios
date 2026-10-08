@@ -42,7 +42,9 @@ const decodeState = (value: string | null): PendingConnection | null => {
 };
 
 export default function UnifiedCallback() {
-  const [status, setStatus] = useState<"saving" | "success" | "error">("saving");
+  const [status, setStatus] = useState<"saving" | "success" | "error">(
+    "saving",
+  );
   const [errorMsg, setErrorMsg] = useState("");
   const [debugInfo, setDebugInfo] = useState("");
 
@@ -55,7 +57,9 @@ export default function UnifiedCallback() {
           : window.location.hash,
       );
 
-      const stateData = decodeState(params.get("state") || hashParams.get("state"));
+      const stateData = decodeState(
+        params.get("state") || hashParams.get("state"),
+      );
       const pending = readPendingConnection();
 
       let connectionId =
@@ -98,14 +102,17 @@ export default function UnifiedCallback() {
 
       try {
         if (!connectionId && flowUid && tenantId) {
-          const { data, error } = await supabase.functions.invoke("unified-connections", {
-            body: {
-              action: "find_connection",
-              tenant_id: tenantId,
-              integration_type: integrationType,
-              uid: flowUid,
+          const { data, error } = await supabase.functions.invoke(
+            "unified-connections",
+            {
+              body: {
+                action: "find_connection",
+                tenant_id: tenantId,
+                integration_type: integrationType,
+                uid: flowUid,
+              },
             },
-          });
+          );
 
           if (error) throw error;
           connectionId = data?.connection_id ?? null;
@@ -127,15 +134,18 @@ export default function UnifiedCallback() {
           return;
         }
 
-        const { error } = await supabase.functions.invoke("unified-connections", {
-          body: {
-            action: "save_connection",
-            tenant_id: tenantId,
-            connection_id: connectionId,
-            category,
-            integration_type: integrationType,
+        const { error } = await supabase.functions.invoke(
+          "unified-connections",
+          {
+            body: {
+              action: "save_connection",
+              tenant_id: tenantId,
+              connection_id: connectionId,
+              category,
+              integration_type: integrationType,
+            },
           },
-        });
+        );
 
         if (error) throw error;
 
@@ -145,7 +155,9 @@ export default function UnifiedCallback() {
         if (window.opener) {
           window.opener.postMessage({ type: "unified-connected" }, "*");
           try {
-            window.opener.sessionStorage.removeItem("unified_pending_connection");
+            window.opener.sessionStorage.removeItem(
+              "unified_pending_connection",
+            );
           } catch {
             // noop
           }
@@ -170,7 +182,10 @@ export default function UnifiedCallback() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
+    <div
+      className="min-h-screen flex items-center justify-center bg-background"
+      dir="rtl"
+    >
       <div className="text-center space-y-4 p-8">
         {status === "saving" && (
           <>
@@ -181,17 +196,26 @@ export default function UnifiedCallback() {
         {status === "success" && (
           <>
             <CheckCircle2 className="h-12 w-12 text-primary mx-auto" />
-            <p className="text-lg font-medium text-primary">החיבור נשמר בהצלחה!</p>
-            <p className="text-sm text-muted-foreground">החלון ייסגר אוטומטית...</p>
+            <p className="text-lg font-medium text-primary">
+              החיבור נשמר בהצלחה!
+            </p>
+            <p className="text-sm text-muted-foreground">
+              החלון ייסגר אוטומטית...
+            </p>
           </>
         )}
         {status === "error" && (
           <>
             <XCircle className="h-12 w-12 text-destructive mx-auto" />
-            <p className="text-lg font-medium text-destructive">שגיאה בשמירת החיבור</p>
+            <p className="text-lg font-medium text-destructive">
+              שגיאה בשמירת החיבור
+            </p>
             <p className="text-sm text-muted-foreground">{errorMsg}</p>
             {debugInfo && (
-              <pre className="text-xs text-left bg-muted text-foreground p-3 rounded mt-4 max-w-lg mx-auto overflow-auto whitespace-pre-wrap" dir="ltr">
+              <pre
+                className="text-xs text-left bg-muted text-foreground p-3 rounded mt-4 max-w-lg mx-auto overflow-auto whitespace-pre-wrap"
+                dir="ltr"
+              >
                 {debugInfo}
               </pre>
             )}

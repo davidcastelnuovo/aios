@@ -33,7 +33,10 @@ import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector } from "./EmailRecipientsSelector";
 import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
-import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
+import {
+  ReportEmailSenderSelect,
+  type ReportEmailSender,
+} from "./ReportEmailSenderSelect";
 import { syncReportTable, waitForSnapshotReady } from "@/lib/reportSync";
 import { downloadReportPdf } from "@/lib/reportPdf";
 import { getReportLastSyncAt } from "@/lib/reportQueryOptions";
@@ -58,7 +61,9 @@ interface SnapshotCacheEntry {
   savedAt: number;
 }
 
-function readSnapshotCache(tableId: string): { dataUrl: string; fresh: boolean } | null {
+function readSnapshotCache(
+  tableId: string,
+): { dataUrl: string; fresh: boolean } | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY_PREFIX + tableId);
     if (!raw) return null;
@@ -80,7 +85,10 @@ function writeSnapshotCache(tableId: string, dataUrl: string) {
   try {
     localStorage.setItem(
       CACHE_KEY_PREFIX + tableId,
-      JSON.stringify({ dataUrl, savedAt: Date.now() } satisfies SnapshotCacheEntry),
+      JSON.stringify({
+        dataUrl,
+        savedAt: Date.now(),
+      } satisfies SnapshotCacheEntry),
     );
   } catch {
     /* localStorage full */
@@ -89,19 +97,52 @@ function writeSnapshotCache(tableId: string, dataUrl: string) {
 
 function generateReadableToken(tableName: string): string {
   const hebrewMap: Record<string, string> = {
-    'א': 'a', 'ב': 'b', 'ג': 'g', 'ד': 'd', 'ה': 'h', 'ו': 'v', 'ז': 'z',
-    'ח': 'ch', 'ט': 't', 'י': 'y', 'כ': 'k', 'ך': 'k', 'ל': 'l', 'מ': 'm',
-    'ם': 'm', 'נ': 'n', 'ן': 'n', 'ס': 's', 'ע': 'a', 'פ': 'p', 'ף': 'f',
-    'צ': 'ts', 'ץ': 'ts', 'ק': 'k', 'ר': 'r', 'ש': 'sh', 'ת': 't',
+    א: "a",
+    ב: "b",
+    ג: "g",
+    ד: "d",
+    ה: "h",
+    ו: "v",
+    ז: "z",
+    ח: "ch",
+    ט: "t",
+    י: "y",
+    כ: "k",
+    ך: "k",
+    ל: "l",
+    מ: "m",
+    ם: "m",
+    נ: "n",
+    ן: "n",
+    ס: "s",
+    ע: "a",
+    פ: "p",
+    ף: "f",
+    צ: "ts",
+    ץ: "ts",
+    ק: "k",
+    ר: "r",
+    ש: "sh",
+    ת: "t",
   };
-  const firstWord = (tableName || 'report').trim().split(/\s+/)[0] || 'report';
-  const transliterated = firstWord.split('').map((ch) => hebrewMap[ch] || ch).join('');
-  const slug = transliterated.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
+  const firstWord = (tableName || "report").trim().split(/\s+/)[0] || "report";
+  const transliterated = firstWord
+    .split("")
+    .map((ch) => hebrewMap[ch] || ch)
+    .join("");
+  const slug = transliterated
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 8);
   const shortId = Math.random().toString(36).slice(2, 6);
-  return `${slug || 'report'}-${shortId}`;
+  return `${slug || "report"}-${shortId}`;
 }
 
-export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPanelProps) {
+export function ClientReportPanel({
+  table,
+  clientId,
+  tenantId,
+}: ClientReportPanelProps) {
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -123,7 +164,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [directPhone, setDirectPhone] = useState("");
   const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
   const [emailSubject, setEmailSubject] = useState("");
-  const [emailSender, setEmailSender] = useState<ReportEmailSender | null>(null);
+  const [emailSender, setEmailSender] = useState<ReportEmailSender | null>(
+    null,
+  );
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
@@ -166,7 +209,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     queryFn: async () => {
       const { data } = await supabase
         .from("client_team")
-        .select("role_on_account, campaigners:campaigner_id (id, full_name, email, active)")
+        .select(
+          "role_on_account, campaigners:campaigner_id (id, full_name, email, active)",
+        )
         .eq("client_id", clientId);
       return (data || [])
         .filter((t: any) => t.campaigners && t.campaigners.active !== false)
@@ -205,11 +250,17 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   useEffect(() => {
     if (client) {
       if (client.phone) setDirectPhone(client.phone);
-      if (client.whatsapp_group_id) setSelectedGroupId(client.whatsapp_group_id);
-      setEmailSubject((prev) => prev || `דוח ${table.name}${client.name ? ` - ${client.name}` : ""}`);
+      if (client.whatsapp_group_id)
+        setSelectedGroupId(client.whatsapp_group_id);
+      setEmailSubject(
+        (prev) =>
+          prev || `דוח ${table.name}${client.name ? ` - ${client.name}` : ""}`,
+      );
     }
     setEmailRecipients((prev) =>
-      prev.length === 0 ? buildDefaultReportRecipientEmails(client?.email) : prev,
+      prev.length === 0
+        ? buildDefaultReportRecipientEmails(client?.email)
+        : prev,
     );
   }, [client, table.name]);
 
@@ -236,7 +287,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     void (async () => {
       await Promise.all([
         queryClient.refetchQueries({ queryKey: ["crm-records", table.id] }),
-        queryClient.refetchQueries({ queryKey: ["crm-tables", tenantId, table.slug] }),
+        queryClient.refetchQueries({
+          queryKey: ["crm-tables", tenantId, table.slug],
+        }),
         queryClient.refetchQueries({ queryKey: ["crm-fields", table.id] }),
       ]);
       if (cancelled) return;
@@ -247,18 +300,26 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [table.id, table.slug, tenantId, queryClient]);
 
   const triggerSync = async () => {
     setIsSyncing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) return;
       const result = await syncReportTable(table);
       if (result.status === "failed") throw new Error(result.error);
-      await queryClient.invalidateQueries({ queryKey: ["client-report-data", table.id] });
-      await queryClient.invalidateQueries({ queryKey: ["ahrefs-reports", tenantId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["client-report-data", table.id],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["ahrefs-reports", tenantId],
+      });
       autoCapturedTableRef.current = null;
       setCaptureReady(false);
       setSnapshotVersion((version) => version + 1);
@@ -281,7 +342,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
       // If snapshot defines a `data-snapshot-end` marker, crop the screenshot
       // to only include content above it (e.g. SEO report → header + KPI cards only).
-      const endMarker = node.querySelector<HTMLElement>('[data-snapshot-end="true"]');
+      const endMarker = node.querySelector<HTMLElement>(
+        '[data-snapshot-end="true"]',
+      );
       let height: number | undefined;
       if (endMarker) {
         const nodeRect = node.getBoundingClientRect();
@@ -296,7 +359,8 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       // rows). Lower the pixel ratio for tall nodes and hard-crop past a
       // safe maximum so the capture always yields a valid image.
       const MAX_CANVAS_PX = 16000;
-      const fullHeight = height ?? Math.ceil(node.getBoundingClientRect().height);
+      const fullHeight =
+        height ?? Math.ceil(node.getBoundingClientRect().height);
       let pixelRatio = 1.5;
       if (fullHeight * pixelRatio > MAX_CANVAS_PX) {
         pixelRatio = Math.max(0.75, MAX_CANVAS_PX / fullHeight);
@@ -312,14 +376,19 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         backgroundColor: "#ffffff",
         skipFonts: true,
         ...(captureHeight
-          ? { height: captureHeight, canvasHeight: Math.floor(captureHeight * pixelRatio) }
+          ? {
+              height: captureHeight,
+              canvasHeight: Math.floor(captureHeight * pixelRatio),
+            }
           : {}),
       });
 
       // An oversized/failed canvas yields an empty data URL — treat as an error
       // instead of setting a broken <img> source.
       if (!dataUrl || dataUrl.length < 200) {
-        throw new Error("Screenshot produced an empty image (canvas too large?)");
+        throw new Error(
+          "Screenshot produced an empty image (canvas too large?)",
+        );
       }
 
       setScreenshotUrl(dataUrl);
@@ -339,7 +408,12 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
   // Auto-capture when hidden snapshot mounts (skip when fresh cache already shown).
   useEffect(() => {
-    if (!captureReady || isCapturing || autoCapturedTableRef.current === table.id) return;
+    if (
+      !captureReady ||
+      isCapturing ||
+      autoCapturedTableRef.current === table.id
+    )
+      return;
     autoCapturedTableRef.current = table.id;
     captureScreenshot();
   }, [captureReady, isCapturing, table.id, captureScreenshot]);
@@ -354,7 +428,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const ensureShareLink = useCallback(async (): Promise<string | null> => {
     if (shareLink) return shareLink;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return null;
 
       // Check for ANY existing share row (active or inactive) to avoid duplicates
@@ -377,7 +453,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
             .eq("share_token", existingRow.share_token);
         }
         const url = `https://aios.co.il/shared/table/${existingRow.share_token}`;
-        queryClient.invalidateQueries({ queryKey: ["table-share-link", table.id] });
+        queryClient.invalidateQueries({
+          queryKey: ["table-share-link", table.id],
+        });
         return url;
       }
 
@@ -398,7 +476,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       const token = (data as any)?.share_token;
       if (!token) return null;
       const url = `https://aios.co.il/shared/table/${token}`;
-      queryClient.invalidateQueries({ queryKey: ["table-share-link", table.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["table-share-link", table.id],
+      });
       toast.success("נוצר קישור שיתוף חדש");
       return url;
     } catch (err) {
@@ -430,12 +510,15 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           return;
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (!session) throw new Error("Not authenticated");
 
         const captionParts: string[] = [];
         if (messageText) captionParts.push(messageText);
-        if (effectiveShareLink) captionParts.push(`\n📊 צפה בדוח המלא: ${effectiveShareLink}`);
+        if (effectiveShareLink)
+          captionParts.push(`\n📊 צפה בדוח המלא: ${effectiveShareLink}`);
         const fullCaption = captionParts.join("");
 
         const formData = new FormData();
@@ -458,7 +541,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
             method: "POST",
             headers: { Authorization: `Bearer ${session.access_token}` },
             body: formData,
-          }
+          },
         );
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "שגיאה בשליחה");
@@ -467,7 +550,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         // Auto-save the WhatsApp text as a weekly update in the client updates tab
         if (messageText.trim()) {
           try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
             await supabase.from("client_updates").insert({
               client_id: clientId,
               tenant_id: tenantId,
@@ -475,7 +560,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
               content: messageText.trim(),
               update_type: "weekly_update",
             } as any);
-            queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+            queryClient.invalidateQueries({
+              queryKey: ["client-updates", tenantId],
+            });
           } catch (e) {
             console.warn("Failed to auto-save weekly update:", e);
           }
@@ -500,7 +587,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           reader.readAsDataURL(screenshotBlob);
         });
 
-        const subject = emailSubject || `דוח ${table.name}${client?.name ? ` - ${client.name}` : ""}`;
+        const subject =
+          emailSubject ||
+          `דוח ${table.name}${client?.name ? ` - ${client.name}` : ""}`;
         const bodyHtml = buildBrandedEmailHtml({
           title: `דוח ${table.name}`,
           subtitle: client?.name ? `עבור ${client.name}` : undefined,
@@ -514,25 +603,31 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
         if (emailSender) {
           // Chosen a verified sending domain → send via Resend (same backend as broadcast).
-          const { data, error } = await supabase.functions.invoke("send-resend-email", {
-            body: {
-              to: emailRecipients,
-              subject,
-              html: bodyHtml,
-              fromEmail: emailSender.fromEmail,
-              fromName: emailSender.fromName || undefined,
-              attachments: [
-                {
-                  filename: `report-${table.name}.png`,
-                  content: base64Data,
-                  contentType: "image/png",
-                  content_id: "report-snapshot",
-                },
-              ],
+          const { data, error } = await supabase.functions.invoke(
+            "send-resend-email",
+            {
+              body: {
+                to: emailRecipients,
+                subject,
+                html: bodyHtml,
+                fromEmail: emailSender.fromEmail,
+                fromName: emailSender.fromName || undefined,
+                attachments: [
+                  {
+                    filename: `report-${table.name}.png`,
+                    content: base64Data,
+                    contentType: "image/png",
+                    content_id: "report-snapshot",
+                  },
+                ],
+              },
             },
-          });
+          );
           if (error) throw new Error(error.message || "שגיאה בשליחה");
-          if (data?.error) throw new Error(data.details ? JSON.stringify(data.details) : data.error);
+          if (data?.error)
+            throw new Error(
+              data.details ? JSON.stringify(data.details) : data.error,
+            );
         } else {
           // Default: send from the connected Gmail account (unchanged behavior).
           const { data, error } = await supabase.functions.invoke("gmail-api", {
@@ -560,7 +655,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         // Auto-save the email text as a monthly SEO update
         if (messageText.trim()) {
           try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
             await supabase.from("client_updates").insert({
               client_id: clientId,
               tenant_id: tenantId,
@@ -568,30 +665,35 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
               content: messageText.trim(),
               update_type: "monthly_seo",
             } as any);
-            queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+            queryClient.invalidateQueries({
+              queryKey: ["client-updates", tenantId],
+            });
           } catch (e) {
             console.warn("Failed to auto-save monthly SEO update:", e);
           }
         }
       }
 
-      const { error: deliveryLogError } = await supabase.from("report_deliveries").insert({
-        tenant_id: tenantId,
-        client_id: clientId,
-        target_type: "table",
-        target_id: table.id,
-        channels: [
-          ...(sendWhatsApp ? ["whatsapp"] : []),
-          ...(sendEmail ? ["email"] : []),
-        ],
-        status: "sent",
-        details: {
-          source: "manual",
-          share_url: effectiveShareLink,
-          email_recipients: sendEmail ? emailRecipients : [],
-        },
-      });
-      if (deliveryLogError) console.warn("Failed to log report delivery:", deliveryLogError);
+      const { error: deliveryLogError } = await supabase
+        .from("report_deliveries")
+        .insert({
+          tenant_id: tenantId,
+          client_id: clientId,
+          target_type: "table",
+          target_id: table.id,
+          channels: [
+            ...(sendWhatsApp ? ["whatsapp"] : []),
+            ...(sendEmail ? ["email"] : []),
+          ],
+          status: "sent",
+          details: {
+            source: "manual",
+            share_url: effectiveShareLink,
+            email_recipients: sendEmail ? emailRecipients : [],
+          },
+        });
+      if (deliveryLogError)
+        console.warn("Failed to log report delivery:", deliveryLogError);
     } catch (error: any) {
       console.error("Error sending report:", error);
       const msg = String(error?.message || "");
@@ -639,7 +741,10 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         className="px-1"
       />
       {/* Screenshot Preview */}
-      <div className="relative border rounded-lg bg-muted/20 overflow-x-auto" style={{ minHeight: 200 }}>
+      <div
+        className="relative border rounded-lg bg-muted/20 overflow-x-auto"
+        style={{ minHeight: 200 }}
+      >
         {screenshotUrl ? (
           <img
             src={screenshotUrl}
@@ -702,9 +807,11 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           onClick={exportPdf}
           disabled={!screenshotBlob || isExportingPdf}
         >
-          {isExportingPdf
-            ? <Loader2 className="h-3 w-3 animate-spin" />
-            : <Download className="h-3 w-3" />}
+          {isExportingPdf ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Download className="h-3 w-3" />
+          )}
           יצוא PDF
         </Button>
         {(() => {
@@ -715,7 +822,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
               variant="outline"
               size="sm"
               className="gap-1 text-xs"
-              onClick={() => window.open(adUrl, "_blank", "noopener,noreferrer")}
+              onClick={() =>
+                window.open(adUrl, "_blank", "noopener,noreferrer")
+              }
             >
               <ExternalLink className="h-3 w-3" />
               פתח חשבון מודעות
@@ -726,7 +835,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           variant="ghost"
           size="sm"
           className="gap-1 text-xs mr-auto"
-          onClick={() => window.open(buildPath(`/table/${table.slug}`), "_blank")}
+          onClick={() =>
+            window.open(buildPath(`/table/${table.slug}`), "_blank")
+          }
         >
           <ExternalLink className="h-3 w-3" />
           פתח דוח
@@ -737,12 +848,18 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
         <div className="flex gap-4">
           <label className="flex items-center gap-2 cursor-pointer">
-            <Checkbox checked={sendWhatsApp} onCheckedChange={(c) => setSendWhatsApp(!!c)} />
+            <Checkbox
+              checked={sendWhatsApp}
+              onCheckedChange={(c) => setSendWhatsApp(!!c)}
+            />
             <MessageCircle className="h-3.5 w-3.5 text-green-600" />
             <span className="text-xs">וואטסאפ</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
-            <Checkbox checked={sendEmail} onCheckedChange={(c) => setSendEmail(!!c)} />
+            <Checkbox
+              checked={sendEmail}
+              onCheckedChange={(c) => setSendEmail(!!c)}
+            />
             <Mail className="h-3.5 w-3.5 text-blue-600" />
             <span className="text-xs">אימייל</span>
           </label>
@@ -750,7 +867,11 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
         {sendWhatsApp && (
           <div className="space-y-2">
-            <ReportWhatsAppSenderSelect tenantId={tenantId} value={waSenderId} onChange={setWaSenderId} />
+            <ReportWhatsAppSenderSelect
+              tenantId={tenantId}
+              value={waSenderId}
+              onChange={setWaSenderId}
+            />
             <WhatsAppGroupSelect
               groups={groups}
               value={selectedGroupId}
@@ -771,7 +892,10 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
         {sendEmail && (
           <div className="space-y-2">
-            <ReportEmailSenderSelect value={emailSender} onChange={setEmailSender} />
+            <ReportEmailSenderSelect
+              value={emailSender}
+              onChange={setEmailSender}
+            />
             <EmailRecipientsSelector
               options={buildReportEmailOptions({
                 clientEmail: client?.email,
@@ -792,8 +916,12 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         )}
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Link2 className={`h-3 w-3 shrink-0 ${shareLink ? "" : "opacity-50"}`} />
-          <span className="flex-1">{shareLink ? "קישור צפייה יצורף אוטומטית" : "אין קישור שיתוף פעיל"}</span>
+          <Link2
+            className={`h-3 w-3 shrink-0 ${shareLink ? "" : "opacity-50"}`}
+          />
+          <span className="flex-1">
+            {shareLink ? "קישור צפייה יצורף אוטומטית" : "אין קישור שיתוף פעיל"}
+          </span>
           {!shareLink && (
             <Button
               variant="outline"
@@ -821,9 +949,13 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           className="w-full gap-1"
         >
           {isSending ? (
-            <><Loader2 className="h-3.5 w-3.5 animate-spin" /> שולח...</>
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> שולח...
+            </>
           ) : (
-            <><Send className="h-3.5 w-3.5" /> שלח דוח</>
+            <>
+              <Send className="h-3.5 w-3.5" /> שלח דוח
+            </>
           )}
         </Button>
       </div>
@@ -831,34 +963,36 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       {/* Hidden snapshot — only mount when capture is needed (not on every tab open). */}
       {captureReady &&
         createPortal(
-        <div
-          style={{
-            position: "fixed",
-            left: -9999,
-            top: -9999,
-            zIndex: -9999,
-            pointerEvents: "none",
-            opacity: 0,
-          }}
-          aria-hidden="true"
-        >
-          {/* Render the actual DynamicTableView (full report, not summary) so the
+          <div
+            style={{
+              position: "fixed",
+              left: -9999,
+              top: -9999,
+              zIndex: -9999,
+              pointerEvents: "none",
+              opacity: 0,
+            }}
+            aria-hidden="true"
+          >
+            {/* Render the actual DynamicTableView (full report, not summary) so the
               screenshot mirrors exactly what the user sees inside the client card. */}
-          <ClientTableSnapshot
-            key={`${table.id}-${snapshotVersion}`}
-            ref={snapshotRef}
-            tableSlug={table.slug}
-            summaryOnly={
-              ["ahrefs", "google_analytics", "google_search_console"].includes(
-                table.integration_type
-              )
-                ? false
-                : true
-            }
-          />
-        </div>,
-        document.body
-      )}
+            <ClientTableSnapshot
+              key={`${table.id}-${snapshotVersion}`}
+              ref={snapshotRef}
+              tableSlug={table.slug}
+              summaryOnly={
+                [
+                  "ahrefs",
+                  "google_analytics",
+                  "google_search_console",
+                ].includes(table.integration_type)
+                  ? false
+                  : true
+              }
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

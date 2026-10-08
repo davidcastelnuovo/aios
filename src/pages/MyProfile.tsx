@@ -2,7 +2,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Mail, Folder, Briefcase, Calendar, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Phone,
+  Mail,
+  Folder,
+  Briefcase,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -24,11 +32,13 @@ export default function MyProfile() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select(`
+        .select(
+          `
           *,
           campaigners (*),
           sales_people (*)
-        `)
+        `,
+        )
         .eq("id", userId)
         .maybeSingle();
 
@@ -45,7 +55,8 @@ export default function MyProfile() {
 
       const { data, error } = await supabase
         .from("client_team")
-        .select(`
+        .select(
+          `
           *,
           clients (
             id,
@@ -53,7 +64,8 @@ export default function MyProfile() {
             status,
             agencies (name)
           )
-        `)
+        `,
+        )
         .eq("campaigner_id", profile.campaigner_id)
         .order("created_at", { ascending: false });
 
@@ -71,10 +83,12 @@ export default function MyProfile() {
 
       const { data, error } = await supabase
         .from("leads")
-        .select(`
+        .select(
+          `
           *,
           agencies (name)
-        `)
+        `,
+        )
         .eq("sales_person_id", profile.sales_person_id)
         .order("created_at", { ascending: false });
 
@@ -107,12 +121,14 @@ export default function MyProfile() {
       if (!profile?.sales_person_id) return [];
       const { data, error } = await supabase
         .from("sales_person_agencies")
-        .select(`
+        .select(
+          `
           agencies (
             id,
             name
           )
-        `)
+        `,
+        )
         .eq("sales_person_id", profile.sales_person_id);
       if (error) throw error;
       return (data || []).map((row: any) => row.agencies).filter(Boolean);
@@ -127,16 +143,18 @@ export default function MyProfile() {
 
       const { data, error } = await supabase
         .from("campaigner_agencies")
-        .select(`
+        .select(
+          `
           agencies (
             id,
             name
           )
-        `)
+        `,
+        )
         .eq("campaigner_id", profile.campaigner_id);
 
       if (error) throw error;
-      return data?.map(item => item.agencies).filter(Boolean) || [];
+      return data?.map((item) => item.agencies).filter(Boolean) || [];
     },
     enabled: !!profile?.campaigner_id,
   });
@@ -148,12 +166,14 @@ export default function MyProfile() {
       if (!userId) return [];
       const { data, error } = await supabase
         .from("user_managed_agencies")
-        .select(`
+        .select(
+          `
           agencies (
             id,
             name
           )
-        `)
+        `,
+        )
         .eq("user_id", userId);
       if (error) throw error;
       return data?.map((item: any) => item.agencies).filter(Boolean) || [];
@@ -175,34 +195,70 @@ export default function MyProfile() {
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
-      .channel('my-profile-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, () => {
-        queryClient.invalidateQueries({ queryKey: ['my-profile', userId] });
-      })
+      .channel("my-profile-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${userId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["my-profile", userId] });
+        },
+      )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userId, queryClient]);
 
   useEffect(() => {
     if (!profile?.campaigner_id) return;
     const channel = supabase
-      .channel('my-campaigner-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_team', filter: `campaigner_id=eq.${profile.campaigner_id}` }, () => {
-        queryClient.invalidateQueries({ queryKey: ['my-assignments', profile.campaigner_id] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'campaigner_agencies', filter: `campaigner_id=eq.${profile.campaigner_id}` }, () => {
-        queryClient.invalidateQueries({ queryKey: ['my-agencies', profile.campaigner_id] });
-      })
+      .channel("my-campaigner-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "client_team",
+          filter: `campaigner_id=eq.${profile.campaigner_id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({
+            queryKey: ["my-assignments", profile.campaigner_id],
+          });
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "campaigner_agencies",
+          filter: `campaigner_id=eq.${profile.campaigner_id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({
+            queryKey: ["my-agencies", profile.campaigner_id],
+          });
+        },
+      )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [profile?.campaigner_id, queryClient]);
 
   const calculateTotal = () => {
     if (!assignments) return 0;
     return assignments
-      .filter(assignment => 
-        assignment.clients?.status === "active" || 
-        assignment.clients?.status === "onboarding"
+      .filter(
+        (assignment) =>
+          assignment.clients?.status === "active" ||
+          assignment.clients?.status === "onboarding",
       )
       .reduce((sum, assignment) => {
         return sum + Number(assignment.campaigner_payment || 0);
@@ -269,7 +325,9 @@ export default function MyProfile() {
       <Card className="shadow-card">
         <CardHeader className="border-b bg-muted/30">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl">{person?.full_name || profile?.full_name || profile?.email || ""}</CardTitle>
+            <CardTitle className="text-2xl">
+              {person?.full_name || profile?.full_name || profile?.email || ""}
+            </CardTitle>
             {person?.active !== undefined && (
               <Badge variant={person?.active ? "default" : "secondary"}>
                 {person?.active ? "פעיל" : "לא פעיל"}
@@ -326,18 +384,20 @@ export default function MyProfile() {
           )}
 
           {/* Agencies - for sales people */}
-          {isSalesPerson && salesPersonAgencies && salesPersonAgencies.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="font-semibold text-lg">סוכנויות</h3>
-              <div className="flex flex-wrap gap-2">
-                {salesPersonAgencies.map((agency: any) => (
-                  <Badge key={agency.id} variant="outline">
-                    {agency.name}
-                  </Badge>
-                ))}
+          {isSalesPerson &&
+            salesPersonAgencies &&
+            salesPersonAgencies.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="font-semibold text-lg">סוכנויות</h3>
+                <div className="flex flex-wrap gap-2">
+                  {salesPersonAgencies.map((agency: any) => (
+                    <Badge key={agency.id} variant="outline">
+                      {agency.name}
+                    </Badge>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Notes */}
           {person?.notes && (
@@ -358,7 +418,13 @@ export default function MyProfile() {
                   onClick={() => setShowAssignments(!showAssignments)}
                 >
                   <h3 className="font-semibold text-lg">
-                    לקוחות משויכים ({assignments?.filter(a => a.clients?.status === "active" || a.clients?.status === "onboarding").length || 0})
+                    לקוחות משויכים (
+                    {assignments?.filter(
+                      (a) =>
+                        a.clients?.status === "active" ||
+                        a.clients?.status === "onboarding",
+                    ).length || 0}
+                    )
                   </h3>
                   {showAssignments ? (
                     <ChevronUp className="h-5 w-5" />
@@ -372,87 +438,125 @@ export default function MyProfile() {
                   <span>סה"כ תשלום: ₪{totalPayment.toLocaleString()}</span>
                 </div>
               )}
-              
+
               {showAssignments && assignments && assignments.length > 0 && (
                 <div className="space-y-3">
                   {assignments
-                    .filter(assignment => 
-                      assignment.clients?.status === "active" || 
-                      assignment.clients?.status === "onboarding"
+                    .filter(
+                      (assignment) =>
+                        assignment.clients?.status === "active" ||
+                        assignment.clients?.status === "onboarding",
                     )
                     .map((assignment) => (
-                    <Card key={assignment.id} className="bg-muted/30">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-medium">{assignment.clients?.name}</h4>
-                              <Badge className={getStatusColor(assignment.clients?.status || "")}>
-                                {getStatusText(assignment.clients?.status || "")}
-                              </Badge>
-                            </div>
-                            
-                            {assignment.clients?.agencies && (
-                              <p className="text-sm text-muted-foreground">
-                                {assignment.clients.agencies.name}
-                              </p>
-                            )}
-
-                            {assignment.role_on_account && (
-                              <p className="text-sm">
-                                <span className="text-muted-foreground">תפקיד: </span>
-                                {assignment.role_on_account}
-                              </p>
-                            )}
-
-                            {assignment.allocation_percent && (
-                              <p className="text-sm">
-                                <span className="text-muted-foreground">אחוז הקצאה: </span>
-                                {assignment.allocation_percent}%
-                              </p>
-                            )}
-
-                            {(assignment.start_date || assignment.end_date) && (
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                {assignment.start_date && (
-                                  <div className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    <span>התחלה: {format(new Date(assignment.start_date), "dd/MM/yyyy", { locale: he })}</span>
-                                  </div>
-                                )}
-                                {assignment.end_date && (
-                                  <div className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    <span>סיום: {format(new Date(assignment.end_date), "dd/MM/yyyy", { locale: he })}</span>
-                                  </div>
-                                )}
+                      <Card key={assignment.id} className="bg-muted/30">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-medium">
+                                  {assignment.clients?.name}
+                                </h4>
+                                <Badge
+                                  className={getStatusColor(
+                                    assignment.clients?.status || "",
+                                  )}
+                                >
+                                  {getStatusText(
+                                    assignment.clients?.status || "",
+                                  )}
+                                </Badge>
                               </div>
-                            )}
 
-                            {assignment.notes && (
-                              <p className="text-sm text-muted-foreground italic">
-                                {assignment.notes}
-                              </p>
-                            )}
-                          </div>
+                              {assignment.clients?.agencies && (
+                                <p className="text-sm text-muted-foreground">
+                                  {assignment.clients.agencies.name}
+                                </p>
+                              )}
 
-                          {assignment.campaigner_payment && Number(assignment.campaigner_payment) > 0 && (
-                            <div className="text-right">
-                              <Badge variant="outline" className="text-base font-semibold">
-                                ₪{Number(assignment.campaigner_payment).toLocaleString()}
-                              </Badge>
+                              {assignment.role_on_account && (
+                                <p className="text-sm">
+                                  <span className="text-muted-foreground">
+                                    תפקיד:{" "}
+                                  </span>
+                                  {assignment.role_on_account}
+                                </p>
+                              )}
+
+                              {assignment.allocation_percent && (
+                                <p className="text-sm">
+                                  <span className="text-muted-foreground">
+                                    אחוז הקצאה:{" "}
+                                  </span>
+                                  {assignment.allocation_percent}%
+                                </p>
+                              )}
+
+                              {(assignment.start_date ||
+                                assignment.end_date) && (
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                  {assignment.start_date && (
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      <span>
+                                        התחלה:{" "}
+                                        {format(
+                                          new Date(assignment.start_date),
+                                          "dd/MM/yyyy",
+                                          { locale: he },
+                                        )}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {assignment.end_date && (
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      <span>
+                                        סיום:{" "}
+                                        {format(
+                                          new Date(assignment.end_date),
+                                          "dd/MM/yyyy",
+                                          { locale: he },
+                                        )}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {assignment.notes && (
+                                <p className="text-sm text-muted-foreground italic">
+                                  {assignment.notes}
+                                </p>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+
+                            {assignment.campaigner_payment &&
+                              Number(assignment.campaigner_payment) > 0 && (
+                                <div className="text-right">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-base font-semibold"
+                                  >
+                                    ₪
+                                    {Number(
+                                      assignment.campaigner_payment,
+                                    ).toLocaleString()}
+                                  </Badge>
+                                </div>
+                              )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                 </div>
               )}
 
-              {showAssignments && (!assignments || assignments.length === 0) && (
-                <p className="text-sm text-muted-foreground">אין לקוחות משויכים</p>
-              )}
+              {showAssignments &&
+                (!assignments || assignments.length === 0) && (
+                  <p className="text-sm text-muted-foreground">
+                    אין לקוחות משויכים
+                  </p>
+                )}
             </div>
           )}
 
@@ -474,7 +578,7 @@ export default function MyProfile() {
                   )}
                 </button>
               </div>
-              
+
               {showAssignments && salesLeads && salesLeads.length > 0 && (
                 <div className="space-y-3">
                   {salesLeads.map((lead) => (
@@ -483,10 +587,12 @@ export default function MyProfile() {
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 space-y-2">
                             <div className="flex items-center gap-2">
-                              <h4 className="font-medium">{lead.company_name}</h4>
+                              <h4 className="font-medium">
+                                {lead.company_name}
+                              </h4>
                               <Badge>{lead.status}</Badge>
                             </div>
-                            
+
                             {lead.agencies && (
                               <p className="text-sm text-muted-foreground">
                                 {lead.agencies.name}
@@ -495,7 +601,9 @@ export default function MyProfile() {
 
                             {lead.contact_name && (
                               <p className="text-sm">
-                                <span className="text-muted-foreground">איש קשר: </span>
+                                <span className="text-muted-foreground">
+                                  איש קשר:{" "}
+                                </span>
                                 {lead.contact_name}
                               </p>
                             )}
@@ -522,7 +630,9 @@ export default function MyProfile() {
               )}
 
               {showAssignments && (!salesLeads || salesLeads.length === 0) && (
-                <p className="text-sm text-muted-foreground">אין לידים משויכים</p>
+                <p className="text-sm text-muted-foreground">
+                  אין לידים משויכים
+                </p>
               )}
             </div>
           )}

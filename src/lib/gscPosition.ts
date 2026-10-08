@@ -50,7 +50,8 @@ export function visibleGscPosition(
   const tracked = opts?.tracked || [];
   if (tracked.length > 0) {
     const index = buildTrackedTokenIndex(tracked);
-    if (!isKeywordRelevantToTracked(query, index, { forceIrrelevant: blocked })) return null;
+    if (!isKeywordRelevantToTracked(query, index, { forceIrrelevant: blocked }))
+      return null;
   }
   return rank;
 }
@@ -100,8 +101,12 @@ export function trackedPhraseRank(
   const exact = tracked.some((item) =>
     gscQueriesMatch(query, typeof item === "string" ? item : item?.keyword),
   );
-  const gsc = exact ? displayRank(gscPosition) : visibleGscPosition(query, gscPosition, opts);
-  const ahrefs = exact ? opts?.ahrefsPositions?.[normalizeGscQuery(query)] : null;
+  const gsc = exact
+    ? displayRank(gscPosition)
+    : visibleGscPosition(query, gscPosition, opts);
+  const ahrefs = exact
+    ? opts?.ahrefsPositions?.[normalizeGscQuery(query)]
+    : null;
   return betterDisplayRank({ ahrefsPosition: ahrefs, gscPosition: gsc });
 }
 
@@ -109,13 +114,18 @@ export function trackedPhraseRank(
  * Tracked phrases show a position whenever Ahrefs or Search Console has one.
  * A gap between the two sources shows the better rank.
  */
-export function keywordDisplayPosition(kw: {
-  position?: unknown;
-  gsc_position?: unknown;
-  ahrefs_position?: unknown;
-  _source?: string;
-  _position_source?: string;
-} | null | undefined): { position: number; source: "ahrefs" | "gsc" } | null {
+export function keywordDisplayPosition(
+  kw:
+    | {
+        position?: unknown;
+        gsc_position?: unknown;
+        ahrefs_position?: unknown;
+        _source?: string;
+        _position_source?: string;
+      }
+    | null
+    | undefined,
+): { position: number; source: "ahrefs" | "gsc" } | null {
   if (!kw) return null;
   const rankIsGsc = kw._source === "gsc" || kw._position_source === "gsc";
   const gscPosition = kw.gsc_position ?? (rankIsGsc ? kw.position : null);
@@ -125,7 +135,19 @@ export function keywordDisplayPosition(kw: {
 
 /** Newest report wins. A later list without ranks keeps the last stored Ahrefs rank. */
 export function ahrefsPositionsFromReports(
-  reports: Array<{ report_data?: { tracked_keywords?: Array<{ keyword?: unknown; position?: unknown; best_position?: unknown }> } } | null | undefined>,
+  reports: Array<
+    | {
+        report_data?: {
+          tracked_keywords?: Array<{
+            keyword?: unknown;
+            position?: unknown;
+            best_position?: unknown;
+          }>;
+        };
+      }
+    | null
+    | undefined
+  >,
 ): Map<string, number> {
   const map = new Map<string, number>();
   for (const report of reports || []) {

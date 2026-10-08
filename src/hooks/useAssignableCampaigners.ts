@@ -8,7 +8,10 @@ import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
  * campaigners owned by the organization plus campaigners attached to an agency
  * shared with it. RLS remains the final authority over the returned rows.
  */
-export function useAssignableCampaigners(options?: { activeOnly?: boolean; enabled?: boolean }) {
+export function useAssignableCampaigners(options?: {
+  activeOnly?: boolean;
+  enabled?: boolean;
+}) {
   const { tenantId } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const activeOnly = options?.activeOnly ?? true;
@@ -32,7 +35,7 @@ export function useAssignableCampaigners(options?: { activeOnly?: boolean; enabl
         if (agencyError) throw agencyError;
 
         sharedCampaignerIds = Array.from(
-          new Set((agencyRows || []).map((row) => row.campaigner_id))
+          new Set((agencyRows || []).map((row) => row.campaigner_id)),
         );
       }
 
@@ -46,7 +49,7 @@ export function useAssignableCampaigners(options?: { activeOnly?: boolean; enabl
       query =
         sharedCampaignerIds.length > 0
           ? query.or(
-              `tenant_id.eq.${tenantId},id.in.(${sharedCampaignerIds.join(",")})`
+              `tenant_id.eq.${tenantId},id.in.(${sharedCampaignerIds.join(",")})`,
             )
           : query.eq("tenant_id", tenantId);
 

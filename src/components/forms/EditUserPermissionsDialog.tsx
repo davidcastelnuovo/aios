@@ -78,12 +78,12 @@ export function EditUserPermissionsDialog({
 
       // ברירת מחדל: כל המודולים כבויים
       const permissionsMap: Record<string, boolean> = {};
-      allModules.forEach(module => {
+      allModules.forEach((module) => {
         permissionsMap[module.id] = isOwnerInTenant ? true : false;
       });
 
       // דריסה עם הערכים מה-DB
-      data?.forEach(perm => {
+      data?.forEach((perm) => {
         permissionsMap[perm.module] = perm.can_access;
       });
 
@@ -101,16 +101,15 @@ export function EditUserPermissionsDialog({
   // שמירת הרשאות
   const updatePermissionsMutation = useMutation({
     mutationFn: async (perms: Record<string, boolean>) => {
-      await supabase
-        .from("user_permissions")
-        .delete()
-        .eq("user_id", userId);
+      await supabase.from("user_permissions").delete().eq("user_id", userId);
 
-      const permissionsToInsert = Object.entries(perms).map(([module, canAccess]) => ({
-        user_id: userId,
-        module,
-        can_access: canAccess,
-      }));
+      const permissionsToInsert = Object.entries(perms).map(
+        ([module, canAccess]) => ({
+          user_id: userId,
+          module,
+          can_access: canAccess,
+        }),
+      );
 
       const { error } = await supabase
         .from("user_permissions")
@@ -119,7 +118,9 @@ export function EditUserPermissionsDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["user-permissions", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["user-permissions", tenantId],
+      });
       toast.success("ההרשאות עודכנו בהצלחה");
       onOpenChange(false);
     },
@@ -138,11 +139,16 @@ export function EditUserPermissionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[85vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle className="text-xl">הרשאות משתמש</DialogTitle>
           <DialogDescription className="flex items-center justify-between">
-            <span>ניהול הרשאות גישה למודולים עבור: <strong>{userEmail}</strong></span>
+            <span>
+              ניהול הרשאות גישה למודולים עבור: <strong>{userEmail}</strong>
+            </span>
             <Badge variant="secondary" className="mr-2 text-xs">
               {activeCount} / {totalCount} מודולים פעילים
             </Badge>

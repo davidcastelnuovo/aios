@@ -32,13 +32,20 @@ function spreadDates(count: number, horizonMonths: number): string[] {
   const end = new Date(start);
   end.setUTCMonth(end.getUTCMonth() + Math.max(1, horizonMonths));
   const days: string[] = [];
-  for (let cursor = new Date(start); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+  for (
+    let cursor = new Date(start);
+    cursor <= end;
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  ) {
     const dow = cursor.getUTCDay();
     if (dow !== 5 && dow !== 6) days.push(cursor.toISOString().slice(0, 10));
   }
   if (!days.length) return [];
   const step = Math.max(1, Math.floor(days.length / count));
-  return Array.from({ length: count }, (_, i) => days[Math.min(i * step, days.length - 1)]);
+  return Array.from(
+    { length: count },
+    (_, i) => days[Math.min(i * step, days.length - 1)],
+  );
 }
 
 export async function materializeSeoGeoPlan(
@@ -53,17 +60,34 @@ export async function materializeSeoGeoPlan(
     replaceExisting?: boolean;
   },
 ) {
-  const { workItemId, tenantId, clientId, plan, autoApprove, horizonMonths, replaceExisting } = params;
+  const {
+    workItemId,
+    tenantId,
+    clientId,
+    plan,
+    autoApprove,
+    horizonMonths,
+    replaceExisting,
+  } = params;
 
   if (replaceExisting) {
-    await admin.from("seo_geo_calendar_entries").delete().eq("work_item_id", workItemId);
-    await admin.from("seo_geo_keywords").delete().eq("work_item_id", workItemId);
+    await admin
+      .from("seo_geo_calendar_entries")
+      .delete()
+      .eq("work_item_id", workItemId);
+    await admin
+      .from("seo_geo_keywords")
+      .delete()
+      .eq("work_item_id", workItemId);
   }
 
   const keywordRows: Record<string, unknown>[] = [];
   let sort = 0;
   for (const cluster of plan.clusters ?? []) {
-    const keywords = [cluster.pillarKeyword, ...(cluster.supportingKeywords ?? [])].filter(Boolean) as string[];
+    const keywords = [
+      cluster.pillarKeyword,
+      ...(cluster.supportingKeywords ?? []),
+    ].filter(Boolean) as string[];
     for (const keyword of keywords) {
       keywordRows.push({
         tenant_id: tenantId,
@@ -83,7 +107,8 @@ export async function materializeSeoGeoPlan(
   const contentPlan = plan.contentPlan ?? [];
   for (const item of contentPlan) {
     if (!item.primaryKeyword) continue;
-    if (keywordRows.some((row) => row.keyword === item.primaryKeyword)) continue;
+    if (keywordRows.some((row) => row.keyword === item.primaryKeyword))
+      continue;
     keywordRows.push({
       tenant_id: tenantId,
       client_id: clientId,
@@ -99,7 +124,9 @@ export async function materializeSeoGeoPlan(
   }
 
   if (keywordRows.length) {
-    const { error } = await admin.from("seo_geo_keywords").upsert(keywordRows, { onConflict: "work_item_id,keyword" });
+    const { error } = await admin
+      .from("seo_geo_keywords")
+      .upsert(keywordRows, { onConflict: "work_item_id,keyword" });
     if (error) throw error;
   }
 
@@ -125,7 +152,9 @@ export async function materializeSeoGeoPlan(
   }));
 
   if (entries.length) {
-    const { error } = await admin.from("seo_geo_calendar_entries").insert(entries);
+    const { error } = await admin
+      .from("seo_geo_calendar_entries")
+      .insert(entries);
     if (error) throw error;
   }
 
@@ -162,7 +191,9 @@ export async function syncTrackedKeywords(
     sort_order: 1000 + index,
   }));
   if (!rows.length) return 0;
-  const { error } = await admin.from("seo_geo_keywords").upsert(rows, { onConflict: "work_item_id,keyword" });
+  const { error } = await admin
+    .from("seo_geo_keywords")
+    .upsert(rows, { onConflict: "work_item_id,keyword" });
   if (error) throw error;
   return rows.length;
 }

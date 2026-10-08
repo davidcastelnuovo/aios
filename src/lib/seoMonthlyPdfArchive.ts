@@ -45,7 +45,10 @@ export async function archiveSeoMonthlyPdf(input: {
     type: "application/pdf",
     uploaded_at: new Date().toISOString(),
   };
-  const attachments = [...existing.filter((item) => item.path !== path), attachment];
+  const attachments = [
+    ...existing.filter((item) => item.path !== path),
+    attachment,
+  ];
   const { error: updateError } = await supabase
     .from("clients")
     .update({ attachments: attachments as never })

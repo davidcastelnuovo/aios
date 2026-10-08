@@ -22,7 +22,10 @@ test("chat-integrations is not treated as chat/:id", () => {
 
 test("tenant index uses dashboard permission; ungated pages stay open", () => {
   assert.equal(permissionHandleForPathname("/t/acme")?.permission, "dashboard");
-  assert.equal(permissionHandleForPathname("/t/acme/")?.permission, "dashboard");
+  assert.equal(
+    permissionHandleForPathname("/t/acme/")?.permission,
+    "dashboard",
+  );
   assert.equal(permissionHandleForPathname("/t/acme/home"), undefined);
   assert.equal(permissionHandleForPathname("/t/acme/my-profile"), undefined);
   assert.equal(permissionHandleForPathname("/auth"), undefined);
@@ -30,10 +33,14 @@ test("tenant index uses dashboard permission; ungated pages stay open", () => {
 
 test("org dashboard module stays gated; client dashboard entity route does not", () => {
   assert.equal(permissionForSubpath("dashboard"), "dashboard");
-  assert.equal(permissionHandleForPathname("/t/acme/dashboard")?.permission, "dashboard");
+  assert.equal(
+    permissionHandleForPathname("/t/acme/dashboard")?.permission,
+    "dashboard",
+  );
   assert.equal(permissionForSubpath("dashboard/abc-123"), undefined);
   assert.equal(
-    permissionHandleForPathname("/t/marketingcaptain/dashboard/abc-123")?.permission,
+    permissionHandleForPathname("/t/marketingcaptain/dashboard/abc-123")
+      ?.permission,
     undefined,
   );
 });

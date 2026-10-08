@@ -3,7 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +40,11 @@ import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
 import { SummaryViewerDialog } from "@/components/recordings/SummaryViewerDialog";
 import { TranscriptViewerDialog } from "@/components/recordings/TranscriptViewerDialog";
 import { ShareSummaryDialog } from "@/components/recordings/ShareSummaryDialog";
-import { RecordingCard, type FeedRecording, type FolderOption } from "@/components/recordings/RecordingCard";
+import {
+  RecordingCard,
+  type FeedRecording,
+  type FolderOption,
+} from "@/components/recordings/RecordingCard";
 import { JoinMeetingBotDialog } from "@/components/recordings/JoinMeetingBotDialog";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { useAssignableClients } from "@/hooks/useAssignableClients";
@@ -63,7 +72,9 @@ export default function Recordings() {
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTopic, setUploadTopic] = useState("");
-  const [uploadDate, setUploadDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [uploadDate, setUploadDate] = useState(
+    () => new Date().toISOString().split("T")[0],
+  );
   const [uploadClientId, setUploadClientId] = useState<string>("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
@@ -72,13 +83,18 @@ export default function Recordings() {
     d.setDate(d.getDate() - 30);
     return d.toISOString().split("T")[0];
   });
-  const [fetchToDate, setFetchToDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [fetchToDate, setFetchToDate] = useState(
+    () => new Date().toISOString().split("T")[0],
+  );
   const [zoomFetchOpen, setZoomFetchOpen] = useState(false);
   const [joinBotOpen, setJoinBotOpen] = useState(false);
 
   const [summarizeRec, setSummarizeRec] = useState<FeedRecording | null>(null);
-  const [transcriptViewRec, setTranscriptViewRec] = useState<FeedRecording | null>(null);
-  const [summaryViewRec, setSummaryViewRec] = useState<FeedRecording | null>(null);
+  const [transcriptViewRec, setTranscriptViewRec] =
+    useState<FeedRecording | null>(null);
+  const [summaryViewRec, setSummaryViewRec] = useState<FeedRecording | null>(
+    null,
+  );
   const [shareRec, setShareRec] = useState<FeedRecording | null>(null);
 
   const [newFolderName, setNewFolderName] = useState("");
@@ -121,7 +137,9 @@ export default function Recordings() {
   });
 
   const { data: clients = [] } = useAssignableClients();
-  const { data: campaigners = [] } = useAssignableCampaigners({ activeOnly: true });
+  const { data: campaigners = [] } = useAssignableCampaigners({
+    activeOnly: true,
+  });
   const agencies = accessibleAgencies || [];
 
   const { data: folders = [] } = useQuery({
@@ -136,7 +154,9 @@ export default function Recordings() {
   // ── Mutations ─────────────────────────────────────────────────
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["recordings", currentTenantId] });
+    queryClient.invalidateQueries({
+      queryKey: ["recordings", currentTenantId],
+    });
     queryClient.invalidateQueries({ queryKey: ["client-recordings"] });
   };
 
@@ -177,11 +197,22 @@ export default function Recordings() {
       invalidate();
       toast({ title: "השיוך עודכן" });
     },
-    onError: (err: any) => toast({ title: "שגיאה בשיוך", description: err.message, variant: "destructive" }),
+    onError: (err: any) =>
+      toast({
+        title: "שגיאה בשיוך",
+        description: err.message,
+        variant: "destructive",
+      }),
   });
 
   const moveFolderMutation = useMutation({
-    mutationFn: async ({ recordingIds, folderId }: { recordingIds: string[]; folderId: string | null }) => {
+    mutationFn: async ({
+      recordingIds,
+      folderId,
+    }: {
+      recordingIds: string[];
+      folderId: string | null;
+    }) => {
       const { error } = await (supabase as any)
         .from("zoom_recordings")
         .update({ folder_id: folderId })
@@ -192,11 +223,22 @@ export default function Recordings() {
       invalidate();
       toast({ title: "ההקלטה הועברה" });
     },
-    onError: (err: any) => toast({ title: "שגיאה בהעברה", description: err.message, variant: "destructive" }),
+    onError: (err: any) =>
+      toast({
+        title: "שגיאה בהעברה",
+        description: err.message,
+        variant: "destructive",
+      }),
   });
 
   const renameMutation = useMutation({
-    mutationFn: async ({ recordingIds, name }: { recordingIds: string[]; name: string }) => {
+    mutationFn: async ({
+      recordingIds,
+      name,
+    }: {
+      recordingIds: string[];
+      name: string;
+    }) => {
       const { error } = await supabase
         .from("zoom_recordings")
         .update({ meeting_topic: name.trim() })
@@ -208,12 +250,22 @@ export default function Recordings() {
       toast({ title: "שם ההקלטה עודכן" });
     },
     onError: (err: any) => {
-      toast({ title: "שגיאה בשינוי השם", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה בשינוי השם",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async ({ recordingIds, filePaths }: { recordingIds: string[]; filePaths: string[] }) => {
+    mutationFn: async ({
+      recordingIds,
+      filePaths,
+    }: {
+      recordingIds: string[];
+      filePaths: string[];
+    }) => {
       if (filePaths.length > 0) {
         await supabase.storage.from("recordings").remove(filePaths);
         // Extension recordings also leave sampled screen frames ({ts}_frame_N.jpg)
@@ -229,25 +281,42 @@ export default function Recordings() {
             .from("recordings")
             .list(folder, { limit: 300, search: `${ts}_frame_` });
           if (frames && frames.length > 0) {
-            await supabase.storage.from("recordings").remove(frames.map((f) => `${folder}/${f.name}`));
+            await supabase.storage
+              .from("recordings")
+              .remove(frames.map((f) => `${folder}/${f.name}`));
           }
         }
       }
-      const { error } = await supabase.from("zoom_recordings").delete().in("id", recordingIds);
+      const { error } = await supabase
+        .from("zoom_recordings")
+        .delete()
+        .in("id", recordingIds);
       if (error) throw error;
     },
     onSuccess: () => {
       invalidate();
       toast({ title: "ההקלטה נמחקה בהצלחה" });
     },
-    onError: (err: any) => toast({ title: "שגיאה במחיקה", description: err.message, variant: "destructive" }),
+    onError: (err: any) =>
+      toast({
+        title: "שגיאה במחיקה",
+        description: err.message,
+        variant: "destructive",
+      }),
   });
 
   const fetchRecordingsMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("fetch-zoom-recordings", {
-        body: { tenant_id: currentTenantId, from_date: fetchFromDate, to_date: fetchToDate },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "fetch-zoom-recordings",
+        {
+          body: {
+            tenant_id: currentTenantId,
+            from_date: fetchFromDate,
+            to_date: fetchToDate,
+          },
+        },
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       return data;
@@ -255,9 +324,17 @@ export default function Recordings() {
     onSuccess: (data) => {
       invalidate();
       setZoomFetchOpen(false);
-      toast({ title: "הקלטות נמשכו בהצלחה", description: `נמצאו ${data.meetings_found} פגישות, עובדו ${data.recordings_processed} הקלטות` });
+      toast({
+        title: "הקלטות נמשכו בהצלחה",
+        description: `נמצאו ${data.meetings_found} פגישות, עובדו ${data.recordings_processed} הקלטות`,
+      });
     },
-    onError: (err: any) => toast({ title: "שגיאה במשיכת הקלטות", description: err.message, variant: "destructive" }),
+    onError: (err: any) =>
+      toast({
+        title: "שגיאה במשיכת הקלטות",
+        description: err.message,
+        variant: "destructive",
+      }),
   });
 
   const uploadMutation = useMutation({
@@ -267,26 +344,27 @@ export default function Recordings() {
       if (uploadFile) {
         const ext = uploadFile.name.split(".").pop();
         const fileName = `${currentTenantId}/${Date.now()}.${ext}`;
-        const { error: uploadError } = await supabase.storage.from("recordings").upload(fileName, uploadFile);
+        const { error: uploadError } = await supabase.storage
+          .from("recordings")
+          .upload(fileName, uploadFile);
         if (uploadError) throw uploadError;
         filePath = fileName;
       }
-      const { error } = await supabase
-        .from("zoom_recordings")
-        .insert({
-          tenant_id: currentTenantId,
-          meeting_topic: uploadTopic || "הקלטה ידנית",
-          start_time: new Date(uploadDate).toISOString(),
-          source: "manual",
-          file_path: filePath,
-          client_id: uploadClientId || null,
-          agency_id: uploadClientId
-            ? clients.find((client) => client.id === uploadClientId)?.agency_id || null
-            : null,
-          folder_id: selection.kind === "folder" ? selection.folderId : null,
-          meeting_id: `manual_${Date.now()}`,
-          recording_type: "manual",
-        } as any);
+      const { error } = await supabase.from("zoom_recordings").insert({
+        tenant_id: currentTenantId,
+        meeting_topic: uploadTopic || "הקלטה ידנית",
+        start_time: new Date(uploadDate).toISOString(),
+        source: "manual",
+        file_path: filePath,
+        client_id: uploadClientId || null,
+        agency_id: uploadClientId
+          ? clients.find((client) => client.id === uploadClientId)?.agency_id ||
+            null
+          : null,
+        folder_id: selection.kind === "folder" ? selection.folderId : null,
+        meeting_id: `manual_${Date.now()}`,
+        recording_type: "manual",
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -297,7 +375,12 @@ export default function Recordings() {
       setUploadFile(null);
       setUploadClientId("");
     },
-    onError: (err: any) => toast({ title: "שגיאה בהעלאה", description: err.message, variant: "destructive" }),
+    onError: (err: any) =>
+      toast({
+        title: "שגיאה בהעלאה",
+        description: err.message,
+        variant: "destructive",
+      }),
   });
 
   const createFolderMutation = useMutation({
@@ -308,20 +391,32 @@ export default function Recordings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["recording-folders", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["recording-folders", currentTenantId],
+      });
       setNewFolderName("");
       setCreatingFolder(false);
     },
-    onError: (err: any) => toast({ title: "שגיאה ביצירת תיקייה", description: err.message, variant: "destructive" }),
+    onError: (err: any) =>
+      toast({
+        title: "שגיאה ביצירת תיקייה",
+        description: err.message,
+        variant: "destructive",
+      }),
   });
 
   const renameFolderMutation = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const { error } = await (supabase as any).from("recording_folders").update({ name }).eq("id", id);
+      const { error } = await (supabase as any)
+        .from("recording_folders")
+        .update({ name })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["recording-folders", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["recording-folders", currentTenantId],
+      });
       setRenamingFolderId(null);
     },
   });
@@ -329,11 +424,16 @@ export default function Recordings() {
   const deleteFolderMutation = useMutation({
     mutationFn: async (id: string) => {
       // folder_id on recordings is ON DELETE SET NULL — recordings survive.
-      const { error } = await (supabase as any).from("recording_folders").delete().eq("id", id);
+      const { error } = await (supabase as any)
+        .from("recording_folders")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["recording-folders", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["recording-folders", currentTenantId],
+      });
       invalidate();
       setSelection({ kind: "all" });
       toast({ title: "התיקייה נמחקה (ההקלטות נשמרו)" });
@@ -351,28 +451,46 @@ export default function Recordings() {
     });
 
     return Array.from(groups.values()).map((group) => {
-      const videoRec = group.find((r: any) => r.recording_type === "shared_screen_with_speaker_view")
-        || group.find((r: any) => r.recording_type === "speaker_view")
-        || group.find((r: any) => r.recording_type === "screen_capture");
-      const audioRec = group.find((r: any) => r.recording_type === "audio_only");
+      const videoRec =
+        group.find(
+          (r: any) => r.recording_type === "shared_screen_with_speaker_view",
+        ) ||
+        group.find((r: any) => r.recording_type === "speaker_view") ||
+        group.find((r: any) => r.recording_type === "screen_capture");
+      const audioRec = group.find(
+        (r: any) => r.recording_type === "audio_only",
+      );
       const primary = videoRec || audioRec || group[0];
-      const transcribedRec = group.find((r: any) => r.transcription_status === "completed" && r.transcription);
+      const transcribedRec = group.find(
+        (r: any) => r.transcription_status === "completed" && r.transcription,
+      );
 
       return {
         ...primary,
-        transcription_status: group.find((r: any) => r.transcription_status === "completed")?.transcription_status
-          || group.find((r: any) => r.transcription_status === "processing")?.transcription_status
-          || group.find((r: any) => r.transcription_status === "failed")?.transcription_status
-          || null,
+        transcription_status:
+          group.find((r: any) => r.transcription_status === "completed")
+            ?.transcription_status ||
+          group.find((r: any) => r.transcription_status === "processing")
+            ?.transcription_status ||
+          group.find((r: any) => r.transcription_status === "failed")
+            ?.transcription_status ||
+          null,
         transcription: transcribedRec?.transcription || null,
-        summary_file_url: group.find((r: any) => r.summary_file_url)?.summary_file_url || null,
+        summary_file_url:
+          group.find((r: any) => r.summary_file_url)?.summary_file_url || null,
         summary_md: group.find((r: any) => r.summary_md)?.summary_md || null,
-        thumbnail_path: group.find((r: any) => r.thumbnail_path)?.thumbnail_path || null,
-        suggested_client_id: group.find((r: any) => r.suggested_client_id)?.suggested_client_id || null,
-        campaigner_ids: group.find((r: any) => r.campaigner_ids?.length)?.campaigner_ids || null,
+        thumbnail_path:
+          group.find((r: any) => r.thumbnail_path)?.thumbnail_path || null,
+        suggested_client_id:
+          group.find((r: any) => r.suggested_client_id)?.suggested_client_id ||
+          null,
+        campaigner_ids:
+          group.find((r: any) => r.campaigner_ids?.length)?.campaigner_ids ||
+          null,
         agency_id: group.find((r: any) => r.agency_id)?.agency_id || null,
         agencies: group.find((r: any) => r.agencies)?.agencies || null,
-        summary_scope: group.find((r: any) => r.summary_scope)?.summary_scope || null,
+        summary_scope:
+          group.find((r: any) => r.summary_scope)?.summary_scope || null,
         _group: group,
       } as FeedRecording;
     });
@@ -396,18 +514,25 @@ export default function Recordings() {
   const folderCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const rec of groupedRecordings) {
-      if (rec.folder_id) counts.set(rec.folder_id, (counts.get(rec.folder_id) || 0) + 1);
+      if (rec.folder_id)
+        counts.set(rec.folder_id, (counts.get(rec.folder_id) || 0) + 1);
     }
     return counts;
   }, [groupedRecordings]);
 
   const filtered = groupedRecordings.filter((rec) => {
     if (
-      selection.kind === "unassigned"
-      && (rec.client_id || rec.agency_id || (rec.campaigner_ids || []).length > 0 || rec.folder_id)
-    ) return false;
-    if (selection.kind === "client" && rec.client_id !== selection.clientId) return false;
-    if (selection.kind === "folder" && rec.folder_id !== selection.folderId) return false;
+      selection.kind === "unassigned" &&
+      (rec.client_id ||
+        rec.agency_id ||
+        (rec.campaigner_ids || []).length > 0 ||
+        rec.folder_id)
+    )
+      return false;
+    if (selection.kind === "client" && rec.client_id !== selection.clientId)
+      return false;
+    if (selection.kind === "folder" && rec.folder_id !== selection.folderId)
+      return false;
 
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
@@ -420,7 +545,8 @@ export default function Recordings() {
 
   // ── Card action handlers ─────────────────────────────────────
 
-  const groupIds = (rec: FeedRecording) => (rec._group || [rec]).map((r) => r.id);
+  const groupIds = (rec: FeedRecording) =>
+    (rec._group || [rec]).map((r) => r.id);
 
   const campaignerNamesFor = (rec: FeedRecording) =>
     (rec.campaigner_ids || [])
@@ -431,7 +557,9 @@ export default function Recordings() {
   // transcription already exists, so it continues straight to summary + brief.
   const acceptSuggestion = async (rec: FeedRecording) => {
     if (!rec.suggested_client_id) return;
-    const suggestedClient = clients.find((client) => client.id === rec.suggested_client_id);
+    const suggestedClient = clients.find(
+      (client) => client.id === rec.suggested_client_id,
+    );
     const { error } = await (supabase as any)
       .from("zoom_recordings")
       .update({
@@ -442,12 +570,17 @@ export default function Recordings() {
       })
       .in("id", groupIds(rec));
     if (error) {
-      toast({ title: "שגיאה באישור השיוך", description: error.message, variant: "destructive" });
+      toast({
+        title: "שגיאה באישור השיוך",
+        description: error.message,
+        variant: "destructive",
+      });
       return;
     }
     invalidate();
     toast({ title: "השיוך אושר — נוצרים סיכום ובריף ברקע" });
-    supabase.functions.invoke("ingest-extension-recording", { body: { recording_id: rec.id } })
+    supabase.functions
+      .invoke("ingest-extension-recording", { body: { recording_id: rec.id } })
       .catch((err) => console.error("ingest re-run failed:", err));
   };
 
@@ -461,7 +594,12 @@ export default function Recordings() {
 
   const handleDelete = (rec: FeedRecording) => {
     const filePaths = (rec._group || [rec])
-      .flatMap((r: any) => [r.file_path, r.audio_file_path, r.thumbnail_path, ...(r.audio_file_paths || [])])
+      .flatMap((r: any) => [
+        r.file_path,
+        r.audio_file_path,
+        r.thumbnail_path,
+        ...(r.audio_file_paths || []),
+      ])
       .filter(Boolean);
     deleteMutation.mutate({ recordingIds: groupIds(rec), filePaths });
   };
@@ -477,7 +615,7 @@ export default function Recordings() {
     <div
       className={cn(
         "group/item flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer",
-        active ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"
+        active ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted",
       )}
       onClick={onClick}
     >
@@ -520,10 +658,19 @@ export default function Recordings() {
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm text-destructive">
             לא הצלחנו לטעון הקלטות
-            {(recordingsQueryError as Error)?.message ? `: ${(recordingsQueryError as Error).message}` : ""}
+            {(recordingsQueryError as Error)?.message
+              ? `: ${(recordingsQueryError as Error).message}`
+              : ""}
           </span>
-          <Button variant="outline" size="sm" onClick={() => refetchRecordings()} disabled={recordingsFetching}>
-            {recordingsFetching ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : null}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetchRecordings()}
+            disabled={recordingsFetching}
+          >
+            {recordingsFetching ? (
+              <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+            ) : null}
             נסה שוב
           </Button>
         </div>
@@ -534,18 +681,33 @@ export default function Recordings() {
         <aside className="w-60 shrink-0 space-y-4 sticky top-4">
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="חיפוש..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pr-9" />
+            <Input
+              placeholder="חיפוש..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pr-9"
+            />
           </div>
 
           <div className="space-y-0.5">
-            {sidebarItem(selection.kind === "all", () => setSelection({ kind: "all" }), <LayoutGrid className="h-4 w-4" />, "כל ההקלטות", groupedRecordings.length)}
+            {sidebarItem(
+              selection.kind === "all",
+              () => setSelection({ kind: "all" }),
+              <LayoutGrid className="h-4 w-4" />,
+              "כל ההקלטות",
+              groupedRecordings.length,
+            )}
             {sidebarItem(
               selection.kind === "unassigned",
               () => setSelection({ kind: "unassigned" }),
               <Video className="h-4 w-4" />,
               "ללא שיוך",
               groupedRecordings.filter(
-                (r) => !r.client_id && !r.agency_id && (r.campaigner_ids || []).length === 0 && !r.folder_id,
+                (r) =>
+                  !r.client_id &&
+                  !r.agency_id &&
+                  (r.campaigner_ids || []).length === 0 &&
+                  !r.folder_id,
               ).length,
             )}
           </div>
@@ -557,17 +719,19 @@ export default function Recordings() {
                 לקוחות
               </div>
               <div className="space-y-0.5 max-h-64 overflow-y-auto">
-                {clientFolders.map((cf) =>
+                {clientFolders.map((cf) => (
                   <div key={cf.clientId}>
                     {sidebarItem(
-                      selection.kind === "client" && selection.clientId === cf.clientId,
-                      () => setSelection({ kind: "client", clientId: cf.clientId }),
+                      selection.kind === "client" &&
+                        selection.clientId === cf.clientId,
+                      () =>
+                        setSelection({ kind: "client", clientId: cf.clientId }),
                       <Folder className="h-4 w-4 text-blue-500" />,
                       cf.name,
                       cf.count,
                     )}
                   </div>
-                )}
+                ))}
               </div>
             </div>
           )}
@@ -578,7 +742,13 @@ export default function Recordings() {
                 <Folder className="h-3.5 w-3.5" />
                 תיקיות
               </div>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCreatingFolder(true)} title="תיקייה חדשה">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setCreatingFolder(true)}
+                title="תיקייה חדשה"
+              >
                 <FolderPlus className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -594,7 +764,10 @@ export default function Recordings() {
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && renameValue.trim()) {
-                            renameFolderMutation.mutate({ id: f.id, name: renameValue.trim() });
+                            renameFolderMutation.mutate({
+                              id: f.id,
+                              name: renameValue.trim(),
+                            });
                           }
                           if (e.key === "Escape") setRenamingFolderId(null);
                         }}
@@ -603,26 +776,45 @@ export default function Recordings() {
                     </div>
                   ) : (
                     sidebarItem(
-                      selection.kind === "folder" && selection.folderId === f.id,
+                      selection.kind === "folder" &&
+                        selection.folderId === f.id,
                       () => setSelection({ kind: "folder", folderId: f.id }),
                       <Folder className="h-4 w-4 text-amber-500" />,
                       `${f.icon ? f.icon + " " : ""}${f.name}`,
                       folderCounts.get(f.id) || 0,
                       <DropdownMenu dir="rtl">
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover/item:opacity-100">
+                        <DropdownMenuTrigger
+                          asChild
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 opacity-0 group-hover/item:opacity-100"
+                          >
                             <MoreVertical className="h-3 w-3" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolderId(f.id); setRenameValue(f.name); }}>
-                            <Pencil className="h-3.5 w-3.5 ml-2" />שנה שם
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenamingFolderId(f.id);
+                              setRenameValue(f.name);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5 ml-2" />
+                            שנה שם
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
-                            onClick={(e) => { e.stopPropagation(); deleteFolderMutation.mutate(f.id); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteFolderMutation.mutate(f.id);
+                            }}
                           >
-                            <Trash2 className="h-3.5 w-3.5 ml-2" />מחק תיקייה
+                            <Trash2 className="h-3.5 w-3.5 ml-2" />
+                            מחק תיקייה
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>,
@@ -639,10 +831,16 @@ export default function Recordings() {
                     className="h-7 text-sm"
                     autoFocus
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && newFolderName.trim()) createFolderMutation.mutate(newFolderName.trim());
-                      if (e.key === "Escape") { setCreatingFolder(false); setNewFolderName(""); }
+                      if (e.key === "Enter" && newFolderName.trim())
+                        createFolderMutation.mutate(newFolderName.trim());
+                      if (e.key === "Escape") {
+                        setCreatingFolder(false);
+                        setNewFolderName("");
+                      }
                     }}
-                    onBlur={() => { if (!newFolderName.trim()) setCreatingFolder(false); }}
+                    onBlur={() => {
+                      if (!newFolderName.trim()) setCreatingFolder(false);
+                    }}
                   />
                 </div>
               )}
@@ -661,7 +859,9 @@ export default function Recordings() {
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground border rounded-xl">
               <Video className="h-10 w-10" />
               <div className="font-medium">אין הקלטות להצגה</div>
-              <div className="text-sm">הקלט פגישה עם התוסף, העלה קובץ, או משוך הקלטות מ-Zoom</div>
+              <div className="text-sm">
+                הקלט פגישה עם התוסף, העלה קובץ, או משוך הקלטות מ-Zoom
+              </div>
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
@@ -679,15 +879,31 @@ export default function Recordings() {
                   onOpenTranscript={setTranscriptViewRec}
                   onOpenSummary={setSummaryViewRec}
                   onCreateSummary={(r) => {
-                    const audioRec = r._group?.find((g: any) => g.recording_type === "audio_only") || r;
+                    const audioRec =
+                      r._group?.find(
+                        (g: any) => g.recording_type === "audio_only",
+                      ) || r;
                     setSummarizeRec({ ...audioRec, _group: r._group });
                   }}
                   onShare={setShareRec}
                   onAssignTarget={(r, assignment) =>
-                    assignMutation.mutateAsync({ recordingIds: groupIds(r), selection: assignment })
+                    assignMutation.mutateAsync({
+                      recordingIds: groupIds(r),
+                      selection: assignment,
+                    })
                   }
-                  onMoveToFolder={(r, folderId) => moveFolderMutation.mutate({ recordingIds: groupIds(r), folderId })}
-                  onRename={(r, name) => renameMutation.mutateAsync({ recordingIds: groupIds(r), name })}
+                  onMoveToFolder={(r, folderId) =>
+                    moveFolderMutation.mutate({
+                      recordingIds: groupIds(r),
+                      folderId,
+                    })
+                  }
+                  onRename={(r, name) =>
+                    renameMutation.mutateAsync({
+                      recordingIds: groupIds(r),
+                      name,
+                    })
+                  }
                   onDelete={handleDelete}
                 />
               ))}
@@ -705,11 +921,19 @@ export default function Recordings() {
           <div className="space-y-3">
             <div>
               <Label>נושא</Label>
-              <Input value={uploadTopic} onChange={(e) => setUploadTopic(e.target.value)} placeholder="נושא ההקלטה..." />
+              <Input
+                value={uploadTopic}
+                onChange={(e) => setUploadTopic(e.target.value)}
+                placeholder="נושא ההקלטה..."
+              />
             </div>
             <div>
               <Label>תאריך</Label>
-              <Input type="date" value={uploadDate} onChange={(e) => setUploadDate(e.target.value)} />
+              <Input
+                type="date"
+                value={uploadDate}
+                onChange={(e) => setUploadDate(e.target.value)}
+              />
             </div>
             <div>
               <Label>שיוך ללקוח (אופציונלי)</Label>
@@ -723,10 +947,22 @@ export default function Recordings() {
             </div>
             <div>
               <Label>קובץ הקלטה</Label>
-              <Input type="file" accept="audio/*,video/*" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+              <Input
+                type="file"
+                accept="audio/*,video/*"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+              />
             </div>
-            <Button className="w-full" onClick={() => uploadMutation.mutate()} disabled={uploadMutation.isPending || !uploadFile}>
-              {uploadMutation.isPending ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <Upload className="h-4 w-4 ml-2" />}
+            <Button
+              className="w-full"
+              onClick={() => uploadMutation.mutate()}
+              disabled={uploadMutation.isPending || !uploadFile}
+            >
+              {uploadMutation.isPending ? (
+                <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4 ml-2" />
+              )}
               העלה
             </Button>
           </div>
@@ -752,14 +988,30 @@ export default function Recordings() {
           <div className="space-y-3">
             <div>
               <Label>מתאריך</Label>
-              <Input type="date" value={fetchFromDate} onChange={(e) => setFetchFromDate(e.target.value)} />
+              <Input
+                type="date"
+                value={fetchFromDate}
+                onChange={(e) => setFetchFromDate(e.target.value)}
+              />
             </div>
             <div>
               <Label>עד תאריך</Label>
-              <Input type="date" value={fetchToDate} onChange={(e) => setFetchToDate(e.target.value)} />
+              <Input
+                type="date"
+                value={fetchToDate}
+                onChange={(e) => setFetchToDate(e.target.value)}
+              />
             </div>
-            <Button className="w-full" onClick={() => fetchRecordingsMutation.mutate()} disabled={fetchRecordingsMutation.isPending}>
-              {fetchRecordingsMutation.isPending ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <Download className="h-4 w-4 ml-2" />}
+            <Button
+              className="w-full"
+              onClick={() => fetchRecordingsMutation.mutate()}
+              disabled={fetchRecordingsMutation.isPending}
+            >
+              {fetchRecordingsMutation.isPending ? (
+                <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 ml-2" />
+              )}
               משוך הקלטות
             </Button>
           </div>
@@ -782,7 +1034,10 @@ export default function Recordings() {
           tenantId={currentTenantId ?? undefined}
           recordingIds={groupIds(transcriptViewRec)}
           onSummarized={(summaryMd) =>
-            setTranscriptViewRec((prev) => prev ? { ...prev, summary_md: summaryMd } : prev)}
+            setTranscriptViewRec((prev) =>
+              prev ? { ...prev, summary_md: summaryMd } : prev,
+            )
+          }
         />
       )}
 
@@ -793,7 +1048,11 @@ export default function Recordings() {
           recording={summaryViewRec as any}
           tenantId={currentTenantId}
           recordingIds={groupIds(summaryViewRec)}
-          onSaved={(summaryMd) => setSummaryViewRec((prev) => prev ? { ...prev, summary_md: summaryMd } : prev)}
+          onSaved={(summaryMd) =>
+            setSummaryViewRec((prev) =>
+              prev ? { ...prev, summary_md: summaryMd } : prev,
+            )
+          }
         />
       )}
 

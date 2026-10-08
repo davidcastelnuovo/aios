@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const TOOL = {
@@ -13,14 +14,26 @@ const TOOL = {
     parameters: {
       type: "object",
       properties: {
-        vendor_name: { type: "string", description: "Supplier / business name issuing the invoice" },
+        vendor_name: {
+          type: "string",
+          description: "Supplier / business name issuing the invoice",
+        },
         invoice_number: { type: "string" },
         invoice_date: { type: "string", description: "ISO date YYYY-MM-DD" },
-        total_amount: { type: "number", description: "Total amount including VAT" },
+        total_amount: {
+          type: "number",
+          description: "Total amount including VAT",
+        },
         vat_amount: { type: "number", description: "VAT amount only" },
         currency: { type: "string", description: "ILS, USD, EUR..." },
-        description: { type: "string", description: "Short description of what was purchased" },
-        suggested_category: { type: "string", description: "Hebrew expense category" },
+        description: {
+          type: "string",
+          description: "Short description of what was purchased",
+        },
+        suggested_category: {
+          type: "string",
+          description: "Hebrew expense category",
+        },
       },
       required: ["vendor_name", "total_amount"],
       additionalProperties: false,
@@ -29,7 +42,8 @@ const TOOL = {
 };
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   try {
     const { invoice_id } = await req.json();
@@ -69,7 +83,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -79,13 +93,19 @@ Deno.serve(async (req) => {
           {
             role: "user",
             content: [
-              { type: "text", text: "Extract the invoice fields from this document." },
+              {
+                type: "text",
+                text: "Extract the invoice fields from this document.",
+              },
               { type: "image_url", image_url: { url: dataUrl } },
             ],
           },
         ],
         tools: [TOOL],
-        tool_choice: { type: "function", function: { name: "extract_invoice" } },
+        tool_choice: {
+          type: "function",
+          function: { name: "extract_invoice" },
+        },
       }),
     });
 
@@ -96,7 +116,8 @@ Deno.serve(async (req) => {
         .from("invoice_uploads")
         .update({ status: "failed", error_message: `AI ${aiResp.status}` })
         .eq("id", invoice_id);
-      const status = aiResp.status === 429 || aiResp.status === 402 ? aiResp.status : 500;
+      const status =
+        aiResp.status === 429 || aiResp.status === 402 ? aiResp.status : 500;
       return new Response(JSON.stringify({ error: text }), {
         status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -107,7 +128,11 @@ Deno.serve(async (req) => {
     const call = aiData.choices?.[0]?.message?.tool_calls?.[0];
     let extracted: any = {};
     if (call?.function?.arguments) {
-      try { extracted = JSON.parse(call.function.arguments); } catch { extracted = {}; }
+      try {
+        extracted = JSON.parse(call.function.arguments);
+      } catch {
+        extracted = {};
+      }
     }
 
     const update: any = {
@@ -119,7 +144,8 @@ Deno.serve(async (req) => {
       total_amount: extracted.total_amount ?? null,
       vat_amount: extracted.vat_amount ?? null,
       currency: extracted.currency ?? "ILS",
-      description: extracted.description ?? extracted.suggested_category ?? null,
+      description:
+        extracted.description ?? extracted.suggested_category ?? null,
       error_message: null,
     };
 
@@ -133,7 +159,9 @@ Deno.serve(async (req) => {
         const lower = extracted.vendor_name.toLowerCase();
         const hit = matchedSupplier.find(
           (s: any) =>
-            s.name && (s.name.toLowerCase().includes(lower) || lower.includes(s.name.toLowerCase()))
+            s.name &&
+            (s.name.toLowerCase().includes(lower) ||
+              lower.includes(s.name.toLowerCase())),
         );
         if (hit) update.supplier_id = hit.id;
       }

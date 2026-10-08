@@ -2,7 +2,11 @@ import { useDraggable } from "@dnd-kit/core";
 import { Eye, EyeOff, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SitemapNode } from "../hooks/useSitemap";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type Props = {
   node: SitemapNode;
@@ -11,7 +15,12 @@ type Props = {
   onRename?: () => void;
 };
 
-export function ModuleCard({ node, cardId, onToggleVisibility, onRename }: Props) {
+export function ModuleCard({
+  node,
+  cardId,
+  onToggleVisibility,
+  onRename,
+}: Props) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: cardId,
     data: { type: "module", moduleKey: node.module.key },
@@ -64,7 +73,11 @@ export function ModuleCard({ node, cardId, onToggleVisibility, onRename }: Props
         className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
         title={node.hidden ? "הצג בתפריט" : "הסתר מהתפריט"}
       >
-        {node.hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+        {node.hidden ? (
+          <EyeOff className="h-3 w-3" />
+        ) : (
+          <Eye className="h-3 w-3" />
+        )}
       </button>
     </div>
   );

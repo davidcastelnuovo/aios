@@ -1,4 +1,8 @@
-import { getAdsPurchasesFromData, getRevenueFromData, getSpendFromData } from "@/lib/adsMetrics";
+import {
+  getAdsPurchasesFromData,
+  getRevenueFromData,
+  getSpendFromData,
+} from "@/lib/adsMetrics";
 import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
 
 export type CampaignRecord = {
@@ -35,14 +39,18 @@ const emptyTotals = (): CampaignRecord => ({
 export const isFacebookIntegration = (source: string) =>
   ["facebook_insights", "facebook_ecommerce"].includes(source);
 
-export const isGoogleAdsIntegration = (source: string) => source === "google_ads";
+export const isGoogleAdsIntegration = (source: string) =>
+  source === "google_ads";
 
 export const isAdsIntegration = (source: string) =>
   isFacebookIntegration(source) || isGoogleAdsIntegration(source);
 
 export type AgencyPlatformFilter = "all" | "facebook" | "google_ads";
 
-export function matchesAgencyPlatformFilter(integrationType: string, filter: AgencyPlatformFilter): boolean {
+export function matchesAgencyPlatformFilter(
+  integrationType: string,
+  filter: AgencyPlatformFilter,
+): boolean {
   if (filter === "all") return true;
   if (filter === "facebook") return isFacebookIntegration(integrationType);
   if (filter === "google_ads") return isGoogleAdsIntegration(integrationType);
@@ -66,7 +74,9 @@ export function getCampaignType(
   if (integrationType === "facebook_insights") return "leads";
   if (integrationType === "facebook_ecommerce") return "ecommerce";
   if (integrationType === "google_ads") {
-    return integrationSettings?.campaign_type === "ecommerce" ? "ecommerce" : "leads";
+    return integrationSettings?.campaign_type === "ecommerce"
+      ? "ecommerce"
+      : "leads";
   }
   return "leads";
 }
@@ -92,7 +102,8 @@ export function buildClientCampaignTableData(input: {
   endDate: string;
   platformFilter: AgencyPlatformFilter;
 }): ClientCampaignTableData[] {
-  const { clients, tables, records, startDate, endDate, platformFilter } = input;
+  const { clients, tables, records, startDate, endDate, platformFilter } =
+    input;
   const clientMap = new Map(clients.map((client) => [client.id, client.name]));
   const tableMeta = new Map(tables.map((table) => [table.id, table]));
   const tableDataMap = new Map<string, ClientCampaignTableData>();
@@ -101,12 +112,14 @@ export function buildClientCampaignTableData(input: {
     const table = tableMeta.get(record.table_id);
     if (!table?.client_id) continue;
     if (!isAdsIntegration(table.integration_type)) continue;
-    if (!matchesAgencyPlatformFilter(table.integration_type, platformFilter)) continue;
+    if (!matchesAgencyPlatformFilter(table.integration_type, platformFilter))
+      continue;
 
     const data = record.data || {};
     const date = typeof data.date === "string" ? data.date : null;
     if (!date || date < startDate || date > endDate) continue;
-    if (!shouldIncludeInAdsDashboardAggregate(data, table.integration_type)) continue;
+    if (!shouldIncludeInAdsDashboardAggregate(data, table.integration_type))
+      continue;
 
     const key = `${table.client_id}-${table.id}`;
     if (!tableDataMap.has(key)) {
@@ -116,7 +129,10 @@ export function buildClientCampaignTableData(input: {
         tableId: table.id,
         tableName: table.name || "",
         integrationType: table.integration_type,
-        campaignType: getCampaignType(table.integration_type, table.integration_settings),
+        campaignType: getCampaignType(
+          table.integration_type,
+          table.integration_settings,
+        ),
         records: [],
         totals: emptyTotals(),
       });
@@ -127,7 +143,9 @@ export function buildClientCampaignTableData(input: {
       data.campaign_name || data.campaignName || data.name || "ללא שם",
     );
 
-    let campaignRecord = tableData.records.find((row) => row.campaignName === campaignName);
+    let campaignRecord = tableData.records.find(
+      (row) => row.campaignName === campaignName,
+    );
     if (!campaignRecord) {
       campaignRecord = {
         campaignName,

@@ -49,7 +49,8 @@ const STAGE_COLORS: Record<string, string> = {
 
 function StageNode({ data }: { data: any }) {
   const Icon = STAGE_ICONS[data.stage_type] ?? Lightbulb;
-  const color = STAGE_COLORS[data.stage_type] ?? "from-muted to-muted/40 border-border";
+  const color =
+    STAGE_COLORS[data.stage_type] ?? "from-muted to-muted/40 border-border";
   const configured = !!data.agentName || !!data.hasInstructions;
   return (
     <Card
@@ -65,7 +66,9 @@ function StageNode({ data }: { data: any }) {
         <div className="flex-1">
           <div className="flex items-center gap-1 text-sm font-semibold">
             {data.name}
-            {configured && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
+            {configured && (
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+            )}
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <Bot className="h-3 w-3" />
@@ -103,7 +106,13 @@ const APPROVAL_LABELS: Record<string, string> = {
   hybrid: "היברידי",
 };
 
-export function PipelineCanvas({ pipelineId, tenantId, clientId, track, onSelectItem }: Props) {
+export function PipelineCanvas({
+  pipelineId,
+  tenantId,
+  clientId,
+  track,
+  onSelectItem,
+}: Props) {
   const queryClient = useQueryClient();
   const [openStageId, setOpenStageId] = useState<string | null>(null);
 
@@ -135,7 +144,8 @@ export function PipelineCanvas({ pipelineId, tenantId, clientId, track, onSelect
   const itemCounts: Record<string, number> = useMemo(() => {
     const counts: Record<string, number> = {};
     (items ?? []).forEach((row: any) => {
-      if (row.current_stage_id) counts[row.current_stage_id] = (counts[row.current_stage_id] ?? 0) + 1;
+      if (row.current_stage_id)
+        counts[row.current_stage_id] = (counts[row.current_stage_id] ?? 0) + 1;
     });
     return counts;
   }, [items]);
@@ -160,7 +170,9 @@ export function PipelineCanvas({ pipelineId, tenantId, clientId, track, onSelect
 
   const edges: Edge[] = useMemo(() => {
     if (!stages) return [];
-    const sorted = [...stages].sort((a: any, b: any) => a.sort_order - b.sort_order);
+    const sorted = [...stages].sort(
+      (a: any, b: any) => a.sort_order - b.sort_order,
+    );
     const out: Edge[] = [];
     for (let i = 0; i < sorted.length - 1; i++) {
       out.push({
@@ -173,7 +185,8 @@ export function PipelineCanvas({ pipelineId, tenantId, clientId, track, onSelect
     return out;
   }, [stages]);
 
-  const openStage = (stages ?? []).find((s: any) => s.id === openStageId) ?? null;
+  const openStage =
+    (stages ?? []).find((s: any) => s.id === openStageId) ?? null;
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -192,7 +205,9 @@ export function PipelineCanvas({ pipelineId, tenantId, clientId, track, onSelect
 
       {(items ?? []).length > 0 && (
         <div className="border-t bg-card/40 px-4 py-2" dir="rtl">
-          <div className="mb-1 text-xs font-medium text-muted-foreground">פריטי תוכן ({items?.length})</div>
+          <div className="mb-1 text-xs font-medium text-muted-foreground">
+            פריטי תוכן ({items?.length})
+          </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {(items ?? []).map((it: any) => (
               <button
@@ -218,7 +233,9 @@ export function PipelineCanvas({ pipelineId, tenantId, clientId, track, onSelect
         onClose={() => setOpenStageId(null)}
         onSaved={() => {
           refetchStages();
-          queryClient.invalidateQueries({ queryKey: ["marketing-stages", pipelineId, tenantId] });
+          queryClient.invalidateQueries({
+            queryKey: ["marketing-stages", pipelineId, tenantId],
+          });
         }}
       />
     </div>

@@ -3,12 +3,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "./useCurrentTenant";
 import { useViewAs } from "@/contexts/ViewAsContext";
 
-export type UserRole = "owner" | "team_manager" | "campaigner" | "sales_person" | "super_admin" | "seo";
+export type UserRole =
+  | "owner"
+  | "team_manager"
+  | "campaigner"
+  | "sales_person"
+  | "super_admin"
+  | "seo";
 
 export function useUserRole() {
   const { tenantId } = useCurrentTenant();
   const { isViewingAs, viewAsUserId } = useViewAs();
-  
+
   const { data: session } = useQuery({
     queryKey: ["session"],
     queryFn: async () => {
@@ -30,7 +36,7 @@ export function useUserRole() {
     queryKey: ["user-roles", effectiveUserId, tenantId, isViewingAs],
     queryFn: async () => {
       if (!effectiveUserId) return [];
-      
+
       const { data, error } = await supabase
         .from("user_roles")
         .select("role")
@@ -92,25 +98,22 @@ export function useUserRole() {
         .select("sales_person_id")
         .eq("id", effectiveUserId)
         .maybeSingle();
-      
+
       if (!profile?.sales_person_id) return null;
-      
+
       const { data: agencies } = await supabase
         .from("sales_person_agencies")
         .select("agency_id")
         .eq("sales_person_id", profile.sales_person_id);
-      
-      return agencies?.map(a => a.agency_id) || null;
+
+      return agencies?.map((a) => a.agency_id) || null;
     },
     enabled: !!effectiveUserId && isSalesPersonRole,
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
   });
 
-  const {
-    data: tenantMembership,
-    isPending: membershipPending,
-  } = useQuery({
+  const { data: tenantMembership, isPending: membershipPending } = useQuery({
     queryKey: ["tenant-membership-role", effectiveUserId, tenantId],
     queryFn: async () => {
       if (!effectiveUserId || !tenantId) return null;
@@ -129,13 +132,15 @@ export function useUserRole() {
   });
 
   const hasRole = (role: UserRole) => roles?.includes(role) || false;
-  const isTenantOwner = tenantMembership === "owner" || tenantMembership === "agency_owner";
+  const isTenantOwner =
+    tenantMembership === "owner" || tenantMembership === "agency_owner";
   const isSeoTaggedCampaigner = (campaignerRoleTags || []).includes("SEO");
 
   return {
     roles: roles || [],
     isOwner: hasRole("owner") || tenantMembership === "owner",
-    isAgencyOwner: hasRole("agency_owner") || tenantMembership === "agency_owner",
+    isAgencyOwner:
+      hasRole("agency_owner") || tenantMembership === "agency_owner",
     isTeamManager: hasRole("team_manager"),
     isCampaigner: hasRole("campaigner"),
     isSalesPerson: hasRole("sales_person"),

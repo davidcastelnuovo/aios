@@ -42,7 +42,7 @@ interface ConvertMessageToTaskDialogProps {
   onOpenChange: (open: boolean) => void;
   messageText: string;
   contactId?: string;
-  contactType?: 'client' | 'lead' | 'group' | 'unknown' | 'telegram';
+  contactType?: "client" | "lead" | "group" | "unknown" | "telegram";
   agencyId?: string;
 }
 
@@ -63,7 +63,7 @@ export function ConvertMessageToTaskDialog({
       title: messageText.slice(0, 50) + (messageText.length > 50 ? "..." : ""),
       notes: messageText,
       agency_id: agencyId || "",
-      client_id: contactType === 'client' ? contactId : "",
+      client_id: contactType === "client" ? contactId : "",
       priority: 5,
     },
   });
@@ -109,7 +109,7 @@ export function ConvertMessageToTaskDialog({
         .from("campaigner_agencies")
         .select("campaigner_id, campaigners(id, full_name)")
         .eq("agency_id", selectedAgencyId);
-      
+
       return data?.map((ca: any) => ca.campaigners).filter(Boolean) || [];
     },
     enabled: !!tenantId && !!selectedAgencyId && open,
@@ -159,9 +159,7 @@ export function ConvertMessageToTaskDialog({
       <DialogContent className="sm:max-w-[500px]" dir="rtl">
         <DialogHeader>
           <DialogTitle>המרת הודעה למשימה</DialogTitle>
-          <DialogDescription>
-            צור משימה חדשה מתוכן ההודעה
-          </DialogDescription>
+          <DialogDescription>צור משימה חדשה מתוכן ההודעה</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -236,7 +234,9 @@ export function ConvertMessageToTaskDialog({
             <Label htmlFor="client_id">לקוח (אופציונלי)</Label>
             <Select
               value={form.watch("client_id") || "__none__"}
-              onValueChange={(value) => form.setValue("client_id", value === "__none__" ? "" : value)}
+              onValueChange={(value) =>
+                form.setValue("client_id", value === "__none__" ? "" : value)
+              }
               disabled={!selectedAgencyId}
             >
               <SelectTrigger>
@@ -255,11 +255,7 @@ export function ConvertMessageToTaskDialog({
 
           <div className="space-y-2">
             <Label htmlFor="due_date">תאריך יעד (אופציונלי)</Label>
-            <Input
-              id="due_date"
-              type="date"
-              {...form.register("due_date")}
-            />
+            <Input id="due_date" type="date" {...form.register("due_date")} />
           </div>
 
           <div className="space-y-2">

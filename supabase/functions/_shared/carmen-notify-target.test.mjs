@@ -29,8 +29,18 @@ test("DMM pulse: campaign_pulse_phone → Felix, not newest David session", () =
   const result = resolveCarmenNotifyTarget({
     campaignPulsePhone: FELIX,
     sessions: [
-      { chat_id: `${DAVID}@c.us`, phone: DAVID, sender_name: "דוד", updated_at: "2026-08-05" },
-      { chat_id: `${FELIX}@c.us`, phone: FELIX, sender_name: "פליקס", updated_at: "2026-07-01" },
+      {
+        chat_id: `${DAVID}@c.us`,
+        phone: DAVID,
+        sender_name: "דוד",
+        updated_at: "2026-08-05",
+      },
+      {
+        chat_id: `${FELIX}@c.us`,
+        phone: FELIX,
+        sender_name: "פליקס",
+        updated_at: "2026-07-01",
+      },
     ],
     staff: [
       { phone: FELIX, full_name: "פליקס", role: "מנהל צוות" },
@@ -46,8 +56,18 @@ test("DMM: without pulse phone, prefer Felix manager session over David (David n
   const result = resolveCarmenNotifyTarget({
     campaignPulsePhone: null,
     sessions: [
-      { chat_id: `${DAVID}@c.us`, phone: DAVID, sender_name: "דוד", updated_at: "2026-08-05" },
-      { chat_id: `${FELIX}@c.us`, phone: FELIX, sender_name: "פליקס", updated_at: "2026-07-01" },
+      {
+        chat_id: `${DAVID}@c.us`,
+        phone: DAVID,
+        sender_name: "דוד",
+        updated_at: "2026-08-05",
+      },
+      {
+        chat_id: `${FELIX}@c.us`,
+        phone: FELIX,
+        sender_name: "פליקס",
+        updated_at: "2026-07-01",
+      },
     ],
     staff: [
       { phone: FELIX, full_name: "פליקס", role: "מנהל צוות" },
@@ -62,12 +82,8 @@ test("DMM: without pulse phone, prefer Felix manager session over David (David n
 test("DMM: David-only sessions + Felix staff phone → Felix (no David fallback)", () => {
   const result = resolveCarmenNotifyTarget({
     campaignPulsePhone: null,
-    sessions: [
-      { chat_id: `${DAVID}@c.us`, phone: DAVID, sender_name: "דוד" },
-    ],
-    staff: [
-      { phone: FELIX, full_name: "פליקס", role: "מנהל צוות" },
-    ],
+    sessions: [{ chat_id: `${DAVID}@c.us`, phone: DAVID, sender_name: "דוד" }],
+    staff: [{ phone: FELIX, full_name: "פליקס", role: "מנהל צוות" }],
   });
   assert.equal(result.source, "tenant_staff_phone");
   assert.equal(normalizeNotifyPhone(result.chatId), FELIX);
@@ -77,9 +93,7 @@ test("DMM: David sessions + empty staff → refuse", () => {
   const result = resolveCarmenNotifyTarget({
     campaignPulsePhone: null,
     preferredPhone: null,
-    sessions: [
-      { chat_id: `${DAVID}@c.us`, phone: DAVID, sender_name: "דוד" },
-    ],
+    sessions: [{ chat_id: `${DAVID}@c.us`, phone: DAVID, sender_name: "דוד" }],
     staff: [],
   });
   assert.equal(result.source, "none");
@@ -114,8 +128,18 @@ test("manager staff preferred over campaigner when both have sessions", () => {
   const avi = "972549757611";
   const result = resolveCarmenNotifyTarget({
     sessions: [
-      { chat_id: `${avi}@c.us`, phone: avi, sender_name: "אביעד", updated_at: "2026-08-05" },
-      { chat_id: `${FELIX}@c.us`, phone: FELIX, sender_name: "פליקס", updated_at: "2026-07-01" },
+      {
+        chat_id: `${avi}@c.us`,
+        phone: avi,
+        sender_name: "אביעד",
+        updated_at: "2026-08-05",
+      },
+      {
+        chat_id: `${FELIX}@c.us`,
+        phone: FELIX,
+        sender_name: "פליקס",
+        updated_at: "2026-07-01",
+      },
     ],
     staff: [
       { phone: avi, full_name: "אביעד", role: "קמפיינר" },
@@ -137,8 +161,18 @@ test("newest group session with David's phone does not steal private notify", ()
   const result = resolveCarmenNotifyTarget({
     preferredPhone: DAVID,
     sessions: [
-      { chat_id: group, phone: DAVID, sender_name: "דוד", updated_at: "2026-08-27T12:23:00Z" },
-      { chat_id: `${DAVID}@c.us`, phone: DAVID, sender_name: "דוד", updated_at: "2026-08-27T11:01:00Z" },
+      {
+        chat_id: group,
+        phone: DAVID,
+        sender_name: "דוד",
+        updated_at: "2026-08-27T12:23:00Z",
+      },
+      {
+        chat_id: `${DAVID}@c.us`,
+        phone: DAVID,
+        sender_name: "דוד",
+        updated_at: "2026-08-27T11:01:00Z",
+      },
     ],
     staff: [{ phone: DAVID, full_name: "דוד", role: "owner" }],
   });

@@ -16,13 +16,17 @@ export function useUserTenants(userId?: string | null) {
     let mounted = true;
 
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (mounted) setToken(session?.access_token ?? null);
     };
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_e, session) => {
-      setToken(session?.access_token ?? null);
-    });
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      (_e, session) => {
+        setToken(session?.access_token ?? null);
+      },
+    );
 
     init();
 
@@ -36,15 +40,17 @@ export function useUserTenants(userId?: string | null) {
     queryKey: ["user-tenants", userId, token, currentTenantId],
     enabled: !!userId && !!token,
     queryFn: async () => {
-      
-      const { data, error } = await supabase.functions.invoke("list-user-tenants", {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const { data, error } = await supabase.functions.invoke(
+        "list-user-tenants",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: {
+            scope_tenant_id: currentTenantId,
+          },
         },
-        body: {
-          scope_tenant_id: currentTenantId,
-        },
-      });
+      );
 
       if (error) {
         console.error("Error fetching user tenants:", error);
@@ -57,7 +63,7 @@ export function useUserTenants(userId?: string | null) {
         console.warn("Tenants data is not an array:", tenants);
         return [] as any[];
       }
-      
+
       // sanitize
       return tenants.filter((t: any) => t && t.id && t.name);
     },
@@ -69,9 +75,12 @@ export function useUserTenants(userId?: string | null) {
     placeholderData: keepPreviousData,
   });
 
-  return useMemo(() => ({
-    userTenants: (query.data as any[]) ?? [],
-    isLoading: query.isLoading || query.isFetching,
-    refetch: query.refetch,
-  }), [query.data, query.isLoading, query.isFetching, query.refetch]);
+  return useMemo(
+    () => ({
+      userTenants: (query.data as any[]) ?? [],
+      isLoading: query.isLoading || query.isFetching,
+      refetch: query.refetch,
+    }),
+    [query.data, query.isLoading, query.isFetching, query.refetch],
+  );
 }

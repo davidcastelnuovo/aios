@@ -1,7 +1,13 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
 interface Props {
@@ -18,7 +24,11 @@ interface Props {
  * send call omits integrationId and the edge function keeps its existing auto-pick,
  * so nothing changes for tenants with a single number.
  */
-export function ReportWhatsAppSenderSelect({ tenantId, value, onChange }: Props) {
+export function ReportWhatsAppSenderSelect({
+  tenantId,
+  value,
+  onChange,
+}: Props) {
   const { data: instances = [] } = useQuery({
     queryKey: ["green-api-instances", tenantId],
     enabled: !!tenantId,
@@ -47,7 +57,9 @@ export function ReportWhatsAppSenderSelect({ tenantId, value, onChange }: Props)
       i.display_name ||
       s.instance_name ||
       s.connection_name ||
-      (s.instance_id ? `WhatsApp ··${String(s.instance_id).slice(-4)}` : "WhatsApp")
+      (s.instance_id
+        ? `WhatsApp ··${String(s.instance_id).slice(-4)}`
+        : "WhatsApp")
     );
   };
 

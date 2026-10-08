@@ -7,7 +7,14 @@ import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Wrench, Plug, Sparkles, ShieldCheck, Save } from "lucide-react";
+import {
+  Loader2,
+  Wrench,
+  Plug,
+  Sparkles,
+  ShieldCheck,
+  Save,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AGENT_TOOLS_CATALOG } from "@/lib/agentToolsCatalog";
 
@@ -21,7 +28,9 @@ export function AgentAccessTab({ agent }: { agent: any }) {
   const queryClient = useQueryClient();
   const [offTools, setOffTools] = useState<Set<string>>(new Set());
   const [offSkins, setOffSkins] = useState<Set<string>>(new Set());
-  const [offIntegrations, setOffIntegrations] = useState<Set<string>>(new Set());
+  const [offIntegrations, setOffIntegrations] = useState<Set<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
     setOffTools(new Set(agent.disabled_tools || []));
@@ -36,14 +45,20 @@ export function AgentAccessTab({ agent }: { agent: any }) {
         .from("ai_skills" as any)
         .select("slug,name,scope,is_active")
         .eq("is_active", true)
-        .or(tenantId ? `scope.eq.global,and(scope.eq.tenant,tenant_id.eq.${tenantId})` : "scope.eq.global");
+        .or(
+          tenantId
+            ? `scope.eq.global,and(scope.eq.tenant,tenant_id.eq.${tenantId})`
+            : "scope.eq.global",
+        );
       const bySlug = new Map<string, any>();
       for (const r of (data as any[]) || []) {
         if (!r.slug) continue;
         const ex = bySlug.get(r.slug);
         if (!ex || r.scope === "tenant") bySlug.set(r.slug, r);
       }
-      return Array.from(bySlug.values()).sort((a, b) => a.name.localeCompare(b.name, "he"));
+      return Array.from(bySlug.values()).sort((a, b) =>
+        a.name.localeCompare(b.name, "he"),
+      );
     },
     enabled: !!tenantId,
   });
@@ -87,18 +102,34 @@ export function AgentAccessTab({ agent }: { agent: any }) {
     onError: (e: any) => toast.error("שמירה נכשלה: " + (e?.message || e)),
   });
 
-  const toggle = (set: Set<string>, setter: (s: Set<string>) => void, key: string) => {
+  const toggle = (
+    set: Set<string>,
+    setter: (s: Set<string>) => void,
+    key: string,
+  ) => {
     const next = new Set(set);
     next.has(key) ? next.delete(key) : next.add(key);
     setter(next);
   };
 
-  const Row = ({ on, label, sub, onToggle }: { on: boolean; label: string; sub?: string; onToggle: () => void }) => (
+  const Row = ({
+    on,
+    label,
+    sub,
+    onToggle,
+  }: {
+    on: boolean;
+    label: string;
+    sub?: string;
+    onToggle: () => void;
+  }) => (
     <div className="flex items-center justify-between gap-3 py-1.5">
       <Switch checked={on} onCheckedChange={onToggle} />
       <div className="flex-1 text-right">
         <span className="text-sm">{label}</span>
-        {sub && <span className="text-[11px] text-muted-foreground block">{sub}</span>}
+        {sub && (
+          <span className="text-[11px] text-muted-foreground block">{sub}</span>
+        )}
       </div>
     </div>
   );
@@ -108,15 +139,28 @@ export function AgentAccessTab({ agent }: { agent: any }) {
   return (
     <div className="space-y-4 max-w-4xl" dir="rtl">
       <div className="flex items-center justify-between">
-        <Button onClick={() => save.mutate()} disabled={save.isPending} className="gap-1.5">
-          {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+        <Button
+          onClick={() => save.mutate()}
+          disabled={save.isPending}
+          className="gap-1.5"
+        >
+          {save.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
           שמור גישות
         </Button>
         <div className="text-right">
           <p className="text-sm text-muted-foreground flex items-center gap-2 justify-end">
             <ShieldCheck className="h-4 w-4 text-emerald-500" />
-            הסוכן ניגש לכל הכלים, האינטגרציות והסקינז כברירת מחדל. כבה כאן מה שלא רוצה שישתמש בו.
-            {totalOff > 0 && <Badge variant="outline" className="text-[10px]">{totalOff} מכובים</Badge>}
+            הסוכן ניגש לכל הכלים, האינטגרציות והסקינז כברירת מחדל. כבה כאן מה
+            שלא רוצה שישתמש בו.
+            {totalOff > 0 && (
+              <Badge variant="outline" className="text-[10px]">
+                {totalOff} מכובים
+              </Badge>
+            )}
           </p>
         </div>
       </div>
@@ -126,12 +170,15 @@ export function AgentAccessTab({ agent }: { agent: any }) {
           {/* Tools */}
           <Card className="p-4 space-y-3 md:col-span-2">
             <h2 className="font-semibold flex items-center gap-1.5 justify-end">
-              <Wrench className="h-4 w-4" />כלים
+              <Wrench className="h-4 w-4" />
+              כלים
             </h2>
             <div className="grid gap-x-6 md:grid-cols-2">
               {Object.entries(toolGroups).map(([group, tools]) => (
                 <div key={group} className="space-y-0.5">
-                  <p className="text-[11px] font-medium text-muted-foreground text-right pt-2">{group}</p>
+                  <p className="text-[11px] font-medium text-muted-foreground text-right pt-2">
+                    {group}
+                  </p>
                   {tools.map((t) => (
                     <Row
                       key={t.name}
@@ -149,7 +196,8 @@ export function AgentAccessTab({ agent }: { agent: any }) {
           {/* Skins */}
           <Card className="p-4 space-y-2">
             <h2 className="font-semibold flex items-center gap-1.5 justify-end">
-              <Sparkles className="h-4 w-4 text-orange-500" />סקינז
+              <Sparkles className="h-4 w-4 text-orange-500" />
+              סקינז
             </h2>
             {(skins || []).map((s: any) => (
               <Row
@@ -161,14 +209,17 @@ export function AgentAccessTab({ agent }: { agent: any }) {
               />
             ))}
             {(!skins || skins.length === 0) && (
-              <p className="text-xs text-muted-foreground text-center py-2">אין סקינז.</p>
+              <p className="text-xs text-muted-foreground text-center py-2">
+                אין סקינז.
+              </p>
             )}
           </Card>
 
           {/* Integrations */}
           <Card className="p-4 space-y-2">
             <h2 className="font-semibold flex items-center gap-1.5 justify-end">
-              <Plug className="h-4 w-4 text-blue-500" />אינטגרציות (MCP)
+              <Plug className="h-4 w-4 text-blue-500" />
+              אינטגרציות (MCP)
             </h2>
             {(integrations || []).map((c: any) => (
               <Row
@@ -176,7 +227,9 @@ export function AgentAccessTab({ agent }: { agent: any }) {
                 on={!offIntegrations.has(c.name)}
                 label={c.name}
                 sub={c.state}
-                onToggle={() => toggle(offIntegrations, setOffIntegrations, c.name)}
+                onToggle={() =>
+                  toggle(offIntegrations, setOffIntegrations, c.name)
+                }
               />
             ))}
             {(!integrations || integrations.length === 0) && (

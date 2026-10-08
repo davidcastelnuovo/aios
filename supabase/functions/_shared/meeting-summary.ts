@@ -24,25 +24,22 @@ async function requestMeetingCompletion(
   userPrompt: string,
   maxCompletionTokens: number,
 ): Promise<string> {
-  const aiResponse = await fetch(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0.1,
-        max_completion_tokens: maxCompletionTokens,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
+  const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${openaiKey}`,
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: 0.1,
+      max_completion_tokens: maxCompletionTokens,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    }),
+  });
 
   if (!aiResponse.ok) {
     if (aiResponse.status === 429) {
@@ -107,17 +104,31 @@ export async function saveSummaryForTarget(
   admin: any,
   opts: SaveSummaryOptions,
 ): Promise<{ fileUrl: string; fileName: string }> {
-  const { tenant_id, target_type, target_id, target_name, summary, recording_id, created_by } = opts;
+  const {
+    tenant_id,
+    target_type,
+    target_id,
+    target_name,
+    summary,
+    recording_id,
+    created_by,
+  } = opts;
 
   const dateStr = new Date().toLocaleDateString("he-IL");
-  const docxBytes = buildDocx(summary, target_name, dateStr, recording_id ?? undefined);
+  const docxBytes = buildDocx(
+    summary,
+    target_name,
+    dateStr,
+    recording_id ?? undefined,
+  );
 
   const fileName = `summaries/${tenant_id}/${target_type}_${target_id}/${Date.now()}_summary.docx`;
 
   const { error: uploadError } = await admin.storage
     .from("recordings")
     .upload(fileName, docxBytes, {
-      contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      contentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       upsert: false,
     });
 
@@ -127,8 +138,13 @@ export async function saveSummaryForTarget(
   }
 
   // Get signed URL (bucket is private)
-  const { data: urlData, error: urlError } = await admin.storage.from("recordings").createSignedUrl(fileName, 60 * 60 * 24 * 365 * 10);
-  if (urlError || !urlData) throw new Error("Failed to sign recording URL: " + (urlError?.message ?? ""));
+  const { data: urlData, error: urlError } = await admin.storage
+    .from("recordings")
+    .createSignedUrl(fileName, 60 * 60 * 24 * 365 * 10);
+  if (urlError || !urlData)
+    throw new Error(
+      "Failed to sign recording URL: " + (urlError?.message ?? ""),
+    );
   const fileUrl = urlData.signedUrl;
 
   const newAttachment = {
@@ -198,24 +214,32 @@ export async function maybeCreateMarketingBrief(
 ): Promise<{ created: boolean; workItemId: string | null }> {
   const { summary, tenant_id, client_id, recording_id, fileUrl, source } = opts;
   try {
-    const briefDetectRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: `אתה מנתח פגישות שיווקיות. קרא את סיכום הפגישה וזהה אם יש צרכי שיווק (קמפיינים, תוכן, SEO, סושיאל, קופי, גרפיקה, מודעות). אם יש — החזר JSON בפורמט: {"has_marketing_needs": true, "brief_title": "כותרת", "brief_content": "תיאור צרכים", "tracks": ["campaigns","social_organic","seo_geo"]}. אם אין — {"has_marketing_needs": false}.`,
-          },
-          { role: "user", content: `סיכום הפגישה:\n${summary}` },
-        ],
-      }),
-    });
+    const briefDetectRes = await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openaiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content: `אתה מנתח פגישות שיווקיות. קרא את סיכום הפגישה וזהה אם יש צרכי שיווק (קמפיינים, תוכן, SEO, סושיאל, קופי, גרפיקה, מודעות). אם יש — החזר JSON בפורמט: {"has_marketing_needs": true, "brief_title": "כותרת", "brief_content": "תיאור צרכים", "tracks": ["campaigns","social_organic","seo_geo"]}. אם אין — {"has_marketing_needs": false}.`,
+            },
+            { role: "user", content: `סיכום הפגישה:\n${summary}` },
+          ],
+        }),
+      },
+    );
     if (briefDetectRes.ok) {
       const briefData = await briefDetectRes.json();
-      const briefJson = JSON.parse(briefData.choices?.[0]?.message?.content ?? "{}");
+      const briefJson = JSON.parse(
+        briefData.choices?.[0]?.message?.content ?? "{}",
+      );
       if (briefJson.has_marketing_needs && briefJson.brief_title) {
         const validTracks = new Set(["campaigns", "social_organic", "seo_geo"]);
         const detectedTracks = Array.from(
@@ -225,7 +249,8 @@ export async function maybeCreateMarketingBrief(
               .filter((track: string) => validTracks.has(track)),
           ),
         ) as string[];
-        const tracks = detectedTracks.length > 0 ? detectedTracks : ["campaigns"];
+        const tracks =
+          detectedTracks.length > 0 ? detectedTracks : ["campaigns"];
         let firstWorkItemId: string | null = null;
 
         for (const track of tracks) {
@@ -236,7 +261,10 @@ export async function maybeCreateMarketingBrief(
               .select("id")
               .eq("tenant_id", tenant_id)
               .eq("client_id", client_id)
-              .contains("payload", { source_recording_id: recording_id, source_track: track })
+              .contains("payload", {
+                source_recording_id: recording_id,
+                source_track: track,
+              })
               .maybeSingle();
             if (existing?.id) {
               firstWorkItemId ??= existing.id;
@@ -252,7 +280,9 @@ export async function maybeCreateMarketingBrief(
             .eq("track", track)
             .maybeSingle();
           if (!pipeline) {
-            console.warn(`[MARKETING] No ${track} pipeline for client ${client_id}`);
+            console.warn(
+              `[MARKETING] No ${track} pipeline for client ${client_id}`,
+            );
             continue;
           }
 
@@ -288,7 +318,9 @@ export async function maybeCreateMarketingBrief(
 
           if (workItem?.id) {
             firstWorkItemId ??= workItem.id;
-            console.log(`[MARKETING] Auto-brief created for ${track}: ${workItem.id}`);
+            console.log(
+              `[MARKETING] Auto-brief created for ${track}: ${workItem.id}`,
+            );
           }
         }
 
@@ -306,7 +338,11 @@ export async function maybeCreateMarketingBrief(
 // ─── DOCX Builder ───
 
 function escapeXml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function markdownToDocxParagraphs(md: string): string {
@@ -390,7 +426,12 @@ function makeBlockquote(text: string): string {
   return `<w:p><w:pPr><w:pStyle w:val="Normal"/><w:bidi/><w:ind w:right="720"/><w:pBdr><w:right w:val="single" w:sz="12" w:space="4" w:color="3B82F6"/></w:pBdr></w:pPr>${makeRuns(text)}</w:p>`;
 }
 
-export function buildDocx(summary: string, targetName: string, dateStr: string, recordingId?: string): Uint8Array {
+export function buildDocx(
+  summary: string,
+  targetName: string,
+  dateStr: string,
+  recordingId?: string,
+): Uint8Array {
   const bodyContent = markdownToDocxParagraphs(summary);
 
   const metaLine = `תאריך הפקה: ${dateStr}${recordingId ? ` | מזהה הקלטה: ${recordingId}` : ""}`;

@@ -2,14 +2,34 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Upload, Sparkles, Trash2, Download, Phone, Mail, Loader2 } from "lucide-react";
+import {
+  Upload,
+  Sparkles,
+  Trash2,
+  Download,
+  Phone,
+  Mail,
+  Loader2,
+} from "lucide-react";
 import { format } from "date-fns";
 
 interface SupplierInvoicesDialogProps {
@@ -18,15 +38,23 @@ interface SupplierInvoicesDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: SupplierInvoicesDialogProps) {
+export function SupplierInvoicesDialog({
+  supplier,
+  open,
+  onOpenChange,
+}: SupplierInvoicesDialogProps) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
-  
+
   const [file, setFile] = useState<File | null>(null);
   const [invoiceName, setInvoiceName] = useState("");
   const [invoiceAmount, setInvoiceAmount] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [invoiceMonth, setInvoiceMonth] = useState(format(new Date(), "yyyy-MM"));
+  const [invoiceDate, setInvoiceDate] = useState(
+    format(new Date(), "yyyy-MM-dd"),
+  );
+  const [invoiceMonth, setInvoiceMonth] = useState(
+    format(new Date(), "yyyy-MM"),
+  );
   const [notes, setNotes] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -56,7 +84,9 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["supplier-invoices", supplier?.id, tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["supplier-invoices", supplier?.id, tenantId],
+      });
       toast.success("החשבונית נמחקה");
     },
     onError: () => toast.error("שגיאה במחיקת חשבונית"),
@@ -79,9 +109,12 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
         reader.readAsDataURL(file);
       });
 
-      const { data, error } = await supabase.functions.invoke("extract-invoice-data", {
-        body: { file_base64: base64, file_type: file.type },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "extract-invoice-data",
+        {
+          body: { file_base64: base64, file_type: file.type },
+        },
+      );
 
       if (error) throw error;
       if (data?.invoice_name) setInvoiceName(data.invoice_name);
@@ -112,8 +145,11 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
           .from("supplier-invoices")
           .upload(path, file);
         if (uploadError) throw uploadError;
-        const { data: urlData, error: urlError } = await supabase.storage.from("supplier-invoices").createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
-        if (urlError || !urlData) throw urlError ?? new Error("Failed to sign URL");
+        const { data: urlData, error: urlError } = await supabase.storage
+          .from("supplier-invoices")
+          .createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
+        if (urlError || !urlData)
+          throw urlError ?? new Error("Failed to sign URL");
         fileUrl = urlData.signedUrl;
         fileName = file.name;
       }
@@ -133,7 +169,9 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
       if (error) throw error;
 
       toast.success("החשבונית נשמרה בהצלחה!");
-      queryClient.invalidateQueries({ queryKey: ["supplier-invoices", supplier?.id, tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["supplier-invoices", supplier?.id, tenantId],
+      });
       // Reset form
       setFile(null);
       setInvoiceName("");
@@ -148,11 +186,16 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
     }
   };
 
-  const total = invoices?.reduce((sum, inv) => sum + Number(inv.invoice_amount || 0), 0) || 0;
+  const total =
+    invoices?.reduce((sum, inv) => sum + Number(inv.invoice_amount || 0), 0) ||
+    0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
+      <DialogContent
+        className="max-w-3xl max-h-[90vh] overflow-y-auto"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle>ניהול חשבוניות - {supplier?.name}</DialogTitle>
         </DialogHeader>
@@ -176,7 +219,7 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
         {/* Upload new invoice */}
         <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
           <h4 className="font-semibold text-sm">העלאת חשבונית חדשה</h4>
-          
+
           <div className="flex gap-2 items-end">
             <div className="flex-1">
               <Label className="text-xs">קובץ חשבונית</Label>
@@ -193,7 +236,11 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
               onClick={handleExtractAI}
               disabled={!file || isExtracting}
             >
-              {isExtracting ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <Sparkles className="h-4 w-4 ml-1" />}
+              {isExtracting ? (
+                <Loader2 className="h-4 w-4 animate-spin ml-1" />
+              ) : (
+                <Sparkles className="h-4 w-4 ml-1" />
+              )}
               קרא עם AI
             </Button>
           </div>
@@ -201,29 +248,58 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">שם החשבונית</Label>
-              <Input value={invoiceName} onChange={(e) => setInvoiceName(e.target.value)} placeholder="שם/תיאור" />
+              <Input
+                value={invoiceName}
+                onChange={(e) => setInvoiceName(e.target.value)}
+                placeholder="שם/תיאור"
+              />
             </div>
             <div>
               <Label className="text-xs">סכום</Label>
-              <Input type="number" value={invoiceAmount} onChange={(e) => setInvoiceAmount(e.target.value)} placeholder="0" />
+              <Input
+                type="number"
+                value={invoiceAmount}
+                onChange={(e) => setInvoiceAmount(e.target.value)}
+                placeholder="0"
+              />
             </div>
             <div>
               <Label className="text-xs">תאריך חשבונית</Label>
-              <Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+              <Input
+                type="date"
+                value={invoiceDate}
+                onChange={(e) => setInvoiceDate(e.target.value)}
+              />
             </div>
             <div>
               <Label className="text-xs">חודש דיווח</Label>
-              <Input type="month" value={invoiceMonth} onChange={(e) => setInvoiceMonth(e.target.value)} />
+              <Input
+                type="month"
+                value={invoiceMonth}
+                onChange={(e) => setInvoiceMonth(e.target.value)}
+              />
             </div>
           </div>
 
           <div>
             <Label className="text-xs">הערות</Label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="הערות..." />
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="הערות..."
+            />
           </div>
 
-          <Button onClick={handleSaveInvoice} disabled={isUploading || !invoiceName || !invoiceAmount} className="w-full">
-            {isUploading ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <Upload className="h-4 w-4 ml-1" />}
+          <Button
+            onClick={handleSaveInvoice}
+            disabled={isUploading || !invoiceName || !invoiceAmount}
+            className="w-full"
+          >
+            {isUploading ? (
+              <Loader2 className="h-4 w-4 animate-spin ml-1" />
+            ) : (
+              <Upload className="h-4 w-4 ml-1" />
+            )}
             שמור חשבונית
           </Button>
         </div>
@@ -251,24 +327,44 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
                     <TableRow key={inv.id}>
                       <TableCell className="font-medium">
                         {inv.invoice_name}
-                        {inv.ai_extracted && <Badge variant="secondary" className="mr-1 text-[10px]">AI</Badge>}
+                        {inv.ai_extracted && (
+                          <Badge
+                            variant="secondary"
+                            className="mr-1 text-[10px]"
+                          >
+                            AI
+                          </Badge>
+                        )}
                       </TableCell>
-                      <TableCell>₪{Number(inv.invoice_amount).toLocaleString()}</TableCell>
-                      <TableCell>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd/MM/yyyy") : "-"}</TableCell>
+                      <TableCell>
+                        ₪{Number(inv.invoice_amount).toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        {inv.invoice_date
+                          ? format(new Date(inv.invoice_date), "dd/MM/yyyy")
+                          : "-"}
+                      </TableCell>
                       <TableCell>{inv.invoice_month || "-"}</TableCell>
                       <TableCell>
                         {inv.file_url ? (
-                          <a href={inv.file_url} target="_blank" rel="noopener noreferrer">
+                          <a
+                            href={inv.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
                             <Download className="h-4 w-4 text-primary hover:text-primary/80" />
                           </a>
-                        ) : "-"}
+                        ) : (
+                          "-"
+                        )}
                       </TableCell>
                       <TableCell>
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => {
-                            if (confirm("למחוק חשבונית זו?")) deleteMutation.mutate(inv.id);
+                            if (confirm("למחוק חשבונית זו?"))
+                              deleteMutation.mutate(inv.id);
                           }}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
@@ -284,7 +380,9 @@ export function SupplierInvoicesDialog({ supplier, open, onOpenChange }: Supplie
               </div>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">אין חשבוניות עדיין</p>
+            <p className="text-sm text-muted-foreground text-center py-4">
+              אין חשבוניות עדיין
+            </p>
           )}
         </div>
       </DialogContent>

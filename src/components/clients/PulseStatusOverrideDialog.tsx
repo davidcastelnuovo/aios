@@ -64,7 +64,9 @@ export function PulseStatusOverrideDialog({
 
   useEffect(() => {
     if (!target) return;
-    setOverrideStatus(target.activeOverride?.override_status ?? target.algorithmOverall);
+    setOverrideStatus(
+      target.activeOverride?.override_status ?? target.algorithmOverall,
+    );
     setReason("");
   }, [target]);
 
@@ -121,7 +123,9 @@ export function PulseStatusOverrideDialog({
         const historyContent = [
           `בדיקת דופק — שינוי ידני: ${overallStatusLabel(algoOverall)} → ${overallStatusLabel(overrideStatus)}`,
           `הסבר: ${trimmedReason}`,
-          target.flags.length ? `דגלים אוטומטיים: ${target.flags.join(", ")}` : null,
+          target.flags.length
+            ? `דגלים אוטומטיים: ${target.flags.join(", ")}`
+            : null,
         ]
           .filter(Boolean)
           .join("\n");
@@ -203,14 +207,18 @@ export function PulseStatusOverrideDialog({
 
           <div className="space-y-2">
             <Label>צבע להצגה בדשבורד</Label>
-            <Select value={overrideStatus} onValueChange={(v) => setOverrideStatus(v as OverallStatus)}>
+            <Select
+              value={overrideStatus}
+              onValueChange={(v) => setOverrideStatus(v as OverallStatus)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-background">
                 {OVERRIDE_OPTIONS.map((status) => (
                   <SelectItem key={status} value={status}>
-                    {OVERALL_STATUS_CONFIG[status].dot} {OVERALL_STATUS_CONFIG[status].label}
+                    {OVERALL_STATUS_CONFIG[status].dot}{" "}
+                    {OVERALL_STATUS_CONFIG[status].label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -233,14 +241,24 @@ export function PulseStatusOverrideDialog({
 
         <DialogFooter className="gap-2 sm:justify-between">
           {target.activeOverride ? (
-            <Button type="button" variant="ghost" onClick={handleClearOverride} disabled={saving}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleClearOverride}
+              disabled={saving}
+            >
               החזר לחישוב אוטומטי
             </Button>
           ) : (
             <span />
           )}
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={saving}
+            >
               ביטול
             </Button>
             <Button type="button" onClick={handleSave} disabled={saving}>

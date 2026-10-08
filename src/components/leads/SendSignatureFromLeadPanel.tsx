@@ -9,10 +9,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Download, FileSignature, FolderCheck, Plus, Save, Send } from "lucide-react";
+import {
+  Download,
+  FileSignature,
+  FolderCheck,
+  Plus,
+  Save,
+  Send,
+} from "lucide-react";
 import { splitContactName } from "@/components/signatures/signatureContactUtils";
 import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLinkShareButtons";
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
@@ -41,13 +54,18 @@ const statusLabels: Record<string, { label: string; color: string }> = {
   draft: { label: "טיוטה", color: "bg-muted text-muted-foreground" },
 };
 
-export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFromLeadPanelProps) {
+export function SendSignatureFromLeadPanel({
+  lead,
+  tenantId,
+}: SendSignatureFromLeadPanelProps) {
   const { buildPath } = useTenantPath();
   const { userId } = useCurrentUser();
   const queryClient = useQueryClient();
   const [sourceDocId, setSourceDocId] = useState("");
   const [documentTitle, setDocumentTitle] = useState("");
-  const [lastLinks, setLastLinks] = useState<Array<{ name: string; email: string; url: string }>>([]);
+  const [lastLinks, setLastLinks] = useState<
+    Array<{ name: string; email: string; url: string }>
+  >([]);
   const [newDocTitle, setNewDocTitle] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
@@ -57,12 +75,18 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
   const canSend = !!sourceDocId;
   const { firstName, lastName } = splitContactName(recipientName);
 
-  const { data: sourceDocuments = [], isLoading: loadingSources, refetch: refetchSources } = useQuery({
+  const {
+    data: sourceDocuments = [],
+    isLoading: loadingSources,
+    refetch: refetchSources,
+  } = useQuery({
     queryKey: ["signature-source-documents", tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("signature_documents")
-        .select("id, title, template_name, is_template, status, created_at, file_url")
+        .select(
+          "id, title, template_name, is_template, status, created_at, file_url",
+        )
         .eq("tenant_id", tenantId!)
         .eq("status", "draft")
         .not("file_url", "is", null)
@@ -80,10 +104,12 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
     queryFn: async () => {
       const { data, error } = await supabase
         .from("signature_documents")
-        .select(`
+        .select(
+          `
           id, title, status, created_at, signed_file_url, saved_to_entity_at,
           signature_recipients(name, email, sign_token, status)
-        `)
+        `,
+        )
         .eq("tenant_id", tenantId!)
         .eq("lead_id", lead.id)
         .eq("is_template", false)
@@ -123,15 +149,21 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
       setSourceDocId(docId);
       setUploadFile(null);
       refetchSources();
-      queryClient.invalidateQueries({ queryKey: ["signature-templates", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["signature-templates", tenantId],
+      });
       toast.success("המסמך נשמר — בחר אותו ושלח לחתימה");
     },
     onError: (err: Error) => toast.error(err.message || "שגיאה בשמירה"),
   });
 
-  const getSigningUrl = (token: string) => `${window.location.origin}/sign/${token}`;
+  const getSigningUrl = (token: string) =>
+    `${window.location.origin}/sign/${token}`;
 
-  const downloadSigned = async (doc: { signed_file_url: string | null; title: string }) => {
+  const downloadSigned = async (doc: {
+    signed_file_url: string | null;
+    title: string;
+  }) => {
     if (!doc.signed_file_url) return;
     if (doc.signed_file_url.startsWith("http")) {
       window.open(doc.signed_file_url, "_blank");
@@ -154,9 +186,22 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-lg border bg-card p-3 text-sm space-y-1">
-            <p><span className="text-muted-foreground">חותם:</span> {recipientName || "—"}</p>
-            <p dir="ltr" className="text-left"><span className="text-muted-foreground" dir="rtl">אימייל:</span> {recipientEmail || "—"}</p>
-            {lead.phone && <p><span className="text-muted-foreground">טלפון:</span> {lead.phone}</p>}
+            <p>
+              <span className="text-muted-foreground">חותם:</span>{" "}
+              {recipientName || "—"}
+            </p>
+            <p dir="ltr" className="text-left">
+              <span className="text-muted-foreground" dir="rtl">
+                אימייל:
+              </span>{" "}
+              {recipientEmail || "—"}
+            </p>
+            {lead.phone && (
+              <p>
+                <span className="text-muted-foreground">טלפון:</span>{" "}
+                {lead.phone}
+              </p>
+            )}
           </div>
 
           {/* Save new document */}
@@ -167,7 +212,11 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
               <Input
                 value={newDocTitle}
                 onChange={(e) => setNewDocTitle(e.target.value)}
-                placeholder={lead.company_name ? `חוזה - ${lead.company_name}` : "שם המסמך..."}
+                placeholder={
+                  lead.company_name
+                    ? `חוזה - ${lead.company_name}`
+                    : "שם המסמך..."
+                }
               />
             </div>
             <div className="space-y-2">
@@ -181,7 +230,9 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
             <Button
               variant="secondary"
               onClick={() => saveDocMutation.mutate()}
-              disabled={!uploadFile || !newDocTitle.trim() || saveDocMutation.isPending}
+              disabled={
+                !uploadFile || !newDocTitle.trim() || saveDocMutation.isPending
+              }
             >
               <Save className="h-4 w-4 ml-2" />
               {saveDocMutation.isPending ? "שומר..." : "שמור מסמך"}
@@ -189,21 +240,33 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
           </div>
 
           {!recipientEmail && !lead.phone && (
-            <p className="text-sm text-destructive">יש להוסיף אימייל או טלפון לליד לפני שליחה לחתימה.</p>
+            <p className="text-sm text-destructive">
+              יש להוסיף אימייל או טלפון לליד לפני שליחה לחתימה.
+            </p>
           )}
           {!recipientEmail && lead.phone && (
-            <p className="text-sm text-muted-foreground">אין אימייל לליד — השליחה תהיה בוואטסאפ בלבד.</p>
+            <p className="text-sm text-muted-foreground">
+              אין אימייל לליד — השליחה תהיה בוואטסאפ בלבד.
+            </p>
           )}
 
           <div className="space-y-2">
             <Label>מסמך לשליחה</Label>
-            <Select value={sourceDocId} onValueChange={setSourceDocId} disabled={loadingSources}>
+            <Select
+              value={sourceDocId}
+              onValueChange={setSourceDocId}
+              disabled={loadingSources}
+            >
               <SelectTrigger>
-                <SelectValue placeholder={loadingSources ? "טוען..." : "בחר מסמך שמור..."} />
+                <SelectValue
+                  placeholder={loadingSources ? "טוען..." : "בחר מסמך שמור..."}
+                />
               </SelectTrigger>
               <SelectContent>
                 {sourceDocuments.length === 0 ? (
-                  <SelectItem value="__none" disabled>אין מסמכים שמורים — העלה ושמור למעלה</SelectItem>
+                  <SelectItem value="__none" disabled>
+                    אין מסמכים שמורים — העלה ושמור למעלה
+                  </SelectItem>
                 ) : (
                   sourceDocuments.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
@@ -226,10 +289,7 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={() => setSendDialogOpen(true)}
-              disabled={!canSend}
-            >
+            <Button onClick={() => setSendDialogOpen(true)} disabled={!canSend}>
               <Send className="h-4 w-4 ml-2" />
               שלח לחתימה
             </Button>
@@ -276,14 +336,24 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
           <CardContent className="space-y-2">
             {leadDocuments.map((doc) => {
               const st = statusLabels[doc.status] || statusLabels.draft;
-              const pendingRecipient = (doc.signature_recipients as Array<{ sign_token?: string; name?: string; status?: string }> | undefined)
-                ?.find((r) => r.status === "pending" && r.sign_token);
+              const pendingRecipient = (
+                doc.signature_recipients as
+                  | Array<{
+                      sign_token?: string;
+                      name?: string;
+                      status?: string;
+                    }>
+                  | undefined
+              )?.find((r) => r.status === "pending" && r.sign_token);
               const signingUrl = pendingRecipient?.sign_token
                 ? getSigningUrl(pendingRecipient.sign_token)
                 : null;
 
               return (
-                <div key={doc.id} className="flex items-center justify-between gap-2 p-2 border rounded-lg bg-muted/30 text-sm">
+                <div
+                  key={doc.id}
+                  className="flex items-center justify-between gap-2 p-2 border rounded-lg bg-muted/30 text-sm"
+                >
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{doc.title}</p>
                     <p className="text-xs text-muted-foreground">
@@ -295,7 +365,9 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
                           size="sm"
                           signingUrl={signingUrl}
                           phone={lead.phone}
-                          recipientName={pendingRecipient?.name || recipientName}
+                          recipientName={
+                            pendingRecipient?.name || recipientName
+                          }
                           documentTitle={doc.title}
                         />
                       </div>
@@ -304,12 +376,19 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
                   <div className="flex items-center gap-1 shrink-0">
                     <Badge className={st.color}>{st.label}</Badge>
                     {doc.status === "completed" && doc.signed_file_url && (
-                      <Button variant="ghost" size="icon" onClick={() => downloadSigned(doc)} title="הורד PDF חתום">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => downloadSigned(doc)}
+                        title="הורד PDF חתום"
+                      >
                         <Download className="h-4 w-4" />
                       </Button>
                     )}
                     {doc.saved_to_entity_at && (
-                      <span title="נשמר בתיק הליד"><FolderCheck className="h-4 w-4 text-green-600" /></span>
+                      <span title="נשמר בתיק הליד">
+                        <FolderCheck className="h-4 w-4 text-green-600" />
+                      </span>
                     )}
                   </div>
                 </div>
@@ -347,7 +426,9 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
         onSuccess={(result) => {
           setLastLinks(result.signingLinks);
           refetchDocs();
-          queryClient.invalidateQueries({ queryKey: ["lead-detail", tenantId, lead.id] });
+          queryClient.invalidateQueries({
+            queryKey: ["lead-detail", tenantId, lead.id],
+          });
         }}
       />
     </div>

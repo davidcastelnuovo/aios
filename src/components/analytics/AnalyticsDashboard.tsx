@@ -3,11 +3,44 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+} from "recharts";
 import { format, subDays, differenceInDays } from "date-fns";
 import { he } from "date-fns/locale";
-import { Globe, Clock, Users, TrendingUp, Smartphone, Monitor, Tablet, ArrowDown, ShoppingCart, CreditCard, Eye, MousePointer } from "lucide-react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Globe,
+  Clock,
+  Users,
+  TrendingUp,
+  Smartphone,
+  Monitor,
+  Tablet,
+  ArrowDown,
+  ShoppingCart,
+  CreditCard,
+  Eye,
+  MousePointer,
+} from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { type DateRange } from "./DateRangeFilter";
 import { ComparisonBadge } from "./ComparisonBadge";
 
@@ -20,10 +53,24 @@ interface AnalyticsDashboardProps {
 }
 
 // Vibrant colors for pie chart
-const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#14b8a6"];
+const COLORS = [
+  "#3b82f6",
+  "#22c55e",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#06b6d4",
+  "#ec4899",
+  "#14b8a6",
+];
 
-export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRange, compareEnabled }: AnalyticsDashboardProps) {
-
+export function AnalyticsDashboard({
+  tenantId,
+  clientId,
+  dateRange,
+  comparisonRange,
+  compareEnabled,
+}: AnalyticsDashboardProps) {
   // Helper to get tracking config for client
   const getTrackingConfigQuery = async () => {
     if (!clientId) return null;
@@ -37,11 +84,18 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
 
   // Fetch sessions with aggregated data
   const { data: sessionsData, isLoading } = useQuery({
-    queryKey: ["analytics_sessions", tenantId, clientId, dateRange.start.toISOString(), dateRange.end.toISOString()],
+    queryKey: [
+      "analytics_sessions",
+      tenantId,
+      clientId,
+      dateRange.start.toISOString(),
+      dateRange.end.toISOString(),
+    ],
     queryFn: async () => {
       let query = supabase
         .from("site_sessions")
-        .select(`
+        .select(
+          `
           id,
           started_at,
           duration_seconds,
@@ -54,7 +108,8 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
           browser,
           is_bounce,
           landing_page
-        `)
+        `,
+        )
         .eq("tenant_id", tenantId)
         .gte("started_at", dateRange.start.toISOString())
         .lte("started_at", dateRange.end.toISOString())
@@ -76,10 +131,16 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
 
   // Fetch comparison sessions if enabled
   const { data: comparisonSessionsData } = useQuery({
-    queryKey: ["analytics_sessions_comparison", tenantId, clientId, comparisonRange?.start.toISOString(), comparisonRange?.end.toISOString()],
+    queryKey: [
+      "analytics_sessions_comparison",
+      tenantId,
+      clientId,
+      comparisonRange?.start.toISOString(),
+      comparisonRange?.end.toISOString(),
+    ],
     queryFn: async () => {
       if (!comparisonRange) return [];
-      
+
       let query = supabase
         .from("site_sessions")
         .select(`id, duration_seconds, page_count, is_bounce`)
@@ -103,7 +164,13 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
 
   // Fetch top pages
   const { data: topPages = [] } = useQuery({
-    queryKey: ["analytics_top_pages", tenantId, clientId, dateRange.start.toISOString(), dateRange.end.toISOString()],
+    queryKey: [
+      "analytics_top_pages",
+      tenantId,
+      clientId,
+      dateRange.start.toISOString(),
+      dateRange.end.toISOString(),
+    ],
     queryFn: async () => {
       let query = supabase
         .from("site_pageviews")
@@ -123,14 +190,21 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
       if (error) throw error;
 
       // Aggregate by page
-      const pageMap = new Map<string, { path: string; title: string; views: number }>();
+      const pageMap = new Map<
+        string,
+        { path: string; title: string; views: number }
+      >();
       data?.forEach((pv) => {
         const key = pv.page_path || "/";
         const existing = pageMap.get(key);
         if (existing) {
           existing.views++;
         } else {
-          pageMap.set(key, { path: key, title: pv.page_title || key, views: 1 });
+          pageMap.set(key, {
+            path: key,
+            title: pv.page_title || key,
+            views: 1,
+          });
         }
       });
 
@@ -143,7 +217,13 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
 
   // Fetch events data
   const { data: eventsData = [] } = useQuery({
-    queryKey: ["analytics_events", tenantId, clientId, dateRange.start.toISOString(), dateRange.end.toISOString()],
+    queryKey: [
+      "analytics_events",
+      tenantId,
+      clientId,
+      dateRange.start.toISOString(),
+      dateRange.end.toISOString(),
+    ],
     queryFn: async () => {
       let query = supabase
         .from("site_events")
@@ -163,30 +243,33 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
       if (error) throw error;
 
       // Aggregate by event name
-      const eventMap = new Map<string, { name: string; category: string; count: number; totalValue: number }>();
+      const eventMap = new Map<
+        string,
+        { name: string; category: string; count: number; totalValue: number }
+      >();
       data?.forEach((event) => {
         const key = event.event_name || "unknown";
         const existing = eventMap.get(key);
-        const eventValue = event.event_value || 
-          (event.event_data as Record<string, unknown>)?.value || 
-          (event.event_data as Record<string, unknown>)?.revenue || 
+        const eventValue =
+          event.event_value ||
+          (event.event_data as Record<string, unknown>)?.value ||
+          (event.event_data as Record<string, unknown>)?.revenue ||
           0;
-        
+
         if (existing) {
           existing.count++;
           existing.totalValue += Number(eventValue) || 0;
         } else {
-          eventMap.set(key, { 
-            name: key, 
+          eventMap.set(key, {
+            name: key,
             category: event.event_category || "other",
-            count: 1, 
-            totalValue: Number(eventValue) || 0 
+            count: 1,
+            totalValue: Number(eventValue) || 0,
           });
         }
       });
 
-      return Array.from(eventMap.values())
-        .sort((a, b) => b.count - a.count);
+      return Array.from(eventMap.values()).sort((a, b) => b.count - a.count);
     },
     enabled: !!tenantId,
   });
@@ -201,24 +284,31 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
     // Sessions by day
     const sessionsByDay = new Map<string, number>();
     for (let i = 0; i < daysInRange; i++) {
-      const date = format(subDays(dateRange.end, daysInRange - 1 - i), "yyyy-MM-dd");
+      const date = format(
+        subDays(dateRange.end, daysInRange - 1 - i),
+        "yyyy-MM-dd",
+      );
       sessionsByDay.set(date, 0);
     }
-    
+
     sessionsData.forEach((session) => {
       const date = format(new Date(session.started_at), "yyyy-MM-dd");
       sessionsByDay.set(date, (sessionsByDay.get(date) || 0) + 1);
     });
 
-    const sessionsChart = Array.from(sessionsByDay.entries()).map(([date, count]) => ({
-      date: format(new Date(date), "dd/MM", { locale: he }),
-      sessions: count,
-    }));
+    const sessionsChart = Array.from(sessionsByDay.entries()).map(
+      ([date, count]) => ({
+        date: format(new Date(date), "dd/MM", { locale: he }),
+        sessions: count,
+      }),
+    );
 
     // Traffic sources
     const sourceMap = new Map<string, number>();
     sessionsData.forEach((session) => {
-      const source = session.utm_source || (session.referrer ? new URL(session.referrer).hostname : "ישיר");
+      const source =
+        session.utm_source ||
+        (session.referrer ? new URL(session.referrer).hostname : "ישיר");
       sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
     });
 
@@ -234,8 +324,10 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
       deviceMap.set(device, (deviceMap.get(device) || 0) + 1);
     });
 
-    const devices = Array.from(deviceMap.entries())
-      .map(([name, value]) => ({ name, value }));
+    const devices = Array.from(deviceMap.entries()).map(([name, value]) => ({
+      name,
+      value,
+    }));
 
     // Browser breakdown
     const browserMap = new Map<string, number>();
@@ -250,35 +342,58 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
 
     // Averages
     const totalSessions = sessionsData.length;
-    const totalDuration = sessionsData.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
-    const totalPages = sessionsData.reduce((sum, s) => sum + (s.page_count || 0), 0);
-    const bounces = sessionsData.filter(s => s.is_bounce).length;
+    const totalDuration = sessionsData.reduce(
+      (sum, s) => sum + (s.duration_seconds || 0),
+      0,
+    );
+    const totalPages = sessionsData.reduce(
+      (sum, s) => sum + (s.page_count || 0),
+      0,
+    );
+    const bounces = sessionsData.filter((s) => s.is_bounce).length;
 
     return {
       sessionsChart,
       trafficSources,
       devices,
       browsers,
-      avgDuration: totalSessions ? Math.round(totalDuration / totalSessions) : 0,
+      avgDuration: totalSessions
+        ? Math.round(totalDuration / totalSessions)
+        : 0,
       avgPages: totalSessions ? (totalPages / totalSessions).toFixed(1) : "0",
-      bounceRate: totalSessions ? Math.round((bounces / totalSessions) * 100) : 0,
+      bounceRate: totalSessions
+        ? Math.round((bounces / totalSessions) * 100)
+        : 0,
       totalSessions,
     };
   }, [sessionsData, dateRange]);
 
   // Process comparison data
   const comparisonData = useMemo(() => {
-    if (!comparisonSessionsData || comparisonSessionsData.length === 0) return null;
+    if (!comparisonSessionsData || comparisonSessionsData.length === 0)
+      return null;
 
     const totalSessions = comparisonSessionsData.length;
-    const totalDuration = comparisonSessionsData.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
-    const totalPages = comparisonSessionsData.reduce((sum, s) => sum + (s.page_count || 0), 0);
-    const bounces = comparisonSessionsData.filter(s => s.is_bounce).length;
+    const totalDuration = comparisonSessionsData.reduce(
+      (sum, s) => sum + (s.duration_seconds || 0),
+      0,
+    );
+    const totalPages = comparisonSessionsData.reduce(
+      (sum, s) => sum + (s.page_count || 0),
+      0,
+    );
+    const bounces = comparisonSessionsData.filter((s) => s.is_bounce).length;
 
     return {
-      avgDuration: totalSessions ? Math.round(totalDuration / totalSessions) : 0,
-      avgPages: totalSessions ? parseFloat((totalPages / totalSessions).toFixed(1)) : 0,
-      bounceRate: totalSessions ? Math.round((bounces / totalSessions) * 100) : 0,
+      avgDuration: totalSessions
+        ? Math.round(totalDuration / totalSessions)
+        : 0,
+      avgPages: totalSessions
+        ? parseFloat((totalPages / totalSessions).toFixed(1))
+        : 0,
+      bounceRate: totalSessions
+        ? Math.round((bounces / totalSessions) * 100)
+        : 0,
       totalSessions,
     };
   }, [comparisonSessionsData]);
@@ -291,35 +406,45 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
 
   const getDeviceIcon = (device: string) => {
     switch (device) {
-      case "mobile": return <Smartphone className="h-4 w-4" />;
-      case "tablet": return <Tablet className="h-4 w-4" />;
-      default: return <Monitor className="h-4 w-4" />;
+      case "mobile":
+        return <Smartphone className="h-4 w-4" />;
+      case "tablet":
+        return <Tablet className="h-4 w-4" />;
+      default:
+        return <Monitor className="h-4 w-4" />;
     }
   };
 
   const getEventIcon = (eventName: string) => {
     switch (eventName) {
-      case "add_to_cart": return <ShoppingCart className="h-4 w-4 text-primary" />;
-      case "remove_from_cart": return <ShoppingCart className="h-4 w-4 text-destructive" />;
-      case "purchase": return <CreditCard className="h-4 w-4 text-primary" />;
-      case "begin_checkout": return <ShoppingCart className="h-4 w-4 text-muted-foreground" />;
-      case "view_product": return <Eye className="h-4 w-4 text-secondary-foreground" />;
-      case "form_submit": return <TrendingUp className="h-4 w-4 text-accent-foreground" />;
-      default: return <MousePointer className="h-4 w-4 text-muted-foreground" />;
+      case "add_to_cart":
+        return <ShoppingCart className="h-4 w-4 text-primary" />;
+      case "remove_from_cart":
+        return <ShoppingCart className="h-4 w-4 text-destructive" />;
+      case "purchase":
+        return <CreditCard className="h-4 w-4 text-primary" />;
+      case "begin_checkout":
+        return <ShoppingCart className="h-4 w-4 text-muted-foreground" />;
+      case "view_product":
+        return <Eye className="h-4 w-4 text-secondary-foreground" />;
+      case "form_submit":
+        return <TrendingUp className="h-4 w-4 text-accent-foreground" />;
+      default:
+        return <MousePointer className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
   const getEventDisplayName = (eventName: string) => {
     const names: Record<string, string> = {
-      "add_to_cart": "הוספה לעגלה",
-      "remove_from_cart": "הסרה מעגלה",
-      "purchase": "רכישה",
-      "begin_checkout": "התחלת צ'קאאוט",
-      "view_product": "צפייה במוצר",
-      "form_submit": "שליחת טופס",
-      "click": "לחיצה",
-      "button_click": "לחיצה על כפתור",
-      "outbound_click": "לחיצה חיצונית",
+      add_to_cart: "הוספה לעגלה",
+      remove_from_cart: "הסרה מעגלה",
+      purchase: "רכישה",
+      begin_checkout: "התחלת צ'קאאוט",
+      view_product: "צפייה במוצר",
+      form_submit: "שליחת טופס",
+      click: "לחיצה",
+      button_click: "לחיצה על כפתור",
+      outbound_click: "לחיצה חיצונית",
     };
     return names[eventName] || eventName;
   };
@@ -346,7 +471,6 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
 
   return (
     <div className="space-y-6" dir="rtl">
-
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
@@ -355,10 +479,12 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{processedData.totalSessions}</div>
+            <div className="text-2xl font-bold">
+              {processedData.totalSessions}
+            </div>
             {compareEnabled && comparisonData && (
-              <ComparisonBadge 
-                current={processedData.totalSessions} 
+              <ComparisonBadge
+                current={processedData.totalSessions}
                 previous={comparisonData.totalSessions}
                 className="mt-1"
               />
@@ -368,14 +494,18 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">זמן שהייה ממוצע</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              זמן שהייה ממוצע
+            </CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatDuration(processedData.avgDuration)}</div>
+            <div className="text-2xl font-bold">
+              {formatDuration(processedData.avgDuration)}
+            </div>
             {compareEnabled && comparisonData && (
-              <ComparisonBadge 
-                current={processedData.avgDuration} 
+              <ComparisonBadge
+                current={processedData.avgDuration}
                 previous={comparisonData.avgDuration}
                 className="mt-1"
               />
@@ -391,8 +521,8 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
           <CardContent>
             <div className="text-2xl font-bold">{processedData.avgPages}</div>
             {compareEnabled && comparisonData && (
-              <ComparisonBadge 
-                current={parseFloat(processedData.avgPages)} 
+              <ComparisonBadge
+                current={parseFloat(processedData.avgPages)}
                 previous={comparisonData.avgPages}
                 className="mt-1"
               />
@@ -406,10 +536,12 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
             <ArrowDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{processedData.bounceRate}%</div>
+            <div className="text-2xl font-bold">
+              {processedData.bounceRate}%
+            </div>
             {compareEnabled && comparisonData && (
-              <ComparisonBadge 
-                current={processedData.bounceRate} 
+              <ComparisonBadge
+                current={processedData.bounceRate}
                 previous={comparisonData.bounceRate}
                 reverseColors // Lower bounce rate is better
                 className="mt-1"
@@ -433,10 +565,10 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
                 <XAxis dataKey="date" fontSize={12} />
                 <YAxis fontSize={12} />
                 <Tooltip />
-                <Line 
-                  type="monotone" 
-                  dataKey="sessions" 
-                  stroke="hsl(var(--primary))" 
+                <Line
+                  type="monotone"
+                  dataKey="sessions"
+                  stroke="hsl(var(--primary))"
                   strokeWidth={2}
                   dot={{ fill: "hsl(var(--primary))" }}
                 />
@@ -468,11 +600,11 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
                     const x = cx + radius * Math.cos(-midAngle * RADIAN);
                     const y = cy + radius * Math.sin(-midAngle * RADIAN);
                     return (
-                      <text 
-                        x={x} 
-                        y={y} 
+                      <text
+                        x={x}
+                        y={y}
                         fill="currentColor"
-                        textAnchor={x > cx ? 'start' : 'end'} 
+                        textAnchor={x > cx ? "start" : "end"}
                         dominantBaseline="central"
                         className="text-xs fill-foreground"
                       >
@@ -482,18 +614,21 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
                   }}
                   labelLine={{
                     stroke: "hsl(var(--muted-foreground))",
-                    strokeWidth: 1
+                    strokeWidth: 1,
                   }}
                 >
                   {processedData.trafficSources.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
                   ))}
                 </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: "hsl(var(--background))", 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--background))",
                     border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px"
+                    borderRadius: "8px",
                   }}
                 />
               </PieChart>
@@ -512,13 +647,20 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
           <CardContent>
             <div className="space-y-3">
               {processedData.devices.map((device) => (
-                <div key={device.name} className="flex items-center justify-between">
+                <div
+                  key={device.name}
+                  className="flex items-center justify-between"
+                >
                   <div className="flex items-center gap-2">
                     {getDeviceIcon(device.name)}
                     <span className="text-sm capitalize">
-                      {device.name === "desktop" ? "מחשב" : 
-                       device.name === "mobile" ? "נייד" : 
-                       device.name === "tablet" ? "טאבלט" : device.name}
+                      {device.name === "desktop"
+                        ? "מחשב"
+                        : device.name === "mobile"
+                          ? "נייד"
+                          : device.name === "tablet"
+                            ? "טאבלט"
+                            : device.name}
                     </span>
                   </div>
                   <Badge variant="secondary">{device.value}</Badge>
@@ -536,9 +678,14 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
           <CardContent>
             <div className="space-y-3">
               {topPages.map((page, index) => (
-                <div key={page.path} className="flex items-center justify-between">
+                <div
+                  key={page.path}
+                  className="flex items-center justify-between"
+                >
                   <div className="flex items-center gap-2 min-w-0">
-                    <Badge variant="outline" className="shrink-0">{index + 1}</Badge>
+                    <Badge variant="outline" className="shrink-0">
+                      {index + 1}
+                    </Badge>
                     <span className="text-sm truncate" title={page.title}>
                       {page.title || page.path}
                     </span>
@@ -547,7 +694,9 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
                 </div>
               ))}
               {topPages.length === 0 && (
-                <p className="text-muted-foreground text-center py-4">אין נתונים</p>
+                <p className="text-muted-foreground text-center py-4">
+                  אין נתונים
+                </p>
               )}
             </div>
           </CardContent>
@@ -566,7 +715,11 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
               <XAxis type="number" fontSize={12} />
               <YAxis type="category" dataKey="name" fontSize={12} width={80} />
               <Tooltip />
-              <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+              <Bar
+                dataKey="value"
+                fill="hsl(var(--primary))"
+                radius={[0, 4, 4, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -602,21 +755,29 @@ export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRa
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">
-                        {event.category === "ecommerce" ? "איקומרס" : 
-                         event.category === "custom" ? "מותאם" : 
-                         event.category === "form" ? "טופס" : event.category}
+                        {event.category === "ecommerce"
+                          ? "איקומרס"
+                          : event.category === "custom"
+                            ? "מותאם"
+                            : event.category === "form"
+                              ? "טופס"
+                              : event.category}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">{event.count}</TableCell>
                     <TableCell className="text-right">
-                      {event.totalValue > 0 ? `₪${event.totalValue.toLocaleString()}` : "-"}
+                      {event.totalValue > 0
+                        ? `₪${event.totalValue.toLocaleString()}`
+                        : "-"}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           ) : (
-            <p className="text-muted-foreground text-center py-4">אין אירועים בטווח התאריכים הנבחר</p>
+            <p className="text-muted-foreground text-center py-4">
+              אין אירועים בטווח התאריכים הנבחר
+            </p>
           )}
         </CardContent>
       </Card>

@@ -9,30 +9,31 @@ export default function FacebookCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
-  
-  const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
-  const [message, setMessage] = useState('מעבד את החיבור לפייסבוק...');
+
+  const [status, setStatus] = useState<"processing" | "success" | "error">(
+    "processing",
+  );
+  const [message, setMessage] = useState("מעבד את החיבור לפייסבוק...");
 
   useEffect(() => {
     // Check for success/error params from Edge Function redirect
-    const success = searchParams.get('facebook_success');
-    const pagesCount = searchParams.get('pages_count');
-    const error = searchParams.get('facebook_error');
+    const success = searchParams.get("facebook_success");
+    const pagesCount = searchParams.get("pages_count");
+    const error = searchParams.get("facebook_error");
 
-
-    if (success === 'true') {
-      setStatus('success');
+    if (success === "true") {
+      setStatus("success");
       setMessage(`החיבור הצליח! נמצאו ${pagesCount || 0} עמודים`);
       // Auto redirect after 2 seconds
-      setTimeout(() => navigate(buildPath('/facebook-settings')), 2000);
+      setTimeout(() => navigate(buildPath("/facebook-settings")), 2000);
     } else if (error) {
-      setStatus('error');
+      setStatus("error");
       setMessage(decodeURIComponent(error));
     } else {
       // No params - wait a bit then redirect (might be loading)
-      setMessage('בודק את סטטוס החיבור...');
+      setMessage("בודק את סטטוס החיבור...");
       setTimeout(() => {
-        navigate(buildPath('/facebook-settings'));
+        navigate(buildPath("/facebook-settings"));
       }, 1500);
     }
   }, [searchParams, navigate, buildPath]);
@@ -42,26 +43,26 @@ export default function FacebookCallback() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-center">
-            {status === 'processing' && 'מתחבר לפייסבוק...'}
-            {status === 'success' && 'החיבור הצליח!'}
-            {status === 'error' && 'שגיאה בחיבור'}
+            {status === "processing" && "מתחבר לפייסבוק..."}
+            {status === "success" && "החיבור הצליח!"}
+            {status === "error" && "שגיאה בחיבור"}
           </CardTitle>
         </CardHeader>
         <CardContent className="text-center space-y-4">
-          {status === 'processing' && (
+          {status === "processing" && (
             <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
           )}
-          {status === 'success' && (
+          {status === "success" && (
             <CheckCircle2 className="h-12 w-12 mx-auto text-green-500" />
           )}
-          {status === 'error' && (
+          {status === "error" && (
             <XCircle className="h-12 w-12 mx-auto text-destructive" />
           )}
-          
+
           <p className="text-muted-foreground">{message}</p>
 
-          {status !== 'processing' && (
-            <Button onClick={() => navigate(buildPath('/facebook-settings'))}>
+          {status !== "processing" && (
+            <Button onClick={() => navigate(buildPath("/facebook-settings"))}>
               חזור להגדרות Facebook
             </Button>
           )}

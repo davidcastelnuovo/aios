@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -30,14 +31,20 @@ Deno.serve(async (req) => {
     if (!tracking_id || !visitor_fingerprint) {
       return new Response(
         JSON.stringify({ error: "Missing required fields" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     if (!email && !phone) {
       return new Response(
         JSON.stringify({ error: "Email or phone required for identification" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -49,10 +56,10 @@ Deno.serve(async (req) => {
       .single();
 
     if (configError || !config) {
-      return new Response(
-        JSON.stringify({ error: "Invalid tracking ID" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Invalid tracking ID" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Find the visitor
@@ -64,21 +71,21 @@ Deno.serve(async (req) => {
       .single();
 
     if (visitorError || !visitor) {
-      return new Response(
-        JSON.stringify({ error: "Visitor not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Visitor not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // If already linked to a lead, return early
     if (visitor.lead_id) {
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           already_linked: true,
-          lead_id: visitor.lead_id 
+          lead_id: visitor.lead_id,
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -100,7 +107,7 @@ Deno.serve(async (req) => {
 
     let lead_id = existingLead?.id;
 
-    // If no existing lead and we're tracking for a specific client, 
+    // If no existing lead and we're tracking for a specific client,
     // we might want to create one (optional feature)
     // For now, just link if lead exists
 
@@ -115,7 +122,10 @@ Deno.serve(async (req) => {
         console.error("Error linking visitor to lead:", updateError);
         return new Response(
           JSON.stringify({ error: "Failed to link visitor to lead" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
 
@@ -142,19 +152,18 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         linked: !!lead_id,
-        lead_id 
+        lead_id,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-
   } catch (error) {
     console.error("Analytics identify error:", error);
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

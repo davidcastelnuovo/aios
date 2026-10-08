@@ -53,13 +53,22 @@ const layer = (partial: Omit<CreativeLayer, "id">): CreativeLayer => ({
 });
 
 /** Character-per-line fit used by Canva-class editors before measureText. */
-export const fitFontSize = (text: string, boxWidthPct: number, maxPx: number, minPx: number): number => {
+export const fitFontSize = (
+  text: string,
+  boxWidthPct: number,
+  maxPx: number,
+  minPx: number,
+): number => {
   const longest = Math.max(...text.split("\n").map((line) => line.length), 1);
   const pxPerChar = ((boxWidthPct / 100) * 1080) / longest;
   return Math.round(Math.min(maxPx, Math.max(minPx, pxPerChar * 0.9)));
 };
 
-export const wrapLines = (text: string, maxChars: number, maxLines = 3): string => {
+export const wrapLines = (
+  text: string,
+  maxChars: number,
+  maxLines = 3,
+): string => {
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = "";
@@ -70,8 +79,12 @@ export const wrapLines = (text: string, maxChars: number, maxLines = 3): string 
       lines.push(current);
       current = word;
       if (lines.length >= maxLines - 1) {
-        const rest = [current, ...words.slice(words.indexOf(word) + 1)].join(" ");
-        lines.push(rest.length > maxChars ? `${rest.slice(0, maxChars - 1)}…` : rest);
+        const rest = [current, ...words.slice(words.indexOf(word) + 1)].join(
+          " ",
+        );
+        lines.push(
+          rest.length > maxChars ? `${rest.slice(0, maxChars - 1)}…` : rest,
+        );
         return lines.slice(0, maxLines).join("\n");
       }
     }
@@ -100,7 +113,9 @@ export const parseOfferBullets = (copyText: string): string[] => {
 };
 
 export const footerModules = (bullets: string[] = []) => {
-  const usable = bullets.filter((item) => item.length >= 2 && item.length <= 16);
+  const usable = bullets.filter(
+    (item) => item.length >= 2 && item.length <= 16,
+  );
   if (usable.length < 2) return [];
   return usable.slice(0, 4).map((label, index) => ({
     icon: iconForLabel(label, index),
@@ -157,159 +172,191 @@ export const buildOfferBoardLayers = ({
     : OFFER_BOARD_SLOTS.ctaFill;
   const layers: CreativeLayer[] = [];
 
-  layers.push(layer({
-    type: "shape",
-    role: "type_field",
-    ...OFFER_BOARD_SLOTS.typeField,
-    fill: "#ffffff",
-  }));
-  layers.push(layer({
-    type: "shape",
-    role: "divider",
-    ...OFFER_BOARD_SLOTS.split,
-    fill: accent,
-  }));
+  layers.push(
+    layer({
+      type: "shape",
+      role: "type_field",
+      ...OFFER_BOARD_SLOTS.typeField,
+      fill: "#ffffff",
+    }),
+  );
+  layers.push(
+    layer({
+      type: "shape",
+      role: "divider",
+      ...OFFER_BOARD_SLOTS.split,
+      fill: accent,
+    }),
+  );
 
   if (headline) {
     const wrapped = wrapLines(headline, story ? 14 : 16, 3);
-    layers.push(layer({
-      type: "text",
-      role: "headline",
-      ...OFFER_BOARD_SLOTS.headline,
-      text: wrapped,
-      fontFamily: "Heebo",
-      fontSize: fitFontSize(wrapped, OFFER_BOARD_SLOTS.headline.width, story ? 36 : 32, 18),
-      fontWeight: "900",
-      color: "#111111",
-      textAlign: "right",
-      letterSpacing: "-0.035em",
-      lineHeight: 1.05,
-      ...withLayerShadow({ shadowStyle: "none" }),
-    }));
+    layers.push(
+      layer({
+        type: "text",
+        role: "headline",
+        ...OFFER_BOARD_SLOTS.headline,
+        text: wrapped,
+        fontFamily: "Heebo",
+        fontSize: fitFontSize(
+          wrapped,
+          OFFER_BOARD_SLOTS.headline.width,
+          story ? 36 : 32,
+          18,
+        ),
+        fontWeight: "900",
+        color: "#111111",
+        textAlign: "right",
+        letterSpacing: "-0.035em",
+        lineHeight: 1.05,
+        ...withLayerShadow({ shadowStyle: "none" }),
+      }),
+    );
   }
 
   if (sub) {
-    layers.push(layer({
-      type: "text",
-      role: "sub",
-      ...OFFER_BOARD_SLOTS.sub,
-      text: wrapLines(sub, 28, 2),
-      fontFamily: "Heebo",
-      fontSize: fitFontSize(sub, OFFER_BOARD_SLOTS.sub.width, 15, 12),
-      fontWeight: "600",
-      color: "#374151",
-      textAlign: "right",
-      lineHeight: 1.2,
-    }));
+    layers.push(
+      layer({
+        type: "text",
+        role: "sub",
+        ...OFFER_BOARD_SLOTS.sub,
+        text: wrapLines(sub, 28, 2),
+        fontFamily: "Heebo",
+        fontSize: fitFontSize(sub, OFFER_BOARD_SLOTS.sub.width, 15, 12),
+        fontWeight: "600",
+        color: "#374151",
+        textAlign: "right",
+        lineHeight: 1.2,
+      }),
+    );
   }
 
   marks.forEach((item, index) => {
     const y = OFFER_BOARD_SLOTS.bullet.y + index * 6.2;
-    layers.push(layer({
-      type: "shape",
-      role: "icon",
-      icon: "badge-check",
-      x: 38.6,
-      y: y + 0.5,
-      width: 3.4,
-      height: 3.4,
-      fill: accent,
-      color: "#ffffff",
-      borderRadius: 999,
-    }));
-    layers.push(layer({
-      type: "text",
-      role: "bullet",
-      x: 4,
-      y,
-      width: 33.8,
-      height: 5.4,
-      text: item,
-      fontFamily: "Heebo",
-      fontSize: 13,
-      fontWeight: "600",
-      color: "#111111",
-      textAlign: "right",
-      lineHeight: 1.15,
-    }));
+    layers.push(
+      layer({
+        type: "shape",
+        role: "icon",
+        icon: "badge-check",
+        x: 38.6,
+        y: y + 0.5,
+        width: 3.4,
+        height: 3.4,
+        fill: accent,
+        color: "#ffffff",
+        borderRadius: 999,
+      }),
+    );
+    layers.push(
+      layer({
+        type: "text",
+        role: "bullet",
+        x: 4,
+        y,
+        width: 33.8,
+        height: 5.4,
+        text: item,
+        fontFamily: "Heebo",
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#111111",
+        textAlign: "right",
+        lineHeight: 1.15,
+      }),
+    );
   });
 
-  layers.push(layer({
-    type: "shape",
-    role: "footer",
-    ...footer,
-    fill: "#111111",
-  }));
+  layers.push(
+    layer({
+      type: "shape",
+      role: "footer",
+      ...footer,
+      fill: "#111111",
+    }),
+  );
 
   if (!compactFooter) {
-    layers.push(layer({
-      type: "text",
-      role: "sub",
-      ...OFFER_BOARD_SLOTS.footerTitle,
-      text: footerTitle || "מה מקבלים איתנו?",
-      fontFamily: "Heebo",
-      fontSize: 13,
-      fontWeight: "700",
-      color: "#ffffff",
-      textAlign: "center",
-    }));
+    layers.push(
+      layer({
+        type: "text",
+        role: "sub",
+        ...OFFER_BOARD_SLOTS.footerTitle,
+        text: footerTitle || "מה מקבלים איתנו?",
+        fontFamily: "Heebo",
+        fontSize: 13,
+        fontWeight: "700",
+        color: "#ffffff",
+        textAlign: "center",
+      }),
+    );
   }
 
   modules.forEach((mod, index) => {
     const x = iconX(index, modules.length);
-    layers.push(layer({
-      type: "shape",
-      role: "icon",
-      icon: mod.icon,
-      x,
-      y: OFFER_BOARD_SLOTS.icon.y,
-      width: OFFER_BOARD_SLOTS.icon.width,
-      height: OFFER_BOARD_SLOTS.icon.height,
-      fill: "transparent",
-      color: accent,
-      borderRadius: 999,
-    }));
-    layers.push(layer({
-      type: "text",
-      role: "icon_label",
-      x: x - (OFFER_BOARD_SLOTS.iconLabel.width - OFFER_BOARD_SLOTS.icon.width) / 2,
-      y: OFFER_BOARD_SLOTS.iconLabel.y,
-      width: OFFER_BOARD_SLOTS.iconLabel.width,
-      height: OFFER_BOARD_SLOTS.iconLabel.height,
-      text: mod.label,
-      fontFamily: "Heebo",
-      fontSize: 11,
-      fontWeight: "600",
-      color: "#ffffff",
-      textAlign: "center",
-      lineHeight: 1.15,
-    }));
+    layers.push(
+      layer({
+        type: "shape",
+        role: "icon",
+        icon: mod.icon,
+        x,
+        y: OFFER_BOARD_SLOTS.icon.y,
+        width: OFFER_BOARD_SLOTS.icon.width,
+        height: OFFER_BOARD_SLOTS.icon.height,
+        fill: "transparent",
+        color: accent,
+        borderRadius: 999,
+      }),
+    );
+    layers.push(
+      layer({
+        type: "text",
+        role: "icon_label",
+        x:
+          x -
+          (OFFER_BOARD_SLOTS.iconLabel.width - OFFER_BOARD_SLOTS.icon.width) /
+            2,
+        y: OFFER_BOARD_SLOTS.iconLabel.y,
+        width: OFFER_BOARD_SLOTS.iconLabel.width,
+        height: OFFER_BOARD_SLOTS.iconLabel.height,
+        text: mod.label,
+        fontFamily: "Heebo",
+        fontSize: 11,
+        fontWeight: "600",
+        color: "#ffffff",
+        textAlign: "center",
+        lineHeight: 1.15,
+      }),
+    );
   });
 
   const ctaText = fitCta(cta || "השאירו פרטים");
-  layers.push(layer({
-    type: "shape",
-    role: "cta_fill",
-    ...ctaFill,
-    fill: accent,
-    borderRadius: 999,
-    boxShadow: "0 10px 24px rgba(0,0,0,0.28)",
-  }));
-  layers.push(layer({
-    type: "text",
-    role: "cta",
-    x: ctaFill.x,
-    y: ctaFill.y + 1.4,
-    width: ctaFill.width,
-    height: 5.4,
-    text: ctaText,
-    fontFamily: "Heebo",
-    fontSize: fitFontSize(ctaText, ctaFill.width, 15, 12),
-    fontWeight: "800",
-    color: palette.ctaText || "#ffffff",
-    textAlign: "center",
-    ...withLayerShadow({ shadowStyle: "none" }),
-  }));
+  layers.push(
+    layer({
+      type: "shape",
+      role: "cta_fill",
+      ...ctaFill,
+      fill: accent,
+      borderRadius: 999,
+      boxShadow: "0 10px 24px rgba(0,0,0,0.28)",
+    }),
+  );
+  layers.push(
+    layer({
+      type: "text",
+      role: "cta",
+      x: ctaFill.x,
+      y: ctaFill.y + 1.4,
+      width: ctaFill.width,
+      height: 5.4,
+      text: ctaText,
+      fontFamily: "Heebo",
+      fontSize: fitFontSize(ctaText, ctaFill.width, 15, 12),
+      fontWeight: "800",
+      color: palette.ctaText || "#ffffff",
+      textAlign: "center",
+      ...withLayerShadow({ shadowStyle: "none" }),
+    }),
+  );
 
   return layers;
 };

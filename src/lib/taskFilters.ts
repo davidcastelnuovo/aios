@@ -1,16 +1,23 @@
-import { startOfDay, startOfMonth, startOfWeek, subMonths, subYears } from "date-fns";
+import {
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+  subYears,
+} from "date-fns";
 
 export type OpenClosedFilter = "all" | "open" | "done";
 export type TaskPeriodFilter = "all" | "week" | "month" | "quarter" | "year";
 export type TaskRelatedKind = "all" | "none" | "client" | "lead";
 
-export const TASK_PERIOD_OPTIONS: { value: TaskPeriodFilter; label: string }[] = [
-  { value: "all", label: "כל התקופות" },
-  { value: "week", label: "השבוע" },
-  { value: "month", label: "החודש" },
-  { value: "quarter", label: "3 חודשים האחרונים" },
-  { value: "year", label: "שנה האחרונה" },
-];
+export const TASK_PERIOD_OPTIONS: { value: TaskPeriodFilter; label: string }[] =
+  [
+    { value: "all", label: "כל התקופות" },
+    { value: "week", label: "השבוע" },
+    { value: "month", label: "החודש" },
+    { value: "quarter", label: "3 חודשים האחרונים" },
+    { value: "year", label: "שנה האחרונה" },
+  ];
 
 export interface TaskFilterState {
   campaignerId: string;
@@ -46,7 +53,10 @@ export function isMineQueueFilter(campaignerFilter: string): boolean {
 }
 
 /** Period window: tasks created in the selected range. */
-export function resolveTaskPeriodStart(period: TaskPeriodFilter, now = new Date()): Date | undefined {
+export function resolveTaskPeriodStart(
+  period: TaskPeriodFilter,
+  now = new Date(),
+): Date | undefined {
   const today = startOfDay(now);
   if (period === "all") return undefined;
   if (period === "week") return startOfWeek(today, { weekStartsOn: 0 });
@@ -73,7 +83,8 @@ export function filterTasksByRelatedEntity<
     return tasks.filter((task) => !task.client_id && !task.lead_id);
   }
   if (!relatedId) return tasks;
-  if (relatedKind === "lead") return tasks.filter((task) => task.lead_id === relatedId);
+  if (relatedKind === "lead")
+    return tasks.filter((task) => task.lead_id === relatedId);
   return tasks.filter((task) => task.client_id === relatedId);
 }
 
@@ -95,7 +106,13 @@ type StoredTasksFilterPreset = {
 };
 
 function parsePeriod(value?: string): TaskPeriodFilter {
-  if (value === "week" || value === "month" || value === "quarter" || value === "year" || value === "all") {
+  if (
+    value === "week" ||
+    value === "month" ||
+    value === "quarter" ||
+    value === "year" ||
+    value === "all"
+  ) {
     return value;
   }
   return defaultTaskFilters.period;
@@ -106,7 +123,11 @@ function parseRelated(stored: StoredTasksFilterPreset | null | undefined): {
   relatedId: string;
   relatedLabel: string;
 } {
-  if (stored?.relatedKind === "client" || stored?.relatedKind === "lead" || stored?.relatedKind === "none") {
+  if (
+    stored?.relatedKind === "client" ||
+    stored?.relatedKind === "lead" ||
+    stored?.relatedKind === "none"
+  ) {
     return {
       relatedKind: stored.relatedKind,
       relatedId: stored.relatedId || "",
@@ -117,12 +138,18 @@ function parseRelated(stored: StoredTasksFilterPreset | null | undefined): {
     return { relatedKind: "none", relatedId: "", relatedLabel: "" };
   }
   if (stored?.clientId && stored.clientId !== "all") {
-    return { relatedKind: "client", relatedId: stored.clientId, relatedLabel: "" };
+    return {
+      relatedKind: "client",
+      relatedId: stored.clientId,
+      relatedLabel: "",
+    };
   }
   return { relatedKind: "all", relatedId: "", relatedLabel: "" };
 }
 
-export function serializeTasksFilterPreset(filters: TaskFilterState): StoredTasksFilterPreset {
+export function serializeTasksFilterPreset(
+  filters: TaskFilterState,
+): StoredTasksFilterPreset {
   return {
     campaignerId: filters.campaignerId,
     taskType: filters.taskType,
@@ -136,9 +163,13 @@ export function serializeTasksFilterPreset(filters: TaskFilterState): StoredTask
   };
 }
 
-export function parseTasksFilterPreset(stored: StoredTasksFilterPreset | null | undefined): TaskFilterState {
+export function parseTasksFilterPreset(
+  stored: StoredTasksFilterPreset | null | undefined,
+): TaskFilterState {
   const openClosed =
-    stored?.openClosed === "all" || stored?.openClosed === "done" || stored?.openClosed === "open"
+    stored?.openClosed === "all" ||
+    stored?.openClosed === "done" ||
+    stored?.openClosed === "open"
       ? stored.openClosed
       : defaultTaskFilters.openClosed;
   const related = parseRelated(stored);
@@ -173,8 +204,14 @@ export function readTasksFilterPreset(userId?: string | null): TaskFilterState {
   }
 }
 
-export function writeTasksFilterPreset(userId: string, filters: TaskFilterState): void {
-  localStorage.setItem(tasksFilterPresetKey(userId), JSON.stringify(serializeTasksFilterPreset(filters)));
+export function writeTasksFilterPreset(
+  userId: string,
+  filters: TaskFilterState,
+): void {
+  localStorage.setItem(
+    tasksFilterPresetKey(userId),
+    JSON.stringify(serializeTasksFilterPreset(filters)),
+  );
 }
 
 /** Who "שלי בלבד" actually means: the staff row the user is linked to. */
@@ -213,7 +250,8 @@ type CampaignerBoardTask = {
 
 export function chunkIds(ids: string[], size = 80): string[][] {
   const chunks: string[][] = [];
-  for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
+  for (let i = 0; i < ids.length; i += size)
+    chunks.push(ids.slice(i, i + size));
   return chunks;
 }
 
@@ -244,27 +282,32 @@ export function matchesMineQueueTask(
   const campaignerIds = new Set(mine.campaignerIds);
   if (task.collaborator_for_me) return true;
   if (task.campaigner_id && campaignerIds.has(task.campaigner_id)) return true;
-  if (taskCollaboratorCampaignerIds(task).some((id) => campaignerIds.has(id))) return true;
-  if (mine.kind === "assigned" && mine.salesPersonId && task.sales_person_id === mine.salesPersonId) {
+  if (taskCollaboratorCampaignerIds(task).some((id) => campaignerIds.has(id)))
+    return true;
+  if (
+    mine.kind === "assigned" &&
+    mine.salesPersonId &&
+    task.sales_person_id === mine.salesPersonId
+  ) {
     return true;
   }
   if (mode === "mine_assigned" && task.created_by === mine.userId) return true;
-  if (mine.kind === "created_by" && task.created_by === mine.userId) return true;
+  if (mine.kind === "created_by" && task.created_by === mine.userId)
+    return true;
   return false;
 }
 
-export function filterTasksByCampaignerBoardFilter<T extends CampaignerBoardTask>(
-  tasks: T[],
-  campaignerFilter: string,
-  mine?: MineTaskIdentity | null,
-): T[] {
+export function filterTasksByCampaignerBoardFilter<
+  T extends CampaignerBoardTask,
+>(tasks: T[], campaignerFilter: string, mine?: MineTaskIdentity | null): T[] {
   if (campaignerFilter === "all") return tasks;
   if (campaignerFilter === "none") {
     return tasks.filter((task) => task.campaigner_id == null);
   }
   if (isMineQueueFilter(campaignerFilter)) {
     if (!mine) return [];
-    const mode = campaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
+    const mode =
+      campaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
     return tasks.filter((task) => matchesMineQueueTask(task, mine, mode));
   }
   return tasks.filter((task) => taskTouchesCampaigner(task, campaignerFilter));
@@ -281,9 +324,15 @@ export function filterTasksForBoardUserPreview<T extends CampaignerBoardTask>(
   return tasks.filter((task) => {
     if (task.created_by === boardUserId) return true;
     if (task.collaborator_for_me) return true;
-    if (task.campaigner_id && campaignerIds.has(task.campaigner_id)) return true;
-    if (taskCollaboratorCampaignerIds(task).some((id) => campaignerIds.has(id))) return true;
-    if (mine.kind === "assigned" && mine.salesPersonId && task.sales_person_id === mine.salesPersonId) {
+    if (task.campaigner_id && campaignerIds.has(task.campaigner_id))
+      return true;
+    if (taskCollaboratorCampaignerIds(task).some((id) => campaignerIds.has(id)))
+      return true;
+    if (
+      mine.kind === "assigned" &&
+      mine.salesPersonId &&
+      task.sales_person_id === mine.salesPersonId
+    ) {
       return true;
     }
     return false;
@@ -291,7 +340,9 @@ export function filterTasksForBoardUserPreview<T extends CampaignerBoardTask>(
 }
 
 /** PostgREST `.or()` filter for "שלי בלבד" assignment rows. */
-export function buildMineAssignmentOrFilter(identity: MineTaskIdentity): string | null {
+export function buildMineAssignmentOrFilter(
+  identity: MineTaskIdentity,
+): string | null {
   const parts: string[] = [];
   for (const id of identity.campaignerIds) {
     parts.push(`campaigner_id.eq.${id}`);

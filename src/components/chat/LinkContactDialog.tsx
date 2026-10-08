@@ -52,7 +52,9 @@ export function LinkContactDialog({
   const queryClient = useQueryClient();
   const { terms } = useTerminology();
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedType, setSelectedType] = useState<"client" | "lead" | "group">("client");
+  const [selectedType, setSelectedType] = useState<"client" | "lead" | "group">(
+    "client",
+  );
 
   const form = useForm<LinkFormValues>({
     resolver: zodResolver(linkSchema),
@@ -72,11 +74,13 @@ export function LinkContactDialog({
         .select("id, name, phone, agency_id, agencies(name)")
         .eq("tenant_id", tenantId)
         .order("name");
-      
+
       if (searchTerm) {
-        query = query.or(`name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+        query = query.or(
+          `name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`,
+        );
       }
-      
+
       const { data } = await query.limit(50);
       return data || [];
     },
@@ -90,14 +94,18 @@ export function LinkContactDialog({
       if (!tenantId) return [];
       let query = supabase
         .from("leads")
-        .select("id, company_name, contact_name, phone, agency_id, agencies(name)")
+        .select(
+          "id, company_name, contact_name, phone, agency_id, agencies(name)",
+        )
         .eq("tenant_id", tenantId)
         .order("company_name");
-      
+
       if (searchTerm) {
-        query = query.or(`company_name.ilike.%${searchTerm}%,contact_name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+        query = query.or(
+          `company_name.ilike.%${searchTerm}%,contact_name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`,
+        );
       }
-      
+
       const { data } = await query.limit(50);
       return data || [];
     },
@@ -114,11 +122,11 @@ export function LinkContactDialog({
         .select("id, group_name, group_id")
         .eq("tenant_id", tenantId)
         .order("group_name");
-      
+
       if (searchTerm) {
         query = query.ilike("group_name", `%${searchTerm}%`);
       }
-      
+
       const { data } = await query.limit(50);
       return data || [];
     },
@@ -128,27 +136,39 @@ export function LinkContactDialog({
   // Link mutation
   const linkMutation = useMutation({
     mutationFn: async (values: LinkFormValues) => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
-      const { data, error } = await supabase.functions.invoke("convert-unknown-contact", {
-        body: {
-          senderPhone,
-          contactType: values.type,
-          contactId: values.contact_id,
-          tenantId,
+      const { data, error } = await supabase.functions.invoke(
+        "convert-unknown-contact",
+        {
+          body: {
+            senderPhone,
+            contactType: values.type,
+            contactId: values.contact_id,
+            tenantId,
+          },
         },
-      });
+      );
 
       if (error) throw error;
       return { data, type: values.type };
     },
     onSuccess: (result) => {
-      toast.success(`שויך בהצלחה ל${selectedType === 'client' ? 'לקוח' : selectedType === 'lead' ? 'ליד' : 'קבוצה'}`);
+      toast.success(
+        `שויך בהצלחה ל${selectedType === "client" ? "לקוח" : selectedType === "lead" ? "ליד" : "קבוצה"}`,
+      );
       queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["unknown-contacts", tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["chat-messages", tenantId] });
-      onSuccess(form.getValues().contact_id, result.type as "client" | "lead" | "group");
+      onSuccess(
+        form.getValues().contact_id,
+        result.type as "client" | "lead" | "group",
+      );
       onOpenChange(false);
       form.reset();
     },
@@ -163,7 +183,12 @@ export function LinkContactDialog({
   };
 
   const isLoading = clientsLoading || leadsLoading || groupsLoading;
-  const contactList = selectedType === "client" ? clients : selectedType === "lead" ? leads : groups;
+  const contactList =
+    selectedType === "client"
+      ? clients
+      : selectedType === "lead"
+        ? leads
+        : groups;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -190,8 +215,12 @@ export function LinkContactDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="client">{terms?.client?.singular || 'לקוח'}</SelectItem>
-                <SelectItem value="lead">{terms?.lead?.singular || 'ליד'}</SelectItem>
+                <SelectItem value="client">
+                  {terms?.client?.singular || "לקוח"}
+                </SelectItem>
+                <SelectItem value="lead">
+                  {terms?.lead?.singular || "ליד"}
+                </SelectItem>
                 <SelectItem value="group">קבוצה</SelectItem>
               </SelectContent>
             </Select>
@@ -204,7 +233,7 @@ export function LinkContactDialog({
               <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={`חפש ${selectedType === 'client' ? 'לקוח' : selectedType === 'lead' ? 'ליד' : 'קבוצה'}...`}
+                placeholder={`חפש ${selectedType === "client" ? "לקוח" : selectedType === "lead" ? "ליד" : "קבוצה"}...`}
                 className="pr-10"
               />
             </div>
@@ -231,12 +260,15 @@ export function LinkContactDialog({
                     </div>
                   ) : (
                     contactList.map((contact: any) => (
-                      <SelectItem key={contact.id} value={contact.id || `temp-${Math.random()}`}>
+                      <SelectItem
+                        key={contact.id}
+                        value={contact.id || `temp-${Math.random()}`}
+                      >
                         {selectedType === "client"
-                          ? `${contact.name}${contact.phone ? ` • ${contact.phone}` : ''}${contact.agencies?.name ? ` • ${contact.agencies.name}` : ''}`
+                          ? `${contact.name}${contact.phone ? ` • ${contact.phone}` : ""}${contact.agencies?.name ? ` • ${contact.agencies.name}` : ""}`
                           : selectedType === "lead"
-                          ? `${contact.company_name}${contact.contact_name ? ` • ${contact.contact_name}` : ''}${contact.phone ? ` • ${contact.phone}` : ''}`
-                          : contact.group_name}
+                            ? `${contact.company_name}${contact.contact_name ? ` • ${contact.contact_name}` : ""}${contact.phone ? ` • ${contact.phone}` : ""}`
+                            : contact.group_name}
                       </SelectItem>
                     ))
                   )}

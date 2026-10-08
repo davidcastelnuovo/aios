@@ -54,7 +54,10 @@ test("pixel slots land on the uniform quiet half, not the busy half", () => {
   assert.ok(slots.length >= 1);
   const headline = slots.find((slot) => slot.role === "headline");
   assert.ok(headline);
-  assert.ok((headline?.x ?? 99) < 50, "headline should sit in the calm left pocket");
+  assert.ok(
+    (headline?.x ?? 99) < 50,
+    "headline should sit in the calm left pocket",
+  );
   assert.equal(headline?.textColor, "#ffffff");
   assert.equal(headline?.source, "pixels");
 });
@@ -75,19 +78,77 @@ test("noisy frames fall back to the composition slots", () => {
   }
   assert.equal(proposeTextSlotsFromPixels({ data, width, height }).length, 0);
   const fallback = slotsFromComposition("offer");
-  assert.ok(fallback.some((slot) => slot.role === "headline" && slot.source === "composition"));
+  assert.ok(
+    fallback.some(
+      (slot) => slot.role === "headline" && slot.source === "composition",
+    ),
+  );
 });
 
 test("applySlotsToLayers moves headline and CTA without touching footer chrome", () => {
   const layers: CreativeLayer[] = [
-    { id: "field", type: "shape", role: "type_field", x: 0, y: 0, width: 46, height: 64, fill: "#fff" },
-    { id: "h", type: "text", role: "headline", x: 4, y: 13, width: 40, height: 20, text: "כותרת", color: "#111111" },
-    { id: "cta", type: "text", role: "cta", x: 22, y: 87, width: 56, height: 6, text: "שלח", color: "#fff" },
-    { id: "foot", type: "shape", role: "footer", x: 0, y: 64, width: 100, height: 36, fill: "#111" },
+    {
+      id: "field",
+      type: "shape",
+      role: "type_field",
+      x: 0,
+      y: 0,
+      width: 46,
+      height: 64,
+      fill: "#fff",
+    },
+    {
+      id: "h",
+      type: "text",
+      role: "headline",
+      x: 4,
+      y: 13,
+      width: 40,
+      height: 20,
+      text: "כותרת",
+      color: "#111111",
+    },
+    {
+      id: "cta",
+      type: "text",
+      role: "cta",
+      x: 22,
+      y: 87,
+      width: 56,
+      height: 6,
+      text: "שלח",
+      color: "#fff",
+    },
+    {
+      id: "foot",
+      type: "shape",
+      role: "footer",
+      x: 0,
+      y: 64,
+      width: 100,
+      height: 36,
+      fill: "#111",
+    },
   ];
   const next = applySlotsToLayers(layers, [
-    { role: "headline", x: 8, y: 10, width: 36, height: 18, textColor: "#ffffff", source: "pixels" },
-    { role: "cta", x: 20, y: 80, width: 40, height: 8, textColor: "#111111", source: "pixels" },
+    {
+      role: "headline",
+      x: 8,
+      y: 10,
+      width: 36,
+      height: 18,
+      textColor: "#ffffff",
+      source: "pixels",
+    },
+    {
+      role: "cta",
+      x: 20,
+      y: 80,
+      width: 40,
+      height: 8,
+      textColor: "#111111",
+      source: "pixels",
+    },
   ]);
   assert.equal(next[0].x, 0);
   assert.equal(next[1].x, 8);
@@ -102,7 +163,18 @@ test("proposeAndApplySlots uses composition when pixels are missing", () => {
     name: "t",
     imageUrl: "https://example.com/x.png",
     format: "1:1",
-    layers: [{ id: "h", type: "text", role: "headline", x: 1, y: 1, width: 10, height: 10, text: "היי" }],
+    layers: [
+      {
+        id: "h",
+        type: "text",
+        role: "headline",
+        x: 1,
+        y: 1,
+        width: 10,
+        height: 10,
+        text: "היי",
+      },
+    ],
     comments: [],
     createdAt: "",
     compositionId: "offer",

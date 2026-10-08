@@ -4,7 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Send, Bot, CheckCircle, XCircle, Loader2, Share2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Send,
+  Bot,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  Share2,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useTenant } from "@/contexts/TenantContext";
@@ -51,23 +59,29 @@ export default function TelegramSettings() {
   const connectBot = useMutation({
     mutationFn: async () => {
       if (!currentTenantId || !botToken.trim()) throw new Error("Missing data");
-      
+
       setIsVerifying(true);
-      
+
       // Verify bot token via edge function
-      const { data, error } = await supabase.functions.invoke("telegram-verify-bot", {
-        body: { bot_token: botToken.trim(), tenant_id: currentTenantId },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "telegram-verify-bot",
+        {
+          body: { bot_token: botToken.trim(), tenant_id: currentTenantId },
+        },
+      );
 
       if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "Failed to verify bot");
+      if (!data?.success)
+        throw new Error(data?.error || "Failed to verify bot");
 
       return data;
     },
     onSuccess: (data) => {
       toast.success(`בוט ${data.bot_name} חובר בהצלחה!`);
       setBotToken("");
-      queryClient.invalidateQueries({ queryKey: ["telegram-bot-state", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["telegram-bot-state", currentTenantId],
+      });
     },
     onError: (error: Error) => {
       toast.error(`שגיאה: ${error.message}`);
@@ -86,7 +100,9 @@ export default function TelegramSettings() {
     },
     onSuccess: () => {
       toast.success("הבוט נותק בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["telegram-bot-state", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["telegram-bot-state", currentTenantId],
+      });
     },
     onError: () => toast.error("שגיאה בניתוק הבוט"),
   });
@@ -102,7 +118,9 @@ export default function TelegramSettings() {
     },
     onSuccess: () => {
       toast.success("השיתוף הוסר");
-      queryClient.invalidateQueries({ queryKey: ["telegram-bot-state", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["telegram-bot-state", currentTenantId],
+      });
     },
     onError: (e: Error) => toast.error("שגיאה: " + e.message),
   });
@@ -114,7 +132,11 @@ export default function TelegramSettings() {
     <div className="h-full overflow-y-auto">
       <div className="container mx-auto p-6 space-y-6 max-w-3xl">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(buildPath("integrations"))}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate(buildPath("integrations"))}
+          >
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -122,7 +144,9 @@ export default function TelegramSettings() {
               <Send className="h-6 w-6 text-sky-500" />
               Telegram
             </h1>
-            <p className="text-muted-foreground">חיבור בוט טלגרם לשליחה וקבלה של הודעות</p>
+            <p className="text-muted-foreground">
+              חיבור בוט טלגרם לשליחה וקבלה של הודעות
+            </p>
           </div>
         </div>
 
@@ -131,11 +155,18 @@ export default function TelegramSettings() {
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>סטטוס חיבור</span>
-              <Badge variant={isConnected ? "default" : "secondary"} className={isConnected ? "bg-green-500" : ""}>
+              <Badge
+                variant={isConnected ? "default" : "secondary"}
+                className={isConnected ? "bg-green-500" : ""}
+              >
                 {isConnected ? (
-                  <><CheckCircle className="h-3 w-3 ml-1" /> מחובר</>
+                  <>
+                    <CheckCircle className="h-3 w-3 ml-1" /> מחובר
+                  </>
                 ) : (
-                  <><XCircle className="h-3 w-3 ml-1" /> לא מחובר</>
+                  <>
+                    <XCircle className="h-3 w-3 ml-1" /> לא מחובר
+                  </>
                 )}
               </Badge>
             </CardTitle>
@@ -146,7 +177,10 @@ export default function TelegramSettings() {
                 {isShared && (
                   <div className="p-3 rounded-lg border border-sky-500/30 bg-sky-500/10 flex items-center gap-2 text-sm">
                     <Share2 className="h-4 w-4 text-sky-500" />
-                    <span>בוט משותף מארגון אחר — אתה יכול לשלוח הודעות דרכו, אך לא לנהל את הטוקן.</span>
+                    <span>
+                      בוט משותף מארגון אחר — אתה יכול לשלוח הודעות דרכו, אך לא
+                      לנהל את הטוקן.
+                    </span>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -156,7 +190,9 @@ export default function TelegramSettings() {
                   </div>
                   <div>
                     <span className="text-muted-foreground">Username:</span>
-                    <p className="font-medium" dir="ltr">@{botState.bot_username}</p>
+                    <p className="font-medium" dir="ltr">
+                      @{botState.bot_username}
+                    </p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">הודעות:</span>
@@ -164,11 +200,19 @@ export default function TelegramSettings() {
                   </div>
                 </div>
                 {isShared ? (
-                  <Button variant="destructive" size="sm" onClick={() => removeShareMutation.mutate()}>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => removeShareMutation.mutate()}
+                  >
                     הסר שיתוף
                   </Button>
                 ) : (
-                  <Button variant="destructive" size="sm" onClick={() => disconnectBot.mutate()}>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => disconnectBot.mutate()}
+                  >
                     נתק בוט
                   </Button>
                 )}
@@ -177,7 +221,12 @@ export default function TelegramSettings() {
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
                   כדי לחבר בוט טלגרם, צור בוט דרך{" "}
-                  <a href="https://t.me/BotFather" target="_blank" rel="noopener" className="text-primary underline">
+                  <a
+                    href="https://t.me/BotFather"
+                    target="_blank"
+                    rel="noopener"
+                    className="text-primary underline"
+                  >
                     @BotFather
                   </a>{" "}
                   והכנס את ה-Token שקיבלת.
@@ -197,9 +246,13 @@ export default function TelegramSettings() {
                   disabled={!botToken.trim() || isVerifying}
                 >
                   {isVerifying ? (
-                    <><Loader2 className="h-4 w-4 ml-2 animate-spin" /> מאמת...</>
+                    <>
+                      <Loader2 className="h-4 w-4 ml-2 animate-spin" /> מאמת...
+                    </>
                   ) : (
-                    <><Bot className="h-4 w-4 ml-2" /> חבר בוט</>
+                    <>
+                      <Bot className="h-4 w-4 ml-2" /> חבר בוט
+                    </>
                   )}
                 </Button>
               </div>

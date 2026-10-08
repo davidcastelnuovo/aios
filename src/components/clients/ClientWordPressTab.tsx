@@ -3,9 +3,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Globe, ShoppingCart, Package, Users, ExternalLink, RefreshCw, AlertCircle } from "lucide-react";
+import {
+  Loader2,
+  Globe,
+  ShoppingCart,
+  Package,
+  Users,
+  ExternalLink,
+  RefreshCw,
+  AlertCircle,
+} from "lucide-react";
 import { SubmissionsSummaryCard } from "@/components/landing-page-submissions/SubmissionsSummaryCard";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -91,19 +107,30 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
   const syncMutation = useMutation({
     mutationFn: async (siteId: string) => {
       setSyncingId(siteId);
-      const { data, error } = await supabase.functions.invoke("sync-woocommerce-data", {
-        body: { site_id: siteId },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "sync-woocommerce-data",
+        {
+          body: { site_id: siteId },
+        },
+      );
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["client-wp-sites", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["client-woo-orders", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["client-woo-products", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["client-woo-customers", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["client-wp-sites", clientId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["client-woo-orders", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["client-woo-products", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["client-woo-customers", tenantId],
+      });
       toast.success(
-        `סנכרון הושלם: ${data?.orders_synced ?? 0} הזמנות, ${data?.products_synced ?? 0} מוצרים, ${data?.customers_synced ?? 0} לקוחות`
+        `סנכרון הושלם: ${data?.orders_synced ?? 0} הזמנות, ${data?.products_synced ?? 0} מוצרים, ${data?.customers_synced ?? 0} לקוחות`,
       );
     },
     onError: (e: Error) => toast.error("שגיאת סנכרון: " + e.message),
@@ -135,11 +162,18 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
   }
 
   // Stats
-  const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+  const totalRevenue = orders.reduce(
+    (sum, o) => sum + (Number(o.total) || 0),
+    0,
+  );
   const completedOrders = orders.filter((o) => o.status === "completed").length;
   const currency = orders[0]?.currency || "ILS";
   const fmtMoney = (n: number) =>
-    new Intl.NumberFormat("he-IL", { style: "currency", currency, maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat("he-IL", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(n);
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -153,7 +187,9 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
                   <Globe className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium truncate">{site.site_name || site.site_url}</p>
+                  <p className="font-medium truncate">
+                    {site.site_name || site.site_url}
+                  </p>
                   <a
                     href={site.site_url}
                     target="_blank"
@@ -194,7 +230,10 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
             </CardHeader>
             {site.woo_last_sync_at && (
               <CardContent className="py-2 border-t text-xs text-muted-foreground">
-                סנכרון אחרון: {format(new Date(site.woo_last_sync_at), "dd/MM/yyyy HH:mm", { locale: he })}
+                סנכרון אחרון:{" "}
+                {format(new Date(site.woo_last_sync_at), "dd/MM/yyyy HH:mm", {
+                  locale: he,
+                })}
               </CardContent>
             )}
           </Card>
@@ -203,7 +242,11 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
 
       {/* Elementor Form Submissions summary — shown for every connected site */}
       {sites.map((site) => (
-        <SubmissionsSummaryCard key={`subs-${site.id}`} siteId={site.id} siteName={site.site_name} />
+        <SubmissionsSummaryCard
+          key={`subs-${site.id}`}
+          siteId={site.id}
+          siteName={site.site_name}
+        />
       ))}
 
       {/* Show data only if WooCommerce is enabled on at least one site */}
@@ -211,18 +254,42 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
         <>
           {/* Stats cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard icon={ShoppingCart} label="סה״כ הזמנות" value={String(orders.length)} color="text-blue-600" />
-            <StatCard icon={ShoppingCart} label="הזמנות שהושלמו" value={String(completedOrders)} color="text-green-600" />
-            <StatCard icon={Package} label="מוצרים" value={String(products.length)} color="text-purple-600" />
-            <StatCard icon={Users} label="לקוחות" value={String(customers.length)} color="text-orange-600" />
+            <StatCard
+              icon={ShoppingCart}
+              label="סה״כ הזמנות"
+              value={String(orders.length)}
+              color="text-blue-600"
+            />
+            <StatCard
+              icon={ShoppingCart}
+              label="הזמנות שהושלמו"
+              value={String(completedOrders)}
+              color="text-green-600"
+            />
+            <StatCard
+              icon={Package}
+              label="מוצרים"
+              value={String(products.length)}
+              color="text-purple-600"
+            />
+            <StatCard
+              icon={Users}
+              label="לקוחות"
+              value={String(customers.length)}
+              color="text-orange-600"
+            />
           </div>
 
           <Card>
             <CardHeader className="py-3">
-              <CardTitle className="text-base">סך הכנסות ({orders.length} הזמנות אחרונות)</CardTitle>
+              <CardTitle className="text-base">
+                סך הכנסות ({orders.length} הזמנות אחרונות)
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-primary">{fmtMoney(totalRevenue)}</p>
+              <p className="text-3xl font-bold text-primary">
+                {fmtMoney(totalRevenue)}
+              </p>
             </CardContent>
           </Card>
 
@@ -257,19 +324,37 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
                       <TableBody>
                         {orders.map((o) => (
                           <TableRow key={o.id}>
-                            <TableCell className="font-medium">#{o.order_number}</TableCell>
+                            <TableCell className="font-medium">
+                              #{o.order_number}
+                            </TableCell>
                             <TableCell>
-                              {[o.customer_first_name, o.customer_last_name].filter(Boolean).join(" ") ||
+                              {[o.customer_first_name, o.customer_last_name]
+                                .filter(Boolean)
+                                .join(" ") ||
                                 o.customer_email ||
                                 "—"}
                             </TableCell>
                             <TableCell>
-                              <Badge variant={o.status === "completed" ? "default" : "secondary"}>{o.status}</Badge>
+                              <Badge
+                                variant={
+                                  o.status === "completed"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                              >
+                                {o.status}
+                              </Badge>
                             </TableCell>
-                            <TableCell>{fmtMoney(Number(o.total) || 0)}</TableCell>
+                            <TableCell>
+                              {fmtMoney(Number(o.total) || 0)}
+                            </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {o.date_created
-                                ? format(new Date(o.date_created), "dd/MM/yyyy", { locale: he })
+                                ? format(
+                                    new Date(o.date_created),
+                                    "dd/MM/yyyy",
+                                    { locale: he },
+                                  )
                                 : "—"}
                             </TableCell>
                           </TableRow>
@@ -300,11 +385,23 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
                       <TableBody>
                         {products.map((p) => (
                           <TableRow key={p.id}>
-                            <TableCell className="font-medium">{p.name}</TableCell>
-                            <TableCell className="text-xs">{p.sku || "—"}</TableCell>
-                            <TableCell>{p.price ? fmtMoney(Number(p.price)) : "—"}</TableCell>
+                            <TableCell className="font-medium">
+                              {p.name}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {p.sku || "—"}
+                            </TableCell>
                             <TableCell>
-                              <Badge variant={p.stock_status === "instock" ? "default" : "secondary"}>
+                              {p.price ? fmtMoney(Number(p.price)) : "—"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  p.stock_status === "instock"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                              >
                                 {p.stock_quantity ?? p.stock_status}
                               </Badge>
                             </TableCell>
@@ -337,11 +434,19 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
                         {customers.map((c) => (
                           <TableRow key={c.id}>
                             <TableCell className="font-medium">
-                              {[c.first_name, c.last_name].filter(Boolean).join(" ") || c.username || "—"}
+                              {[c.first_name, c.last_name]
+                                .filter(Boolean)
+                                .join(" ") ||
+                                c.username ||
+                                "—"}
                             </TableCell>
-                            <TableCell className="text-xs" dir="ltr">{c.email}</TableCell>
+                            <TableCell className="text-xs" dir="ltr">
+                              {c.email}
+                            </TableCell>
                             <TableCell>{c.orders_count || 0}</TableCell>
-                            <TableCell>{fmtMoney(Number(c.total_spent) || 0)}</TableCell>
+                            <TableCell>
+                              {fmtMoney(Number(c.total_spent) || 0)}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -357,7 +462,8 @@ export function ClientWordPressTab({ clientId }: ClientWordPressTabProps) {
           <CardContent className="py-8 text-center space-y-2">
             <AlertCircle className="h-8 w-8 text-muted-foreground/40 mx-auto" />
             <p className="text-sm text-muted-foreground">
-              WooCommerce לא מופעל באתרים המקושרים. הפעל אותו בהגדרות הוורדפרס כדי לראות נתוני חנות.
+              WooCommerce לא מופעל באתרים המקושרים. הפעל אותו בהגדרות הוורדפרס
+              כדי לראות נתוני חנות.
             </p>
           </CardContent>
         </Card>
@@ -391,5 +497,7 @@ function StatCard({
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <p className="text-sm text-muted-foreground text-center py-8">{text}</p>;
+  return (
+    <p className="text-sm text-muted-foreground text-center py-8">{text}</p>
+  );
 }

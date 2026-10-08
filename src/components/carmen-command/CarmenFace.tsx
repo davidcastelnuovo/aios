@@ -22,10 +22,10 @@ const MOUTH_X = 0.5;
 const MOUTH_Y = 0.615;
 
 const COLORS = {
-  idle:      { line: "76, 195, 255", dot: "160, 220, 255" },
+  idle: { line: "76, 195, 255", dot: "160, 220, 255" },
   listening: { line: "76, 195, 255", dot: "160, 220, 255" },
-  speaking:  { line: "120, 210, 255", dot: "200, 235, 255" },
-  alert:     { line: "251, 191, 36", dot: "252, 211, 77" },
+  speaking: { line: "120, 210, 255", dot: "200, 235, 255" },
+  alert: { line: "251, 191, 36", dot: "252, 211, 77" },
 };
 
 /**
@@ -34,7 +34,12 @@ const COLORS = {
  * mouth glow while speaking, and an amber tint pulse on alert. The artwork
  * itself carries the rings/sparkles, so nothing synthetic is drawn on top.
  */
-export function CarmenFace({ state, audioLevelRef, className, imageUrl }: CarmenFaceProps) {
+export function CarmenFace({
+  state,
+  audioLevelRef,
+  className,
+  imageUrl,
+}: CarmenFaceProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<CarmenFaceState>(state);
   stateRef.current = state;
@@ -45,7 +50,9 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     let raf = 0;
     let running = true;
     let mouth = 0;
@@ -58,8 +65,12 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
     const img = new Image();
     let imgReady = false;
     let imgFailed = false;
-    img.onload = () => { imgReady = true; };
-    img.onerror = () => { imgFailed = true; };
+    img.onload = () => {
+      imgReady = true;
+    };
+    img.onerror = () => {
+      imgFailed = true;
+    };
     img.src = imageUrl || CARMEN_HOLOGRAM_URL;
 
     const resize = () => {
@@ -76,8 +87,10 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
       if (!running) return;
       const st = stateRef.current;
       const level = Math.min(1, Math.max(0, audioLevelRef?.current ?? 0));
-      const w = canvas.width, h = canvas.height;
-      const cx = w / 2, cy = h / 2;
+      const w = canvas.width,
+        h = canvas.height;
+      const cx = w / 2,
+        cy = h / 2;
       const t = now / 1000;
       const c = COLORS[st];
       const alertPulse = st === "alert" ? 0.6 + Math.sin(t * 6) * 0.4 : 1;
@@ -92,7 +105,8 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
       // Portrait — square image fitted to the panel, breathing gently
       const breathe = reduced ? 1 : 1 + Math.sin(t * 1.1) * 0.006;
       const side = Math.min(w, h) * 1.0 * breathe;
-      const ix = cx - side / 2, iy = cy - side / 2;
+      const ix = cx - side / 2,
+        iy = cy - side / 2;
       let mouthPx = { x: cx, y: cy + side * 0.1 };
 
       // The AI-core sphere — Carmen sits at its center. The back hemisphere is
@@ -102,7 +116,14 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
       const sphereY = cy;
       const sphereLat = [-0.95, -0.55, -0.18, 0.18, 0.55, 0.95];
       {
-        const core = ctx.createRadialGradient(cx, sphereY, 0, cx, sphereY, sphereR);
+        const core = ctx.createRadialGradient(
+          cx,
+          sphereY,
+          0,
+          cx,
+          sphereY,
+          sphereR,
+        );
         core.addColorStop(0, `rgba(${c.line}, ${0.09 * alertPulse})`);
         core.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = core;
@@ -121,8 +142,16 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
         // latitudes — full rings (their upper halves read as the back side)
         for (const a of sphereLat) {
           ctx.beginPath();
-          ctx.ellipse(cx, sphereY + Math.sin(a) * sphereR, Math.cos(a) * sphereR, Math.cos(a) * sphereR * 0.18, 0, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(${c.line}, ${0.10 * alertPulse})`;
+          ctx.ellipse(
+            cx,
+            sphereY + Math.sin(a) * sphereR,
+            Math.cos(a) * sphereR,
+            Math.cos(a) * sphereR * 0.18,
+            0,
+            0,
+            Math.PI * 2,
+          );
+          ctx.strokeStyle = `rgba(${c.line}, ${0.1 * alertPulse})`;
           ctx.stroke();
         }
       }
@@ -157,7 +186,15 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
         ctx.lineWidth = Math.max(1, side * 0.0016);
         for (const a of sphereLat) {
           ctx.beginPath();
-          ctx.ellipse(cx, sphereY + Math.sin(a) * sphereR, Math.cos(a) * sphereR, Math.cos(a) * sphereR * 0.18, 0, 0, Math.PI);
+          ctx.ellipse(
+            cx,
+            sphereY + Math.sin(a) * sphereR,
+            Math.cos(a) * sphereR,
+            Math.cos(a) * sphereR * 0.18,
+            0,
+            0,
+            Math.PI,
+          );
           ctx.strokeStyle = `rgba(${c.line}, ${0.22 * alertPulse})`;
           ctx.stroke();
         }
@@ -167,7 +204,14 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
       // adds a whisper of movement on top of the slow envelope
       if (speechEnv > 0.02 || mouth > 0.02) {
         const r = side * (0.05 + speechEnv * 0.02 + mouth * 0.015);
-        const g = ctx.createRadialGradient(mouthPx.x, mouthPx.y, 0, mouthPx.x, mouthPx.y, r);
+        const g = ctx.createRadialGradient(
+          mouthPx.x,
+          mouthPx.y,
+          0,
+          mouthPx.x,
+          mouthPx.y,
+          r,
+        );
         g.addColorStop(0, `rgba(${c.dot}, ${0.22 * speechEnv + 0.08 * mouth})`);
         g.addColorStop(1, "rgba(0,0,0,0)");
         ctx.globalCompositeOperation = "lighter";
@@ -179,7 +223,13 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
           const phase = (t * 0.25) % 1;
           const fade = (1 - phase) ** 2;
           ctx.beginPath();
-          ctx.arc(mouthPx.x, mouthPx.y, side * (0.055 + phase * 0.12), 0, Math.PI * 2);
+          ctx.arc(
+            mouthPx.x,
+            mouthPx.y,
+            side * (0.055 + phase * 0.12),
+            0,
+            Math.PI * 2,
+          );
           ctx.strokeStyle = `rgba(${c.line}, ${0.16 * speechEnv * fade})`;
           ctx.lineWidth = Math.max(1, side * 0.0016);
           ctx.stroke();
@@ -192,7 +242,7 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
       // Listening: expanding sound-wave rings around the hologram
       if (st === "listening" && !reduced) {
         for (let k = 0; k < 3; k++) {
-          const phase = ((t * 0.6 + k / 3) % 1);
+          const phase = (t * 0.6 + k / 3) % 1;
           ctx.beginPath();
           ctx.arc(cx, cy, side * (0.47 + phase * 0.16), 0, Math.PI * 2);
           ctx.strokeStyle = `rgba(${c.line}, ${0.45 * (1 - phase)})`;
@@ -202,14 +252,20 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
       }
 
       if (reduced) {
-        setTimeout(() => { if (running) raf = requestAnimationFrame(draw); }, 200);
+        setTimeout(() => {
+          if (running) raf = requestAnimationFrame(draw);
+        }, 200);
       } else {
         raf = requestAnimationFrame(draw);
       }
     };
     raf = requestAnimationFrame(draw);
 
-    return () => { running = false; cancelAnimationFrame(raf); ro.disconnect(); };
+    return () => {
+      running = false;
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
   }, [audioLevelRef, imageUrl]);
 
   return (

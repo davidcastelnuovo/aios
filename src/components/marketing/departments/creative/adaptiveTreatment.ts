@@ -1,7 +1,12 @@
-import { extractCopyAngle, parseCreativeCopy, strongestLine } from "./designedLayers";
+import {
+  extractCopyAngle,
+  parseCreativeCopy,
+  strongestLine,
+} from "./designedLayers";
 import type { CreativeVisualStyleId } from "./visualStyles";
 
-export type CopyMood = "urgent" | "doubt" | "screen" | "offer" | "place" | "human" | "neutral";
+export type CopyMood =
+  "urgent" | "doubt" | "screen" | "offer" | "place" | "human" | "neutral";
 
 const MOOD_RULES: { id: CopyMood; test: RegExp; lock: string }[] = [
   {
@@ -57,11 +62,12 @@ export const detectCopyMood = (text: string): CopyMood => {
 };
 
 const moodLock = (mood: CopyMood) =>
-  MOOD_RULES.find((rule) => rule.id === mood)?.lock
-  ?? "MOOD: invent a premium commercial treatment that a stranger would say belongs to THIS sentence and THIS brand. Do not pick a look from a style catalog.";
+  MOOD_RULES.find((rule) => rule.id === mood)?.lock ??
+  "MOOD: invent a premium commercial treatment that a stranger would say belongs to THIS sentence and THIS brand. Do not pick a look from a style catalog.";
 
-export const isOptionalCostume = (styleId?: CreativeVisualStyleId | null): boolean =>
-  !!styleId && styleId !== "adaptive";
+export const isOptionalCostume = (
+  styleId?: CreativeVisualStyleId | null,
+): boolean => !!styleId && styleId !== "adaptive";
 
 export const buildAdaptiveTreatment = ({
   copyText,
@@ -79,10 +85,16 @@ export const buildAdaptiveTreatment = ({
   costumeLabel?: string;
 }): string => {
   const parts = parseCreativeCopy(copyText ?? "", title);
-  const idea = strongestLine(copyText ?? "", title) || parts.headline || parts.body;
+  const idea =
+    strongestLine(copyText ?? "", title) || parts.headline || parts.body;
   const angle = extractCopyAngle(copyText, copyLabel);
-  const topic = [brief, title, idea, angle].filter((bit) => bit && bit.trim()).join(" · ").slice(0, 280);
-  const mood = detectCopyMood([copyText, copyLabel, title, brief].filter(Boolean).join("\n"));
+  const topic = [brief, title, idea, angle]
+    .filter((bit) => bit && bit.trim())
+    .join(" · ")
+    .slice(0, 280);
+  const mood = detectCopyMood(
+    [copyText, copyLabel, title, brief].filter(Boolean).join("\n"),
+  );
   const colors = (brandColors ?? []).filter(Boolean);
 
   return [
@@ -90,7 +102,8 @@ export const buildAdaptiveTreatment = ({
     "Style is a function of (1) this copy's idea, (2) the logo/brand colors, (3) the real topic. It must change when any of those change.",
     idea && `The picture's job is to stage: "${idea}".`,
     angle && `Copy angle that must shape light and energy: ${angle}.`,
-    topic && `Topic/world: ${topic}. Materials, location and props come from that world — not from a style catalog.`,
+    topic &&
+      `Topic/world: ${topic}. Materials, location and props come from that world — not from a style catalog.`,
     moodLock(mood),
     colors.length
       ? `PALETTE IS THE LOGO: ${colors.join(", ")}. Grade, gels, props and graphic fields use ONLY these colors plus black, white, or paper. Do not import a style-board palette (no purple-orange, no pink-cyan, no Bauhaus primaries, no industrial yellow) unless those hexes are in the logo.`
@@ -100,5 +113,7 @@ export const buildAdaptiveTreatment = ({
       ? `Optional costume hint only: you may borrow a MATERIAL from "${costumeLabel}" (grain, paper, glass, daylight) — never its palette, layout, or cliché subject. Copy + logo + topic still win.`
       : "No costume lock. Invent the finish.",
     "If this still could be reused for a different brand or a different variation, it failed.",
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 };

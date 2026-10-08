@@ -3,16 +3,46 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube, Download, Search, ListTree, Share2, Plus, User as UserIcon } from "lucide-react";
+import {
+  Facebook,
+  Unlink,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  Webhook,
+  Target,
+  ArrowLeft,
+  Loader2,
+  TestTube,
+  Download,
+  Search,
+  ListTree,
+  Share2,
+  Plus,
+  User as UserIcon,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
@@ -34,30 +64,31 @@ export default function FacebookSettings() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
-  
+
   const [selectedPage, setSelectedPage] = useState<string>("");
   const [pixelId, setPixelId] = useState<string>("");
   const [testEventCode, setTestEventCode] = useState<string>("");
   const [manualToken, setManualToken] = useState<string>("");
   const [pageSearchQuery, setPageSearchQuery] = useState<string>("");
   const [selectedLeadAdsId, setSelectedLeadAdsId] = useState<string>("");
-  const [sharingIntegrationId, setSharingIntegrationId] = useState<string | null>(null);
-  const [sharingIntegrationName, setSharingIntegrationName] = useState<string>("");
+  const [sharingIntegrationId, setSharingIntegrationId] = useState<
+    string | null
+  >(null);
+  const [sharingIntegrationName, setSharingIntegrationName] =
+    useState<string>("");
   const [sharingOwnerId, setSharingOwnerId] = useState<string | null>(null);
 
-  const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const projectUrl = import.meta.env.VITE_SUPABASE_URL || "";
   const webhookUrl = `${projectUrl}/functions/v1/facebook-lead-webhook`;
 
   // Fetch ALL Lead Ads integrations visible to this user in this tenant
   // (own + permission-shared). Each user can have their own per-user FB
   // connection alongside any shared/mirror connection from the agency owner.
-  const { data: leadAdsList = [], isLoading: loadingLeadAds } = useUserIntegrations(
-    currentTenant?.id,
-    'facebook_lead_ads'
-  );
+  const { data: leadAdsList = [], isLoading: loadingLeadAds } =
+    useUserIntegrations(currentTenant?.id, "facebook_lead_ads");
   const { data: capiList = [], isLoading: loadingCapi } = useUserIntegrations(
     currentTenant?.id,
-    'facebook_capi'
+    "facebook_capi",
   );
 
   // Auto-select first integration when list changes (prefer own connections)
@@ -66,27 +97,31 @@ export default function FacebookSettings() {
       if (selectedLeadAdsId) setSelectedLeadAdsId("");
       return;
     }
-    const stillExists = leadAdsList.some((i: any) => i.id === selectedLeadAdsId);
+    const stillExists = leadAdsList.some(
+      (i: any) => i.id === selectedLeadAdsId,
+    );
     if (!stillExists) {
       const ownFirst = leadAdsList.find((i: any) => i._isOwn) || leadAdsList[0];
       setSelectedLeadAdsId(ownFirst.id);
     }
   }, [leadAdsList, selectedLeadAdsId]);
 
-  const leadAdsIntegration: any = leadAdsList.find((i: any) => i.id === selectedLeadAdsId) || leadAdsList[0] || null;
+  const leadAdsIntegration: any =
+    leadAdsList.find((i: any) => i.id === selectedLeadAdsId) ||
+    leadAdsList[0] ||
+    null;
   const capiIntegration: any = capiList[0] || null;
-
 
   // Fetch agencies for form mapping
   const { data: agencies } = useQuery({
-    queryKey: ['agencies', currentTenant?.id],
+    queryKey: ["agencies", currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant?.id) return [];
       const { data, error } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', currentTenant.id)
-        .eq('status', 'active');
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", currentTenant.id)
+        .eq("status", "active");
       if (error) throw error;
       return data || [];
     },
@@ -95,14 +130,14 @@ export default function FacebookSettings() {
 
   // Fetch sales people for form mapping
   const { data: salesPeople } = useQuery({
-    queryKey: ['sales-people', currentTenant?.id],
+    queryKey: ["sales-people", currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant?.id) return [];
       const { data, error } = await supabase
-        .from('sales_people')
-        .select('id, full_name')
-        .eq('tenant_id', currentTenant.id)
-        .eq('active', true);
+        .from("sales_people")
+        .select("id, full_name")
+        .eq("tenant_id", currentTenant.id)
+        .eq("active", true);
       if (error) throw error;
       return data || [];
     },
@@ -111,14 +146,14 @@ export default function FacebookSettings() {
 
   // Fetch tags for form mapping
   const { data: tags } = useQuery({
-    queryKey: ['chat-tags', currentTenant?.id],
+    queryKey: ["chat-tags", currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant?.id) return [];
       const { data, error } = await supabase
-        .from('chat_tags')
-        .select('id, name, color')
-        .eq('tenant_id', currentTenant.id)
-        .order('sort_order');
+        .from("chat_tags")
+        .select("id, name, color")
+        .eq("tenant_id", currentTenant.id)
+        .order("sort_order");
       if (error) throw error;
       return data || [];
     },
@@ -129,8 +164,8 @@ export default function FacebookSettings() {
   useEffect(() => {
     if (capiIntegration?.settings) {
       const settings = capiIntegration.settings as any;
-      setPixelId(settings.pixel_id || '');
-      setTestEventCode(settings.test_event_code || '');
+      setPixelId(settings.pixel_id || "");
+      setTestEventCode(settings.test_event_code || "");
     }
   }, [capiIntegration]);
 
@@ -138,15 +173,18 @@ export default function FacebookSettings() {
   const connectMutation = useMutation({
     mutationFn: async (integrationType: string) => {
       const redirectUri = `${window.location.origin}/t/${currentTenant?.slug}/facebook-callback`;
-      
-      const { data, error } = await supabase.functions.invoke('facebook-auth?action=get_auth_url', {
-        body: {
-          tenant_id: currentTenant?.id,
-          user_id: user?.id,
-          integration_type: integrationType,
-          redirect_uri: redirectUri,
+
+      const { data, error } = await supabase.functions.invoke(
+        "facebook-auth?action=get_auth_url",
+        {
+          body: {
+            tenant_id: currentTenant?.id,
+            user_id: user?.id,
+            integration_type: integrationType,
+            redirect_uri: redirectUri,
+          },
         },
-      });
+      );
 
       if (error) throw error;
       return data;
@@ -157,7 +195,7 @@ export default function FacebookSettings() {
       }
     },
     onError: (error) => {
-      toast.error('שגיאה בהתחברות לפייסבוק: ' + (error as Error).message);
+      toast.error("שגיאה בהתחברות לפייסבוק: " + (error as Error).message);
     },
   });
 
@@ -165,50 +203,65 @@ export default function FacebookSettings() {
   const disconnectMutation = useMutation({
     mutationFn: async (integrationId: string) => {
       const { error } = await supabase
-        .from('tenant_integrations')
+        .from("tenant_integrations")
         .update({ is_active: false, api_key: null })
-        .eq('id', integrationId);
+        .eq("id", integrationId);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('החיבור לפייסבוק נותק בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
-      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
+      toast.success("החיבור לפייסבוק נותק בהצלחה");
+      queryClient.invalidateQueries({
+        queryKey: ["user-integrations", currentTenant?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["user-integrations", currentTenant?.id],
+      });
     },
     onError: (error) => {
-      toast.error('שגיאה בניתוק: ' + (error as Error).message);
+      toast.error("שגיאה בניתוק: " + (error as Error).message);
     },
   });
 
   // Subscribe page mutation
   const subscribePageMutation = useMutation({
-    mutationFn: async ({ integrationId, pageId }: { integrationId: string; pageId: string }) => {
-      const { data, error } = await supabase.functions.invoke('facebook-auth?action=subscribe_page', {
-        body: {
-          integration_id: integrationId,
-          page_id: pageId,
+    mutationFn: async ({
+      integrationId,
+      pageId,
+    }: {
+      integrationId: string;
+      pageId: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke(
+        "facebook-auth?action=subscribe_page",
+        {
+          body: {
+            integration_id: integrationId,
+            page_id: pageId,
+          },
         },
-      });
+      );
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      toast.success('העמוד נרשם בהצלחה לקבלת לידים');
-      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
+      toast.success("העמוד נרשם בהצלחה לקבלת לידים");
+      queryClient.invalidateQueries({
+        queryKey: ["user-integrations", currentTenant?.id],
+      });
     },
     onError: (error) => {
-      toast.error('שגיאה ברישום העמוד: ' + (error as Error).message);
+      toast.error("שגיאה ברישום העמוד: " + (error as Error).message);
     },
   });
 
   // Save CAPI settings mutation
   const saveCapiMutation = useMutation({
     mutationFn: async () => {
-      if (!currentTenant?.id) throw new Error('No tenant');
-      
+      if (!currentTenant?.id) throw new Error("No tenant");
+
       const integrationData = {
         tenant_id: currentTenant.id,
-        integration_type: 'facebook_capi',
+        integration_type: "facebook_capi",
         is_active: true,
         settings: {
           pixel_id: pixelId,
@@ -219,23 +272,25 @@ export default function FacebookSettings() {
 
       if (capiIntegration?.id) {
         const { error } = await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update(integrationData)
-          .eq('id', capiIntegration.id);
+          .eq("id", capiIntegration.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .insert(integrationData);
         if (error) throw error;
       }
     },
     onSuccess: () => {
-      toast.success('הגדרות CAPI נשמרו בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
+      toast.success("הגדרות CAPI נשמרו בהצלחה");
+      queryClient.invalidateQueries({
+        queryKey: ["user-integrations", currentTenant?.id],
+      });
     },
     onError: (error) => {
-      toast.error('שגיאה בשמירת ההגדרות: ' + (error as Error).message);
+      toast.error("שגיאה בשמירת ההגדרות: " + (error as Error).message);
     },
   });
 
@@ -243,26 +298,28 @@ export default function FacebookSettings() {
   const saveManualTokenMutation = useMutation({
     mutationFn: async () => {
       if (!leadAdsIntegration?.id || !manualToken.trim()) {
-        throw new Error('Missing integration ID or token');
+        throw new Error("Missing integration ID or token");
       }
-      
+
       const { error } = await supabase
-        .from('tenant_integrations')
-        .update({ 
+        .from("tenant_integrations")
+        .update({
           api_key: manualToken.trim(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', leadAdsIntegration.id);
-      
+        .eq("id", leadAdsIntegration.id);
+
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Token נשמר בהצלחה');
-      setManualToken('');
-      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenant?.id] });
+      toast.success("Token נשמר בהצלחה");
+      setManualToken("");
+      queryClient.invalidateQueries({
+        queryKey: ["user-integrations", currentTenant?.id],
+      });
     },
     onError: (error) => {
-      toast.error('שגיאה בשמירת Token: ' + (error as Error).message);
+      toast.error("שגיאה בשמירת Token: " + (error as Error).message);
     },
   });
 
@@ -273,41 +330,49 @@ export default function FacebookSettings() {
       const pageId = settings?.page_id;
       const formMappings = settings?.form_mappings || {};
       const firstFormId = Object.keys(formMappings)[0];
-      
-      const { data, error } = await supabase.functions.invoke('test-facebook-lead-webhook', {
-        body: { 
-          page_id: pageId,
-          form_id: firstFormId,
-          tenant_id: currentTenant?.id,
+
+      const { data, error } = await supabase.functions.invoke(
+        "test-facebook-lead-webhook",
+        {
+          body: {
+            page_id: pageId,
+            form_id: firstFormId,
+            tenant_id: currentTenant?.id,
+          },
         },
-      });
-      
+      );
+
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
       if (data?.success) {
         toast.success(`ליד טסט נוצר בהצלחה! ID: ${data.lead_id}`);
-        queryClient.invalidateQueries({ queryKey: ['leads', currentTenant?.id] });
+        queryClient.invalidateQueries({
+          queryKey: ["leads", currentTenant?.id],
+        });
       } else {
-        toast.error('שגיאה: ' + (data?.error || 'Unknown error'));
+        toast.error("שגיאה: " + (data?.error || "Unknown error"));
       }
     },
     onError: (error) => {
-      toast.error('שגיאה בבדיקה: ' + (error as Error).message);
+      toast.error("שגיאה בבדיקה: " + (error as Error).message);
     },
   });
 
   // Sync Facebook leads mutation
   const syncLeadsMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('sync-facebook-leads', {
-        body: { 
-          tenant_id: currentTenant?.id,
-          integration_id: leadAdsIntegration?.id,
+      const { data, error } = await supabase.functions.invoke(
+        "sync-facebook-leads",
+        {
+          body: {
+            tenant_id: currentTenant?.id,
+            integration_id: leadAdsIntegration?.id,
+          },
         },
-      });
-      
+      );
+
       if (error) throw error;
       return data;
     },
@@ -318,50 +383,58 @@ export default function FacebookSettings() {
         } else if (data.skipped > 0) {
           toast.info(`לא נמצאו לידים חדשים (${data.skipped} כבר קיימים)`);
         } else {
-          toast.info('לא נמצאו לידים חדשים');
+          toast.info("לא נמצאו לידים חדשים");
         }
-        queryClient.invalidateQueries({ queryKey: ['leads', currentTenant?.id] });
+        queryClient.invalidateQueries({
+          queryKey: ["leads", currentTenant?.id],
+        });
       } else {
-        toast.error('שגיאה: ' + (data?.error || 'Unknown error'));
+        toast.error("שגיאה: " + (data?.error || "Unknown error"));
       }
     },
     onError: (error) => {
-      toast.error('שגיאה בסנכרון: ' + (error as Error).message);
+      toast.error("שגיאה בסנכרון: " + (error as Error).message);
     },
   });
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success('הועתק ללוח');
+    toast.success("הועתק ללוח");
   };
 
   const leadAdsSettings = leadAdsIntegration?.settings as any;
   const pages = leadAdsSettings?.pages || [];
   const selectedPageName = leadAdsSettings?.page_name;
-  
+
   // Filter pages based on search query
   const filteredPages = pages.filter((page: FacebookPage) =>
-    page.name.toLowerCase().includes(pageSearchQuery.toLowerCase())
+    page.name.toLowerCase().includes(pageSearchQuery.toLowerCase()),
   );
-  
+
   // Check if this integration is shared from another
-  const isSharedConnection = !!(leadAdsIntegration as any)?.shared_from_integration_id;
+  const isSharedConnection = !!(leadAdsIntegration as any)
+    ?.shared_from_integration_id;
   const isOwnConnection = leadAdsIntegration?.is_active && !isSharedConnection;
-  
+
   // Check if token is valid (Facebook tokens start with "EAA" and are long)
   const isValidFacebookToken = (token: string | null | undefined): boolean => {
     if (!token) return false;
     // Facebook access tokens start with "EAA" and are typically 150+ characters
-    return token.startsWith('EAA') && token.length > 100;
+    return token.startsWith("EAA") && token.length > 100;
   };
-  
+
   const hasValidToken = isValidFacebookToken(leadAdsIntegration?.api_key);
-  const hasTokenButNoApiKey = leadAdsIntegration?.is_active && !hasValidToken && !isSharedConnection;
+  const hasTokenButNoApiKey =
+    leadAdsIntegration?.is_active && !hasValidToken && !isSharedConnection;
 
   return (
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(buildPath('/integrations'))}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate(buildPath("/integrations"))}
+        >
           <ArrowLeft className="h-5 w-5 rotate-180" />
         </Button>
         <div>
@@ -379,22 +452,35 @@ export default function FacebookSettings() {
       {leadAdsList.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-right text-base">חיבורי Facebook זמינים</CardTitle>
+            <CardTitle className="text-right text-base">
+              חיבורי Facebook זמינים
+            </CardTitle>
             <CardDescription className="text-right text-xs">
-              חיבור משותף + חיבור אישי שלך. ניתן להוסיף חשבון Facebook נוסף ולשתף עם משתמשים אחרים בארגון.
+              חיבור משותף + חיבור אישי שלך. ניתן להוסיף חשבון Facebook נוסף
+              ולשתף עם משתמשים אחרים בארגון.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {leadAdsList.length > 1 && (
-              <Select value={selectedLeadAdsId} onValueChange={setSelectedLeadAdsId}>
-                <SelectTrigger><SelectValue placeholder="בחר חיבור" /></SelectTrigger>
+              <Select
+                value={selectedLeadAdsId}
+                onValueChange={setSelectedLeadAdsId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר חיבור" />
+                </SelectTrigger>
                 <SelectContent>
                   {leadAdsList.map((i: any) => {
                     const settings = i.settings as any;
-                    const label = settings?.page_name || settings?.fb_user_name || `חיבור ${i.id.slice(0, 6)}`;
+                    const label =
+                      settings?.page_name ||
+                      settings?.fb_user_name ||
+                      `חיבור ${i.id.slice(0, 6)}`;
                     return (
                       <SelectItem key={i.id} value={i.id}>
-                        {i._isOwn ? `${label} (שלך)` : `${label}${i._sharedByName ? ` (משותף ע"י ${i._sharedByName})` : ' (משותף)'}`}
+                        {i._isOwn
+                          ? `${label} (שלך)`
+                          : `${label}${i._sharedByName ? ` (משותף ע"י ${i._sharedByName})` : " (משותף)"}`}
                       </SelectItem>
                     );
                   })}
@@ -408,7 +494,9 @@ export default function FacebookSettings() {
                   variant="outline"
                   onClick={() => {
                     const settings = leadAdsIntegration.settings as any;
-                    setSharingIntegrationName(settings?.page_name || 'Facebook');
+                    setSharingIntegrationName(
+                      settings?.page_name || "Facebook",
+                    );
                     setSharingOwnerId(leadAdsIntegration.user_id);
                     setSharingIntegrationId(leadAdsIntegration.id);
                   }}
@@ -420,7 +508,7 @@ export default function FacebookSettings() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => connectMutation.mutate('facebook_lead_ads')}
+                onClick={() => connectMutation.mutate("facebook_lead_ads")}
                 disabled={connectMutation.isPending}
               >
                 <Plus className="h-4 w-4 ml-2" />
@@ -432,7 +520,6 @@ export default function FacebookSettings() {
       )}
 
       <Tabs defaultValue="lead-ads" className="w-full">
-
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="lead-ads" className="gap-2">
             <Target className="h-4 w-4" />
@@ -450,17 +537,26 @@ export default function FacebookSettings() {
             <CardHeader>
               <CardTitle className="flex items-center justify-between flex-row-reverse">
                 {leadAdsIntegration?.is_active && hasValidToken ? (
-                  <Badge variant="default" className="bg-green-500 flex items-center gap-1">
+                  <Badge
+                    variant="default"
+                    className="bg-green-500 flex items-center gap-1"
+                  >
                     <CheckCircle2 className="h-3 w-3" />
                     מחובר
                   </Badge>
                 ) : leadAdsIntegration?.is_active && !hasValidToken ? (
-                  <Badge variant="default" className="bg-amber-500 flex items-center gap-1">
+                  <Badge
+                    variant="default"
+                    className="bg-amber-500 flex items-center gap-1"
+                  >
                     <AlertCircle className="h-3 w-3" />
                     חסר Token
                   </Badge>
                 ) : (
-                  <Badge variant="secondary" className="flex items-center gap-1">
+                  <Badge
+                    variant="secondary"
+                    className="flex items-center gap-1"
+                  >
                     <AlertCircle className="h-3 w-3" />
                     לא מחובר
                   </Badge>
@@ -474,9 +570,11 @@ export default function FacebookSettings() {
             <CardContent className="space-y-4">
               {/* Show shared connection banner if applicable */}
               {isSharedConnection && (
-                <SharedFacebookConnectionBanner integration={leadAdsIntegration} />
+                <SharedFacebookConnectionBanner
+                  integration={leadAdsIntegration}
+                />
               )}
-              
+
               {!leadAdsIntegration?.is_active ? (
                 <div className="space-y-4">
                   <Alert className="text-right">
@@ -485,11 +583,12 @@ export default function FacebookSettings() {
                       התחבר לפייסבוק
                     </AlertTitle>
                     <AlertDescription className="text-right">
-                      לחץ על הכפתור למטה כדי לאשר גישה לעמודי הפייסבוק שלך וטפסי Lead Ads
+                      לחץ על הכפתור למטה כדי לאשר גישה לעמודי הפייסבוק שלך וטפסי
+                      Lead Ads
                     </AlertDescription>
                   </Alert>
                   <Button
-                    onClick={() => connectMutation.mutate('facebook_lead_ads')}
+                    onClick={() => connectMutation.mutate("facebook_lead_ads")}
                     disabled={connectMutation.isPending}
                     className="bg-[#1877F2] hover:bg-[#166FE5] gap-2"
                   >
@@ -500,7 +599,7 @@ export default function FacebookSettings() {
                         מתחבר...
                       </>
                     ) : (
-                      'התחבר עם Facebook'
+                      "התחבר עם Facebook"
                     )}
                   </Button>
                 </div>
@@ -513,23 +612,27 @@ export default function FacebookSettings() {
                       חסר Access Token
                     </AlertTitle>
                     <AlertDescription className="text-amber-700 text-right">
-                      האינטגרציה פעילה אבל חסר Access Token. הזן Token חדש מ-Graph API Explorer או התחבר מחדש.
+                      האינטגרציה פעילה אבל חסר Access Token. הזן Token חדש
+                      מ-Graph API Explorer או התחבר מחדש.
                     </AlertDescription>
                   </Alert>
-                  
+
                   <div className="space-y-2 text-right">
                     <Label>Access Token</Label>
                     <div className="flex gap-2 flex-row-reverse">
-                      <Input 
-                        value={manualToken} 
+                      <Input
+                        value={manualToken}
                         onChange={(e) => setManualToken(e.target.value)}
                         placeholder="הדבק Access Token כאן..."
-                        className="font-mono text-sm text-left" 
-                        dir="ltr" 
+                        className="font-mono text-sm text-left"
+                        dir="ltr"
                       />
                       <Button
                         onClick={() => saveManualTokenMutation.mutate()}
-                        disabled={!manualToken.trim() || saveManualTokenMutation.isPending}
+                        disabled={
+                          !manualToken.trim() ||
+                          saveManualTokenMutation.isPending
+                        }
                         className="gap-2"
                       >
                         {saveManualTokenMutation.isPending ? (
@@ -541,14 +644,26 @@ export default function FacebookSettings() {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      ניתן לקבל Token מ-<a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener noreferrer" className="underline text-primary">Graph API Explorer</a>
+                      ניתן לקבל Token מ-
+                      <a
+                        href="https://developers.facebook.com/tools/explorer/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline text-primary"
+                      >
+                        Graph API Explorer
+                      </a>
                     </p>
                   </div>
 
                   <div className="border-t pt-4">
-                    <p className="text-sm text-muted-foreground mb-2">או התחבר מחדש דרך OAuth:</p>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      או התחבר מחדש דרך OAuth:
+                    </p>
                     <Button
-                      onClick={() => connectMutation.mutate('facebook_lead_ads')}
+                      onClick={() =>
+                        connectMutation.mutate("facebook_lead_ads")
+                      }
                       disabled={connectMutation.isPending}
                       variant="outline"
                       className="gap-2"
@@ -560,7 +675,7 @@ export default function FacebookSettings() {
                           מתחבר...
                         </>
                       ) : (
-                        'התחבר מחדש עם Facebook'
+                        "התחבר מחדש עם Facebook"
                       )}
                     </Button>
                   </div>
@@ -572,7 +687,7 @@ export default function FacebookSettings() {
                     <p>הגדרות החיבור מנוהלות מהארגון המקורי.</p>
                     <p>ניתן להגדיר Form Mapping ייחודי לארגון זה בסקשן למטה.</p>
                   </div>
-                  
+
                   {/* Sync & Test Buttons for shared connections */}
                   <div className="pt-4 border-t space-y-3">
                     <div className="flex gap-2 flex-wrap">
@@ -582,8 +697,12 @@ export default function FacebookSettings() {
                         disabled={syncLeadsMutation.isPending}
                         className="gap-2"
                       >
-                        <Download className={`h-4 w-4 ${syncLeadsMutation.isPending ? 'animate-spin' : ''}`} />
-                        {syncLeadsMutation.isPending ? 'מסנכרן...' : 'סנכרן לידים מפייסבוק'}
+                        <Download
+                          className={`h-4 w-4 ${syncLeadsMutation.isPending ? "animate-spin" : ""}`}
+                        />
+                        {syncLeadsMutation.isPending
+                          ? "מסנכרן..."
+                          : "סנכרן לידים מפייסבוק"}
                       </Button>
                       <Button
                         variant="outline"
@@ -591,8 +710,12 @@ export default function FacebookSettings() {
                         disabled={testWebhookMutation.isPending}
                         className="gap-2"
                       >
-                        <TestTube className={`h-4 w-4 ${testWebhookMutation.isPending ? 'animate-spin' : ''}`} />
-                        {testWebhookMutation.isPending ? 'מבצע בדיקה...' : 'צור ליד טסט'}
+                        <TestTube
+                          className={`h-4 w-4 ${testWebhookMutation.isPending ? "animate-spin" : ""}`}
+                        />
+                        {testWebhookMutation.isPending
+                          ? "מבצע בדיקה..."
+                          : "צור ליד טסט"}
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -617,8 +740,17 @@ export default function FacebookSettings() {
                   <div className="space-y-2 text-right">
                     <Label>Webhook URL</Label>
                     <div className="flex gap-2 flex-row-reverse">
-                      <Input value={webhookUrl} readOnly className="font-mono text-sm text-left" dir="ltr" />
-                      <Button variant="outline" size="icon" onClick={() => copyToClipboard(webhookUrl)}>
+                      <Input
+                        value={webhookUrl}
+                        readOnly
+                        className="font-mono text-sm text-left"
+                        dir="ltr"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => copyToClipboard(webhookUrl)}
+                      >
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
@@ -631,7 +763,7 @@ export default function FacebookSettings() {
                   {pages.length > 0 && (
                     <div className="space-y-2 text-right">
                       <Label>בחר עמוד פייסבוק</Label>
-                      
+
                       {/* Search input for pages */}
                       {pages.length > 10 && (
                         <div className="relative">
@@ -644,16 +776,22 @@ export default function FacebookSettings() {
                           />
                           {pageSearchQuery && (
                             <p className="text-xs text-muted-foreground mt-1">
-                              נמצאו {filteredPages.length} עמודים מתוך {pages.length}
+                              נמצאו {filteredPages.length} עמודים מתוך{" "}
+                              {pages.length}
                             </p>
                           )}
                         </div>
                       )}
-                      
+
                       <div className="flex gap-2 flex-row-reverse">
-                        <Select value={selectedPage || leadAdsSettings?.page_id || ''} onValueChange={setSelectedPage}>
+                        <Select
+                          value={selectedPage || leadAdsSettings?.page_id || ""}
+                          onValueChange={setSelectedPage}
+                        >
                           <SelectTrigger className="flex-1">
-                            <SelectValue placeholder={`בחר עמוד (${filteredPages.length})`} />
+                            <SelectValue
+                              placeholder={`בחר עמוד (${filteredPages.length})`}
+                            />
                           </SelectTrigger>
                           <SelectContent>
                             {filteredPages.length === 0 ? (
@@ -678,10 +816,14 @@ export default function FacebookSettings() {
                               });
                             }
                           }}
-                          disabled={!selectedPage || subscribePageMutation.isPending}
+                          disabled={
+                            !selectedPage || subscribePageMutation.isPending
+                          }
                           className="gap-2"
                         >
-                          <RefreshCw className={`h-4 w-4 ${subscribePageMutation.isPending ? 'animate-spin' : ''}`} />
+                          <RefreshCw
+                            className={`h-4 w-4 ${subscribePageMutation.isPending ? "animate-spin" : ""}`}
+                          />
                           עדכן
                         </Button>
                       </div>
@@ -696,13 +838,16 @@ export default function FacebookSettings() {
                           עמוד פעיל
                         </AlertTitle>
                         <AlertDescription className="text-right">
-                          לידים מהעמוד "{selectedPageName}" יתקבלו אוטומטית למערכת
+                          לידים מהעמוד "{selectedPageName}" יתקבלו אוטומטית
+                          למערכת
                         </AlertDescription>
                       </Alert>
                       <Button
                         variant="outline"
                         onClick={() => {
-                          document.getElementById('form-mapping-section')?.scrollIntoView({ behavior: 'smooth' });
+                          document
+                            .getElementById("form-mapping-section")
+                            ?.scrollIntoView({ behavior: "smooth" });
                         }}
                         className="gap-2 w-full"
                       >
@@ -717,11 +862,16 @@ export default function FacebookSettings() {
                     {/* Auto-sync status */}
                     <div className="flex items-center gap-2 text-sm text-right">
                       <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                      <span className="text-muted-foreground">סנכרון אוטומטי פעיל — לידים נקלטים כל דקה</span>
+                      <span className="text-muted-foreground">
+                        סנכרון אוטומטי פעיל — לידים נקלטים כל דקה
+                      </span>
                     </div>
                     {leadAdsIntegration?.last_sync_at && (
                       <p className="text-xs text-muted-foreground text-right">
-                        סנכרון אחרון: {new Date(leadAdsIntegration.last_sync_at).toLocaleString('he-IL')}
+                        סנכרון אחרון:{" "}
+                        {new Date(
+                          leadAdsIntegration.last_sync_at,
+                        ).toLocaleString("he-IL")}
                       </p>
                     )}
                     <div className="flex gap-2 flex-wrap">
@@ -731,8 +881,12 @@ export default function FacebookSettings() {
                         disabled={syncLeadsMutation.isPending}
                         className="gap-2"
                       >
-                        <Download className={`h-4 w-4 ${syncLeadsMutation.isPending ? 'animate-spin' : ''}`} />
-                        {syncLeadsMutation.isPending ? 'מסנכרן...' : 'סנכרן עכשיו'}
+                        <Download
+                          className={`h-4 w-4 ${syncLeadsMutation.isPending ? "animate-spin" : ""}`}
+                        />
+                        {syncLeadsMutation.isPending
+                          ? "מסנכרן..."
+                          : "סנכרן עכשיו"}
                       </Button>
                       <Button
                         variant="outline"
@@ -740,8 +894,12 @@ export default function FacebookSettings() {
                         disabled={testWebhookMutation.isPending}
                         className="gap-2"
                       >
-                        <TestTube className={`h-4 w-4 ${testWebhookMutation.isPending ? 'animate-spin' : ''}`} />
-                        {testWebhookMutation.isPending ? 'מבצע בדיקה...' : 'צור ליד טסט'}
+                        <TestTube
+                          className={`h-4 w-4 ${testWebhookMutation.isPending ? "animate-spin" : ""}`}
+                        />
+                        {testWebhookMutation.isPending
+                          ? "מבצע בדיקה..."
+                          : "צור ליד טסט"}
                       </Button>
                     </div>
                   </div>
@@ -750,7 +908,9 @@ export default function FacebookSettings() {
                   <div className="pt-4 border-t flex gap-2 flex-wrap">
                     <Button
                       variant="outline"
-                      onClick={() => connectMutation.mutate('facebook_lead_ads')}
+                      onClick={() =>
+                        connectMutation.mutate("facebook_lead_ads")
+                      }
                       disabled={connectMutation.isPending}
                       className="gap-2"
                     >
@@ -761,12 +921,15 @@ export default function FacebookSettings() {
                           מתחבר...
                         </>
                       ) : (
-                        'התחבר מחדש'
+                        "התחבר מחדש"
                       )}
                     </Button>
                     <Button
                       variant="destructive"
-                      onClick={() => leadAdsIntegration?.id && disconnectMutation.mutate(leadAdsIntegration.id)}
+                      onClick={() =>
+                        leadAdsIntegration?.id &&
+                        disconnectMutation.mutate(leadAdsIntegration.id)
+                      }
                       disabled={disconnectMutation.isPending}
                       className="gap-2"
                     >
@@ -794,13 +957,18 @@ export default function FacebookSettings() {
               <CardContent className="space-y-5">
                 <IntegrationVisibilitySelector
                   integrationId={leadAdsIntegration.id}
-                  integrationName={(leadAdsIntegration.settings as any)?.page_name || 'Facebook Lead Ads'}
+                  integrationName={
+                    (leadAdsIntegration.settings as any)?.page_name ||
+                    "Facebook Lead Ads"
+                  }
                   ownerId={leadAdsIntegration.user_id || null}
                   tenantId={currentTenant.id}
                 />
                 {/* Cross-org sharing (between tenants / agencies) */}
                 <div className="pt-4 border-t">
-                  <p className="text-sm font-medium text-right mb-3">שיתוף עם ארגונים אחרים</p>
+                  <p className="text-sm font-medium text-right mb-3">
+                    שיתוף עם ארגונים אחרים
+                  </p>
                   <ShareFacebookConnectionSection
                     integrationId={leadAdsIntegration.id}
                     currentTenantId={currentTenant.id}
@@ -814,24 +982,38 @@ export default function FacebookSettings() {
           {/* Form Mapping Section - only show when we have a token or shared connection */}
           {leadAdsIntegration?.is_active && !hasTokenButNoApiKey && (
             <FacebookFormMappingSection
-              tenantId={currentTenant?.id || ''}
+              tenantId={currentTenant?.id || ""}
               integrationId={leadAdsIntegration?.id || null}
               accessToken={leadAdsIntegration?.api_key || null}
               agencies={agencies || []}
               salesPeople={salesPeople || []}
               tags={tags || []}
-              sharedFromIntegrationId={(leadAdsIntegration as any)?.shared_from_integration_id}
+              sharedFromIntegrationId={
+                (leadAdsIntegration as any)?.shared_from_integration_id
+              }
             />
           )}
 
           {/* Lead Ads Instructions */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-right">הגדרת Webhook בפייסבוק</CardTitle>
+              <CardTitle className="text-right">
+                הגדרת Webhook בפייסבוק
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-right">
               <ol className="list-decimal space-y-2 mr-5 list-inside">
-                <li>עבור ל-<a href="https://developers.facebook.com" target="_blank" rel="noopener" className="text-primary underline">Meta for Developers</a></li>
+                <li>
+                  עבור ל-
+                  <a
+                    href="https://developers.facebook.com"
+                    target="_blank"
+                    rel="noopener"
+                    className="text-primary underline"
+                  >
+                    Meta for Developers
+                  </a>
+                </li>
                 <li>בחר את ה-App המשותף</li>
                 <li>הוסף את המוצר "Webhooks"</li>
                 <li>הגדר webhook עבור "Page" עם השדה "leadgen"</li>
@@ -846,13 +1028,20 @@ export default function FacebookSettings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between flex-row-reverse">
-                {capiIntegration?.is_active && (capiIntegration.settings as any)?.pixel_id ? (
-                  <Badge variant="default" className="bg-green-500 flex items-center gap-1">
+                {capiIntegration?.is_active &&
+                (capiIntegration.settings as any)?.pixel_id ? (
+                  <Badge
+                    variant="default"
+                    className="bg-green-500 flex items-center gap-1"
+                  >
                     <CheckCircle2 className="h-3 w-3" />
                     פעיל
                   </Badge>
                 ) : (
-                  <Badge variant="secondary" className="flex items-center gap-1">
+                  <Badge
+                    variant="secondary"
+                    className="flex items-center gap-1"
+                  >
                     <AlertCircle className="h-3 w-3" />
                     לא מוגדר
                   </Badge>
@@ -868,7 +1057,11 @@ export default function FacebookSettings() {
                 <Label htmlFor="pixel-id">Pixel ID *</Label>
                 <Input
                   id="pixel-id"
-                  value={pixelId || (capiIntegration?.settings as any)?.pixel_id || ''}
+                  value={
+                    pixelId ||
+                    (capiIntegration?.settings as any)?.pixel_id ||
+                    ""
+                  }
                   onChange={(e) => setPixelId(e.target.value)}
                   placeholder="לדוגמה: 123456789012345"
                   dir="ltr"
@@ -880,10 +1073,16 @@ export default function FacebookSettings() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="test-event-code">Test Event Code (אופציונלי)</Label>
+                <Label htmlFor="test-event-code">
+                  Test Event Code (אופציונלי)
+                </Label>
                 <Input
                   id="test-event-code"
-                  value={testEventCode || (capiIntegration?.settings as any)?.test_event_code || ''}
+                  value={
+                    testEventCode ||
+                    (capiIntegration?.settings as any)?.test_event_code ||
+                    ""
+                  }
                   onChange={(e) => setTestEventCode(e.target.value)}
                   placeholder="לדוגמה: TEST12345"
                   dir="ltr"
@@ -900,7 +1099,8 @@ export default function FacebookSettings() {
                   Access Token
                 </AlertTitle>
                 <AlertDescription className="text-right">
-                  אם התחברת דרך Lead Ads, אותו Token ישמש גם עבור CAPI. אחרת, התחבר קודם בטאב Lead Ads.
+                  אם התחברת דרך Lead Ads, אותו Token ישמש גם עבור CAPI. אחרת,
+                  התחבר קודם בטאב Lead Ads.
                 </AlertDescription>
               </Alert>
 
@@ -908,7 +1108,7 @@ export default function FacebookSettings() {
                 onClick={() => saveCapiMutation.mutate()}
                 disabled={!pixelId || saveCapiMutation.isPending}
               >
-                {saveCapiMutation.isPending ? 'שומר...' : 'שמור הגדרות'}
+                {saveCapiMutation.isPending ? "שומר..." : "שמור הגדרות"}
               </Button>
             </CardContent>
           </Card>
@@ -926,28 +1126,36 @@ export default function FacebookSettings() {
                 <div className="flex items-center justify-between p-3 bg-muted rounded-lg flex-row-reverse">
                   <div className="text-right">
                     <p className="font-medium">Lead</p>
-                    <p className="text-xs text-muted-foreground">כאשר ליד חדש נוצר במערכת</p>
+                    <p className="text-xs text-muted-foreground">
+                      כאשר ליד חדש נוצר במערכת
+                    </p>
                   </div>
                   <Badge>אוטומטי</Badge>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-muted rounded-lg flex-row-reverse">
                   <div className="text-right">
                     <p className="font-medium">Contact</p>
-                    <p className="text-xs text-muted-foreground">כאשר יוצרים קשר עם ליד</p>
+                    <p className="text-xs text-muted-foreground">
+                      כאשר יוצרים קשר עם ליד
+                    </p>
                   </div>
                   <Badge variant="secondary">עתידי</Badge>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-muted rounded-lg flex-row-reverse">
                   <div className="text-right">
                     <p className="font-medium">Lead Qualified</p>
-                    <p className="text-xs text-muted-foreground">כאשר ליד עובר לסטטוס proposal</p>
+                    <p className="text-xs text-muted-foreground">
+                      כאשר ליד עובר לסטטוס proposal
+                    </p>
                   </div>
                   <Badge variant="secondary">עתידי</Badge>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-muted rounded-lg flex-row-reverse">
                   <div className="text-right">
                     <p className="font-medium">Purchase</p>
-                    <p className="text-xs text-muted-foreground">כאשר ליד נסגר (won)</p>
+                    <p className="text-xs text-muted-foreground">
+                      כאשר ליד נסגר (won)
+                    </p>
                   </div>
                   <Badge variant="secondary">עתידי</Badge>
                 </div>
@@ -959,8 +1167,10 @@ export default function FacebookSettings() {
 
       <ManageIntegrationPermissionsDialog
         open={!!sharingIntegrationId}
-        onOpenChange={(open) => { if (!open) setSharingIntegrationId(null); }}
-        integrationId={sharingIntegrationId || ''}
+        onOpenChange={(open) => {
+          if (!open) setSharingIntegrationId(null);
+        }}
+        integrationId={sharingIntegrationId || ""}
         integrationName={`Facebook - ${sharingIntegrationName}`}
         integrationOwnerId={sharingOwnerId}
       />

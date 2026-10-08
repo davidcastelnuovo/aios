@@ -69,11 +69,17 @@ export function isScreeningQuestionKey(key: string): boolean {
   if (normalized.startsWith("fb_")) return false;
   // Catch Hebrew/English contact + campaign envelope labels Make sometimes
   // puts inside questions_and_answers (must not appear under "שאלות סינון").
-  if (/(טלפון|אימייל|מייל|email|phone|mobile|whatsapp)/i.test(normalized)) return false;
-  if (/^(שם|name|full.?name)(\b|_)/i.test(normalized) || normalized === "שם" || normalized === "name") {
+  if (/(טלפון|אימייל|מייל|email|phone|mobile|whatsapp)/i.test(normalized))
+    return false;
+  if (
+    /^(שם|name|full.?name)(\b|_)/i.test(normalized) ||
+    normalized === "שם" ||
+    normalized === "name"
+  ) {
     return false;
   }
-  if (/ליד חדש|מקמפיין פייסבוק|facebook campaign/i.test(normalized)) return false;
+  if (/ליד חדש|מקמפיין פייסבוק|facebook campaign/i.test(normalized))
+    return false;
   return true;
 }
 
@@ -103,10 +109,12 @@ export function parseQaText(value: string): Record<string, string> {
   return out;
 }
 
-export function filterScreeningAnswers(fieldData: Record<string, string>): Record<string, string> {
+export function filterScreeningAnswers(
+  fieldData: Record<string, string>,
+): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(fieldData).filter(([key, value]) =>
-      Boolean(value?.trim()) && isScreeningQuestionKey(key)
+    Object.entries(fieldData).filter(
+      ([key, value]) => Boolean(value?.trim()) && isScreeningQuestionKey(key),
     ),
   );
 }
@@ -122,9 +130,14 @@ export function buildFormQaSummary(fieldData: Record<string, string>): string {
     .join(" • ");
 }
 
-export function buildFacebookFields(fieldData: Record<string, string>): Record<string, string> {
+export function buildFacebookFields(
+  fieldData: Record<string, string>,
+): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(fieldData).map(([key, value]) => [`fb_${key.replace(/\s+/g, "_")}`, value]),
+    Object.entries(fieldData).map(([key, value]) => [
+      `fb_${key.replace(/\s+/g, "_")}`,
+      value,
+    ]),
   );
 }
 
@@ -201,23 +214,41 @@ export function firstLeadPayloadString(
  * lead_name, form_qa_summary, …). Those must trigger WhatsApp automations only —
  * not create rows in the agency CRM via webhook-lead-intake.
  */
-export function isClientLeadAlertPayload(payload: Record<string, unknown>): boolean {
-  if (payload.crm_intake === true || payload.create_crm_lead === true) return false;
+export function isClientLeadAlertPayload(
+  payload: Record<string, unknown>,
+): boolean {
+  if (payload.crm_intake === true || payload.create_crm_lead === true)
+    return false;
 
-  const explicitAutomationId = firstLeadPayloadString(payload, ["automation_id"]);
+  const explicitAutomationId = firstLeadPayloadString(payload, [
+    "automation_id",
+  ]);
   if (explicitAutomationId) return true;
 
-  const clientPhone = firstLeadPayloadString(payload, ["client_phone", "recipient_phone"]);
+  const clientPhone = firstLeadPayloadString(payload, [
+    "client_phone",
+    "recipient_phone",
+  ]);
   const clientId = firstLeadPayloadString(payload, ["client_id"]);
-  const leadName = firstLeadPayloadString(payload, ["lead_name", "contact_name", "full_name", "name"]);
-  const leadPhone = firstLeadPayloadString(payload, ["lead_phone", "phone", "phone_number", "mobile"]);
+  const leadName = firstLeadPayloadString(payload, [
+    "lead_name",
+    "contact_name",
+    "full_name",
+    "name",
+  ]);
+  const leadPhone = firstLeadPayloadString(payload, [
+    "lead_phone",
+    "phone",
+    "phone_number",
+    "mobile",
+  ]);
   const hasClientTarget = Boolean(clientPhone || clientId);
   const hasLeadIdentity = Boolean(leadName || leadPhone);
   const hasRoutingEnvelope = Boolean(
     firstLeadPayloadString(payload, ["client_name", "recipient_name"]) ||
-      firstLeadPayloadString(payload, ["form_qa_summary"]) ||
-      payload.questions_and_answers ||
-      payload.form_data,
+    firstLeadPayloadString(payload, ["form_qa_summary"]) ||
+    payload.questions_and_answers ||
+    payload.form_data,
   );
 
   return hasClientTarget && hasLeadIdentity && hasRoutingEnvelope;

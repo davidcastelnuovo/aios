@@ -64,7 +64,7 @@ export function AddSupplierForm() {
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
       if (!tenantId) throw new Error("לא נמצא tenant_id");
-      
+
       const { error } = await supabase.from("suppliers").insert({
         name: values.name,
         type: values.type as any,
@@ -99,7 +99,10 @@ export function AddSupplierForm() {
           הוסף ספק
         </Button>
       </DialogTrigger>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>הוסף ספק חדש</DialogTitle>
         </DialogHeader>
@@ -201,7 +204,11 @@ export function AddSupplierForm() {
               )}
             />
 
-            <Button type="submit" className="w-full" disabled={mutation.isPending}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={mutation.isPending}
+            >
               {mutation.isPending ? "מוסיף..." : "הוסף ספק"}
             </Button>
           </form>

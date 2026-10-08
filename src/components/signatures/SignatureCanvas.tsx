@@ -1,7 +1,13 @@
 import { useEffect, useRef } from "react";
 
 /** Fixed backing dimensions keep ink intact when the viewport changes size. */
-export function SignatureCanvas({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+export function SignatureCanvas({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
 
@@ -14,10 +20,13 @@ export function SignatureCanvas({ value, onChange }: { value: string; onChange: 
     let cancelled = false;
     const image = new Image();
     image.onload = () => {
-      if (!cancelled && !drawing.current) context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      if (!cancelled && !drawing.current)
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
     };
     image.src = value;
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [value]);
 
   const finish = () => {
@@ -40,9 +49,9 @@ export function SignatureCanvas({ value, onChange }: { value: string; onChange: 
         if (!context) return;
         canvas.setPointerCapture(event.pointerId);
         const rect = canvas.getBoundingClientRect();
-        const x = (event.clientX - rect.left) * canvas.width / rect.width;
-        const y = (event.clientY - rect.top) * canvas.height / rect.height;
-        context.lineWidth = 2 * canvas.width / rect.width;
+        const x = ((event.clientX - rect.left) * canvas.width) / rect.width;
+        const y = ((event.clientY - rect.top) * canvas.height) / rect.height;
+        context.lineWidth = (2 * canvas.width) / rect.width;
         context.lineCap = "round";
         context.lineJoin = "round";
         context.strokeStyle = "#000";
@@ -58,8 +67,10 @@ export function SignatureCanvas({ value, onChange }: { value: string; onChange: 
         const context = canvas.getContext("2d");
         if (!context) return;
         const rect = canvas.getBoundingClientRect();
-        context.lineTo((event.clientX - rect.left) * canvas.width / rect.width,
-          (event.clientY - rect.top) * canvas.height / rect.height);
+        context.lineTo(
+          ((event.clientX - rect.left) * canvas.width) / rect.width,
+          ((event.clientY - rect.top) * canvas.height) / rect.height,
+        );
         context.stroke();
       }}
       onPointerUp={finish}

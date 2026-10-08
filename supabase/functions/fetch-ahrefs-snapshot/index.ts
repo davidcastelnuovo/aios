@@ -6,10 +6,14 @@ import { mergeTrackedKeywordRows } from "../_shared/gscPosition.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
-function isServiceRoleAuth(authHeader: string | null, serviceKey: string): boolean {
+function isServiceRoleAuth(
+  authHeader: string | null,
+  serviceKey: string,
+): boolean {
   if (!authHeader) return false;
   if (serviceKey && authHeader === `Bearer ${serviceKey}`) return true;
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
@@ -19,8 +23,12 @@ function isServiceRoleAuth(authHeader: string | null, serviceKey: string): boole
     const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
     const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
     const payload = JSON.parse(atob(padded));
-    const projectRef = Deno.env.get("SUPABASE_PROJECT_ID") || "zvoijyneresvkadpprel";
-    return payload?.role === "service_role" && (!payload?.ref || payload.ref === projectRef);
+    const projectRef =
+      Deno.env.get("SUPABASE_PROJECT_ID") || "zvoijyneresvkadpprel";
+    return (
+      payload?.role === "service_role" &&
+      (!payload?.ref || payload.ref === projectRef)
+    );
   } catch {
     return false;
   }
@@ -37,18 +45,24 @@ Deno.serve(async (req) => {
     const ahrefsApiKey = Deno.env.get("AHREFS_API_KEY");
 
     if (!ahrefsApiKey) {
-      return new Response(JSON.stringify({ error: "Ahrefs API key not configured" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Ahrefs API key not configured" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "No authorization header" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "No authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -56,10 +70,17 @@ Deno.serve(async (req) => {
     if (isServiceRoleAuth(authHeader, supabaseServiceKey)) {
       user = { id: "system:fetch-ahrefs-snapshot" };
     } else {
-      const anonClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user: authUser }, error: userError } = await anonClient.auth.getUser();
+      const anonClient = createClient(
+        supabaseUrl,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        {
+          global: { headers: { Authorization: authHeader } },
+        },
+      );
+      const {
+        data: { user: authUser },
+        error: userError,
+      } = await anonClient.auth.getUser();
       if (userError || !authUser) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
@@ -92,12 +113,14 @@ Deno.serve(async (req) => {
     let projectId: string | number | undefined = projectIdFromBody;
 
     const gscKeywords: string[] = Array.isArray(gscKeywordsRaw)
-      ? Array.from(new Set(
-          gscKeywordsRaw
-            .filter((k): k is string => typeof k === "string")
-            .map((k) => k.toLowerCase().trim())
-            .filter((k) => k.length > 0)
-        ))
+      ? Array.from(
+          new Set(
+            gscKeywordsRaw
+              .filter((k): k is string => typeof k === "string")
+              .map((k) => k.toLowerCase().trim())
+              .filter((k) => k.length > 0),
+          ),
+        )
       : [];
 
     if (!clientId) {
@@ -129,20 +152,40 @@ Deno.serve(async (req) => {
         .replace(/\/.*$/, "")
         .trim();
 
-    const domain = normalizeDomain(rawDomain || client.ahrefs_domain || client.website);
+    const domain = normalizeDomain(
+      rawDomain || client.ahrefs_domain || client.website,
+    );
     if (!domain) {
       return new Response(
-        JSON.stringify({ error: "No domain available — set the client website or pass a domain" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          error:
+            "No domain available — set the client website or pass a domain",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Helper: fetch all Ahrefs projects (FREE endpoint) and find one matching domain.
-    const resolveProjectIdByDomain = async (targetDomain: string): Promise<{ projectId: string; mode?: string; protocol?: string } | null> => {
+    const resolveProjectIdByDomain = async (
+      targetDomain: string,
+    ): Promise<{
+      projectId: string;
+      mode?: string;
+      protocol?: string;
+    } | null> => {
       try {
-        const res = await fetch("https://api.ahrefs.com/v3/management/projects?output=json", {
-          headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
-        });
+        const res = await fetch(
+          "https://api.ahrefs.com/v3/management/projects?output=json",
+          {
+            headers: {
+              Authorization: `Bearer ${ahrefsApiKey}`,
+              Accept: "application/json",
+            },
+          },
+        );
         if (!res.ok) {
           console.warn(`projects list fetch failed: status=${res.status}`);
           return null;
@@ -150,13 +193,21 @@ Deno.serve(async (req) => {
         const json = await res.json();
         const projects = Array.isArray(json?.projects) ? json.projects : [];
         const target = normalizeDomain(targetDomain);
-        const match = projects.find((p: any) => normalizeDomain(p.url) === target)
-          || projects.find((p: any) => normalizeDomain(p.url).endsWith(target))
-          || projects.find((p: any) => target.endsWith(normalizeDomain(p.url)));
+        const match =
+          projects.find((p: any) => normalizeDomain(p.url) === target) ||
+          projects.find((p: any) => normalizeDomain(p.url).endsWith(target)) ||
+          projects.find((p: any) => target.endsWith(normalizeDomain(p.url)));
         if (!match) return null;
-        return { projectId: String(match.project_id), mode: match.mode, protocol: match.protocol };
+        return {
+          projectId: String(match.project_id),
+          mode: match.mode,
+          protocol: match.protocol,
+        };
       } catch (e) {
-        console.warn("resolveProjectIdByDomain threw:", e instanceof Error ? e.message : String(e));
+        console.warn(
+          "resolveProjectIdByDomain threw:",
+          e instanceof Error ? e.message : String(e),
+        );
         return null;
       }
     };
@@ -165,22 +216,33 @@ Deno.serve(async (req) => {
     // last saved report > Ahrefs projects list.
     const resolveAhrefsProjectId = async (
       current: string | number | undefined,
-    ): Promise<{ projectId: string | number; mode?: string; protocol?: string } | null> => {
+    ): Promise<{
+      projectId: string | number;
+      mode?: string;
+      protocol?: string;
+    } | null> => {
       if (current) return { projectId: current };
 
       const { data: seoTables } = await supabase
         .from("crm_tables")
         .select("integration_settings, updated_at")
         .eq("integration_type", "ahrefs")
-        .or(`client_id.eq.${client.id},integration_settings->>clientId.eq.${client.id}`)
+        .or(
+          `client_id.eq.${client.id},integration_settings->>clientId.eq.${client.id}`,
+        )
         .order("updated_at", { ascending: false })
         .limit(20);
       for (const table of (seoTables as any[]) || []) {
-        const settings = (table?.integration_settings || {}) as Record<string, unknown>;
+        const settings = (table?.integration_settings || {}) as Record<
+          string,
+          unknown
+        >;
         const pid = settings.ahrefs_project_id;
         if (!pid) continue;
         const tableDomain = normalizeDomain(
-          String(settings.targetDomain || settings.domain || settings.target || ""),
+          String(
+            settings.targetDomain || settings.domain || settings.target || "",
+          ),
         );
         if (!tableDomain || tableDomain === domain) {
           return {
@@ -200,7 +262,8 @@ Deno.serve(async (req) => {
         .order("report_date", { ascending: false })
         .limit(20);
       const rows = (lastWithProject as any[]) || [];
-      const match = rows.find((r: any) => normalizeDomain(r.domain) === domain) || rows[0];
+      const match =
+        rows.find((r: any) => normalizeDomain(r.domain) === domain) || rows[0];
       const meta = match?.metadata as any;
       const savedPid = meta?.ahrefs_project_id;
       if (savedPid) {
@@ -215,7 +278,9 @@ Deno.serve(async (req) => {
     };
 
     // Helper: pull tracked keywords from Rank Tracker (FREE endpoints).
-    const fetchTrackedKeywords = async (pid: string | number): Promise<{ tracked: any[]; source: string | null }> => {
+    const fetchTrackedKeywords = async (
+      pid: string | number,
+    ): Promise<{ tracked: any[]; source: string | null }> => {
       const trackedByKey = new Map<string, any>();
       const normalizeTracked = (k: any, source: string, device?: string) => ({
         keyword: String(k.keyword || "").trim(),
@@ -236,15 +301,34 @@ Deno.serve(async (req) => {
       });
       const addRows = (rows: any[], source: string, device?: string) => {
         for (const row of rows) {
-          if (!row || typeof row.keyword !== "string" || !row.keyword.trim()) continue;
+          if (!row || typeof row.keyword !== "string" || !row.keyword.trim())
+            continue;
           const n = normalizeTracked(row, source, device);
-          const key = [n.keyword.toLowerCase(), n.country, n.location, n.language].join("|");
+          const key = [
+            n.keyword.toLowerCase(),
+            n.country,
+            n.location,
+            n.language,
+          ].join("|");
           if (!trackedByKey.has(key)) trackedByKey.set(key, n);
         }
       };
       const selectFields = [
-        "keyword","position","position_prev","best_position","best_position_prev",
-        "volume","keyword_difficulty","cost_per_click","traffic","traffic_prev","url","country","location","language","tags",
+        "keyword",
+        "position",
+        "position_prev",
+        "best_position",
+        "best_position_prev",
+        "volume",
+        "keyword_difficulty",
+        "cost_per_click",
+        "traffic",
+        "traffic_prev",
+        "url",
+        "country",
+        "location",
+        "language",
+        "tags",
       ].join(",");
       const today = new Date().toISOString().split("T")[0];
       const trackerDates: string[] = [];
@@ -263,27 +347,43 @@ Deno.serve(async (req) => {
             `?project_id=${encodeURIComponent(String(pid))}` +
             `&device=${device}&date=${trackerDate}&date_compared=${comparedDate}` +
             `&select=${encodeURIComponent(selectFields)}&limit=1000&volume_mode=monthly&output=json`;
-          const r = await fetch(url, { headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" } });
+          const r = await fetch(url, {
+            headers: {
+              Authorization: `Bearer ${ahrefsApiKey}`,
+              Accept: "application/json",
+            },
+          });
           if (r.ok) {
             const j = await r.json();
             const overviews = Array.isArray(j?.overviews) ? j.overviews : [];
             addRows(overviews, "rank-tracker-overview", device);
-            console.log(`tracked_only Rank Tracker: project=${pid} date=${trackerDate} device=${device} rows=${overviews.length}`);
+            console.log(
+              `tracked_only Rank Tracker: project=${pid} date=${trackerDate} device=${device} rows=${overviews.length}`,
+            );
           } else {
             const errTxt = await r.text();
-            console.warn(`tracked_only Rank Tracker failed: project=${pid} date=${trackerDate} device=${device} status=${r.status} body=${errTxt.slice(0, 200)}`);
+            console.warn(
+              `tracked_only Rank Tracker failed: project=${pid} date=${trackerDate} device=${device} status=${r.status} body=${errTxt.slice(0, 200)}`,
+            );
           }
         }
         if (trackedByKey.size > 0) break;
       }
       if (trackedByKey.size === 0) {
         const url = `https://api.ahrefs.com/v3/management/project-keywords?project_id=${encodeURIComponent(String(pid))}&output=json`;
-        const r = await fetch(url, { headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" } });
+        const r = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${ahrefsApiKey}`,
+            Accept: "application/json",
+          },
+        });
         if (r.ok) {
           const j = await r.json();
           const rows = Array.isArray(j?.keywords) ? j.keywords : [];
           addRows(rows, "management-project-keywords");
-          console.log(`tracked_only Project Keywords fallback: project=${pid} rows=${rows.length}`);
+          console.log(
+            `tracked_only Project Keywords fallback: project=${pid} rows=${rows.length}`,
+          );
         }
       }
       const tracked = Array.from(trackedByKey.values());
@@ -301,11 +401,16 @@ Deno.serve(async (req) => {
         .order("report_date", { ascending: false })
         .limit(20);
       const all = (prevReports as any[]) || [];
-      const sameDomain = all.filter((r) => normalizeDomain(r.domain) === domain);
+      const sameDomain = all.filter(
+        (r) => normalizeDomain(r.domain) === domain,
+      );
       const history = sameDomain.length > 0 ? sameDomain : all;
       let filled = Array.isArray(rows) ? rows : [];
       for (const prev of history) {
-        filled = mergeTrackedKeywordRows(prev?.report_data?.tracked_keywords, filled);
+        filled = mergeTrackedKeywordRows(
+          prev?.report_data?.tracked_keywords,
+          filled,
+        );
       }
       return filled;
     };
@@ -324,14 +429,18 @@ Deno.serve(async (req) => {
             error: "לא נמצא פרויקט Ahrefs Rank Tracker מתאים לדומיין",
             domain,
           }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
       projectId = resolved.projectId;
       resolvedMode = resolved.mode;
       resolvedProtocol = resolved.protocol;
 
-      const { tracked: fetchedTracked, source } = await fetchTrackedKeywords(projectId);
+      const { tracked: fetchedTracked, source } =
+        await fetchTrackedKeywords(projectId);
       const tracked = await fillTrackedFromHistory(fetchedTracked);
 
       // Find latest existing report to merge into
@@ -342,11 +451,16 @@ Deno.serve(async (req) => {
         .eq("client_id", client.id)
         .order("report_date", { ascending: false })
         .limit(20);
-      const latest = ((latestReports as any[]) || []).find((r: any) => normalizeDomain(r.domain) === domain)
-        || ((latestReports as any[]) || [])[0];
+      const latest =
+        ((latestReports as any[]) || []).find(
+          (r: any) => normalizeDomain(r.domain) === domain,
+        ) || ((latestReports as any[]) || [])[0];
 
       if (latest) {
-        const mergedReportData = { ...(latest.report_data || {}), tracked_keywords: tracked };
+        const mergedReportData = {
+          ...(latest.report_data || {}),
+          tracked_keywords: tracked,
+        };
         const mergedMetadata = {
           ...(latest.metadata || {}),
           ahrefs_project_id: String(projectId),
@@ -362,8 +476,14 @@ Deno.serve(async (req) => {
         if (updErr) {
           console.error("tracked_only update failed:", updErr);
           return new Response(
-            JSON.stringify({ error: "Failed to update report", details: updErr.message }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({
+              error: "Failed to update report",
+              details: updErr.message,
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
       } else {
@@ -375,7 +495,12 @@ Deno.serve(async (req) => {
           domain,
           report_type: "site_explorer",
           report_date: new Date().toISOString().split("T")[0],
-          report_data: { domain, snapshot: {}, organic_keywords: [], tracked_keywords: tracked },
+          report_data: {
+            domain,
+            snapshot: {},
+            organic_keywords: [],
+            tracked_keywords: tracked,
+          },
           metadata: {
             source: "fetch-ahrefs-snapshot:tracked_only",
             triggered_by: user.id,
@@ -397,12 +522,10 @@ Deno.serve(async (req) => {
           tracked_source: source,
           merged_into_report_id: latest?.id ?? null,
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
     // ============ end tracked_only mode ============
-
-
 
     // Strategy: try multiple modes (subdomains/exact/domain) and dates.
     // For new Ahrefs projects there might be no historical snapshot for the
@@ -437,9 +560,16 @@ Deno.serve(async (req) => {
     const tryModes: Array<{ mode: string; protocol: string }> =
       effectiveHintMode || effectiveHintProtocol
         ? [
-            { mode: effectiveHintMode || "subdomains", protocol: effectiveHintProtocol || "both" },
+            {
+              mode: effectiveHintMode || "subdomains",
+              protocol: effectiveHintProtocol || "both",
+            },
             ...baseModes.filter(
-              (m) => !(m.mode === (effectiveHintMode || "subdomains") && m.protocol === (effectiveHintProtocol || "both"))
+              (m) =>
+                !(
+                  m.mode === (effectiveHintMode || "subdomains") &&
+                  m.protocol === (effectiveHintProtocol || "both")
+                ),
             ),
           ]
         : baseModes;
@@ -452,25 +582,33 @@ Deno.serve(async (req) => {
     let lastErr = "";
     let lastStatus = 0;
 
-    const METRICS_SELECT = "domain_rating,org_traffic,org_keywords,backlinks,refdomains";
+    const METRICS_SELECT =
+      "domain_rating,org_traffic,org_keywords,backlinks,refdomains";
 
     outer: for (const { mode, protocol } of tryModes) {
       for (const d of tryDates) {
         const overviewUrl = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(domain)}&date=${d}&protocol=${protocol}&mode=${mode}&output=json&volume_mode=monthly&select=${METRICS_SELECT}`;
         const overviewRes = await fetch(overviewUrl, {
-          headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+          headers: {
+            Authorization: `Bearer ${ahrefsApiKey}`,
+            Accept: "application/json",
+          },
         });
         if (overviewRes.ok) {
           overviewJson = await overviewRes.json();
           usedDate = d;
           usedMode = mode;
           usedProtocol = protocol;
-          console.log(`Ahrefs overview OK: domain=${domain} date=${d} mode=${mode} protocol=${protocol}`);
+          console.log(
+            `Ahrefs overview OK: domain=${domain} date=${d} mode=${mode} protocol=${protocol}`,
+          );
           break outer;
         }
         lastErr = await overviewRes.text();
         lastStatus = overviewRes.status;
-        console.warn(`Ahrefs overview failed: domain=${domain} date=${d} mode=${mode} protocol=${protocol} status=${overviewRes.status} body=${lastErr.slice(0, 200)}`);
+        console.warn(
+          `Ahrefs overview failed: domain=${domain} date=${d} mode=${mode} protocol=${protocol} status=${overviewRes.status} body=${lastErr.slice(0, 200)}`,
+        );
         if (overviewRes.status === 401 || overviewRes.status === 403) {
           break outer;
         }
@@ -484,13 +622,17 @@ Deno.serve(async (req) => {
           details: lastErr || "No snapshot found",
           status: lastStatus,
           domain,
-          hint: lastStatus === 404
-            ? "אין snapshot זמין ב-Ahrefs עבור הדומיין הזה. ייתכן שהפרויקט נוצר זה עתה ו-Ahrefs עדיין לא ביצעה crawl ראשון (תהליך שיכול לקחת 24-48 שעות)."
-            : lastStatus === 401 || lastStatus === 403
-            ? "מפתח Ahrefs API לא תקין או חסר הרשאות."
-            : "בדוק שהדומיין נכון ושיש לך גישה אליו ב-Ahrefs.",
+          hint:
+            lastStatus === 404
+              ? "אין snapshot זמין ב-Ahrefs עבור הדומיין הזה. ייתכן שהפרויקט נוצר זה עתה ו-Ahrefs עדיין לא ביצעה crawl ראשון (תהליך שיכול לקחת 24-48 שעות)."
+              : lastStatus === 401 || lastStatus === 403
+                ? "מפתח Ahrefs API לא תקין או חסר הרשאות."
+                : "בדוק שהדומיין נכון ושיש לך גישה אליו ב-Ahrefs.",
         }),
-        { status: lastStatus === 401 || lastStatus === 403 ? 401 : 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: lastStatus === 401 || lastStatus === 403 ? 401 : 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
     const m = overviewJson?.metrics || overviewJson || {};
@@ -512,10 +654,16 @@ Deno.serve(async (req) => {
     const fetchOrganicKeywords = async (target: string): Promise<any[]> => {
       const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(target)}&date=${reportDate}&country=${country}&protocol=${usedProtocol}&mode=${usedMode}&output=json&limit=500&select=keyword,volume,keyword_difficulty,cpc,sum_traffic,best_position,best_position_url`;
       const kwRes = await fetch(kwUrl, {
-        headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+        headers: {
+          Authorization: `Bearer ${ahrefsApiKey}`,
+          Accept: "application/json",
+        },
       });
       if (!kwRes.ok) {
-        console.warn(`Ahrefs organic-keywords fetch failed for ${target}:`, await kwRes.text());
+        console.warn(
+          `Ahrefs organic-keywords fetch failed for ${target}:`,
+          await kwRes.text(),
+        );
         return [];
       }
       const kwJson = await kwRes.json();
@@ -532,8 +680,14 @@ Deno.serve(async (req) => {
     // Ahrefs v3 returns metrics with these keys: domain_rating, ahrefs_rank, org_traffic, org_keywords, backlinks, refdomains, org_cost
     // Compute Top 3 / Top 10 keyword counts from the organic keywords list (up to limit=500).
     // Fallback to tracked_keywords (rank tracker) when organic is empty so the snapshot stays useful.
-    let top3Count = organic_keywords.filter((k: any) => typeof k.position === "number" && k.position >= 1 && k.position <= 3).length;
-    let top10Count = organic_keywords.filter((k: any) => typeof k.position === "number" && k.position >= 1 && k.position <= 10).length;
+    let top3Count = organic_keywords.filter(
+      (k: any) =>
+        typeof k.position === "number" && k.position >= 1 && k.position <= 3,
+    ).length;
+    let top10Count = organic_keywords.filter(
+      (k: any) =>
+        typeof k.position === "number" && k.position >= 1 && k.position <= 10,
+    ).length;
 
     const snapshot: Record<string, any> = {
       dr: m.domain_rating,
@@ -553,7 +707,10 @@ Deno.serve(async (req) => {
         const ds = d.toISOString().split("T")[0];
         const url = `https://api.ahrefs.com/v3/site-explorer/metrics?target=${encodeURIComponent(domain)}&date=${ds}&protocol=${usedProtocol}&mode=${usedMode}&output=json&volume_mode=monthly&select=${METRICS_SELECT}`;
         const r = await fetch(url, {
-          headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+          headers: {
+            Authorization: `Bearer ${ahrefsApiKey}`,
+            Accept: "application/json",
+          },
         });
         if (r.ok) {
           const j = await r.json();
@@ -594,9 +751,14 @@ Deno.serve(async (req) => {
         const { tracked, source } = await fetchTrackedKeywords(projectId);
         tracked_keywords = tracked;
         trackedSource = source;
-        console.log(`Ahrefs tracked keywords resolved: project=${projectId} tracked_count=${tracked_keywords.length} source=${trackedSource ?? "none"}`);
+        console.log(
+          `Ahrefs tracked keywords resolved: project=${projectId} tracked_count=${tracked_keywords.length} source=${trackedSource ?? "none"}`,
+        );
       } catch (e) {
-        console.warn("Rank Tracker fetch threw:", e instanceof Error ? e.message : String(e));
+        console.warn(
+          "Rank Tracker fetch threw:",
+          e instanceof Error ? e.message : String(e),
+        );
       }
     }
 
@@ -606,12 +768,18 @@ Deno.serve(async (req) => {
     tracked_keywords = await fillTrackedFromHistory(tracked_keywords);
     if (beforeFill === 0 && tracked_keywords.length > 0) {
       trackedSource = "preserved-previous";
-      console.log(`Preserved ${tracked_keywords.length} tracked_keywords from previous report`);
+      console.log(
+        `Preserved ${tracked_keywords.length} tracked_keywords from previous report`,
+      );
     }
 
     // When Site Explorer returns no organic rows but Rank Tracker has phrases, mirror
     // tracked into organic_keywords so the SEO dashboard isn't blank (dentiq.co.il).
-    if ((organic_keywords?.length ?? 0) === 0 && Array.isArray(tracked_keywords) && tracked_keywords.length > 0) {
+    if (
+      (organic_keywords?.length ?? 0) === 0 &&
+      Array.isArray(tracked_keywords) &&
+      tracked_keywords.length > 0
+    ) {
       organic_keywords = tracked_keywords.map((k: any) => ({
         keyword: k.keyword,
         position: k.position ?? k.best_position ?? null,
@@ -629,35 +797,48 @@ Deno.serve(async (req) => {
     };
     if (organic_keywords.length > 0) {
       const organicTop3 = organic_keywords.filter((k) => {
-        const p = posOf(k); return p != null && p <= 3;
+        const p = posOf(k);
+        return p != null && p <= 3;
       }).length;
       const organicTop10 = organic_keywords.filter((k) => {
-        const p = posOf(k); return p != null && p <= 10;
+        const p = posOf(k);
+        return p != null && p <= 10;
       }).length;
-      if (!snapshot.org_keywords_total) snapshot.org_keywords_total = organic_keywords.length;
+      if (!snapshot.org_keywords_total)
+        snapshot.org_keywords_total = organic_keywords.length;
       if (!snapshot.org_keywords_top3) snapshot.org_keywords_top3 = organicTop3;
-      if (!snapshot.org_keywords_top10) snapshot.org_keywords_top10 = organicTop10;
+      if (!snapshot.org_keywords_top10)
+        snapshot.org_keywords_top10 = organicTop10;
     }
-
-
-
-
 
     // 5) Enrichment via keywords-explorer/overview:
     //    Pull volume/kd/cpc for (a) tracked keywords missing volume,
     //    and (b) every GSC keyword passed in that's not already in organic/tracked.
     //    These are the same data the user sees in the GSC tab and the
     //    "ביטויים במעקב" tab, so they need volume to be useful.
-    const gsc_keyword_metrics: Record<string, { volume: number | null; kd: number | null; cpc: number | null }> = {};
+    const gsc_keyword_metrics: Record<
+      string,
+      { volume: number | null; kd: number | null; cpc: number | null }
+    > = {};
     try {
-      const norm = (s: any) => String(s || "").toLowerCase().trim();
+      const norm = (s: any) =>
+        String(s || "")
+          .toLowerCase()
+          .trim();
 
-      const haveVolume = new Map<string, { volume: number | null; kd: number | null; cpc: number | null }>();
+      const haveVolume = new Map<
+        string,
+        { volume: number | null; kd: number | null; cpc: number | null }
+      >();
       for (const k of organic_keywords) {
         const key = norm(k.keyword);
         if (!key) continue;
         if (k.volume != null) {
-          haveVolume.set(key, { volume: k.volume ?? null, kd: k.kd ?? null, cpc: k.cpc ?? null });
+          haveVolume.set(key, {
+            volume: k.volume ?? null,
+            kd: k.kd ?? null,
+            cpc: k.cpc ?? null,
+          });
         }
       }
 
@@ -675,7 +856,9 @@ Deno.serve(async (req) => {
       }
 
       const needList = Array.from(needSet);
-      console.log(`Ahrefs enrichment: organic_with_volume=${haveVolume.size} tracked=${tracked_keywords.length} gsc_in=${gscKeywords.length} to_enrich=${needList.length}`);
+      console.log(
+        `Ahrefs enrichment: organic_with_volume=${haveVolume.size} tracked=${tracked_keywords.length} gsc_in=${gscKeywords.length} to_enrich=${needList.length}`,
+      );
 
       if (needList.length > 0) {
         const BATCH = 100;
@@ -694,18 +877,29 @@ Deno.serve(async (req) => {
           });
           if (!res.ok) {
             const errTxt = await res.text();
-            console.warn(`keywords-explorer/overview failed: status=${res.status} body=${errTxt.slice(0, 300)}`);
+            console.warn(
+              `keywords-explorer/overview failed: status=${res.status} body=${errTxt.slice(0, 300)}`,
+            );
             // Try GET fallback with comma-separated keywords
             const getUrl = `https://api.ahrefs.com/v3/keywords-explorer/overview?country=${encodeURIComponent(country)}&select=${encodeURIComponent("keyword,volume,difficulty,cpc")}&keywords=${encodeURIComponent(batch.join(","))}`;
             const res2 = await fetch(getUrl, {
-              headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+              headers: {
+                Authorization: `Bearer ${ahrefsApiKey}`,
+                Accept: "application/json",
+              },
             });
             if (!res2.ok) {
-              console.warn(`keywords-explorer/overview GET also failed: status=${res2.status}`);
+              console.warn(
+                `keywords-explorer/overview GET also failed: status=${res2.status}`,
+              );
               continue;
             }
             const j2 = await res2.json();
-            const rows2 = Array.isArray(j2?.keywords) ? j2.keywords : (Array.isArray(j2?.metrics) ? j2.metrics : []);
+            const rows2 = Array.isArray(j2?.keywords)
+              ? j2.keywords
+              : Array.isArray(j2?.metrics)
+                ? j2.metrics
+                : [];
             for (const r of rows2) {
               const key = norm(r.keyword);
               if (!key) continue;
@@ -718,7 +912,11 @@ Deno.serve(async (req) => {
             continue;
           }
           const j = await res.json();
-          const rows = Array.isArray(j?.keywords) ? j.keywords : (Array.isArray(j?.metrics) ? j.metrics : []);
+          const rows = Array.isArray(j?.keywords)
+            ? j.keywords
+            : Array.isArray(j?.metrics)
+              ? j.metrics
+              : [];
           for (const r of rows) {
             const key = norm(r.keyword);
             if (!key) continue;
@@ -736,13 +934,17 @@ Deno.serve(async (req) => {
         const key = norm(t.keyword);
         const m = gsc_keyword_metrics[key];
         if (m) {
-          if (t.volume == null || t.volume === 0) t.volume = m.volume ?? t.volume;
+          if (t.volume == null || t.volume === 0)
+            t.volume = m.volume ?? t.volume;
           if (t.kd == null) t.kd = m.kd;
           if (t.cpc == null) t.cpc = m.cpc;
         }
       }
     } catch (e) {
-      console.warn("keywords-explorer enrichment threw:", e instanceof Error ? e.message : String(e));
+      console.warn(
+        "keywords-explorer enrichment threw:",
+        e instanceof Error ? e.message : String(e),
+      );
     }
 
     const reportPayload = {
@@ -793,13 +995,18 @@ Deno.serve(async (req) => {
         snapshot,
         webhook: webhookJson,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
     console.error("Error in fetch-ahrefs-snapshot:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

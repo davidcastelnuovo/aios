@@ -12,7 +12,9 @@ export type AgencyScopedTask = {
  * task is linked to a client, the client's agency is the source of truth — the
  * same rule the Carmen notification router already uses for outbound routing.
  */
-export function resolveTaskEffectiveAgency(task: AgencyScopedTask): string | null {
+export function resolveTaskEffectiveAgency(
+  task: AgencyScopedTask,
+): string | null {
   const clientAgencyId = task.clients?.agency_id;
   if (task.client_id && clientAgencyId) return clientAgencyId;
   return task.agency_id ?? null;
@@ -54,7 +56,9 @@ export function filterTasksBySelectedAgency<T extends AgencyScopedTask>(
   selectedAgency: string | null | undefined,
 ): T[] {
   if (!selectedAgency || selectedAgency === "all") return tasks;
-  return tasks.filter((task) => resolveTaskEffectiveAgency(task) === selectedAgency);
+  return tasks.filter(
+    (task) => resolveTaskEffectiveAgency(task) === selectedAgency,
+  );
 }
 
 /**
@@ -79,7 +83,10 @@ export function headerAgencyAppliesToBoard(
   campaignerFilter: string,
   selectedAgency?: string | null,
 ): boolean {
-  const effective = resolveTasksBoardAgencyFilter(campaignerFilter, selectedAgency ?? "all");
+  const effective = resolveTasksBoardAgencyFilter(
+    campaignerFilter,
+    selectedAgency ?? "all",
+  );
   return effective !== "all" && effective != null;
 }
 
@@ -124,7 +131,9 @@ export function filterTasksByBoardTenantScope<T extends BoardTenantScopedTask>(
   sharedAgencyIds: string[],
 ): T[] {
   if (!tenantId) return tasks;
-  return tasks.filter((task) => taskBelongsToBoardTenantScope(task, tenantId, sharedAgencyIds));
+  return tasks.filter((task) =>
+    taskBelongsToBoardTenantScope(task, tenantId, sharedAgencyIds),
+  );
 }
 
 /**
@@ -137,7 +146,10 @@ export function filterTasksByBoardTenantScope<T extends BoardTenantScopedTask>(
  */
 export function buildTasksBoardScopeOrFilter(scope: TasksBoardScope): string {
   const parts = [`tenant_id.eq.${scope.tenantId}`];
-  if (scope.type === "tenant_or_shared" && scope.crossTenantAgencyIds.length > 0) {
+  if (
+    scope.type === "tenant_or_shared" &&
+    scope.crossTenantAgencyIds.length > 0
+  ) {
     parts.push(`agency_id.in.(${scope.crossTenantAgencyIds.join(",")})`);
   }
   return parts.join(",");
@@ -153,7 +165,11 @@ export function buildTasksBoardScopeOrFilter(scope: TasksBoardScope): string {
  * the narrowing on rows the tenant may already read.
  */
 export type TasksBoardScope =
-  | { type: "tenant_or_shared"; tenantId: string; crossTenantAgencyIds: string[] }
+  | {
+      type: "tenant_or_shared";
+      tenantId: string;
+      crossTenantAgencyIds: string[];
+    }
   | { type: "tenant"; tenantId: string };
 
 export function resolveTasksBoardScope(input: {
@@ -163,7 +179,11 @@ export function resolveTasksBoardScope(input: {
   const { tenantId, crossTenantAgencyIds = [] } = input;
   const sharedAgencyIds = Array.from(new Set(crossTenantAgencyIds));
   if (sharedAgencyIds.length > 0) {
-    return { type: "tenant_or_shared", tenantId, crossTenantAgencyIds: sharedAgencyIds };
+    return {
+      type: "tenant_or_shared",
+      tenantId,
+      crossTenantAgencyIds: sharedAgencyIds,
+    };
   }
   return { type: "tenant", tenantId };
 }
@@ -179,7 +199,9 @@ export type CampaignerScopedTask = AgencyScopedTask & {
   created_by?: string | null;
 };
 
-export function syncLocalTasksForAgencyFilter<T extends CampaignerScopedTask>(input: {
+export function syncLocalTasksForAgencyFilter<
+  T extends CampaignerScopedTask,
+>(input: {
   isFetching: boolean;
   fetchedTasks: T[] | undefined | null;
   previousLocal: T[];
@@ -198,6 +220,10 @@ export function syncLocalTasksForAgencyFilter<T extends CampaignerScopedTask>(in
   } = input;
   const base = isFetching
     ? filterTasksForBoardView(previousLocal, selectedAgency, campaignerFilter)
-    : filterTasksForBoardView(fetchedTasks ?? [], selectedAgency, campaignerFilter);
+    : filterTasksForBoardView(
+        fetchedTasks ?? [],
+        selectedAgency,
+        campaignerFilter,
+      );
   return applyCampaignerFilter ? applyCampaignerFilter(base) : base;
 }

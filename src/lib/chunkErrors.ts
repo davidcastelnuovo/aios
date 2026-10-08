@@ -3,7 +3,7 @@ export function isChunkLoadError(error: unknown): boolean {
   const text = [
     error instanceof Error ? error.message : String(error ?? ""),
     error instanceof Error ? error.name : "",
-    error instanceof Error ? error.stack ?? "" : "",
+    error instanceof Error ? (error.stack ?? "") : "",
   ]
     .join(" ")
     .toLowerCase();

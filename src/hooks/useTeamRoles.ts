@@ -122,7 +122,10 @@ export function useTeamRoles() {
 
     // ברירת מחדל לפי org_type
     const orgType = tenant?.org_type || "organization";
-    return DEFAULT_ROLES_BY_ORG_TYPE[orgType] || DEFAULT_ROLES_BY_ORG_TYPE.organization;
+    return (
+      DEFAULT_ROLES_BY_ORG_TYPE[orgType] ||
+      DEFAULT_ROLES_BY_ORG_TYPE.organization
+    );
   })();
 
   return {
@@ -142,15 +145,16 @@ export function useUpdateTeamRoles() {
   const updateRoles = async (roles: TeamRole[]) => {
     if (!tenantId) throw new Error("No tenant ID found");
 
-    const { error } = await supabase
-      .from("tenant_settings")
-      .upsert({
+    const { error } = await supabase.from("tenant_settings").upsert(
+      {
         tenant_id: tenantId,
         setting_key: "team_roles",
         setting_value: roles as any,
-      }, {
+      },
+      {
         onConflict: "tenant_id,setting_key",
-      });
+      },
+    );
 
     if (error) throw error;
   };

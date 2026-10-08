@@ -5,19 +5,47 @@ import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target, ChevronsUpDown, Check, ArrowUpDown, Award } from "lucide-react";
+import {
+  Link2,
+  RefreshCw,
+  Search,
+  MousePointerClick,
+  Eye,
+  Target,
+  ChevronsUpDown,
+  Check,
+  ArrowUpDown,
+  Award,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
 import { formatGscCtrPercent, gscCtrAsPercent } from "@/lib/gscFormat";
 import { trackedPhraseRank } from "@/lib/gscPosition";
 import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 
-export type GscDateRange = '28d' | '3m' | '12m';
+export type GscDateRange = "28d" | "3m" | "12m";
 
 export interface GscMultiPeriodData {
   current: GscKeywordData[];
@@ -82,24 +110,27 @@ interface GscIntegrationProps {
 }
 
 const DATE_RANGE_DAYS: Record<GscDateRange, number> = {
-  '28d': 28,
-  '3m': 90,
-  '12m': 365,
+  "28d": 28,
+  "3m": 90,
+  "12m": 365,
 };
 
 const DATE_RANGE_LABELS: Record<GscDateRange, string> = {
-  '28d': 'חודש אחרון',
-  '3m': '3 חודשים',
-  '12m': 'שנה',
+  "28d": "חודש אחרון",
+  "3m": "3 חודשים",
+  "12m": "שנה",
 };
 
-function computeRange(range: GscDateRange): { startDate: string; endDate: string } {
+function computeRange(range: GscDateRange): {
+  startDate: string;
+  endDate: string;
+} {
   const days = DATE_RANGE_DAYS[range];
   const end = new Date();
   const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
   return {
-    startDate: start.toISOString().split('T')[0],
-    endDate: end.toISOString().split('T')[0],
+    startDate: start.toISOString().split("T")[0],
+    endDate: end.toISOString().split("T")[0],
   };
 }
 
@@ -151,17 +182,19 @@ export function GscIntegration({
   // the selection logic below skips it so we can fall through to the
   // org-wide service-side fallback instead of showing a reconnect banner
   // on a single client when other clients work fine via the fallback.
-  const [brokenIntegrationIds, setBrokenIntegrationIds] = useState<Set<string>>(new Set());
-  const [internalDateRange, setInternalDateRange] = useState<GscDateRange>('28d');
+  const [brokenIntegrationIds, setBrokenIntegrationIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [internalDateRange, setInternalDateRange] =
+    useState<GscDateRange>("28d");
   const effectiveDateRange: GscDateRange = dateRange ?? internalDateRange;
 
   // Use per-user integration filtering (own + shared) across the full
   // shared-agency tenant scope when provided.
   const lookupTenants =
     Array.isArray(tenantIds) && tenantIds.length > 0 ? tenantIds : tenantId;
-  const { data: gscIntegrations = [], isLoading: isLoadingIntegration } = useUserIntegrations(
-    lookupTenants, 'google_search_console'
-  );
+  const { data: gscIntegrations = [], isLoading: isLoadingIntegration } =
+    useUserIntegrations(lookupTenants, "google_search_console");
 
   // Selection priority for the GSC integration to use:
   //   1. The connection explicitly selected for this report.
@@ -187,7 +220,7 @@ export function GscIntegration({
     };
 
     const usableIntegrations = gscIntegrations.filter(
-      (i: any) => !brokenIntegrationIds.has(i.id)
+      (i: any) => !brokenIntegrationIds.has(i.id),
     );
 
     if (!usableIntegrations.length) {
@@ -205,7 +238,7 @@ export function GscIntegration({
       const sites = (i.settings as any)?.available_sites || [];
       const site = sites.find((s: any) => s.siteUrl === mapped);
       // Accept if we don't have permission metadata, or if it's not 'siteUnverifiedUser'
-      return !site || site.permissionLevel !== 'siteUnverifiedUser';
+      return !site || site.permissionLevel !== "siteUnverifiedUser";
     });
     if (withGoodMapping) return withGoodMapping;
 
@@ -214,7 +247,13 @@ export function GscIntegration({
     // as the public shared link). Fall back to the first personal integration
     // only if no org fallback is available.
     return buildFallback() || usableIntegrations[0];
-  }, [gscIntegrations, clientId, resolvedFallback, brokenIntegrationIds, selectedIntegrationId]);
+  }, [
+    gscIntegrations,
+    clientId,
+    resolvedFallback,
+    brokenIntegrationIds,
+    selectedIntegrationId,
+  ]);
 
   const isFallbackIntegration = !!(gscIntegration as any)?._isFallback;
 
@@ -229,16 +268,25 @@ export function GscIntegration({
     queryKey: ["gsc-sites", gscIntegration?.id],
     queryFn: async () => {
       if (!gscIntegration?.id) {
-        return { sites: [] as GscSite[], needsReconnect: false, ownerEmail: null as string | null };
+        return {
+          sites: [] as GscSite[],
+          needsReconnect: false,
+          ownerEmail: null as string | null,
+        };
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const response = await supabase.functions.invoke("google-search-console-auth?action=get_sites", {
-        body: { integrationId: gscIntegration.id },
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      const response = await supabase.functions.invoke(
+        "google-search-console-auth?action=get_sites",
+        {
+          body: { integrationId: gscIntegration.id },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        },
+      );
 
       if (response.error) {
         // Treat as needs_reconnect so UI can fall back to cached sites.
@@ -252,7 +300,8 @@ export function GscIntegration({
       return {
         sites: Array.isArray(data.sites) ? (data.sites as GscSite[]) : [],
         needsReconnect: !!data.needs_reconnect,
-        ownerEmail: data.owner_email || (settings?.google_email as string) || null,
+        ownerEmail:
+          data.owner_email || (settings?.google_email as string) || null,
       };
     },
     enabled: !!gscIntegration?.id && !isFallbackIntegration,
@@ -283,13 +332,17 @@ export function GscIntegration({
   ]);
 
   const cachedSites: GscSite[] = useMemo(
-    () => (Array.isArray(settings?.available_sites) ? (settings.available_sites as GscSite[]) : []),
-    [settings]
+    () =>
+      Array.isArray(settings?.available_sites)
+        ? (settings.available_sites as GscSite[])
+        : [],
+    [settings],
   );
 
   const liveSites = sitesResult?.sites || [];
   const needsReconnect = !!sitesResult?.needsReconnect;
-  const reconnectOwnerEmail = sitesResult?.ownerEmail || (settings?.google_email as string) || null;
+  const reconnectOwnerEmail =
+    sitesResult?.ownerEmail || (settings?.google_email as string) || null;
 
   // Fall back to cached sites when the live call returned nothing (auth issue
   // or transient failure) so the user can still pick a property.
@@ -304,14 +357,15 @@ export function GscIntegration({
   // Filter out properties we have no API access to (siteUnverifiedUser → 403).
   // We still keep them in `availableSites` for diagnostics, but never auto-select them.
   const usableSites = useMemo(
-    () => availableSites.filter((s) => s.permissionLevel !== 'siteUnverifiedUser'),
-    [availableSites]
+    () =>
+      availableSites.filter((s) => s.permissionLevel !== "siteUnverifiedUser"),
+    [availableSites],
   );
 
   const isUsableSite = (siteUrl?: string) => {
     if (!siteUrl) return false;
     const meta = availableSites.find((s) => s.siteUrl === siteUrl);
-    if (meta) return meta.permissionLevel !== 'siteUnverifiedUser';
+    if (meta) return meta.permissionLevel !== "siteUnverifiedUser";
     // Once a selected account has returned its property list, a property absent
     // from that list belongs to another account and must not be reused.
     if (!isFallbackIntegration && availableSites.length > 0) return false;
@@ -331,13 +385,16 @@ export function GscIntegration({
 
   const normalizedDomain = normalizeDomain(domain);
   const matchedSite = normalizedDomain
-    ? usableSites.find((site) => seoDomainsMatch(site.siteUrl, normalizedDomain))
+    ? usableSites.find((site) =>
+        seoDomainsMatch(site.siteUrl, normalizedDomain),
+      )
     : null;
 
   // Auto-link by domain: only suggest if the report domain matches a GSC property.
   // Single-property auto-select kept as a convenience when there's nothing else to choose.
   const fallbackSiteUrl =
-    matchedSite?.siteUrl || (usableSites.length === 1 ? usableSites[0].siteUrl : "");
+    matchedSite?.siteUrl ||
+    (usableSites.length === 1 ? usableSites[0].siteUrl : "");
   const effectiveSiteUrl = persistedSiteUrl || fallbackSiteUrl;
 
   // Reset to empty ONLY when we truly have no integration at all. Avoid wiping
@@ -360,12 +417,26 @@ export function GscIntegration({
   // condition where the 28d response (fewer keywords) overwrites the multi-period
   // result on first load.
   const enableMultiPeriod = !!onMultiPeriodLoaded && hideTable;
-  const enableSinglePeriod = !!gscIntegration?.id && !!effectiveSiteUrl && !enableMultiPeriod;
+  const enableSinglePeriod =
+    !!gscIntegration?.id && !!effectiveSiteUrl && !enableMultiPeriod;
 
-  const { data: gscData, isLoading: isLoadingData, isFetching: isFetchingData, refetch: refetchData } = useQuery({
-    queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl, effectiveDateRange, keywords?.join(",")],
+  const {
+    data: gscData,
+    isLoading: isLoadingData,
+    isFetching: isFetchingData,
+    refetch: refetchData,
+  } = useQuery({
+    queryKey: [
+      "gsc-keyword-data",
+      gscIntegration?.id,
+      effectiveSiteUrl,
+      effectiveDateRange,
+      keywords?.join(","),
+    ],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       const { startDate, endDate } = computeRange(effectiveDateRange);
@@ -393,7 +464,11 @@ export function GscIntegration({
       }
       // Token revoked → mark integration as broken so the selection memo
       // falls back to the org-wide service-side integration if available.
-      if (response.data?.needs_reconnect && gscIntegration?.id && !isFallbackIntegration) {
+      if (
+        response.data?.needs_reconnect &&
+        gscIntegration?.id &&
+        !isFallbackIntegration
+      ) {
         const id = gscIntegration.id;
         setBrokenIntegrationIds((prev) => {
           if (prev.has(id)) return prev;
@@ -408,16 +483,23 @@ export function GscIntegration({
     },
     enabled: enableSinglePeriod,
   });
-  const { data: multiPeriodData, isLoading: isLoadingMulti, isFetching: isFetchingMulti, refetch: refetchMulti } = useQuery({
+  const {
+    data: multiPeriodData,
+    isLoading: isLoadingMulti,
+    isFetching: isFetchingMulti,
+    refetch: refetchMulti,
+  } = useQuery({
     queryKey: ["gsc-multi-period", gscIntegration?.id, effectiveSiteUrl],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       const dateMinus = (days: number) => {
         const d = new Date();
         d.setDate(d.getDate() - days);
-        return d.toISOString().split('T')[0];
+        return d.toISOString().split("T")[0];
       };
 
       // Each period: 28-day window ending at the given offset.
@@ -425,13 +507,18 @@ export function GscIntegration({
       // so that the SEO dashboard can merge GSC traffic into ALL Ahrefs keywords
       // (including older ones), not just last month's GSC keywords.
       const periods = {
-        current:    { startOffset: 90,  endOffset: 0,   aggregateAll: true  },
-        prevMonth:  { startOffset: 58,  endOffset: 30,  aggregateAll: false },
-        threeMonth: { startOffset: 118, endOffset: 90,  aggregateAll: false },
-        yearly:     { startOffset: 393, endOffset: 365, aggregateAll: false },
+        current: { startOffset: 90, endOffset: 0, aggregateAll: true },
+        prevMonth: { startOffset: 58, endOffset: 30, aggregateAll: false },
+        threeMonth: { startOffset: 118, endOffset: 90, aggregateAll: false },
+        yearly: { startOffset: 393, endOffset: 365, aggregateAll: false },
       } as const;
 
-      const entries = Object.entries(periods) as Array<[keyof typeof periods, { startOffset: number; endOffset: number; aggregateAll: boolean }]>;
+      const entries = Object.entries(periods) as Array<
+        [
+          keyof typeof periods,
+          { startOffset: number; endOffset: number; aggregateAll: boolean },
+        ]
+      >;
       const responses = await Promise.all(
         entries.map(([, p]) =>
           supabase.functions.invoke("fetch-gsc-data", {
@@ -444,8 +531,8 @@ export function GscIntegration({
               forceLive: forceLiveNextRef.current,
             },
             headers: { Authorization: `Bearer ${session.access_token}` },
-          })
-        )
+          }),
+        ),
       );
       forceLiveNextRef.current = false;
 
@@ -456,13 +543,17 @@ export function GscIntegration({
         yearly: [],
       };
       entries.forEach(([key], idx) => {
-        const rows = Array.isArray(responses[idx].data?.rows) ? responses[idx].data.rows : [];
+        const rows = Array.isArray(responses[idx].data?.rows)
+          ? responses[idx].data.rows
+          : [];
         result[key] = rows as GscKeywordData[];
       });
 
       // If any of the parallel calls reported needs_reconnect, mark the
       // integration as broken so the selection memo falls back.
-      const anyNeedsReconnect = responses.some((r: any) => r?.data?.needs_reconnect);
+      const anyNeedsReconnect = responses.some(
+        (r: any) => r?.data?.needs_reconnect,
+      );
       if (anyNeedsReconnect && gscIntegration?.id && !isFallbackIntegration) {
         const id = gscIntegration.id;
         setBrokenIntegrationIds((prev) => {
@@ -501,17 +592,22 @@ export function GscIntegration({
 
   const connectMutation = useMutation({
     mutationFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const response = await supabase.functions.invoke("google-search-console-auth?action=authorize", {
-        body: {
-          tenantId,
-          userId: session.user.id,
-          siteUrl: domain || "",
+      const response = await supabase.functions.invoke(
+        "google-search-console-auth?action=authorize",
+        {
+          body: {
+            tenantId,
+            userId: session.user.id,
+            siteUrl: domain || "",
+          },
+          headers: { Authorization: `Bearer ${session.access_token}` },
         },
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      );
 
       if (response.error) throw response.error;
       return response.data;
@@ -538,7 +634,11 @@ export function GscIntegration({
       }
       const updatedClientSites = { ...clientSites, [clientId]: siteUrl };
       // Strip any legacy global site_url/siteUrl to prevent cross-client leakage.
-      const { site_url: _legacySnake, siteUrl: _legacyCamel, ...cleanSettings } = settings || {};
+      const {
+        site_url: _legacySnake,
+        siteUrl: _legacyCamel,
+        ...cleanSettings
+      } = settings || {};
       try {
         const { error } = await supabase
           .from("tenant_integrations")
@@ -555,12 +655,17 @@ export function GscIntegration({
       } catch (err) {
         // RLS may block updating an integration shared by another user.
         // Swallow the error — the report-level save (onSiteSelected) is the real source of truth.
-        console.warn('[GSC] tenant_integrations update blocked (likely shared integration RLS):', err);
+        console.warn(
+          "[GSC] tenant_integrations update blocked (likely shared integration RLS):",
+          err,
+        );
         return { siteUrl, dbUpdated: false };
       }
     },
     onSuccess: ({ siteUrl, dbUpdated }) => {
-      queryClient.invalidateQueries({ queryKey: ["user-integrations", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["user-integrations", tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["gsc-keyword-data"] });
       onSiteSelected?.(siteUrl);
       if (dbUpdated) toast.success("הנכס עודכן");
@@ -581,7 +686,12 @@ export function GscIntegration({
       updateSiteMutation.mutate(matchedSite.siteUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gscIntegration?.id, clientId, matchedSite?.siteUrl, storedClientSiteIsUsable]);
+  }, [
+    gscIntegration?.id,
+    clientId,
+    matchedSite?.siteUrl,
+    storedClientSiteIsUsable,
+  ]);
 
   if (isLoadingIntegration) return null;
 
@@ -622,7 +732,9 @@ export function GscIntegration({
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 text-primary" />
-            <CardTitle className="text-sm font-medium">Google Search Console</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Google Search Console
+            </CardTitle>
             <Badge variant="secondary" className="text-xs">
               {settings?.google_email || "מחובר"}
             </Badge>
@@ -632,7 +744,10 @@ export function GscIntegration({
               </Badge>
             )}
             {hideTable && gscData && gscData.length > 0 && (
-              <Badge variant="outline" className="text-xs text-green-700 border-green-300 bg-green-50">
+              <Badge
+                variant="outline"
+                className="text-xs text-green-700 border-green-300 bg-green-50"
+              >
                 {gscData.length} ביטויים נטענו
               </Badge>
             )}
@@ -651,14 +766,20 @@ export function GscIntegration({
                 </SelectTrigger>
                 <SelectContent>
                   {gscIntegrations.map((integration) => {
-                    const integrationSettings =
-                      (integration.settings || {}) as Record<string, unknown>;
-                    const email = String(integrationSettings.google_email || "חשבון Google");
+                    const integrationSettings = (integration.settings ||
+                      {}) as Record<string, unknown>;
+                    const email = String(
+                      integrationSettings.google_email || "חשבון Google",
+                    );
                     const owner = integration._isOwn
                       ? "שלי"
                       : integration._sharedByName || "משותף";
                     return (
-                      <SelectItem key={integration.id} value={integration.id} className="text-xs">
+                      <SelectItem
+                        key={integration.id}
+                        value={integration.id}
+                        className="text-xs"
+                      >
                         {email} · {owner}
                       </SelectItem>
                     );
@@ -679,32 +800,45 @@ export function GscIntegration({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(DATE_RANGE_LABELS) as GscDateRange[]).map((k) => (
-                    <SelectItem key={k} value={k} className="text-xs">
-                      {DATE_RANGE_LABELS[k]}
-                    </SelectItem>
-                  ))}
+                  {(Object.keys(DATE_RANGE_LABELS) as GscDateRange[]).map(
+                    (k) => (
+                      <SelectItem key={k} value={k} className="text-xs">
+                        {DATE_RANGE_LABELS[k]}
+                      </SelectItem>
+                    ),
+                  )}
                 </SelectContent>
               </Select>
             )}
             {usableSites.length > 0 && (
               <Popover open={sitePopoverOpen} onOpenChange={setSitePopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" className="h-7 text-xs w-full min-w-0 sm:w-[220px] justify-between">
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="h-7 text-xs w-full min-w-0 sm:w-[220px] justify-between"
+                  >
                     {effectiveSiteUrl
-                      ? effectiveSiteUrl.replace("sc-domain:", "").replace("https://", "")
+                      ? effectiveSiteUrl
+                          .replace("sc-domain:", "")
+                          .replace("https://", "")
                       : "בחר נכס Search Console"}
                     <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[260px] p-0" align="start">
                   <Command>
-                    <CommandInput placeholder="חפש נכס..." className="h-8 text-xs" />
+                    <CommandInput
+                      placeholder="חפש נכס..."
+                      className="h-8 text-xs"
+                    />
                     <CommandList>
                       <CommandEmpty>לא נמצאו נכסים</CommandEmpty>
                       <CommandGroup>
                         {usableSites.map((site) => {
-                          const label = site.siteUrl.replace("sc-domain:", "").replace("https://", "");
+                          const label = site.siteUrl
+                            .replace("sc-domain:", "")
+                            .replace("https://", "");
                           return (
                             <CommandItem
                               key={site.siteUrl}
@@ -716,7 +850,14 @@ export function GscIntegration({
                               }}
                               className="text-xs"
                             >
-                              <Check className={cn("mr-2 h-3 w-3", effectiveSiteUrl === site.siteUrl ? "opacity-100" : "opacity-0")} />
+                              <Check
+                                className={cn(
+                                  "mr-2 h-3 w-3",
+                                  effectiveSiteUrl === site.siteUrl
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
                               {label}
                             </CommandItem>
                           );
@@ -738,29 +879,50 @@ export function GscIntegration({
                   if (!isFallbackIntegration) await refetchSites();
                   if (enableMultiPeriod) {
                     await queryClient.invalidateQueries({
-                      queryKey: ["gsc-multi-period", gscIntegration?.id, effectiveSiteUrl],
+                      queryKey: [
+                        "gsc-multi-period",
+                        gscIntegration?.id,
+                        effectiveSiteUrl,
+                      ],
                     });
                     const result = await refetchMulti();
                     if (result.error) throw result.error;
                     const count = result.data?.current?.length ?? 0;
-                    toast.success(`נתוני GSC עודכנו (${count.toLocaleString()} ביטויים)`);
+                    toast.success(
+                      `נתוני GSC עודכנו (${count.toLocaleString()} ביטויים)`,
+                    );
                   } else {
                     await queryClient.invalidateQueries({
-                      queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl],
+                      queryKey: [
+                        "gsc-keyword-data",
+                        gscIntegration?.id,
+                        effectiveSiteUrl,
+                      ],
                     });
                     const result = await refetchData();
                     if (result.error) throw result.error;
-                    const count = Array.isArray(result.data) ? result.data.length : 0;
-                    toast.success(`נתוני GSC עודכנו (${count.toLocaleString()} ביטויים)`);
+                    const count = Array.isArray(result.data)
+                      ? result.data.length
+                      : 0;
+                    toast.success(
+                      `נתוני GSC עודכנו (${count.toLocaleString()} ביטויים)`,
+                    );
                   }
                 } catch (error) {
                   console.error("GSC refresh failed:", error);
                   toast.error("שגיאה ברענון נתוני Google Search Console");
                 }
               }}
-              disabled={!effectiveSiteUrl || isFetchingData || isFetchingMulti || isFetchingSites}
+              disabled={
+                !effectiveSiteUrl ||
+                isFetchingData ||
+                isFetchingMulti ||
+                isFetchingSites
+              }
             >
-              <RefreshCw className={`h-3 w-3 ${(isFetchingData || isFetchingMulti || isFetchingSites) ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`h-3 w-3 ${isFetchingData || isFetchingMulti || isFetchingSites ? "animate-spin" : ""}`}
+              />
             </Button>
           </div>
         </div>
@@ -771,7 +933,9 @@ export function GscIntegration({
           <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-center justify-between gap-2">
             <p className="text-xs text-amber-800 dark:text-amber-200">
               {`החיבור ל-Google${reconnectOwnerEmail ? ` של ${reconnectOwnerEmail}` : ""} פג תוקף — יש להתחבר מחדש`}
-              {cachedSites.length > 0 ? " (בינתיים מוצגים נכסים אחרונים מהמטמון)" : ""}
+              {cachedSites.length > 0
+                ? " (בינתיים מוצגים נכסים אחרונים מהמטמון)"
+                : ""}
             </p>
             <Button
               size="sm"
@@ -789,22 +953,28 @@ export function GscIntegration({
       {!needsReconnect && !isLoadingSites && availableSites.length === 0 && (
         <CardContent className="px-4 pb-3 pt-0">
           <p className="text-xs text-muted-foreground text-center">
-            החיבור קיים אבל לא נטענו נכסים מ-Search Console. נסה רענון או חיבור מחדש.
+            החיבור קיים אבל לא נטענו נכסים מ-Search Console. נסה רענון או חיבור
+            מחדש.
           </p>
         </CardContent>
       )}
 
-      {!isLoadingSites && availableSites.length > 0 && usableSites.length === 0 && (
-        <CardContent className="px-4 pb-3 pt-0">
-          <p className="text-xs text-muted-foreground text-center">
-            אין הרשאת גישה לאף נכס ב-Search Console. בקש מבעל הנכס לאמת אותך כמשתמש מורשה, או חבר חשבון Google אחר.
-          </p>
-        </CardContent>
-      )}
+      {!isLoadingSites &&
+        availableSites.length > 0 &&
+        usableSites.length === 0 && (
+          <CardContent className="px-4 pb-3 pt-0">
+            <p className="text-xs text-muted-foreground text-center">
+              אין הרשאת גישה לאף נכס ב-Search Console. בקש מבעל הנכס לאמת אותך
+              כמשתמש מורשה, או חבר חשבון Google אחר.
+            </p>
+          </CardContent>
+        )}
 
       {!effectiveSiteUrl && usableSites.length > 0 && !isLoadingSites && (
         <CardContent className="px-4 pb-3 pt-0">
-          <p className="text-xs text-muted-foreground text-center">בחר נכס Search Console כדי למשוך נתונים</p>
+          <p className="text-xs text-muted-foreground text-center">
+            בחר נכס Search Console כדי למשוך נתונים
+          </p>
         </CardContent>
       )}
 
@@ -819,7 +989,12 @@ export function GscIntegration({
                 קליקים
               </div>
               <p className="text-sm font-bold">
-                {gscData.reduce((sum: number, row: GscKeywordData) => sum + row.clicks, 0).toLocaleString()}
+                {gscData
+                  .reduce(
+                    (sum: number, row: GscKeywordData) => sum + row.clicks,
+                    0,
+                  )
+                  .toLocaleString()}
               </p>
             </div>
             <div className="text-center">
@@ -828,7 +1003,12 @@ export function GscIntegration({
                 חשיפות
               </div>
               <p className="text-sm font-bold">
-                {gscData.reduce((sum: number, row: GscKeywordData) => sum + row.impressions, 0).toLocaleString()}
+                {gscData
+                  .reduce(
+                    (sum: number, row: GscKeywordData) => sum + row.impressions,
+                    0,
+                  )
+                  .toLocaleString()}
               </p>
             </div>
             <div className="text-center">
@@ -852,7 +1032,10 @@ export function GscIntegration({
                 עמוד ראשון
               </div>
               <p className="text-sm font-bold">
-                {gscData.filter((row: GscKeywordData) => row.position <= 10).length}
+                {
+                  gscData.filter((row: GscKeywordData) => row.position <= 10)
+                    .length
+                }
               </p>
             </div>
           </div>
@@ -871,7 +1054,9 @@ export function GscIntegration({
 
       {effectiveSiteUrl && !enableMultiPeriod && !gscData && !isLoadingData && (
         <CardContent className="px-4 pb-3 pt-0">
-          <p className="text-xs text-muted-foreground text-center">אין נתונים זמינים עבור הנכס שנבחר</p>
+          <p className="text-xs text-muted-foreground text-center">
+            אין נתונים זמינים עבור הנכס שנבחר
+          </p>
         </CardContent>
       )}
     </Card>
@@ -900,13 +1085,19 @@ function GscQueriesTable({
 }) {
   const { forceIrrelevant } = useSeoKeywordRelevance(relevancePersistKey);
   const rankOpts = useMemo(
-    () => ({ tracked: trackedKeywords, forceIrrelevant, ahrefsPositions: trackedAhrefsPositions }),
+    () => ({
+      tracked: trackedKeywords,
+      forceIrrelevant,
+      ahrefsPositions: trackedAhrefsPositions,
+    }),
     [trackedKeywords, forceIrrelevant, trackedAhrefsPositions],
   );
   const [sortBy, setSortBy] = useState<keyof GscKeywordData>("position");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchFilter, setSearchFilter] = useState("");
-  const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? "all");
+  const [langFilter, setLangFilterState] = useState<LangFilter>(
+    initialLangFilter ?? "all",
+  );
 
   // Sync if the parent changes the saved value (e.g., after async DB load)
   useEffect(() => {
@@ -922,7 +1113,9 @@ function GscQueriesTable({
   };
 
   const langCounts = useMemo(() => {
-    let he = 0, en = 0, other = 0;
+    let he = 0,
+      en = 0,
+      other = 0;
     for (const row of data) {
       const k = row.keyword || "";
       if (HEBREW_REGEX.test(k)) he++;
@@ -935,21 +1128,26 @@ function GscQueriesTable({
   const sortedData = useMemo(() => {
     let filtered = data;
     if (langFilter !== "all") {
-      filtered = filtered.filter(row => {
+      filtered = filtered.filter((row) => {
         const k = row.keyword || "";
         if (langFilter === "he") return HEBREW_REGEX.test(k);
-        if (langFilter === "en") return ENGLISH_REGEX.test(k) && !HEBREW_REGEX.test(k);
+        if (langFilter === "en")
+          return ENGLISH_REGEX.test(k) && !HEBREW_REGEX.test(k);
         return true;
       });
     }
     if (searchFilter.trim()) {
       const q = searchFilter.toLowerCase();
-      filtered = filtered.filter(row => row.keyword.toLowerCase().includes(q));
+      filtered = filtered.filter((row) =>
+        row.keyword.toLowerCase().includes(q),
+      );
     }
     return filtered.slice().sort((a, b) => {
       if (sortBy === "position") {
-        const aShown = trackedPhraseRank(a.keyword, a.position, rankOpts)?.position ?? null;
-        const bShown = trackedPhraseRank(b.keyword, b.position, rankOpts)?.position ?? null;
+        const aShown =
+          trackedPhraseRank(a.keyword, a.position, rankOpts)?.position ?? null;
+        const bShown =
+          trackedPhraseRank(b.keyword, b.position, rankOpts)?.position ?? null;
         if (aShown == null && bShown == null) return 0;
         if (aShown == null) return 1;
         if (bShown == null) return -1;
@@ -961,11 +1159,12 @@ function GscQueriesTable({
     });
   }, [data, sortBy, sortOrder, searchFilter, langFilter, rankOpts]);
 
-  const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
+  const formatNumber = (num: number) =>
+    new Intl.NumberFormat("he-IL").format(num);
 
   const handleSortColumn = (col: keyof GscKeywordData) => {
     if (sortBy === col) {
-      setSortOrder(o => o === "asc" ? "desc" : "asc");
+      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
     } else {
       setSortBy(col);
       // position: ascending is best (lower = better); others: descending is best
@@ -974,7 +1173,8 @@ function GscQueriesTable({
   };
 
   const SortIcon = ({ col }: { col: keyof GscKeywordData }) => {
-    if (sortBy !== col) return <ArrowUpDown className="h-3 w-3 opacity-30 inline ml-1" />;
+    if (sortBy !== col)
+      return <ArrowUpDown className="h-3 w-3 opacity-30 inline ml-1" />;
     return (
       <span className="inline ml-1 text-primary">
         {sortOrder === "asc" ? "↑" : "↓"}
@@ -996,7 +1196,9 @@ function GscQueriesTable({
               onClick={() => setLangFilter("all")}
               className={cn(
                 "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
-                langFilter === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                langFilter === "all"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted",
               )}
             >
               הכל ({formatNumber(langCounts.all)})
@@ -1006,7 +1208,9 @@ function GscQueriesTable({
               onClick={() => setLangFilter("he")}
               className={cn(
                 "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
-                langFilter === "he" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                langFilter === "he"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted",
               )}
             >
               עברית ({formatNumber(langCounts.he)})
@@ -1016,7 +1220,9 @@ function GscQueriesTable({
               onClick={() => setLangFilter("en")}
               className={cn(
                 "px-2.5 h-7 text-xs font-medium rounded-sm transition-colors",
-                langFilter === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                langFilter === "en"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted",
               )}
             >
               English ({formatNumber(langCounts.en)})
@@ -1065,37 +1271,61 @@ function GscQueriesTable({
           <tbody>
             {sortedData.slice(0, 200).map((row, index) => (
               <tr key={index} className="border-b hover:bg-muted/50">
-                <td className="py-1.5 px-3 font-medium max-w-[300px] truncate" title={row.keyword}>
+                <td
+                  className="py-1.5 px-3 font-medium max-w-[300px] truncate"
+                  title={row.keyword}
+                >
                   {row.keyword}
                 </td>
                 <td className="text-center py-1.5 px-3">
                   {(() => {
-                    const shown = trackedPhraseRank(row.keyword, row.position, rankOpts)?.position ?? null;
+                    const shown =
+                      trackedPhraseRank(row.keyword, row.position, rankOpts)
+                        ?.position ?? null;
                     if (shown == null) {
-                      return <span className="text-xs text-muted-foreground" title="לא בטופ 20">—</span>;
+                      return (
+                        <span
+                          className="text-xs text-muted-foreground"
+                          title="לא בטופ 20"
+                        >
+                          —
+                        </span>
+                      );
                     }
                     return (
-                      <span className={cn(
-                        "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium",
-                        shown <= 3 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
-                        shown <= 10 ? "bg-primary/10 text-primary" :
-                        "bg-muted text-muted-foreground"
-                      )}>
+                      <span
+                        className={cn(
+                          "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium",
+                          shown <= 3
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                            : shown <= 10
+                              ? "bg-primary/10 text-primary"
+                              : "bg-muted text-muted-foreground",
+                        )}
+                      >
                         {shown.toFixed(1)}
                       </span>
                     );
                   })()}
                 </td>
-                <td className="text-center py-1.5 px-3">{formatNumber(row.clicks)}</td>
-                <td className="text-center py-1.5 px-3">{formatNumber(row.impressions)}</td>
-                <td className="text-center py-1.5 px-3">{formatGscCtrPercent(row.ctr) ?? "—"}</td>
+                <td className="text-center py-1.5 px-3">
+                  {formatNumber(row.clicks)}
+                </td>
+                <td className="text-center py-1.5 px-3">
+                  {formatNumber(row.impressions)}
+                </td>
+                <td className="text-center py-1.5 px-3">
+                  {formatGscCtrPercent(row.ctr) ?? "—"}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       {sortedData.length > 200 && (
-        <p className="text-xs text-muted-foreground text-center">מציג 200 מתוך {formatNumber(sortedData.length)} ביטויים</p>
+        <p className="text-xs text-muted-foreground text-center">
+          מציג 200 מתוך {formatNumber(sortedData.length)} ביטויים
+        </p>
       )}
     </div>
   );

@@ -38,72 +38,92 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import { WaProviderConnectionPicker } from "./WaProviderConnectionPicker";
 
-const formSchema = z.object({
-  name: z.string().min(1, "שם האוטומציה הוא שדה חובה"),
-  description: z.string().optional(),
-  trigger_type: z.enum([
-    "task_assigned",
-    "task_collaborator_added",
-    "task_update_added",
-    "task_status_changed",
-    "lead_status_changed",
-    "lead_created",
-    "client_created",
-    "client_status_changed",
-    "onboarding_status_changed",
-    "meeting_created",
-    "meeting_day_after",
-    "meeting_same_day",
-    "task_calendar_created",
-    "task_overdue",
-    "inbound_webhook_task",
-    "inbound_webhook_lead",
-    "report_alert_triggered",
-  ]),
-  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber", "send_greenapi_message", "send_greenapi_to_campaigner", "add_lead_update", "add_client_update", "create_task", "create_lead"]),
-  // Green API connection selection
-  green_api_integration_id: z.string().optional(),
-  // Green API to campaigner fields
-  campaigner_send_target: z.enum(["phone", "group"]).optional(),
-  // Green API manual target fields
-  greenapi_send_to_type: z.enum(["contact", "manual_phone", "manual_group"]).optional(),
-  greenapi_manual_phone: z.string().optional(),
-  greenapi_manual_group_id: z.string().optional(),
-  // Green API / update template fields
-  message_template: z.string().optional(),
-  update_template: z.string().optional(),
-  webhook_url: z.string().optional(),
-  webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
-  body_template: z.string().optional(),
-  conditions: z.string().optional(),
-  status_entity: z.enum(["lead", "task"]).optional(),
-  status_value: z.string().optional(),
-  trigger_status_value: z.string().optional(),
-  update_field_name: z.string().optional(),
-  update_field_value: z.string().optional(),
-  // ManyChat WhatsApp fields
-  manychat_tag_id: z.string().optional(),
-  field_mapping_date: z.string().optional(),
-  field_mapping_time: z.string().optional(),
-  field_mapping_location: z.string().optional(),
-  field_mapping_contact: z.string().optional(),
-  // Create task fields
-  task_title_template: z.string().optional(),
-  task_notes_template: z.string().optional(),
-  task_priority: z.number().optional(),
-  task_due_days: z.number().optional(),
-}).refine((data) => {
-  if (data.action_type === "webhook" && !data.webhook_url) {
-    return false;
-  }
-  if (data.action_type === "update_status" && !data.status_value) {
-    return false;
-  }
-  return true;
-}, {
-  message: "נא למלא את כל השדות הנדרשים",
-  path: ["action_type"],
-});
+const formSchema = z
+  .object({
+    name: z.string().min(1, "שם האוטומציה הוא שדה חובה"),
+    description: z.string().optional(),
+    trigger_type: z.enum([
+      "task_assigned",
+      "task_collaborator_added",
+      "task_update_added",
+      "task_status_changed",
+      "lead_status_changed",
+      "lead_created",
+      "client_created",
+      "client_status_changed",
+      "onboarding_status_changed",
+      "meeting_created",
+      "meeting_day_after",
+      "meeting_same_day",
+      "task_calendar_created",
+      "task_overdue",
+      "inbound_webhook_task",
+      "inbound_webhook_lead",
+      "report_alert_triggered",
+    ]),
+    action_type: z.enum([
+      "webhook",
+      "email",
+      "notification",
+      "update_status",
+      "send_whatsapp",
+      "create_manychat_subscriber",
+      "send_greenapi_message",
+      "send_greenapi_to_campaigner",
+      "add_lead_update",
+      "add_client_update",
+      "create_task",
+      "create_lead",
+    ]),
+    // Green API connection selection
+    green_api_integration_id: z.string().optional(),
+    // Green API to campaigner fields
+    campaigner_send_target: z.enum(["phone", "group"]).optional(),
+    // Green API manual target fields
+    greenapi_send_to_type: z
+      .enum(["contact", "manual_phone", "manual_group"])
+      .optional(),
+    greenapi_manual_phone: z.string().optional(),
+    greenapi_manual_group_id: z.string().optional(),
+    // Green API / update template fields
+    message_template: z.string().optional(),
+    update_template: z.string().optional(),
+    webhook_url: z.string().optional(),
+    webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
+    body_template: z.string().optional(),
+    conditions: z.string().optional(),
+    status_entity: z.enum(["lead", "task"]).optional(),
+    status_value: z.string().optional(),
+    trigger_status_value: z.string().optional(),
+    update_field_name: z.string().optional(),
+    update_field_value: z.string().optional(),
+    // ManyChat WhatsApp fields
+    manychat_tag_id: z.string().optional(),
+    field_mapping_date: z.string().optional(),
+    field_mapping_time: z.string().optional(),
+    field_mapping_location: z.string().optional(),
+    field_mapping_contact: z.string().optional(),
+    // Create task fields
+    task_title_template: z.string().optional(),
+    task_notes_template: z.string().optional(),
+    task_priority: z.number().optional(),
+    task_due_days: z.number().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.action_type === "webhook" && !data.webhook_url) {
+        return false;
+      }
+      if (data.action_type === "update_status" && !data.status_value) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "נא למלא את כל השדות הנדרשים",
+      path: ["action_type"],
+    },
+  );
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -142,16 +162,15 @@ const LEAD_DATE_FIELDS = [
   { value: "itai_meeting_date", label: "תאריך פגישה עם איתי" },
 ];
 
-const TASK_DATE_FIELDS = [
-  { value: "due_date", label: "תאריך יעד" },
-];
+const TASK_DATE_FIELDS = [{ value: "due_date", label: "תאריך יעד" }];
 
 export function AddAutomationForm() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
-  const { activeStatuses: leadStatuses, isLoading: isLoadingStatuses } = useLeadStatuses();
+  const { activeStatuses: leadStatuses, isLoading: isLoadingStatuses } =
+    useLeadStatuses();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -192,96 +211,106 @@ export function AddAutomationForm() {
 
   // Fetch ManyChat tags when action type is send_whatsapp or create_manychat_subscriber
   const { data: manychatTags, isLoading: isLoadingTags } = useQuery({
-    queryKey: ['manychat-tags', tenantId],
+    queryKey: ["manychat-tags", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase.functions.invoke('get-manychat-tags', {
-        body: { tenantId }
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "get-manychat-tags",
+        {
+          body: { tenantId },
+        },
+      );
       if (error) throw error;
       return Array.isArray(data?.tags) ? data.tags : [];
     },
-    enabled: !!tenantId && (actionType === "send_whatsapp" || actionType === "create_manychat_subscriber"),
+    enabled:
+      !!tenantId &&
+      (actionType === "send_whatsapp" ||
+        actionType === "create_manychat_subscriber"),
   });
 
   // Fetch Green API integrations when action type requires Green API
   // Include both tenant integrations AND integrations the user has permission to use
   const { data: greenApiIntegrations } = useQuery({
-    queryKey: ['green-api-integrations-for-automation', tenantId, actionType],
+    queryKey: ["green-api-integrations-for-automation", tenantId, actionType],
     queryFn: async () => {
       if (!tenantId) return [];
-      
+
       // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         return [];
       }
-      
-      
+
       // Get tenant integrations
       const { data: tenantIntegrations, error: tenantError } = await supabase
-        .from('tenant_integrations')
-        .select('id, settings, user_id, integration_type')
-        .eq('tenant_id', tenantId)
-        .in('integration_type', ['green_api', 'manus_wa'])
-        .eq('is_active', true);
-      
-      
+        .from("tenant_integrations")
+        .select("id, settings, user_id, integration_type")
+        .eq("tenant_id", tenantId)
+        .in("integration_type", ["green_api", "manus_wa"])
+        .eq("is_active", true);
+
       if (tenantError) throw tenantError;
-      
+
       // Get integrations the user has permission to use
       const { data: permissions, error: permError } = await supabase
-        .from('integration_user_permissions')
-        .select('integration_id')
-        .eq('user_id', user.id);
-      
-      
-      const permittedIds = permissions?.map(p => p.integration_id) || [];
-      
+        .from("integration_user_permissions")
+        .select("integration_id")
+        .eq("user_id", user.id);
+
+      const permittedIds = permissions?.map((p) => p.integration_id) || [];
+
       let allIntegrations = [...(tenantIntegrations || [])];
-      
+
       if (permittedIds.length > 0) {
         // Fetch permitted integrations from other tenants
-        const { data: permittedIntegrations, error: permIntError } = await supabase
-          .from('tenant_integrations')
-          .select('id, settings, user_id, integration_type')
-          .in('id', permittedIds)
-          .in('integration_type', ['green_api', 'manus_wa'])
-          .eq('is_active', true);
+        const { data: permittedIntegrations, error: permIntError } =
+          await supabase
+            .from("tenant_integrations")
+            .select("id, settings, user_id, integration_type")
+            .in("id", permittedIds)
+            .in("integration_type", ["green_api", "manus_wa"])
+            .eq("is_active", true);
 
-        
-        
         // Merge and deduplicate
-        const existingIds = new Set(allIntegrations.map(i => i.id));
-        
-        permittedIntegrations?.forEach(integration => {
+        const existingIds = new Set(allIntegrations.map((i) => i.id));
+
+        permittedIntegrations?.forEach((integration) => {
           if (!existingIds.has(integration.id)) {
             allIntegrations.push(integration);
           }
         });
       }
-      
+
       // Fetch owner names for all integrations
       if (allIntegrations.length > 0) {
-        const userIds = [...new Set(allIntegrations.map(i => i.user_id).filter(Boolean))];
+        const userIds = [
+          ...new Set(allIntegrations.map((i) => i.user_id).filter(Boolean)),
+        ];
         if (userIds.length > 0) {
           const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', userIds);
-          
-          const profileMap = new Map(profiles?.map(p => [p.id, p.full_name]) || []);
-          allIntegrations = allIntegrations.map(i => ({
+            .from("profiles")
+            .select("id, full_name")
+            .in("id", userIds);
+
+          const profileMap = new Map(
+            profiles?.map((p) => [p.id, p.full_name]) || [],
+          );
+          allIntegrations = allIntegrations.map((i) => ({
             ...i,
-            owner_name: profileMap.get(i.user_id) || null
+            owner_name: profileMap.get(i.user_id) || null,
           }));
         }
       }
-      
-      
+
       return allIntegrations;
     },
-    enabled: !!tenantId && (actionType === "send_greenapi_message" || actionType === "send_greenapi_to_campaigner"),
+    enabled:
+      !!tenantId &&
+      (actionType === "send_greenapi_message" ||
+        actionType === "send_greenapi_to_campaigner"),
   });
 
   const createAutomationMutation = useMutation({
@@ -298,9 +327,12 @@ export function AddAutomationForm() {
           throw new Error("תנאים חייבים להיות JSON תקין");
         }
       }
-      
+
       // Add trigger status condition if specified
-      if (values.trigger_status_value && values.trigger_status_value !== 'any') {
+      if (
+        values.trigger_status_value &&
+        values.trigger_status_value !== "any"
+      ) {
         conditions.new_status = values.trigger_status_value;
       }
 
@@ -318,9 +350,9 @@ export function AddAutomationForm() {
           entity: values.status_entity,
           status: values.status_value,
         };
-        if (values.update_field_name && values.update_field_name !== 'none') {
+        if (values.update_field_name && values.update_field_name !== "none") {
           cfg.update_field = values.update_field_name;
-          cfg.update_field_value = values.update_field_value || 'today';
+          cfg.update_field_value = values.update_field_value || "today";
         }
         configuration = cfg;
       } else if (values.action_type === "send_whatsapp") {
@@ -351,13 +383,17 @@ export function AddAutomationForm() {
           send_target: values.campaigner_send_target || "phone",
           integration_id: values.green_api_integration_id || null,
         };
-      } else if (values.action_type === "add_lead_update" || values.action_type === "add_client_update") {
+      } else if (
+        values.action_type === "add_lead_update" ||
+        values.action_type === "add_client_update"
+      ) {
         configuration = {
           update_template: values.update_template || "",
         };
       } else if (values.action_type === "create_task") {
         configuration = {
-          task_title_template: values.task_title_template || "{{company_name}} - משימה חדשה",
+          task_title_template:
+            values.task_title_template || "{{company_name}} - משימה חדשה",
           task_notes_template: values.task_notes_template || "",
           task_priority: values.task_priority || 5,
           task_due_days: values.task_due_days || 0,
@@ -417,7 +453,10 @@ export function AddAutomationForm() {
           אוטומציה חדשה
         </Button>
       </DialogTrigger>
-      <DialogContent dir="rtl" className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>יצירת אוטומציה חדשה</DialogTitle>
           <DialogDescription>
@@ -433,7 +472,10 @@ export function AddAutomationForm() {
                 <FormItem>
                   <FormLabel>שם האוטומציה *</FormLabel>
                   <FormControl>
-                    <Input placeholder="שלח webhook כשמשימה משוייכת" {...field} />
+                    <Input
+                      placeholder="שלח webhook כשמשימה משוייכת"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -460,7 +502,10 @@ export function AddAutomationForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>מתי להפעיל? *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="בחר טריגר" />
@@ -479,7 +524,8 @@ export function AddAutomationForm() {
               )}
             />
 
-            {(triggerType === "lead_status_changed" || triggerType === "task_status_changed") && (
+            {(triggerType === "lead_status_changed" ||
+              triggerType === "task_status_changed") && (
               <FormField
                 control={form.control}
                 name="trigger_status_value"
@@ -494,16 +540,21 @@ export function AddAutomationForm() {
                       </FormControl>
                       <SelectContent className="bg-background z-[100]">
                         <SelectItem value="any">כל סטטוס</SelectItem>
-                        {triggerType === "lead_status_changed" && leadStatuses.map((status) => (
-                          <SelectItem key={status.status_key} value={status.status_key}>
-                            {status.label}
-                          </SelectItem>
-                        ))}
-                        {triggerType === "task_status_changed" && TASK_STATUS_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
+                        {triggerType === "lead_status_changed" &&
+                          leadStatuses.map((status) => (
+                            <SelectItem
+                              key={status.status_key}
+                              value={status.status_key}
+                            >
+                              {status.label}
+                            </SelectItem>
+                          ))}
+                        {triggerType === "task_status_changed" &&
+                          TASK_STATUS_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     <FormDescription className="text-xs">
@@ -522,8 +573,8 @@ export function AddAutomationForm() {
                   <span>Webhook URL לקליטת משימות</span>
                 </div>
                 <div className="flex gap-2">
-                  <Input 
-                    readOnly 
+                  <Input
+                    readOnly
                     value={`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-task-intake`}
                     className="font-mono text-xs bg-background"
                   />
@@ -532,7 +583,9 @@ export function AddAutomationForm() {
                     variant="outline"
                     size="icon"
                     onClick={() => {
-                      navigator.clipboard.writeText(`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-task-intake`);
+                      navigator.clipboard.writeText(
+                        `https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-task-intake`,
+                      );
                       toast({
                         title: "הועתק!",
                         description: "ה-URL הועתק ללוח",
@@ -546,7 +599,7 @@ export function AddAutomationForm() {
                   שלח POST request עם JSON לכתובת זו. דוגמה:
                 </p>
                 <pre className="text-xs bg-background p-2 rounded overflow-x-auto font-mono">
-{`{
+                  {`{
   "tenant_slug": "YOUR_TENANT_SLUG",
   "title": "שם המשימה",
   "notes": "תיאור",
@@ -565,14 +618,16 @@ export function AddAutomationForm() {
                   <ExternalLink className="h-4 w-4" />
                   <span>Webhook URL לקליטת לידים מ-Maskyoo</span>
                 </div>
-                
+
                 {/* Maskyoo URL */}
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-foreground">כתובת ה-Webhook למסקיו:</p>
+                  <p className="text-xs font-medium text-foreground">
+                    כתובת ה-Webhook למסקיו:
+                  </p>
                   <div className="flex gap-2">
-                    <Input 
-                      readOnly 
-                      value={`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${tenantId || 'YOUR_TENANT_ID'}`}
+                    <Input
+                      readOnly
+                      value={`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${tenantId || "YOUR_TENANT_ID"}`}
                       className="font-mono text-xs bg-background"
                     />
                     <Button
@@ -580,7 +635,9 @@ export function AddAutomationForm() {
                       variant="outline"
                       size="icon"
                       onClick={() => {
-                        navigator.clipboard.writeText(`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${tenantId || ''}`);
+                        navigator.clipboard.writeText(
+                          `https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${tenantId || ""}`,
+                        );
                         toast({
                           title: "הועתק!",
                           description: "ה-URL הועתק ללוח",
@@ -594,21 +651,26 @@ export function AddAutomationForm() {
 
                 {/* Instructions for Maskyoo */}
                 <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg space-y-2">
-                  <p className="text-sm font-medium text-primary">📞 הוראות הגדרה במסקיו:</p>
+                  <p className="text-sm font-medium text-primary">
+                    📞 הוראות הגדרה במסקיו:
+                  </p>
                   <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside mr-2">
                     <li>העתק את הכתובת למעלה</li>
                     <li>גש להגדרות האוטומציה במסקיו</li>
                     <li>בחר "פתיחת קישור" כסוג הפעולה</li>
                     <li>הדבק את הכתובת</li>
-                    <li>בחר שיטת שליחה: <strong>POST</strong></li>
+                    <li>
+                      בחר שיטת שליחה: <strong>POST</strong>
+                    </li>
                     <li>סמן ✓ "הוסף פרמטרים מברירת מחדל לקישור"</li>
                   </ol>
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  💡 <strong>מה יקרה:</strong> כשמישהו יתקשר למספר המסקיו ולא יענו לו, ייווצר ליד חדש אוטומטית עם מספר הטלפון שלו.
+                  💡 <strong>מה יקרה:</strong> כשמישהו יתקשר למספר המסקיו ולא
+                  יענו לו, ייווצר ליד חדש אוטומטית עם מספר הטלפון שלו.
                 </p>
-                
+
                 {/* Expandable advanced section */}
                 <details className="text-xs">
                   <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
@@ -616,10 +678,21 @@ export function AddAutomationForm() {
                   </summary>
                   <div className="mt-2 space-y-2 pt-2 border-t">
                     <p className="text-muted-foreground">
-                      פרמטרים נתמכים: <code className="bg-muted px-1 rounded">caller</code>, <code className="bg-muted px-1 rounded">description</code>, <code className="bg-muted px-1 rounded">maskyoo</code>, <code className="bg-muted px-1 rounded">call_status</code>, <code className="bg-muted px-1 rounded">private_field1</code>
+                      פרמטרים נתמכים:{" "}
+                      <code className="bg-muted px-1 rounded">caller</code>,{" "}
+                      <code className="bg-muted px-1 rounded">description</code>
+                      , <code className="bg-muted px-1 rounded">maskyoo</code>,{" "}
+                      <code className="bg-muted px-1 rounded">call_status</code>
+                      ,{" "}
+                      <code className="bg-muted px-1 rounded">
+                        private_field1
+                      </code>
                     </p>
                     <p className="text-muted-foreground">
-                      להתעלם משיחות שנענו, הוסף: <code className="bg-muted px-1 rounded">&only_missed=true</code>
+                      להתעלם משיחות שנענו, הוסף:{" "}
+                      <code className="bg-muted px-1 rounded">
+                        &only_missed=true
+                      </code>
                     </p>
                   </div>
                 </details>
@@ -632,7 +705,10 @@ export function AddAutomationForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>סוג פעולה *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="בחר פעולה" />
@@ -641,16 +717,32 @@ export function AddAutomationForm() {
                     <SelectContent className="bg-background z-[100]">
                       <SelectItem value="webhook">Webhook</SelectItem>
                       <SelectItem value="update_status">שינוי סטטוס</SelectItem>
-                      <SelectItem value="send_whatsapp">שלח WhatsApp (ManyChat)</SelectItem>
-                      <SelectItem value="create_manychat_subscriber">צור subscriber ב-ManyChat</SelectItem>
-                      <SelectItem value="send_greenapi_message">שלח WhatsApp (Green API / Manus)</SelectItem>
-                      <SelectItem value="send_greenapi_to_campaigner">שלח WhatsApp לקמפיינר (Green API / Manus)</SelectItem>
-                      <SelectItem value="add_lead_update">הוסף עדכון לליד</SelectItem>
-                      <SelectItem value="add_client_update">הוסף עדכון ללקוח</SelectItem>
+                      <SelectItem value="send_whatsapp">
+                        שלח WhatsApp (ManyChat)
+                      </SelectItem>
+                      <SelectItem value="create_manychat_subscriber">
+                        צור subscriber ב-ManyChat
+                      </SelectItem>
+                      <SelectItem value="send_greenapi_message">
+                        שלח WhatsApp (Green API / Manus)
+                      </SelectItem>
+                      <SelectItem value="send_greenapi_to_campaigner">
+                        שלח WhatsApp לקמפיינר (Green API / Manus)
+                      </SelectItem>
+                      <SelectItem value="add_lead_update">
+                        הוסף עדכון לליד
+                      </SelectItem>
+                      <SelectItem value="add_client_update">
+                        הוסף עדכון ללקוח
+                      </SelectItem>
                       <SelectItem value="create_task">צור משימה</SelectItem>
                       <SelectItem value="create_lead">צור ליד חדש</SelectItem>
-                      <SelectItem value="email" disabled>אימייל (בקרוב)</SelectItem>
-                      <SelectItem value="notification" disabled>התראה (בקרוב)</SelectItem>
+                      <SelectItem value="email" disabled>
+                        אימייל (בקרוב)
+                      </SelectItem>
+                      <SelectItem value="notification" disabled>
+                        התראה (בקרוב)
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -667,9 +759,9 @@ export function AddAutomationForm() {
                     <FormItem>
                       <FormLabel>Webhook URL *</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="https://hooks.zapier.com/..." 
-                          {...field} 
+                        <Input
+                          placeholder="https://hooks.zapier.com/..."
+                          {...field}
                         />
                       </FormControl>
                       <FormDescription className="text-xs">
@@ -686,7 +778,10 @@ export function AddAutomationForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>HTTP Method</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue />
@@ -710,15 +805,16 @@ export function AddAutomationForm() {
                     <FormItem>
                       <FormLabel>Body Template (JSON)</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <Textarea
                           placeholder='{"task_id": "{{id}}", "title": "{{title}}"}'
                           rows={4}
                           className="font-mono text-xs"
-                          {...field} 
+                          {...field}
                         />
                       </FormControl>
                       <FormDescription className="text-xs">
-                        השתמש ב-{`{{variable}}`} להחליף ערכים. אם ריק, כל הנתונים יישלחו.
+                        השתמש ב-{`{{variable}}`} להחליף ערכים. אם ריק, כל
+                        הנתונים יישלחו.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -735,7 +831,10 @@ export function AddAutomationForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>סוג רשומה *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר סוג רשומה" />
@@ -757,23 +856,34 @@ export function AddAutomationForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>סטטוס חדש *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר סטטוס" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          {statusEntity === "lead" && leadStatuses.map((status) => (
-                            <SelectItem key={status.status_key} value={status.status_key}>
-                              {status.label}
-                            </SelectItem>
-                          ))}
-                          {statusEntity === "task" && TASK_STATUS_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
+                          {statusEntity === "lead" &&
+                            leadStatuses.map((status) => (
+                              <SelectItem
+                                key={status.status_key}
+                                value={status.status_key}
+                              >
+                                {status.label}
+                              </SelectItem>
+                            ))}
+                          {statusEntity === "task" &&
+                            TASK_STATUS_OPTIONS.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -790,7 +900,10 @@ export function AddAutomationForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>עדכון שדה תאריך נוסף (אופציונלי)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="אל תעדכן שדה נוסף" />
@@ -798,16 +911,24 @@ export function AddAutomationForm() {
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
                           <SelectItem value="none">ללא</SelectItem>
-                          {statusEntity === "lead" && LEAD_DATE_FIELDS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                          {statusEntity === "task" && TASK_DATE_FIELDS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
+                          {statusEntity === "lead" &&
+                            LEAD_DATE_FIELDS.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          {statusEntity === "task" &&
+                            TASK_DATE_FIELDS.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -828,18 +949,27 @@ export function AddAutomationForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>בחר טאג להפעלה ב-ManyChat *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder={isLoadingTags ? "טוען טאגים..." : "בחר טאג"} />
+                            <SelectValue
+                              placeholder={
+                                isLoadingTags ? "טוען טאגים..." : "בחר טאג"
+                              }
+                            />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          {manychatTags?.map((tag: { id: number; name: string }) => (
-                            <SelectItem key={tag.id} value={String(tag.id)}>
-                              {tag.name}
-                            </SelectItem>
-                          ))}
+                          {manychatTags?.map(
+                            (tag: { id: number; name: string }) => (
+                              <SelectItem key={tag.id} value={String(tag.id)}>
+                                {tag.name}
+                              </SelectItem>
+                            ),
+                          )}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -851,7 +981,9 @@ export function AddAutomationForm() {
                 />
 
                 <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
-                  <p className="text-sm font-medium">מיפוי שדות ל-ManyChat Custom Fields</p>
+                  <p className="text-sm font-medium">
+                    מיפוי שדות ל-ManyChat Custom Fields
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     העתק את ה-Field ID מ-ManyChat עבור כל שדה
                   </p>
@@ -861,9 +993,15 @@ export function AddAutomationForm() {
                     name="field_mapping_date"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">תאריך הפגישה (Field ID)</FormLabel>
+                        <FormLabel className="text-xs">
+                          תאריך הפגישה (Field ID)
+                        </FormLabel>
                         <FormControl>
-                          <Input placeholder="לדוגמה: 123456" {...field} className="h-8 text-sm" />
+                          <Input
+                            placeholder="לדוגמה: 123456"
+                            {...field}
+                            className="h-8 text-sm"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -875,9 +1013,15 @@ export function AddAutomationForm() {
                     name="field_mapping_time"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">שעת הפגישה (Field ID)</FormLabel>
+                        <FormLabel className="text-xs">
+                          שעת הפגישה (Field ID)
+                        </FormLabel>
                         <FormControl>
-                          <Input placeholder="לדוגמה: 123457" {...field} className="h-8 text-sm" />
+                          <Input
+                            placeholder="לדוגמה: 123457"
+                            {...field}
+                            className="h-8 text-sm"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -889,9 +1033,15 @@ export function AddAutomationForm() {
                     name="field_mapping_location"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">מיקום/נושא הפגישה (Field ID)</FormLabel>
+                        <FormLabel className="text-xs">
+                          מיקום/נושא הפגישה (Field ID)
+                        </FormLabel>
                         <FormControl>
-                          <Input placeholder="לדוגמה: 123458" {...field} className="h-8 text-sm" />
+                          <Input
+                            placeholder="לדוגמה: 123458"
+                            {...field}
+                            className="h-8 text-sm"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -903,9 +1053,15 @@ export function AddAutomationForm() {
                     name="field_mapping_contact"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">שם איש הקשר (Field ID)</FormLabel>
+                        <FormLabel className="text-xs">
+                          שם איש הקשר (Field ID)
+                        </FormLabel>
                         <FormControl>
-                          <Input placeholder="לדוגמה: 123459" {...field} className="h-8 text-sm" />
+                          <Input
+                            placeholder="לדוגמה: 123459"
+                            {...field}
+                            className="h-8 text-sm"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -923,7 +1079,10 @@ export function AddAutomationForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>טאג להוספה (אופציונלי)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר טאג להוספה אחרי יצירת ה-subscriber" />
@@ -932,12 +1091,19 @@ export function AddAutomationForm() {
                         <SelectContent className="bg-background z-[100]">
                           <SelectItem value="none">ללא טאג</SelectItem>
                           {isLoadingTags ? (
-                            <SelectItem value="loading" disabled>טוען...</SelectItem>
-                          ) : manychatTags?.map((tag: any) => (
-                            <SelectItem key={tag.id} value={tag.id.toString()}>
-                              {tag.name}
+                            <SelectItem value="loading" disabled>
+                              טוען...
                             </SelectItem>
-                          ))}
+                          ) : (
+                            manychatTags?.map((tag: any) => (
+                              <SelectItem
+                                key={tag.id}
+                                value={tag.id.toString()}
+                              >
+                                {tag.name}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -949,9 +1115,13 @@ export function AddAutomationForm() {
                 />
 
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm">
-                  <p className="font-medium text-blue-600 dark:text-blue-400">כיצד זה עובד?</p>
+                  <p className="font-medium text-blue-600 dark:text-blue-400">
+                    כיצד זה עובד?
+                  </p>
                   <ul className="text-muted-foreground text-xs mt-1 space-y-1">
-                    <li>• כשליד נוצר, המערכת יוצרת subscriber חדש ב-ManyChat</li>
+                    <li>
+                      • כשליד נוצר, המערכת יוצרת subscriber חדש ב-ManyChat
+                    </li>
                     <li>• מספר הטלפון והשם של הליד יועברו ל-ManyChat</li>
                     <li>• ה-Subscriber ID יישמר בליד לשימוש עתידי</li>
                     <li>• אם נבחר טאג, הוא יתווסף אוטומטית ל-subscriber</li>
@@ -968,52 +1138,82 @@ export function AddAutomationForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>בחר חיבור WhatsApp *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר חיבור" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          {greenApiIntegrations && greenApiIntegrations.length > 0 ? (
+                          {greenApiIntegrations &&
+                          greenApiIntegrations.length > 0 ? (
                             greenApiIntegrations.map((integration: any) => {
-                              const providerLabel = integration.integration_type === 'manus_wa' ? 'Manus WA' : 'Green API';
+                              const providerLabel =
+                                integration.integration_type === "manus_wa"
+                                  ? "Manus WA"
+                                  : "Green API";
                               return (
-                                <SelectItem key={integration.id} value={integration.id}>
-                                  [{providerLabel}] {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || integration.settings?.instanceId?.slice(-4) || 'לא ידוע'})
+                                <SelectItem
+                                  key={integration.id}
+                                  value={integration.id}
+                                >
+                                  [{providerLabel}]{" "}
+                                  {integration.owner_name || "חיבור"} (
+                                  {integration.settings?.idInstance?.slice(
+                                    -4,
+                                  ) ||
+                                    integration.settings?.instanceId?.slice(
+                                      -4,
+                                    ) ||
+                                    "לא ידוע"}
+                                  )
                                 </SelectItem>
                               );
                             })
                           ) : (
-                            <div className="py-2 px-3 text-sm text-muted-foreground">לא נמצאו חיבורי WhatsApp</div>
+                            <div className="py-2 px-3 text-sm text-muted-foreground">
+                              לא נמצאו חיבורי WhatsApp
+                            </div>
                           )}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
-                        בחר באיזה חיבור WhatsApp (Green API או Manus) להשתמש לשליחת ההודעה
+                        בחר באיזה חיבור WhatsApp (Green API או Manus) להשתמש
+                        לשליחת ההודעה
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                
                 <FormField
                   control={form.control}
                   name="greenapi_send_to_type"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>שלח ל *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || "contact"}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || "contact"}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר יעד" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          <SelectItem value="contact">איש קשר (ליד/לקוח)</SelectItem>
-                          <SelectItem value="manual_phone">מספר טלפון ידני</SelectItem>
-                          <SelectItem value="manual_group">קבוצת WhatsApp</SelectItem>
+                          <SelectItem value="contact">
+                            איש קשר (ליד/לקוח)
+                          </SelectItem>
+                          <SelectItem value="manual_phone">
+                            מספר טלפון ידני
+                          </SelectItem>
+                          <SelectItem value="manual_group">
+                            קבוצת WhatsApp
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -1054,21 +1254,22 @@ export function AddAutomationForm() {
                           <Input placeholder="120363..." {...field} />
                         </FormControl>
                         <FormDescription className="text-xs">
-                          הזן את מזהה הקבוצה (ניתן למצוא בהגדרות הקבוצה או מ-WhatsApp Web)
+                          הזן את מזהה הקבוצה (ניתן למצוא בהגדרות הקבוצה או
+                          מ-WhatsApp Web)
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 )}
-                
+
                 <FormField
                   control={form.control}
                   name="message_template"
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <MessageTemplateBuilder 
+                        <MessageTemplateBuilder
                           value={field.value || ""}
                           onChange={field.onChange}
                           label="תבנית הודעה *"
@@ -1098,13 +1299,13 @@ export function AddAutomationForm() {
                         />
                       </FormControl>
                       <FormDescription className="text-xs">
-                        בחר ספק (Green API / Manus) ואז את החיבור. אם יש חיבור אחד הוא ייבחר אוטומטית.
+                        בחר ספק (Green API / Manus) ואז את החיבור. אם יש חיבור
+                        אחד הוא ייבחר אוטומטית.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
 
                 <FormField
                   control={form.control}
@@ -1112,7 +1313,10 @@ export function AddAutomationForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>שלח ל *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value || "phone"}>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value || "phone"}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר יעד" />
@@ -1120,7 +1324,9 @@ export function AddAutomationForm() {
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
                           <SelectItem value="phone">טלפון הקמפיינר</SelectItem>
-                          <SelectItem value="group">קבוצת WhatsApp של הקמפיינר</SelectItem>
+                          <SelectItem value="group">
+                            קבוצת WhatsApp של הקמפיינר
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -1136,7 +1342,7 @@ export function AddAutomationForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <MessageTemplateBuilder 
+                        <MessageTemplateBuilder
                           value={field.value || ""}
                           onChange={field.onChange}
                           label="תבנית הודעה *"
@@ -1148,24 +1354,35 @@ export function AddAutomationForm() {
                   )}
                 />
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm">
-                  <p className="font-medium text-blue-600 dark:text-blue-400">הסבר:</p>
+                  <p className="font-medium text-blue-600 dark:text-blue-400">
+                    הסבר:
+                  </p>
                   <ul className="text-muted-foreground text-xs mt-1 space-y-1">
-                    <li>• שליחה לטלפון: ההודעה תישלח לטלפון האישי של הקמפיינר</li>
-                    <li>• שליחה לקבוצה: ההודעה תישלח לקבוצת WhatsApp ששויכה לקמפיינר</li>
-                    <li>• וודא שהגדרת מזהה קבוצה בכרטיס הקמפיינר אם בוחר שליחה לקבוצה</li>
+                    <li>
+                      • שליחה לטלפון: ההודעה תישלח לטלפון האישי של הקמפיינר
+                    </li>
+                    <li>
+                      • שליחה לקבוצה: ההודעה תישלח לקבוצת WhatsApp ששויכה
+                      לקמפיינר
+                    </li>
+                    <li>
+                      • וודא שהגדרת מזהה קבוצה בכרטיס הקמפיינר אם בוחר שליחה
+                      לקבוצה
+                    </li>
                   </ul>
                 </div>
               </>
             )}
 
-            {(actionType === "add_lead_update" || actionType === "add_client_update") && (
+            {(actionType === "add_lead_update" ||
+              actionType === "add_client_update") && (
               <FormField
                 control={form.control}
                 name="update_template"
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <MessageTemplateBuilder 
+                      <MessageTemplateBuilder
                         value={field.value || ""}
                         onChange={field.onChange}
                         label="תבנית עדכון *"
@@ -1186,7 +1403,7 @@ export function AddAutomationForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <MessageTemplateBuilder 
+                        <MessageTemplateBuilder
                           value={field.value || ""}
                           onChange={field.onChange}
                           label="תבנית כותרת המשימה *"
@@ -1204,7 +1421,7 @@ export function AddAutomationForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <MessageTemplateBuilder 
+                        <MessageTemplateBuilder
                           value={field.value || ""}
                           onChange={field.onChange}
                           label="תבנית הערות למשימה (אופציונלי)"
@@ -1224,12 +1441,14 @@ export function AddAutomationForm() {
                       <FormItem>
                         <FormLabel>עדיפות (1-10)</FormLabel>
                         <FormControl>
-                          <Input 
+                          <Input
                             type="number"
                             min={1}
                             max={10}
                             {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 5)}
+                            onChange={(e) =>
+                              field.onChange(parseInt(e.target.value) || 5)
+                            }
                           />
                         </FormControl>
                         <FormDescription className="text-xs">
@@ -1247,11 +1466,13 @@ export function AddAutomationForm() {
                       <FormItem>
                         <FormLabel>ימים לביצוע</FormLabel>
                         <FormControl>
-                          <Input 
+                          <Input
                             type="number"
                             min={0}
                             {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                            onChange={(e) =>
+                              field.onChange(parseInt(e.target.value) || 0)
+                            }
                           />
                         </FormControl>
                         <FormDescription className="text-xs">
@@ -1264,7 +1485,9 @@ export function AddAutomationForm() {
                 </div>
 
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm">
-                  <p className="font-medium text-blue-600 dark:text-blue-400">כיצד זה עובד?</p>
+                  <p className="font-medium text-blue-600 dark:text-blue-400">
+                    כיצד זה עובד?
+                  </p>
                   <ul className="text-muted-foreground text-xs mt-1 space-y-1">
                     <li>• כשהטריגר מופעל, תיווצר משימה חדשה במערכת</li>
                     <li>• המשימה תשויך לליד/לקוח שהפעיל את האוטומציה</li>
@@ -1281,16 +1504,18 @@ export function AddAutomationForm() {
                 <FormItem>
                   <FormLabel>תנאים (אופציונלי)</FormLabel>
                   <FormControl>
-                    <Textarea 
+                    <Textarea
                       placeholder='{"priority": "high", "status": "open"}'
                       rows={3}
                       className="font-mono text-xs"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormDescription className="text-xs flex items-start gap-1">
                     <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                    <span>JSON של תנאים. האוטומציה תרוץ רק אם כל התנאים מתקיימים.</span>
+                    <span>
+                      JSON של תנאים. האוטומציה תרוץ רק אם כל התנאים מתקיימים.
+                    </span>
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -1305,13 +1530,14 @@ export function AddAutomationForm() {
               >
                 ביטול
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={createAutomationMutation.isPending}
-                onClick={() => {
-                }}
+                onClick={() => {}}
               >
-                {createAutomationMutation.isPending ? "יוצר..." : "צור אוטומציה"}
+                {createAutomationMutation.isPending
+                  ? "יוצר..."
+                  : "צור אוטומציה"}
               </Button>
             </div>
           </form>

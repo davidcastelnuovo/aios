@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Content-Type": "application/javascript",
   "Cache-Control": "public, max-age=3600",
@@ -17,9 +18,9 @@ Deno.serve(async (req) => {
   const trackingId = url.searchParams.get("id");
 
   if (!trackingId) {
-    return new Response("// Invalid tracking ID", { 
-      status: 400, 
-      headers: corsHeaders 
+    return new Response("// Invalid tracking ID", {
+      status: 400,
+      headers: corsHeaders,
     });
   }
 
@@ -35,9 +36,9 @@ Deno.serve(async (req) => {
     .single();
 
   if (!config || !config.is_active) {
-    return new Response("// Tracking disabled or invalid", { 
-      status: 404, 
-      headers: corsHeaders 
+    return new Response("// Tracking disabled or invalid", {
+      status: 404,
+      headers: corsHeaders,
     });
   }
 

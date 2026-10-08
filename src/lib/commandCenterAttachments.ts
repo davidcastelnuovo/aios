@@ -11,13 +11,16 @@ export type CommandCenterAttachment = {
 const BUCKET = "command-center-files";
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 const MAX_FILES = 6;
-const ACCEPT = "image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.webp,.png,.jpg,.jpeg,.gif";
+const ACCEPT =
+  "image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.webp,.png,.jpg,.jpeg,.gif";
 
 export const COMMAND_CENTER_FILE_ACCEPT = ACCEPT;
 export const COMMAND_CENTER_MAX_FILES = MAX_FILES;
 
 function isImageFile(file: File): boolean {
-  return file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(file.name);
+  return (
+    file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(file.name)
+  );
 }
 
 export function formatAttachmentsForPrompt(
@@ -46,10 +49,12 @@ export async function uploadCommandCenterAttachments(
     }
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `${userId}/${Date.now()}-${safeName}`;
-    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
-      upsert: false,
-      contentType: file.type || undefined,
-    });
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, file, {
+        upsert: false,
+        contentType: file.type || undefined,
+      });
     if (uploadError) throw uploadError;
 
     const { data: urlData, error: urlError } = await supabase.storage

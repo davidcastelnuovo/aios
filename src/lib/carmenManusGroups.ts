@@ -1,5 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
-import { collectSyncedCatalog, mergeSyncCatalogWithDb } from "./carmenManusGroupsSync.mjs";
+import {
+  collectSyncedCatalog,
+  mergeSyncCatalogWithDb,
+} from "./carmenManusGroupsSync.mjs";
 
 /**
  * Groups Carmen can see in conversation-access UI.
@@ -22,7 +25,10 @@ type WhatsappGroupRow = {
 };
 
 async function fetchWhatsappGroupPages(
-  buildQuery: (from: number, to: number) => PromiseLike<{ data: WhatsappGroupRow[] | null; error: Error | null }>,
+  buildQuery: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: WhatsappGroupRow[] | null; error: Error | null }>,
 ): Promise<WhatsappGroupRow[]> {
   const pageSize = 1000;
   const rows: WhatsappGroupRow[] = [];
@@ -36,7 +42,10 @@ async function fetchWhatsappGroupPages(
   return rows;
 }
 
-async function fetchGroupsByChatIds(tenantId: string, chatIds: string[]): Promise<Map<string, WhatsappGroupRow>> {
+async function fetchGroupsByChatIds(
+  tenantId: string,
+  chatIds: string[],
+): Promise<Map<string, WhatsappGroupRow>> {
   const byChatId = new Map<string, WhatsappGroupRow>();
   if (chatIds.length === 0) return byChatId;
 
@@ -79,7 +88,9 @@ export type ManusGroupsSyncInfo = {
   warning?: string;
 };
 
-export async function fetchManusGroupsSyncInfo(tenantId: string): Promise<ManusGroupsSyncInfo> {
+export async function fetchManusGroupsSyncInfo(
+  tenantId: string,
+): Promise<ManusGroupsSyncInfo> {
   const { data } = await supabase
     .from("tenant_integrations")
     .select("settings")
@@ -92,8 +103,11 @@ export async function fetchManusGroupsSyncInfo(tenantId: string): Promise<ManusG
   let via: string | undefined;
   let warning: string | undefined;
   for (const row of data || []) {
-    const sync = ((row as { settings?: Record<string, unknown> }).settings?.manus_groups_sync
-      || {}) as ManusGroupsSyncMeta & { via?: string; warning?: string };
+    const sync = ((row as { settings?: Record<string, unknown> }).settings
+      ?.manus_groups_sync || {}) as ManusGroupsSyncMeta & {
+      via?: string;
+      warning?: string;
+    };
     if (sync.synced_at) {
       hasSync = true;
       if (!syncedAt || sync.synced_at > syncedAt) {
@@ -109,7 +123,9 @@ export async function fetchManusGroupsSyncInfo(tenantId: string): Promise<ManusG
   return { syncedAt, count, hasSync, via, warning };
 }
 
-export async function fetchCarmenManusGroupIds(tenantId: string): Promise<Set<string>> {
+export async function fetchCarmenManusGroupIds(
+  tenantId: string,
+): Promise<Set<string>> {
   const groups = await fetchCarmenManusGroups(tenantId);
   return new Set(groups.map((g) => String(g.id)));
 }
@@ -170,25 +186,41 @@ export type SyncManusGroupsResult = {
   error?: string;
 };
 
-async function extractInvokeError(error: unknown, data: unknown): Promise<string> {
-  const payload = (data && typeof data === "object" ? data : {}) as { error?: string; message?: string };
+async function extractInvokeError(
+  error: unknown,
+  data: unknown,
+): Promise<string> {
+  const payload = (data && typeof data === "object" ? data : {}) as {
+    error?: string;
+    message?: string;
+  };
   if (payload.error) return payload.error;
   if (payload.message) return payload.message;
 
-  const ctx = error && typeof error === "object" ? (error as { context?: Response; message?: string }) : null;
+  const ctx =
+    error && typeof error === "object"
+      ? (error as { context?: Response; message?: string })
+      : null;
   if (ctx?.context && typeof ctx.context.json === "function") {
     try {
-      const body = await ctx.context.clone().json() as { error?: string; message?: string };
+      const body = (await ctx.context.clone().json()) as {
+        error?: string;
+        message?: string;
+      };
       if (body?.error) return body.error;
       if (body?.message) return body.message;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
   if (ctx?.message) return ctx.message;
   return "סנכרון קבוצות נכשל";
 }
 
 /** Pull group membership from Manus Gateway and upsert whatsapp_groups. */
-export async function syncCarmenManusGroups(tenantId: string): Promise<SyncManusGroupsResult> {
+export async function syncCarmenManusGroups(
+  tenantId: string,
+): Promise<SyncManusGroupsResult> {
   const attempts: Array<{ fn: string; body: Record<string, unknown> }> = [
     { fn: "manus-wa-sync-groups", body: { tenantId } },
     { fn: "manus-wa-status", body: { tenantId, syncGroups: true } },
@@ -198,10 +230,13 @@ export async function syncCarmenManusGroups(tenantId: string): Promise<SyncManus
   let lastError = "סנכרון קבוצות נכשל";
   for (const attempt of attempts) {
     try {
-      const { data, error } = await supabase.functions.invoke(attempt.fn, { body: attempt.body });
+      const { data, error } = await supabase.functions.invoke(attempt.fn, {
+        body: attempt.body,
+      });
       if (data?.success) return data as SyncManusGroupsResult;
       lastError = await extractInvokeError(error, data);
-      const missingFn = /not found|404|Function.*not|Failed to send a request/i.test(lastError);
+      const missingFn =
+        /not found|404|Function.*not|Failed to send a request/i.test(lastError);
       // Keep trying fallbacks when the function is missing / unreachable.
       if (!missingFn && data && data.success === false) break;
     } catch (err) {

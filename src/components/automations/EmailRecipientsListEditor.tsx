@@ -1,7 +1,16 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SelectGroup,
+  SelectLabel,
+  SelectSeparator,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -36,7 +45,12 @@ interface Props {
   onChange: (next: EmailRecipient[]) => void;
 }
 
-export function EmailRecipientsListEditor({ tenantId, availableFields, value, onChange }: Props) {
+export function EmailRecipientsListEditor({
+  tenantId,
+  availableFields,
+  value,
+  onChange,
+}: Props) {
   const recipients = value.length > 0 ? value : [defaultForType("email_field")];
 
   const updateAt = (idx: number, next: EmailRecipient) => {
@@ -73,7 +87,11 @@ export function EmailRecipientsListEditor({ tenantId, availableFields, value, on
           <RecipientRow
             key={idx}
             tenantId={tenantId}
-            emailFields={emailFields.length ? emailFields : [{ key: "email", label: "אימייל" }]}
+            emailFields={
+              emailFields.length
+                ? emailFields
+                : [{ key: "email", label: "אימייל" }]
+            }
             availableFields={availableFields}
             value={r}
             onChange={(next) => updateAt(idx, next)}
@@ -82,12 +100,19 @@ export function EmailRecipientsListEditor({ tenantId, availableFields, value, on
           />
         ))}
       </div>
-      <Button type="button" variant="outline" size="sm" onClick={add} className="w-full">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={add}
+        className="w-full"
+      >
         <Plus className="h-4 w-4 ml-1" />
         הוסף נמען
       </Button>
       <p className="text-xs text-muted-foreground text-right">
-        ניתן להוסיף כמה נמענים. באימייל ידני אפשר להזין כמה כתובות מופרדות בפסיק.
+        ניתן להוסיף כמה נמענים. באימייל ידני אפשר להזין כמה כתובות מופרדות
+        בפסיק.
       </p>
     </div>
   );
@@ -115,7 +140,9 @@ function RecipientRow({
       <div className="flex items-center gap-2">
         <Select
           value={value.type}
-          onValueChange={(v) => onChange(defaultForType(v as EmailRecipient["type"]))}
+          onValueChange={(v) =>
+            onChange(defaultForType(v as EmailRecipient["type"]))
+          }
         >
           <SelectTrigger className="text-right flex-1 h-9">
             <SelectValue />
@@ -129,7 +156,13 @@ function RecipientRow({
           </SelectContent>
         </Select>
         {canRemove && (
-          <Button type="button" variant="ghost" size="icon" onClick={onRemove} className="h-9 w-9 text-destructive">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onRemove}
+            className="h-9 w-9 text-destructive"
+          >
             <Trash2 className="h-4 w-4" />
           </Button>
         )}
@@ -160,24 +193,33 @@ function RecipientValueEditor({
 }) {
   if (value.type === "email_field") {
     return (
-      <Select value={value.field} onValueChange={(v) => onChange({ ...value, field: v })}>
+      <Select
+        value={value.field}
+        onValueChange={(v) => onChange({ ...value, field: v })}
+      >
         <SelectTrigger className="text-right h-9">
           <SelectValue placeholder="בחר שדה..." />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectLabel className="text-xs font-bold text-muted-foreground">שדות אימייל</SelectLabel>
+            <SelectLabel className="text-xs font-bold text-muted-foreground">
+              שדות אימייל
+            </SelectLabel>
             {emailFields.map((f) => (
               <SelectItem key={f.key} value={f.key}>
                 {f.label} ({`{{${f.key}}}`})
               </SelectItem>
             ))}
           </SelectGroup>
-          {availableFields.some((f) => !emailFields.some((e) => e.key === f.key)) && (
+          {availableFields.some(
+            (f) => !emailFields.some((e) => e.key === f.key),
+          ) && (
             <>
               <SelectSeparator />
               <SelectGroup>
-                <SelectLabel className="text-xs font-bold text-muted-foreground">שדות נוספים</SelectLabel>
+                <SelectLabel className="text-xs font-bold text-muted-foreground">
+                  שדות נוספים
+                </SelectLabel>
                 {availableFields
                   .filter((f) => !emailFields.some((e) => e.key === f.key))
                   .map((f) => (
@@ -206,7 +248,13 @@ function RecipientValueEditor({
   }
 
   if (value.type === "contact_lookup") {
-    return <ContactLookupEditor tenantId={tenantId} value={value} onChange={onChange} />;
+    return (
+      <ContactLookupEditor
+        tenantId={tenantId}
+        value={value}
+        onChange={onChange}
+      />
+    );
   }
 
   return null;
@@ -250,7 +298,8 @@ function ContactLookupEditor({
     const q = search.trim().toLowerCase();
     if (!q) return contacts || [];
     return (contacts || []).filter(
-      (c) => c.name?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q),
+      (c) =>
+        c.name?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q),
     );
   }, [contacts, search]);
 
@@ -258,7 +307,9 @@ function ContactLookupEditor({
     <div className="space-y-2">
       <Select
         value={value.entity}
-        onValueChange={(v) => onChange({ ...value, entity: v as "lead" | "client", id: "" })}
+        onValueChange={(v) =>
+          onChange({ ...value, entity: v as "lead" | "client", id: "" })
+        }
       >
         <SelectTrigger className="text-right h-9">
           <SelectValue />
@@ -268,9 +319,14 @@ function ContactLookupEditor({
           <SelectItem value="client">לקוח</SelectItem>
         </SelectContent>
       </Select>
-      <Select value={value.id} onValueChange={(v) => onChange({ ...value, id: v })}>
+      <Select
+        value={value.id}
+        onValueChange={(v) => onChange({ ...value, id: v })}
+      >
         <SelectTrigger className="text-right h-9">
-          <SelectValue placeholder={value.entity === "lead" ? "בחר ליד..." : "בחר לקוח..."} />
+          <SelectValue
+            placeholder={value.entity === "lead" ? "בחר ליד..." : "בחר לקוח..."}
+          />
         </SelectTrigger>
         <SelectContent>
           <div
@@ -290,7 +346,9 @@ function ContactLookupEditor({
             </div>
           </div>
           {filtered.length === 0 ? (
-            <div className="px-2 py-4 text-center text-xs text-muted-foreground">לא נמצאו אנשי קשר עם אימייל</div>
+            <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+              לא נמצאו אנשי קשר עם אימייל
+            </div>
           ) : (
             filtered.map((c) => (
               <SelectItem key={c.id} value={c.id}>
@@ -304,7 +362,9 @@ function ContactLookupEditor({
   );
 }
 
-export function migrateLegacyEmailRecipients(cfg: Record<string, any>): EmailRecipient[] {
+export function migrateLegacyEmailRecipients(
+  cfg: Record<string, any>,
+): EmailRecipient[] {
   if (Array.isArray(cfg?.email_recipients) && cfg.email_recipients.length > 0) {
     return cfg.email_recipients as EmailRecipient[];
   }

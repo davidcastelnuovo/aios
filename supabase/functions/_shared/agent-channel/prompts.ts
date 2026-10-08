@@ -1,18 +1,25 @@
 import type { ChannelAttachment, ChannelProvider } from "./types.ts";
 
 export function aiosEnvironmentLabel(): "staging" | "production" {
-  const env = String(Deno.env.get("APP_ENV") || Deno.env.get("VITE_APP_ENV") || "").toLowerCase();
+  const env = String(
+    Deno.env.get("APP_ENV") || Deno.env.get("VITE_APP_ENV") || "",
+  ).toLowerCase();
   return env === "staging" ? "staging" : "production";
 }
 
-export function agentChannelMcpConnectionName(env?: "staging" | "production"): string {
+export function agentChannelMcpConnectionName(
+  env?: "staging" | "production",
+): string {
   return (env ?? aiosEnvironmentLabel()) === "staging"
     ? "AIOS Agent Channel — Staging"
     : "AIOS Agent Channel — Production";
 }
 
 export function supabaseProjectRef(): string {
-  const url = typeof Deno === "undefined" ? "" : String(Deno.env.get("SUPABASE_URL") || "");
+  const url =
+    typeof Deno === "undefined"
+      ? ""
+      : String(Deno.env.get("SUPABASE_URL") || "");
   return url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] || "";
 }
 
@@ -30,9 +37,10 @@ export function buildCodexWorkspaceAgentInput(args: {
   const env = args.environment ?? aiosEnvironmentLabel();
   const mcp = agentChannelMcpConnectionName(env);
   const projectRef = args.projectRef ?? supabaseProjectRef();
-  const roundLine = args.parliamentRound != null
-    ? `parliament_round: ${args.parliamentRound}\n`
-    : "";
+  const roundLine =
+    args.parliamentRound != null
+      ? `parliament_round: ${args.parliamentRound}\n`
+      : "";
   return (
     `[AIOS Command Center · Codex Direct]\n\n` +
     `You are AIOS Codex Direct. Complete the user's task in the Workspace and return the complete result to AIOS.\n\n` +
@@ -91,7 +99,8 @@ export function buildCallbackInstructions(args: {
   readOnly?: boolean;
   callbackIntent?: "default" | "meeting_summary";
 }): string {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "https://zvoijyneresvkadpprel.supabase.co";
+  const supabaseUrl =
+    Deno.env.get("SUPABASE_URL") || "https://zvoijyneresvkadpprel.supabase.co";
   const roundLine = args.parliamentRound
     ? `This is parliament round ${args.parliamentRound}. Do not open another parliament.\n`
     : "";
@@ -142,11 +151,17 @@ export function wrapDirectPrompt(args: {
     .map((m) => `${m.role}: ${String(m.content || "").slice(0, 1500)}`)
     .join("\n");
   const who =
-    args.origin === "cursor" ? "Cursor Direct" :
-    args.origin === "grok" ? "Grok Bot Direct" :
-    args.origin === "codex" ? "Codex Direct (ChatGPT Workspace)" :
-    args.origin === "claude" ? "Claude Direct" :
-    args.origin === "chatgpt" ? "ChatGPT Work Agent" : args.origin;
+    args.origin === "cursor"
+      ? "Cursor Direct"
+      : args.origin === "grok"
+        ? "Grok Bot Direct"
+        : args.origin === "codex"
+          ? "Codex Direct (ChatGPT Workspace)"
+          : args.origin === "claude"
+            ? "Claude Direct"
+            : args.origin === "chatgpt"
+              ? "ChatGPT Work Agent"
+              : args.origin;
   return (
     `[AIOS Command Center · ${who}]\n` +
     `You are the selected brain for this Carmen conversation. Answer David directly.\n` +

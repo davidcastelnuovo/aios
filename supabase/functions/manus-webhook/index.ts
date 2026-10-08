@@ -2,8 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-signature, x-webhook-timestamp',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-webhook-signature, x-webhook-timestamp",
 };
 
 // Cache for Manus public key
@@ -13,14 +14,14 @@ const PUBLIC_KEY_CACHE_DURATION = 3600000; // 1 hour
 
 async function getManusPublicKey(): Promise<string | null> {
   const now = Date.now();
-  if (cachedPublicKey && (now - publicKeyFetchedAt) < PUBLIC_KEY_CACHE_DURATION) {
+  if (cachedPublicKey && now - publicKeyFetchedAt < PUBLIC_KEY_CACHE_DURATION) {
     return cachedPublicKey;
   }
 
   try {
-    const res = await fetch('https://api.manus.ai/v1/webhook/public_key');
+    const res = await fetch("https://api.manus.ai/v1/webhook/public_key");
     if (!res.ok) {
-      console.error('Failed to fetch Manus public key:', res.status);
+      console.error("Failed to fetch Manus public key:", res.status);
       return cachedPublicKey; // Return stale cache if available
     }
     const data = await res.json();
@@ -28,7 +29,7 @@ async function getManusPublicKey(): Promise<string | null> {
     publicKeyFetchedAt = now;
     return cachedPublicKey;
   } catch (err) {
-    console.error('Error fetching Manus public key:', err);
+    console.error("Error fetching Manus public key:", err);
     return cachedPublicKey;
   }
 }
@@ -38,62 +39,67 @@ async function verifySignature(
   url: string,
   body: Uint8Array,
   signatureB64: string,
-  timestamp: string
+  timestamp: string,
 ): Promise<boolean> {
   try {
     // Check timestamp freshness (5 min window)
     const currentTime = Math.floor(Date.now() / 1000);
     const requestTime = parseInt(timestamp, 10);
     if (Math.abs(currentTime - requestTime) > 300) {
-      console.error('Webhook timestamp outside acceptable range');
+      console.error("Webhook timestamp outside acceptable range");
       return false;
     }
 
     // Compute body SHA256 hex
     const bodyBytes = new Uint8Array(body);
-    const digest = await crypto.subtle.digest('SHA-256', bodyBytes);
+    const digest = await crypto.subtle.digest("SHA-256", bodyBytes);
     const bodyHash = Array.from(new Uint8Array(digest))
-      .map(b => b.toString(16).padStart(2, '0')).join('');
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
 
     // Construct signature content
-    const signatureContent = new TextEncoder().encode(`${timestamp}.${url}.${bodyHash}`);
+    const signatureContent = new TextEncoder().encode(
+      `${timestamp}.${url}.${bodyHash}`,
+    );
 
     // Hash the content
-    const contentHash = await crypto.subtle.digest('SHA-256', signatureContent);
+    const contentHash = await crypto.subtle.digest("SHA-256", signatureContent);
 
     // Import public key
     const pemBody = publicKeyPem
-      .replace('-----BEGIN PUBLIC KEY-----', '')
-      .replace('-----END PUBLIC KEY-----', '')
-      .replace(/\s/g, '');
-    const binaryDer = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0));
+      .replace("-----BEGIN PUBLIC KEY-----", "")
+      .replace("-----END PUBLIC KEY-----", "")
+      .replace(/\s/g, "");
+    const binaryDer = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0));
 
     const key = await crypto.subtle.importKey(
-      'spki',
+      "spki",
       binaryDer,
-      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
       false,
-      ['verify']
+      ["verify"],
     );
 
     // Decode signature
-    const signature = Uint8Array.from(atob(signatureB64), c => c.charCodeAt(0));
+    const signature = Uint8Array.from(atob(signatureB64), (c) =>
+      c.charCodeAt(0),
+    );
 
     // Verify
     return await crypto.subtle.verify(
-      'RSASSA-PKCS1-v1_5',
+      "RSASSA-PKCS1-v1_5",
       key,
       signature,
-      contentHash
+      contentHash,
     );
   } catch (err) {
-    console.error('Signature verification error:', err);
+    console.error("Signature verification error:", err);
     return false;
   }
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -103,17 +109,24 @@ serve(async (req) => {
     const bodyText = new TextDecoder().decode(rawBody);
 
     // Verify webhook signature if headers present
-    const signature = req.headers.get('x-webhook-signature');
-    const timestamp = req.headers.get('x-webhook-timestamp');
+    const signature = req.headers.get("x-webhook-signature");
+    const timestamp = req.headers.get("x-webhook-timestamp");
 
     if (signature && timestamp) {
       const publicKey = await getManusPublicKey();
       if (publicKey) {
-        const valid = await verifySignature(publicKey, url, rawBody, signature, timestamp);
+        const valid = await verifySignature(
+          publicKey,
+          url,
+          rawBody,
+          signature,
+          timestamp,
+        );
         if (!valid) {
-          console.error('Invalid webhook signature');
-          return new Response(JSON.stringify({ error: 'Invalid signature' }), {
-            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          console.error("Invalid webhook signature");
+          return new Response(JSON.stringify({ error: "Invalid signature" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
       }
@@ -122,8 +135,8 @@ serve(async (req) => {
     const payload = JSON.parse(bodyText);
 
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
     // Extract task info from payload
@@ -142,25 +155,27 @@ serve(async (req) => {
       if (taskTitle) updateData.title = taskTitle;
 
       const { error: updateError } = await supabaseClient
-        .from('manus_tasks')
+        .from("manus_tasks")
         .update(updateData)
-        .eq('task_id', taskId);
+        .eq("task_id", taskId);
 
       if (updateError) {
-        console.error('Failed to update manus task:', updateError);
+        console.error("Failed to update manus task:", updateError);
       } else {
       }
     }
 
     return new Response(JSON.stringify({ success: true }), {
-      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (error: unknown) {
-    console.error('Manus webhook error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error("Manus webhook error:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

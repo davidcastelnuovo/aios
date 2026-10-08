@@ -10,7 +10,9 @@ function useCompactTabsNav() {
   });
 
   React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${COMPACT_TABS_BREAKPOINT - 1}px)`);
+    const mql = window.matchMedia(
+      `(max-width: ${COMPACT_TABS_BREAKPOINT - 1}px)`,
+    );
     const onChange = () => {
       setIsCompact(window.innerWidth < COMPACT_TABS_BREAKPOINT);
     };
@@ -126,7 +128,9 @@ export function ResponsiveTabsList({
           value={item.value}
           disabled={item.disabled}
           className={cn(
-            variant === "underline" ? underlineTriggerClass : defaultTriggerClass,
+            variant === "underline"
+              ? underlineTriggerClass
+              : defaultTriggerClass,
             item.triggerClassName,
           )}
         >

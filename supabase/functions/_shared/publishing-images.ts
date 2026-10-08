@@ -38,7 +38,9 @@ export function isAbsoluteHttpUrl(value: string | null | undefined): boolean {
 }
 
 /** Extract object path from a public/sign entity-attachments URL, or a bare storage path. */
-export function extractEntityAttachmentPath(value: string | null | undefined): string | null {
+export function extractEntityAttachmentPath(
+  value: string | null | undefined,
+): string | null {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -78,16 +80,23 @@ export function resolveMagazineImageUrl(
   return value;
 }
 
-export function resolveArticleImageFields<T extends {
-  hero_image_url?: string | null;
-  inline_image_url?: string | null;
-}>(
-  article: T,
-  proxyUrlFor: (kind: MagazineImageKind) => string,
-): T {
+export function resolveArticleImageFields<
+  T extends {
+    hero_image_url?: string | null;
+    inline_image_url?: string | null;
+  },
+>(article: T, proxyUrlFor: (kind: MagazineImageKind) => string): T {
   return {
     ...article,
-    hero_image_url: resolveMagazineImageUrl(article.hero_image_url, "hero", proxyUrlFor),
-    inline_image_url: resolveMagazineImageUrl(article.inline_image_url, "inline", proxyUrlFor),
+    hero_image_url: resolveMagazineImageUrl(
+      article.hero_image_url,
+      "hero",
+      proxyUrlFor,
+    ),
+    inline_image_url: resolveMagazineImageUrl(
+      article.inline_image_url,
+      "inline",
+      proxyUrlFor,
+    ),
   };
 }

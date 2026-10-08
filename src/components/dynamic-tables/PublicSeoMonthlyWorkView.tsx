@@ -1,7 +1,13 @@
 import { useMemo, useRef, useState } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
-import { ArrowRight, Download, ExternalLink, FileText, Loader2 } from "lucide-react";
+import {
+  ArrowRight,
+  Download,
+  ExternalLink,
+  FileText,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,10 +29,7 @@ import {
   SeoMonthlyShareSnapshot,
   SeoShareRecentLink,
 } from "@/lib/seoMonthlyShareSnapshot";
-import {
-  emptySeoMonthlyWork,
-  parseSeoMonthlyWork,
-} from "@/lib/seoMonthlyWork";
+import { emptySeoMonthlyWork, parseSeoMonthlyWork } from "@/lib/seoMonthlyWork";
 import { downloadSeoMonthlySlideshowPdf } from "@/lib/seoMonthlyPdf";
 import { filterValidSeoReports } from "@/components/dynamic-tables/seo/reportValidity";
 import { filterSeoReportsByDomain, normalizeSeoDomain } from "@/lib/seoDomain";
@@ -58,7 +61,9 @@ type Props = {
 
 function monthLabel(month: string): string {
   try {
-    return format(new Date(`${month.slice(0, 10)}T12:00:00`), "MMMM yyyy", { locale: he });
+    return format(new Date(`${month.slice(0, 10)}T12:00:00`), "MMMM yyyy", {
+      locale: he,
+    });
   } catch {
     return month;
   }
@@ -87,7 +92,10 @@ export function PublicSeoMonthlyWorkView({
     [months],
   );
 
-  const lastCalendarMonth = format(startOfMonth(subMonths(new Date(), 1)), "yyyy-MM-dd");
+  const lastCalendarMonth = format(
+    startOfMonth(subMonths(new Date(), 1)),
+    "yyyy-MM-dd",
+  );
   const currentCalendarMonth = format(startOfMonth(new Date()), "yyyy-MM-dd");
   // Prefer last month for the client-facing report; fall back to newest past month, then newest available.
   const defaultMonth =
@@ -125,7 +133,8 @@ export function PublicSeoMonthlyWorkView({
     })();
     for (const row of sortedMonths) {
       if (row.month < windowStart || row.month > selectedKey) continue;
-      const parsed = row.month === selectedKey ? work : parseSeoMonthlyWork(row.work);
+      const parsed =
+        row.month === selectedKey ? work : parseSeoMonthlyWork(row.work);
       for (const link of parsed.links) {
         const key = link.url.trim().toLowerCase();
         if (!key || seen.has(key)) continue;
@@ -152,7 +161,9 @@ export function PublicSeoMonthlyWorkView({
   }, [ahrefsReports, expectedDomain]);
 
   const status: SeoMonthlyShareSnapshot["status"] =
-    selected?.status === "up" || selected?.status === "down" || selected?.status === "stable"
+    selected?.status === "up" ||
+    selected?.status === "down" ||
+    selected?.status === "stable"
       ? selected.status
       : "stable";
 
@@ -163,7 +174,9 @@ export function PublicSeoMonthlyWorkView({
   const snapshot = useMemo(() => {
     const month = selected?.month || selectedMonth;
     const label = monthLabel(month);
-    const published = isSeoMonthlyShareSnapshot(selected?.snapshot) ? selected!.snapshot : null;
+    const published = isSeoMonthlyShareSnapshot(selected?.snapshot)
+      ? selected!.snapshot
+      : null;
     if (published) {
       return applyLiveWorkToShareSnapshot(published, {
         work,
@@ -215,7 +228,10 @@ export function PublicSeoMonthlyWorkView({
       const safeName = `${snapshot.clientName}-${snapshot.monthLabel}`
         .replace(/[^\w\u0590-\u05FF-]+/g, "-")
         .slice(0, 60);
-      await downloadSeoMonthlySlideshowPdf(captureStackRef.current, `seo-${safeName}.pdf`);
+      await downloadSeoMonthlySlideshowPdf(
+        captureStackRef.current,
+        `seo-${safeName}.pdf`,
+      );
       toast.success("ה־PDF הורד");
     } catch (err: any) {
       console.error(err);
@@ -238,7 +254,10 @@ export function PublicSeoMonthlyWorkView({
   ) : null;
 
   const monthPicker = (
-    <Select value={selected?.month || selectedMonth} onValueChange={setSelectedMonth}>
+    <Select
+      value={selected?.month || selectedMonth}
+      onValueChange={setSelectedMonth}
+    >
       <SelectTrigger className="h-10 w-[128px] border-slate-300 bg-white text-sm text-[#172a32] sm:w-[150px]">
         <SelectValue />
       </SelectTrigger>
@@ -260,7 +279,11 @@ export function PublicSeoMonthlyWorkView({
       disabled={exporting || !hasAnyWork}
       onClick={handleExportPdf}
     >
-      {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+      {exporting ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <Download className="h-4 w-4" />
+      )}
       PDF
     </Button>
   );
@@ -293,11 +316,16 @@ export function PublicSeoMonthlyWorkView({
                 {sortedMonths.length > 0 && monthPicker}
               </div>
             </header>
-            <p className="px-4 py-16 text-center text-sm text-slate-500">{emptyMessage}</p>
+            <p className="px-4 py-16 text-center text-sm text-slate-500">
+              {emptyMessage}
+            </p>
           </>
         )}
 
-        <SeoMonthlyLandingPageCapture snapshot={snapshot} reportRef={captureStackRef} />
+        <SeoMonthlyLandingPageCapture
+          snapshot={snapshot}
+          reportRef={captureStackRef}
+        />
       </div>
     );
   }
@@ -322,7 +350,10 @@ export function PublicSeoMonthlyWorkView({
               עבודה שבוצעה
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
-              <Select value={selected?.month || selectedMonth} onValueChange={setSelectedMonth}>
+              <Select
+                value={selected?.month || selectedMonth}
+                onValueChange={setSelectedMonth}
+              >
                 <SelectTrigger className="h-8 w-full min-w-0 sm:w-[180px] text-sm">
                   <SelectValue />
                 </SelectTrigger>
@@ -335,8 +366,17 @@ export function PublicSeoMonthlyWorkView({
                 </SelectContent>
               </Select>
               {monthShareToken && (
-                <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
-                  <a href={`/shared/seo-monthly/${monthShareToken}`} target="_blank" rel="noreferrer">
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5"
+                >
+                  <a
+                    href={`/shared/seo-monthly/${monthShareToken}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     <ExternalLink className="h-3.5 w-3.5" />
                     מסך מלא
                   </a>
@@ -350,7 +390,11 @@ export function PublicSeoMonthlyWorkView({
                 disabled={exporting || !hasAnyWork}
                 onClick={handleExportPdf}
               >
-                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                {exporting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
                 PDF
               </Button>
             </div>
@@ -361,7 +405,8 @@ export function PublicSeoMonthlyWorkView({
       {!hasAnyWork ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            אין פריטי עבודה לחודש {monthLabel(selected?.month || selectedMonth)}.
+            אין פריטי עבודה לחודש {monthLabel(selected?.month || selectedMonth)}
+            .
           </CardContent>
         </Card>
       ) : (
@@ -375,7 +420,10 @@ export function PublicSeoMonthlyWorkView({
         </div>
       )}
 
-      <SeoMonthlyLandingPageCapture snapshot={snapshot} reportRef={captureStackRef} />
+      <SeoMonthlyLandingPageCapture
+        snapshot={snapshot}
+        reportRef={captureStackRef}
+      />
     </div>
   );
 }

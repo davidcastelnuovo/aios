@@ -12,6 +12,7 @@ const UUID_RE =
 export function asUuidOrNull(value) {
   if (value == null) return null;
   const s = String(value).trim();
-  if (!s || s.toLowerCase() === "system" || s === "null" || s === "undefined") return null;
+  if (!s || s.toLowerCase() === "system" || s === "null" || s === "undefined")
+    return null;
   return UUID_RE.test(s) ? s : null;
 }

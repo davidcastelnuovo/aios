@@ -11,79 +11,109 @@
  * prompts below so a fresh deployment still has working skills.
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   DEV_ENVIRONMENT_SKILL_SLUG,
   DEV_ENVIRONMENT_STANDING,
   DEV_ENVIRONMENT_TRIGGERS,
-} from '../environments-standing.ts'
+} from "../environments-standing.ts";
 
 export interface CarmenSkill {
-  id: string
-  triggers: RegExp[]
-  prompt: string
-  tools: string[]
-  version?: number
-  source?: 'db' | 'fallback'
+  id: string;
+  triggers: RegExp[];
+  prompt: string;
+  tools: string[];
+  version?: number;
+  source?: "db" | "fallback";
 }
 
 interface DbSkillRow {
-  slug: string
-  system_prompt: string | null
-  output_template: string | null
-  allowed_tools: string[] | null
-  triggers: string[] | null
-  trigger_phrases: string[] | null
-  goal: string | null
-  constraints: string | null
-  handoff_slugs: string[] | null
-  steps: string | null
-  version: number
-  scope: string
-  tenant_id: string | null
+  slug: string;
+  system_prompt: string | null;
+  output_template: string | null;
+  allowed_tools: string[] | null;
+  triggers: string[] | null;
+  trigger_phrases: string[] | null;
+  goal: string | null;
+  constraints: string | null;
+  handoff_slugs: string[] | null;
+  steps: string | null;
+  version: number;
+  scope: string;
+  tenant_id: string | null;
 }
 
 // ────────── Hardcoded fallbacks (used only if DB read fails) ──────────
 
 const FALLBACK_PULSE_CHECK: CarmenSkill = {
-  id: 'pulse_check',
-  triggers: [/בדיקת\s*דופק/, /בדיקת\s*דוח/, /סיכום\s*קמפיינים/, /מצב\s*קמפיינים/, /\bpulse\s*check\b/i],
-  tools: ['get_latest_campaign_pulse'],
-  prompt: '=== סקיל: בדיקת דופק ===\nחובה לקרוא ל-get_latest_campaign_pulse. בוואטסאפ החזירי רק whatsapp_digest (סיכום + קישור לדשבורד) — אסור טבלת Markdown או פירוט לקוחות. לקמפיינרים הכלי מסנן אוטומטית ללקוחות משויכים ב-client_team. בדשבורד הפנימי מותר formatted_markdown. אסור לחשב בדיקה חדשה או להשלים נתונים מהזיכרון. אם אין Snapshot — אמרי שאין בדיקת דופק זמינה.',
-  source: 'fallback',
-}
+  id: "pulse_check",
+  triggers: [
+    /בדיקת\s*דופק/,
+    /בדיקת\s*דוח/,
+    /סיכום\s*קמפיינים/,
+    /מצב\s*קמפיינים/,
+    /\bpulse\s*check\b/i,
+  ],
+  tools: ["get_latest_campaign_pulse"],
+  prompt:
+    "=== סקיל: בדיקת דופק ===\nחובה לקרוא ל-get_latest_campaign_pulse. בוואטסאפ החזירי רק whatsapp_digest (סיכום + קישור לדשבורד) — אסור טבלת Markdown או פירוט לקוחות. לקמפיינרים הכלי מסנן אוטומטית ללקוחות משויכים ב-client_team. בדשבורד הפנימי מותר formatted_markdown. אסור לחשב בדיקה חדשה או להשלים נתונים מהזיכרון. אם אין Snapshot — אמרי שאין בדיקת דופק זמינה.",
+  source: "fallback",
+};
 const FALLBACK_ECOMMERCE: CarmenSkill = {
-  id: 'ecommerce_pulse',
-  triggers: [/איקומרס/, /ecommerce/i, /e-commerce/i, /רכישות/, /\broas\b/i, /\bcpp\b/i],
-  tools: ['analyze_campaign_performance', 'check_ad_accounts_health'],
-  prompt: '=== סקיל: בדיקת דופק איקומרס ===\nללקוחות is_ecommerce=true: רכישות, CPP, רווח, ROAS — לא CPL.',
-  source: 'fallback',
-}
+  id: "ecommerce_pulse",
+  triggers: [
+    /איקומרס/,
+    /ecommerce/i,
+    /e-commerce/i,
+    /רכישות/,
+    /\broas\b/i,
+    /\bcpp\b/i,
+  ],
+  tools: ["analyze_campaign_performance", "check_ad_accounts_health"],
+  prompt:
+    "=== סקיל: בדיקת דופק איקומרס ===\nללקוחות is_ecommerce=true: רכישות, CPP, רווח, ROAS — לא CPL.",
+  source: "fallback",
+};
 const FALLBACK_RETENTION: CarmenSkill = {
-  id: 'client_retention_scan',
-  triggers: [/שימור/, /נטישה/, /סיכון\s*נטישה/, /בריאות\s*לקוח/, /\bchurn\b/i, /client\s*retention/i],
-  tools: ['get_client_retention_scan', 'batch_update_client_health', 'update_client_health'],
-  prompt: '=== סקיל: דופק שימור ===\nחובה לקרוא ל-get_client_retention_scan. בוואטסאפ החזירי רק whatsapp_digest. אסור לשלוח הודעה ללקוח. אסור לחשב דופק חדש. batch_update_client_health רק אם ביקשו במפורש לעדכן את הדשבורד, עם note לכל לקוח.',
-  source: 'fallback',
-}
+  id: "client_retention_scan",
+  triggers: [
+    /שימור/,
+    /נטישה/,
+    /סיכון\s*נטישה/,
+    /בריאות\s*לקוח/,
+    /\bchurn\b/i,
+    /client\s*retention/i,
+  ],
+  tools: [
+    "get_client_retention_scan",
+    "batch_update_client_health",
+    "update_client_health",
+  ],
+  prompt:
+    "=== סקיל: דופק שימור ===\nחובה לקרוא ל-get_client_retention_scan. בוואטסאפ החזירי רק whatsapp_digest. אסור לשלוח הודעה ללקוח. אסור לחשב דופק חדש. batch_update_client_health רק אם ביקשו במפורש לעדכן את הדשבורד, עם note לכל לקוח.",
+  source: "fallback",
+};
 const FALLBACK_AD_HEALTH: CarmenSkill = {
-  id: 'ad_accounts_health',
+  id: "ad_accounts_health",
   triggers: [/חשבונות\s*מודעות/, /תקינות\s*חשבונות/, /\bad\s*accounts?\b/i],
-  tools: ['check_ad_accounts_health'],
-  prompt: '=== סקיל: בדיקת תקינות חשבונות מודעות ===\nהריצי check_ad_accounts_health ודווחי רק חשבונות עם בעיה.',
-  source: 'fallback',
-}
+  tools: ["check_ad_accounts_health"],
+  prompt:
+    "=== סקיל: בדיקת תקינות חשבונות מודעות ===\nהריצי check_ad_accounts_health ודווחי רק חשבונות עם בעיה.",
+  source: "fallback",
+};
 
 const FALLBACK_DEV_ENVIRONMENT: CarmenSkill = {
   id: DEV_ENVIRONMENT_SKILL_SLUG,
   triggers: DEV_ENVIRONMENT_TRIGGERS.map((t) => {
-    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*')
-    return new RegExp(escaped, 'i')
+    const escaped = t
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\s+/g, "\\s*");
+    return new RegExp(escaped, "i");
   }),
   tools: [],
   prompt: `=== סקיל: ${DEV_ENVIRONMENT_SKILL_SLUG} ===\n${DEV_ENVIRONMENT_STANDING}`,
-  source: 'fallback',
-}
+  source: "fallback",
+};
 
 const FALLBACKS: Record<string, CarmenSkill> = {
   pulse_check: FALLBACK_PULSE_CHECK,
@@ -91,107 +121,136 @@ const FALLBACKS: Record<string, CarmenSkill> = {
   ecommerce_pulse: FALLBACK_ECOMMERCE,
   ad_accounts_health: FALLBACK_AD_HEALTH,
   [DEV_ENVIRONMENT_SKILL_SLUG]: FALLBACK_DEV_ENVIRONMENT,
-}
+};
 
-const ALWAYS_ON_SKILL_SLUGS = new Set([DEV_ENVIRONMENT_SKILL_SLUG])
+const ALWAYS_ON_SKILL_SLUGS = new Set([DEV_ENVIRONMENT_SKILL_SLUG]);
 
 // Backwards-compat exports (some files may still import these)
-export const PULSE_CHECK_SKILL = FALLBACK_PULSE_CHECK
-export const ECOMMERCE_PULSE_SKILL = FALLBACK_ECOMMERCE
-export const AD_ACCOUNTS_HEALTH_SKILL = FALLBACK_AD_HEALTH
-export const SKILLS_REGISTRY = [FALLBACK_PULSE_CHECK, FALLBACK_RETENTION, FALLBACK_ECOMMERCE, FALLBACK_AD_HEALTH, FALLBACK_DEV_ENVIRONMENT]
+export const PULSE_CHECK_SKILL = FALLBACK_PULSE_CHECK;
+export const ECOMMERCE_PULSE_SKILL = FALLBACK_ECOMMERCE;
+export const AD_ACCOUNTS_HEALTH_SKILL = FALLBACK_AD_HEALTH;
+export const SKILLS_REGISTRY = [
+  FALLBACK_PULSE_CHECK,
+  FALLBACK_RETENTION,
+  FALLBACK_ECOMMERCE,
+  FALLBACK_AD_HEALTH,
+  FALLBACK_DEV_ENVIRONMENT,
+];
 
 // ────────── DB Loader with cache ──────────
 
 interface CacheEntry {
-  skills: CarmenSkill[]
-  fetchedAt: number
+  skills: CarmenSkill[];
+  fetchedAt: number;
 }
 
-const CACHE_TTL_MS = 30_000 // 30s — fast enough for "no deploy" feel
-const cache = new Map<string, CacheEntry>()
+const CACHE_TTL_MS = 30_000; // 30s — fast enough for "no deploy" feel
+const cache = new Map<string, CacheEntry>();
 
 function getServiceClient() {
-  const url = Deno.env.get('SUPABASE_URL')!
-  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  return createClient(url, key, { auth: { persistSession: false } })
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  return createClient(url, key, { auth: { persistSession: false } });
 }
 
 function rowToSkill(row: DbSkillRow): CarmenSkill {
   // Union of both trigger columns: seeded skins use `triggers`, agent-created
   // skins historically wrote `trigger_phrases`. Reading only one column left
   // ~10 skins unroutable — accept both so a skin can never go dead again.
-  const triggerStrings = Array.from(new Set([
-    ...(row.triggers || []),
-    ...(row.trigger_phrases || []),
-  ].filter(Boolean)))
+  const triggerStrings = Array.from(
+    new Set(
+      [...(row.triggers || []), ...(row.trigger_phrases || [])].filter(Boolean),
+    ),
+  );
   const regexes = triggerStrings.map((t) => {
     // Build a lenient regex: word boundaries optional for Hebrew, escape regex chars
-    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*')
-    return new RegExp(escaped, 'i')
-  })
-  const promptParts: string[] = []
-  if (row.goal) promptParts.push('מטרה: ' + row.goal)
-  if (row.system_prompt) promptParts.push(row.system_prompt)
-  if (row.constraints) promptParts.push('חוקים קשיחים (לעולם לא נדרסים ע"י טון/מצב רוח):\n' + row.constraints)
+    const escaped = t
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\s+/g, "\\s*");
+    return new RegExp(escaped, "i");
+  });
+  const promptParts: string[] = [];
+  if (row.goal) promptParts.push("מטרה: " + row.goal);
+  if (row.system_prompt) promptParts.push(row.system_prompt);
+  if (row.constraints)
+    promptParts.push(
+      'חוקים קשיחים (לעולם לא נדרסים ע"י טון/מצב רוח):\n' + row.constraints,
+    );
   // Procedural playbook — the ordered "do it this way" steps. Injected so a
   // procedure written into a skin's `steps` actually drives behaviour (it was
   // previously stored but never reached the prompt).
-  if (row.steps) promptParts.push('שלבי עבודה (בצעי לפי הסדר, אלא אם המשתמש ביקש אחרת):\n' + row.steps)
-  if (row.output_template) promptParts.push('פורמט פלט חובה:\n' + row.output_template)
+  if (row.steps)
+    promptParts.push(
+      "שלבי עבודה (בצעי לפי הסדר, אלא אם המשתמש ביקש אחרת):\n" + row.steps,
+    );
+  if (row.output_template)
+    promptParts.push("פורמט פלט חובה:\n" + row.output_template);
   // Skin → capability link: name the tools this skin works with, so the model
   // reaches for the right tool immediately instead of exploring.
   if (row.allowed_tools && row.allowed_tools.length > 0) {
-    promptParts.push('🔧 כלים לשימוש בסקיל זה: ' + row.allowed_tools.join(', '))
+    promptParts.push(
+      "🔧 כלים לשימוש בסקיל זה: " + row.allowed_tools.join(", "),
+    );
   }
   return {
     id: row.slug,
     triggers: regexes,
-    prompt: `=== סקיל: ${row.slug} ===\n${promptParts.join('\n\n')}`,
+    prompt: `=== סקיל: ${row.slug} ===\n${promptParts.join("\n\n")}`,
     tools: row.allowed_tools || [],
     version: row.version,
-    source: 'db',
-  }
+    source: "db",
+  };
 }
 
-async function loadSkillsForTenant(tenantId: string | null): Promise<CarmenSkill[]> {
-  const cacheKey = tenantId || 'global'
-  const cached = cache.get(cacheKey)
+async function loadSkillsForTenant(
+  tenantId: string | null,
+): Promise<CarmenSkill[]> {
+  const cacheKey = tenantId || "global";
+  const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-    return cached.skills
+    return cached.skills;
   }
   try {
-    const sb = getServiceClient()
+    const sb = getServiceClient();
     // Pull global + this tenant. Tenant overrides global on the same slug.
     const { data, error } = await sb
-      .from('ai_skills')
-      .select('slug,system_prompt,output_template,allowed_tools,triggers,trigger_phrases,goal,constraints,handoff_slugs,steps,version,scope,tenant_id')
-      .eq('is_active', true)
-      .or(tenantId ? `scope.eq.global,and(scope.eq.tenant,tenant_id.eq.${tenantId})` : 'scope.eq.global')
+      .from("ai_skills")
+      .select(
+        "slug,system_prompt,output_template,allowed_tools,triggers,trigger_phrases,goal,constraints,handoff_slugs,steps,version,scope,tenant_id",
+      )
+      .eq("is_active", true)
+      .or(
+        tenantId
+          ? `scope.eq.global,and(scope.eq.tenant,tenant_id.eq.${tenantId})`
+          : "scope.eq.global",
+      );
 
-    if (error) throw error
+    if (error) throw error;
 
-    const bySlug = new Map<string, DbSkillRow>()
+    const bySlug = new Map<string, DbSkillRow>();
     for (const row of (data || []) as DbSkillRow[]) {
-      if (!row.slug) continue
-      const existing = bySlug.get(row.slug)
+      if (!row.slug) continue;
+      const existing = bySlug.get(row.slug);
       // Tenant scope wins over global
-      if (!existing || (row.scope === 'tenant' && existing.scope === 'global')) {
-        bySlug.set(row.slug, row)
+      if (
+        !existing ||
+        (row.scope === "tenant" && existing.scope === "global")
+      ) {
+        bySlug.set(row.slug, row);
       }
     }
-    const skills = Array.from(bySlug.values()).map(rowToSkill)
+    const skills = Array.from(bySlug.values()).map(rowToSkill);
     // Add hardcoded fallbacks for any slug missing from DB
     for (const slug of Object.keys(FALLBACKS)) {
-      if (!bySlug.has(slug)) skills.push(FALLBACKS[slug])
+      if (!bySlug.has(slug)) skills.push(FALLBACKS[slug]);
     }
-    cache.set(cacheKey, { skills, fetchedAt: Date.now() })
-    return skills
+    cache.set(cacheKey, { skills, fetchedAt: Date.now() });
+    return skills;
   } catch (e) {
-    console.error('[skills/registry] DB load failed, using fallbacks:', e)
-    const skills = Object.values(FALLBACKS)
-    cache.set(cacheKey, { skills, fetchedAt: Date.now() })
-    return skills
+    console.error("[skills/registry] DB load failed, using fallbacks:", e);
+    const skills = Object.values(FALLBACKS);
+    cache.set(cacheKey, { skills, fetchedAt: Date.now() });
+    return skills;
   }
 }
 
@@ -202,26 +261,29 @@ async function loadSkillsForTenant(tenantId: string | null): Promise<CarmenSkill
  */
 export async function resolveActiveSkills(
   commandText: string,
-  tenantId: string | null = null
+  tenantId: string | null = null,
 ): Promise<CarmenSkill[]> {
-  const all = await loadSkillsForTenant(tenantId)
-  const text = String(commandText || '').toLowerCase()
-  const matches: CarmenSkill[] = []
+  const all = await loadSkillsForTenant(tenantId);
+  const text = String(commandText || "").toLowerCase();
+  const matches: CarmenSkill[] = [];
   for (const skill of all) {
-    if (ALWAYS_ON_SKILL_SLUGS.has(skill.id) || (text && skill.triggers.some((re) => re.test(text)))) {
-      matches.push(skill)
+    if (
+      ALWAYS_ON_SKILL_SLUGS.has(skill.id) ||
+      (text && skill.triggers.some((re) => re.test(text)))
+    ) {
+      matches.push(skill);
     }
   }
-  return matches
+  return matches;
 }
 
 export async function buildSkillsBlock(
   commandText: string,
-  tenantId: string | null = null
+  tenantId: string | null = null,
 ): Promise<string> {
-  const matches = await resolveActiveSkills(commandText, tenantId)
-  if (matches.length === 0) return ''
-  return '\n\n' + matches.map((s) => s.prompt).join('\n\n')
+  const matches = await resolveActiveSkills(commandText, tenantId);
+  if (matches.length === 0) return "";
+  return "\n\n" + matches.map((s) => s.prompt).join("\n\n");
 }
 
 /**
@@ -233,25 +295,25 @@ export async function buildSkillsBlock(
  */
 export async function resolveSkillsBySlug(
   slugs: string[],
-  tenantId: string | null = null
+  tenantId: string | null = null,
 ): Promise<CarmenSkill[]> {
-  if (!slugs || slugs.length === 0) return []
-  const wanted = new Set(slugs.map((s) => String(s).trim()).filter(Boolean))
-  if (wanted.size === 0) return []
-  const all = await loadSkillsForTenant(tenantId)
-  return all.filter((s) => wanted.has(s.id))
+  if (!slugs || slugs.length === 0) return [];
+  const wanted = new Set(slugs.map((s) => String(s).trim()).filter(Boolean));
+  if (wanted.size === 0) return [];
+  const all = await loadSkillsForTenant(tenantId);
+  return all.filter((s) => wanted.has(s.id));
 }
 
 export async function buildSkillsBlockBySlug(
   slugs: string[],
-  tenantId: string | null = null
+  tenantId: string | null = null,
 ): Promise<string> {
-  const matches = await resolveSkillsBySlug(slugs, tenantId)
-  if (matches.length === 0) return ''
-  return '\n\n' + matches.map((s) => s.prompt).join('\n\n')
+  const matches = await resolveSkillsBySlug(slugs, tenantId);
+  if (matches.length === 0) return "";
+  return "\n\n" + matches.map((s) => s.prompt).join("\n\n");
 }
 
 /** For warmup or admin tools */
 export function clearSkillsCache() {
-  cache.clear()
+  cache.clear();
 }

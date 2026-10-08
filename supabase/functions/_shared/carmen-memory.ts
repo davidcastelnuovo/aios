@@ -6,7 +6,7 @@ export function svc() {
   return createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    { auth: { persistSession: false } }
+    { auth: { persistSession: false } },
   );
 }
 
@@ -14,20 +14,23 @@ export function svc() {
 // the historical name so existing callers keep working.
 export const embed = aiEmbed;
 
-export async function upsertPointer(supabase: any, p: {
-  tenant_id: string;
-  category: string;
-  subcategory?: string | null;
-  path: string;
-  entity_type: string;
-  entity_id: string;
-  title: string;
-  summary?: string | null;
-  ref_date?: string | null;
-  importance?: number;
-  metadata?: Record<string, unknown>;
-  withEmbedding?: boolean;
-}) {
+export async function upsertPointer(
+  supabase: any,
+  p: {
+    tenant_id: string;
+    category: string;
+    subcategory?: string | null;
+    path: string;
+    entity_type: string;
+    entity_id: string;
+    title: string;
+    summary?: string | null;
+    ref_date?: string | null;
+    importance?: number;
+    metadata?: Record<string, unknown>;
+    withEmbedding?: boolean;
+  },
+) {
   const row: any = {
     tenant_id: p.tenant_id,
     category: p.category,
@@ -45,9 +48,9 @@ export async function upsertPointer(supabase: any, p: {
     const e = await embed(`${p.title}\n${p.summary}`);
     if (e) row.summary_embedding = e as any;
   }
-  await supabase
-    .from("carmen_memory_pointers")
-    .upsert(row, { onConflict: "tenant_id,path,entity_type,entity_id,subcategory" });
+  await supabase.from("carmen_memory_pointers").upsert(row, {
+    onConflict: "tenant_id,path,entity_type,entity_id,subcategory",
+  });
 }
 
 export function shortText(s: string | null | undefined, n = 240): string {

@@ -9,18 +9,23 @@ interface ComparisonBadgeProps {
   className?: string;
 }
 
-export function ComparisonBadge({ 
-  current, 
-  previous, 
-  format = "percent", 
+export function ComparisonBadge({
+  current,
+  previous,
+  format = "percent",
   reverseColors = false,
-  className 
+  className,
 }: ComparisonBadgeProps) {
   if (previous === 0 && current === 0) {
     return null;
   }
 
-  const change = previous > 0 ? ((current - previous) / previous) * 100 : (current > 0 ? 100 : 0);
+  const change =
+    previous > 0
+      ? ((current - previous) / previous) * 100
+      : current > 0
+        ? 100
+        : 0;
   const isIncrease = change > 0;
   const isDecrease = change < 0;
   const isNoChange = change === 0;
@@ -29,24 +34,28 @@ export function ComparisonBadge({
   const isPositive = reverseColors ? isDecrease : isIncrease;
   const isNegative = reverseColors ? isIncrease : isDecrease;
 
-  const formattedChange = format === "percent" 
-    ? `${Math.abs(change).toFixed(1)}%`
-    : Math.abs(current - previous).toLocaleString();
+  const formattedChange =
+    format === "percent"
+      ? `${Math.abs(change).toFixed(1)}%`
+      : Math.abs(current - previous).toLocaleString();
 
   return (
-    <div 
+    <div
       className={cn(
         "flex items-center gap-1 text-xs font-medium",
         isPositive && "text-emerald-600 dark:text-emerald-500",
         isNegative && "text-destructive",
         isNoChange && "text-muted-foreground",
-        className
+        className,
       )}
     >
       {isIncrease && <ArrowUp className="h-3 w-3" />}
       {isDecrease && <ArrowDown className="h-3 w-3" />}
       {isNoChange && <Minus className="h-3 w-3" />}
-      <span>{isIncrease ? "+" : isDecrease ? "-" : ""}{formattedChange}</span>
+      <span>
+        {isIncrease ? "+" : isDecrease ? "-" : ""}
+        {formattedChange}
+      </span>
     </div>
   );
 }
@@ -58,12 +67,20 @@ interface ComparisonData {
   isIncrease: boolean;
 }
 
-export function calculateComparison(current: number, previous: number): ComparisonData {
-  const change = previous > 0 ? ((current - previous) / previous) * 100 : (current > 0 ? 100 : 0);
+export function calculateComparison(
+  current: number,
+  previous: number,
+): ComparisonData {
+  const change =
+    previous > 0
+      ? ((current - previous) / previous) * 100
+      : current > 0
+        ? 100
+        : 0;
   return {
     currentValue: current,
     previousValue: previous,
     changePercent: Math.abs(change),
-    isIncrease: change >= 0
+    isIncrease: change >= 0,
   };
 }

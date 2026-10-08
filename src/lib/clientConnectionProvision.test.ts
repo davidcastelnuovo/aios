@@ -10,7 +10,9 @@ describe("clientConnectionProvision", () => {
   it("counts a single Meta connection as 1 → no dashboard", () => {
     const fields = { meta_ads_account_id: "act_123" };
     expect(countFilledConnections(fields, ["ppc_meta"])).toBe(1);
-    expect(shouldCreateDashboardForConnections(fields, ["ppc_meta"])).toBe(false);
+    expect(shouldCreateDashboardForConnections(fields, ["ppc_meta"])).toBe(
+      false,
+    );
   });
 
   it("counts Meta + Google Ads as 2 → dashboard", () => {
@@ -19,7 +21,9 @@ describe("clientConnectionProvision", () => {
       google_ads_account_id: "123-456-7890",
     };
     expect(countFilledConnections(fields, ["ppc_meta", "ppc_google"])).toBe(2);
-    expect(shouldCreateDashboardForConnections(fields, ["ppc_meta", "ppc_google"])).toBe(true);
+    expect(
+      shouldCreateDashboardForConnections(fields, ["ppc_meta", "ppc_google"]),
+    ).toBe(true);
   });
 
   it("counts SEO website bundle as one connection", () => {

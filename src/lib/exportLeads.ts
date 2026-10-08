@@ -142,7 +142,8 @@ function endOfDayIso(date: Date): string {
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  for (let i = 0; i < items.length; i += size)
+    out.push(items.slice(i, i + size));
   return out;
 }
 
@@ -166,9 +167,13 @@ export function formatLeadExportUpdate(update: LeadExportUpdate): string {
 function stringifyFormValue(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   if (Array.isArray(value)) {
-    return value.map((item) => stringifyFormValue(item)).filter(Boolean).join(" | ");
+    return value
+      .map((item) => stringifyFormValue(item))
+      .filter(Boolean)
+      .join(" | ");
   }
   try {
     return JSON.stringify(value);
@@ -180,7 +185,11 @@ function stringifyFormValue(value: unknown): string {
 export function collectFormDataKeys(leads: LeadExportRecord[]): string[] {
   const keys = new Set<string>();
   for (const lead of leads) {
-    if (!lead.form_data || typeof lead.form_data !== "object" || Array.isArray(lead.form_data)) {
+    if (
+      !lead.form_data ||
+      typeof lead.form_data !== "object" ||
+      Array.isArray(lead.form_data)
+    ) {
       continue;
     }
     for (const key of Object.keys(lead.form_data as Record<string, unknown>)) {
@@ -207,7 +216,10 @@ export function leadMatchesTagFilter(
 }
 
 /** Same tenant/agency clause the leads page uses before its security guard. */
-export function applyLeadExportTenantScope(query: any, filters: LeadExportFilters): any {
+export function applyLeadExportTenantScope(
+  query: any,
+  filters: LeadExportFilters,
+): any {
   const tenantId = filters.tenantId;
   const selectedAgency = filters.selectedAgency;
   const agencyIds = filters.agencyIds || [];
@@ -216,7 +228,9 @@ export function applyLeadExportTenantScope(query: any, filters: LeadExportFilter
     return query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
   }
   if (agencyIds.length > 0) {
-    return query.or(`tenant_id.eq.${tenantId},agency_id.in.(${agencyIds.join(",")})`);
+    return query.or(
+      `tenant_id.eq.${tenantId},agency_id.in.(${agencyIds.join(",")})`,
+    );
   }
   return query.eq("tenant_id", tenantId);
 }
@@ -245,8 +259,14 @@ function applyLeadExportFilters(query: any, filters: LeadExportFilters): any {
 
   if (filters.viewAsSalesPersonId) {
     query = query.eq("sales_person_id", filters.viewAsSalesPersonId);
-  } else if (filters.filterSalesPersonIds && filters.filterSalesPersonIds.length > 0) {
-    if (filters.filterSalesPersonIds.includes("none") && filters.filterSalesPersonIds.length === 1) {
+  } else if (
+    filters.filterSalesPersonIds &&
+    filters.filterSalesPersonIds.length > 0
+  ) {
+    if (
+      filters.filterSalesPersonIds.includes("none") &&
+      filters.filterSalesPersonIds.length === 1
+    ) {
       query = query.is("sales_person_id", null);
     } else if (!filters.filterSalesPersonIds.includes("none")) {
       query = query.in("sales_person_id", filters.filterSalesPersonIds);
@@ -254,7 +274,10 @@ function applyLeadExportFilters(query: any, filters: LeadExportFilters): any {
   }
 
   if (filters.filterResponseStatus && filters.filterResponseStatus.length > 0) {
-    if (filters.filterResponseStatus.includes("none") && filters.filterResponseStatus.length === 1) {
+    if (
+      filters.filterResponseStatus.includes("none") &&
+      filters.filterResponseStatus.length === 1
+    ) {
       query = query.is("response_status", null);
     } else if (!filters.filterResponseStatus.includes("none")) {
       query = query.in("response_status", filters.filterResponseStatus);
@@ -277,7 +300,9 @@ function applyLeadExportFilters(query: any, filters: LeadExportFilters): any {
   return query;
 }
 
-async function paginateQuery<T>(runPage: (from: number, to: number) => Promise<T[]>): Promise<T[]> {
+async function paginateQuery<T>(
+  runPage: (from: number, to: number) => Promise<T[]>,
+): Promise<T[]> {
   const all: T[] = [];
   let from = 0;
   while (true) {
@@ -310,7 +335,9 @@ export async function fetchAllLeadsForExport(
     const { data, error } = await query;
     if (error) throw error;
     return (data || []) as LeadExportRecord[];
-  }).then((rows) => rows.filter((lead) => leadExportMatchesPageScope(lead, filters)));
+  }).then((rows) =>
+    rows.filter((lead) => leadExportMatchesPageScope(lead, filters)),
+  );
 
   const leadIds = leads.map((lead) => lead.id);
   const tagIdsByLead: Record<string, string[]> = {};
@@ -318,7 +345,11 @@ export async function fetchAllLeadsForExport(
   const updatesByLead: Record<string, LeadExportUpdate[]> = {};
 
   if (leadIds.length > 0) {
-    const tagRows: Array<{ lead_id: string | null; tag_id: string; chat_tags?: { name?: string | null } | null }> = [];
+    const tagRows: Array<{
+      lead_id: string | null;
+      tag_id: string;
+      chat_tags?: { name?: string | null } | null;
+    }> = [];
     for (const idChunk of chunk(leadIds, RELATED_IN_CHUNK)) {
       const chunkRows = await paginateQuery(async (from, to) => {
         const { data, error } = await supabase
@@ -358,7 +389,9 @@ export async function fetchAllLeadsForExport(
       const chunkRows = await paginateQuery(async (from, to) => {
         const { data, error } = await supabase
           .from("lead_updates")
-          .select("lead_id, content, created_at, user_id, profiles:user_id (full_name)")
+          .select(
+            "lead_id, content, created_at, user_id, profiles:user_id (full_name)",
+          )
           .in("lead_id", idChunk)
           .order("created_at", { ascending: true })
           .order("id", { ascending: true })
@@ -396,7 +429,9 @@ export async function fetchAllLeadsForExport(
     filters.filterResponseStatus.includes("none") &&
     filters.filterResponseStatus.length > 1
   ) {
-    const otherStatuses = filters.filterResponseStatus.filter((status) => status !== "none");
+    const otherStatuses = filters.filterResponseStatus.filter(
+      (status) => status !== "none",
+    );
     for (let i = filteredLeads.length - 1; i >= 0; i -= 1) {
       const status = filteredLeads[i].response_status;
       if (status != null && !otherStatuses.includes(status)) {
@@ -406,13 +441,20 @@ export async function fetchAllLeadsForExport(
   }
 
   for (const lead of filteredLeads) {
-    lead.tagNames = (tagNamesByLead[lead.id] || []).slice().sort((a, b) => a.localeCompare(b, "he"));
+    lead.tagNames = (tagNamesByLead[lead.id] || [])
+      .slice()
+      .sort((a, b) => a.localeCompare(b, "he"));
     lead.updates = (updatesByLead[lead.id] || []).slice().sort((a, b) => {
-      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return (
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
     });
   }
 
-  const [{ data: stages, error: stagesError }, { data: statuses, error: statusesError }] = await Promise.all([
+  const [
+    { data: stages, error: stagesError },
+    { data: statuses, error: statusesError },
+  ] = await Promise.all([
     supabase
       .from("lead_pipeline_stages")
       .select("stage_key, label")
@@ -439,32 +481,41 @@ export function buildLeadExportRows(
   stages: LeadExportStage[],
   statuses: LeadExportStatus[],
 ): Record<string, string | number>[] {
-  const maxUpdates = leads.reduce((max, lead) => Math.max(max, lead.updates?.length || 0), 0);
+  const maxUpdates = leads.reduce(
+    (max, lead) => Math.max(max, lead.updates?.length || 0),
+    0,
+  );
   const formKeys = collectFormDataKeys(leads);
 
   return leads.map((lead) => {
-    const stageName = stages.find((stage) => stage.stage_key === lead.status)?.label || lead.status || "";
-    const statusName = findLeadStatus(lead.response_status, statuses)?.label || lead.response_status || "";
+    const stageName =
+      stages.find((stage) => stage.stage_key === lead.status)?.label ||
+      lead.status ||
+      "";
+    const statusName =
+      findLeadStatus(lead.response_status, statuses)?.label ||
+      lead.response_status ||
+      "";
     const row: Record<string, string | number> = {
       "שם איש קשר": lead.contact_name || "",
       "שם העסק": lead.company_name || "",
-      "טלפון": lead.phone || "",
-      "אימייל": lead.email || "",
-      "שלב": stageName,
+      טלפון: lead.phone || "",
+      אימייל: lead.email || "",
+      שלב: stageName,
       "סטטוס תגובה": statusName,
-      "תגיות": (lead.tagNames || []).join(", "),
-      "מקור": leadSourceDisplay(lead),
+      תגיות: (lead.tagNames || []).join(", "),
+      מקור: leadSourceDisplay(lead),
       "מקור ראשוני": leadFirstSourceDisplay(lead) || "",
       "שם קמפיין": lead.campaign_name || "",
-      "תעשייה": lead.industry || "",
-      "מוצרים": lead.products || "",
+      תעשייה: lead.industry || "",
+      מוצרים: lead.products || "",
       "שווי עסקה": lead.estimated_deal_value ?? "",
       'תקציב חד"פ': lead.monthly_budget ?? "",
       "הצעה 3 חודשים": lead.three_month_budget ?? "",
       "איש מכירות": lead.sales_people?.full_name || "",
-      "סוכנות": lead.agencies?.name || "",
+      סוכנות: lead.agencies?.name || "",
       "לקוח מקושר": lead.clients?.name || "",
-      "הערות": lead.notes || "",
+      הערות: lead.notes || "",
       "סיבת אובדן": lead.lost_reason || "",
       "קישור לתיקייה": lead.folder_link || "",
       "תאריך יצירה": formatLeadExportDate(lead.created_at),
@@ -480,7 +531,7 @@ export function buildLeadExportRows(
       "מיקום פגישה": lead.meeting_location || "",
       "תאריך קביעת פגישה": formatLeadExportDate(lead.meeting_set_date),
       "סיכום שאלות ותשובות": lead.form_qa_summary || "",
-      "בארכיון": lead.archived_at ? "כן" : "",
+      בארכיון: lead.archived_at ? "כן" : "",
     };
 
     for (let i = 0; i < maxUpdates; i += 1) {
@@ -489,7 +540,9 @@ export function buildLeadExportRows(
     }
 
     const formData =
-      lead.form_data && typeof lead.form_data === "object" && !Array.isArray(lead.form_data)
+      lead.form_data &&
+      typeof lead.form_data === "object" &&
+      !Array.isArray(lead.form_data)
         ? (lead.form_data as Record<string, unknown>)
         : {};
     for (const key of formKeys) {
@@ -508,14 +561,19 @@ export function buildLeadExportWorkbook(
   const headers = rows[0] ? Object.keys(rows[0]) : [];
   worksheet["!views"] = [{ rightToLeft: true }];
   worksheet["!cols"] = headers.map((header) => ({
-    wch: header.startsWith("עדכון") ? 48 : Math.min(36, Math.max(14, header.length + 2)),
+    wch: header.startsWith("עדכון")
+      ? 48
+      : Math.min(36, Math.max(14, header.length + 2)),
   }));
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.slice(0, 31));
   return workbook;
 }
 
-export function writeLeadExportFile(workbook: XLSX.WorkBook, filename: string): void {
+export function writeLeadExportFile(
+  workbook: XLSX.WorkBook,
+  filename: string,
+): void {
   XLSX.writeFile(workbook, filename);
 }
 

@@ -5,17 +5,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
+import {
+  useAgencyClients,
+  useTableDialogAgencies,
+} from "@/hooks/useAgencyClients";
 import { Loader2, AlertCircle, Music2 } from "lucide-react";
 
 interface Props {
@@ -25,13 +37,17 @@ interface Props {
 }
 
 const MAX_VIDEOS_OPTIONS = [
-  { value: '20', label: '20 סרטונים אחרונים' },
-  { value: '50', label: '50 סרטונים אחרונים (מומלץ)' },
-  { value: '100', label: '100 סרטונים אחרונים' },
-  { value: '200', label: '200 סרטונים אחרונים' },
+  { value: "20", label: "20 סרטונים אחרונים" },
+  { value: "50", label: "50 סרטונים אחרונים (מומלץ)" },
+  { value: "100", label: "100 סרטונים אחרונים" },
+  { value: "200", label: "200 סרטונים אחרונים" },
 ];
 
-export function TikTokTableDialog({ open, onOpenChange, assignedClientIds }: Props) {
+export function TikTokTableDialog({
+  open,
+  onOpenChange,
+  assignedClientIds,
+}: Props) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
@@ -44,52 +60,63 @@ export function TikTokTableDialog({ open, onOpenChange, assignedClientIds }: Pro
   const [clientSearch, setClientSearch] = useState("");
 
   const { data: integration, isLoading: checking } = useQuery({
-    queryKey: ['tiktok-integration-status', tenantId],
+    queryKey: ["tiktok-integration-status", tenantId],
     queryFn: async () => {
       if (!tenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('id, is_active, settings')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'tiktok')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("id, is_active, settings")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "tiktok")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
     enabled: open && !!tenantId,
   });
 
-  const { data: agencies = [] } = useTableDialogAgencies({ includeShared: true, enabled: open });
+  const { data: agencies = [] } = useTableDialogAgencies({
+    includeShared: true,
+    enabled: open,
+  });
 
-  const { data: rawClients = [] } = useAgencyClients(agencyId || null, { enabled: open });
+  const { data: rawClients = [] } = useAgencyClients(agencyId || null, {
+    enabled: open,
+  });
   const clients = assignedClientIds
-    ? rawClients.filter(c => assignedClientIds.includes(c.id))
+    ? rawClients.filter((c) => assignedClientIds.includes(c.id))
     : rawClients;
 
-  useEffect(() => { setClientId(""); setClientSearch(""); }, [agencyId]);
+  useEffect(() => {
+    setClientId("");
+    setClientSearch("");
+  }, [agencyId]);
 
   const connected = !!integration?.is_active;
   const account = (integration?.settings as any) || {};
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const slug = tableName.toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9\u0590-\u05FF-]/g, '')
-        + '-' + Date.now().toString(36);
+      const slug =
+        tableName
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9\u0590-\u05FF-]/g, "") +
+        "-" +
+        Date.now().toString(36);
 
-      const res = await supabase.functions.invoke('crm-tables', {
-        method: 'POST',
+      const res = await supabase.functions.invoke("crm-tables", {
+        method: "POST",
         body: {
           name: tableName,
           slug,
-          category: 'TikTok',
-          integration_type: 'tiktok_content',
+          category: "TikTok",
+          integration_type: "tiktok_content",
           integration_settings: {
             account_open_id: account.open_id,
             account_display_name: account.display_name,
             max_videos: parseInt(maxVideos),
-            sync_frequency: 'daily',
+            sync_frequency: "daily",
           },
           agency_id: agencyId || null,
           client_id: clientId || null,
@@ -99,35 +126,45 @@ export function TikTokTableDialog({ open, onOpenChange, assignedClientIds }: Pro
       return res.data;
     },
     onSuccess: async (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-      toast.success('טבלת TikTok נוצרה');
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      toast.success("טבלת TikTok נוצרה");
       try {
-        toast.info('מסנכרן סרטונים מ-TikTok...');
-        await supabase.functions.invoke('sync-tiktok-content', {
-          method: 'POST',
+        toast.info("מסנכרן סרטונים מ-TikTok...");
+        await supabase.functions.invoke("sync-tiktok-content", {
+          method: "POST",
           body: { table_id: data.id },
         });
-        toast.success('הסנכרון הראשון הושלם');
+        toast.success("הסנכרון הראשון הושלם");
       } catch (e) {
-        console.error('initial tiktok sync failed', e);
-        toast.error('הטבלה נוצרה אך הסנכרון נכשל — נסה לסנכרן ידנית');
+        console.error("initial tiktok sync failed", e);
+        toast.error("הטבלה נוצרה אך הסנכרון נכשל — נסה לסנכרן ידנית");
       }
       handleClose();
       navigate(buildPath(`/table/${data.slug}`));
     },
-    onError: (e: any) => toast.error('שגיאה ביצירת הטבלה: ' + e?.message),
+    onError: (e: any) => toast.error("שגיאה ביצירת הטבלה: " + e?.message),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tableName.trim()) { toast.error('יש להזין שם לטבלה'); return; }
-    if (assignedClientIds && !clientId) { toast.error('יש לבחור לקוח'); return; }
+    if (!tableName.trim()) {
+      toast.error("יש להזין שם לטבלה");
+      return;
+    }
+    if (assignedClientIds && !clientId) {
+      toast.error("יש לבחור לקוח");
+      return;
+    }
     createMutation.mutate();
   };
 
   const handleClose = () => {
-    setTableName(""); setMaxVideos("50"); setAgencyId(""); setClientId("");
-    setClientSearch(""); onOpenChange(false);
+    setTableName("");
+    setMaxVideos("50");
+    setAgencyId("");
+    setClientId("");
+    setClientSearch("");
+    onOpenChange(false);
   };
 
   return (
@@ -139,7 +176,8 @@ export function TikTokTableDialog({ open, onOpenChange, assignedClientIds }: Pro
             יצירת דוח TikTok Content
           </DialogTitle>
           <DialogDescription>
-            דוח ביצועי סרטונים אורגניים מחשבון TikTok — צפיות, לייקים, תגובות, שיתופים ושיעור מעורבות.
+            דוח ביצועי סרטונים אורגניים מחשבון TikTok — צפיות, לייקים, תגובות,
+            שיתופים ושיעור מעורבות.
           </DialogDescription>
         </DialogHeader>
 
@@ -151,10 +189,18 @@ export function TikTokTableDialog({ open, onOpenChange, assignedClientIds }: Pro
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              חשבון TikTok אינו מחובר. עבור{' '}
-              <Button variant="link" className="p-0 h-auto" onClick={() => { handleClose(); navigate(buildPath('/tiktok-settings')); }}>
+              חשבון TikTok אינו מחובר. עבור{" "}
+              <Button
+                variant="link"
+                className="p-0 h-auto"
+                onClick={() => {
+                  handleClose();
+                  navigate(buildPath("/tiktok-settings"));
+                }}
+              >
                 להגדרות TikTok
-              </Button>{' '}לחיבור.
+              </Button>{" "}
+              לחיבור.
             </AlertDescription>
           </Alert>
         ) : (
@@ -167,17 +213,26 @@ export function TikTokTableDialog({ open, onOpenChange, assignedClientIds }: Pro
 
             <div className="space-y-2">
               <Label htmlFor="tt-name">שם הטבלה</Label>
-              <Input id="tt-name" value={tableName} onChange={(e) => setTableName(e.target.value)}
-                placeholder="למשל: ביצועי סרטונים TikTok" autoFocus />
+              <Input
+                id="tt-name"
+                value={tableName}
+                onChange={(e) => setTableName(e.target.value)}
+                placeholder="למשל: ביצועי סרטונים TikTok"
+                autoFocus
+              />
             </div>
 
             <div className="space-y-2">
               <Label>כמות סרטונים לסנכרון</Label>
               <Select value={maxVideos} onValueChange={setMaxVideos}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {MAX_VIDEOS_OPTIONS.map(o => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  {MAX_VIDEOS_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -185,11 +240,20 @@ export function TikTokTableDialog({ open, onOpenChange, assignedClientIds }: Pro
 
             <div className="space-y-2">
               <Label>שיוך לסוכנות (אופציונלי)</Label>
-              <Select value={agencyId || "__none__"} onValueChange={(v) => setAgencyId(v === "__none__" ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="ללא שיוך" /></SelectTrigger>
+              <Select
+                value={agencyId || "__none__"}
+                onValueChange={(v) => setAgencyId(v === "__none__" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="ללא שיוך" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">ללא שיוך</SelectItem>
-                  {agencies.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                  {agencies.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -197,23 +261,50 @@ export function TikTokTableDialog({ open, onOpenChange, assignedClientIds }: Pro
             {agencyId && (
               <div className="space-y-2">
                 <Label>שיוך ללקוח (אופציונלי)</Label>
-                <Input placeholder="חפש לקוח..." value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} className="mb-2" />
-                <Select value={clientId || "__none__"} onValueChange={(v) => setClientId(v === "__none__" ? "" : v)}>
-                  <SelectTrigger><SelectValue placeholder="ללא שיוך" /></SelectTrigger>
+                <Input
+                  placeholder="חפש לקוח..."
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  className="mb-2"
+                />
+                <Select
+                  value={clientId || "__none__"}
+                  onValueChange={(v) => setClientId(v === "__none__" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="ללא שיוך" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">ללא שיוך</SelectItem>
                     {clients
-                      .filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()))
-                      .map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      .filter((c) =>
+                        c.name
+                          ?.toLowerCase()
+                          .includes(clientSearch.toLowerCase()),
+                      )
+                      .map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
             )}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose}>ביטול</Button>
+              <Button type="button" variant="outline" onClick={handleClose}>
+                ביטול
+              </Button>
               <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? (<><Loader2 className="ml-2 h-4 w-4 animate-spin" />יוצר...</>) : 'צור טבלה'}
+                {createMutation.isPending ? (
+                  <>
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                    יוצר...
+                  </>
+                ) : (
+                  "צור טבלה"
+                )}
               </Button>
             </DialogFooter>
           </form>

@@ -37,7 +37,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
-const CARMEN_AVATAR = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-agents-avatar_17945787.png";
+const CARMEN_AVATAR =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-agents-avatar_17945787.png";
 
 function isCarmen(name: string) {
   const n = (name || "").toLowerCase();
@@ -51,7 +52,10 @@ export function AgentEditor({ agent }: { agent: any }) {
 
   const updateEngine = useMutation({
     mutationFn: async (engine: string) => {
-      const { error } = await supabase.from("ai_agents").update({ engine }).eq("id", agent.id);
+      const { error } = await supabase
+        .from("ai_agents")
+        .update({ engine })
+        .eq("id", agent.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -65,7 +69,11 @@ export function AgentEditor({ agent }: { agent: any }) {
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       <div className="p-3 md:p-4 border-b flex items-center gap-2 md:gap-3 flex-wrap">
         {carmen ? (
-          <img src={CARMEN_AVATAR} alt={agent.name} className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover" />
+          <img
+            src={CARMEN_AVATAR}
+            alt={agent.name}
+            className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover"
+          />
         ) : (
           <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-muted flex items-center justify-center">
             <Bot className="h-5 w-5 md:h-6 md:w-6" />
@@ -73,18 +81,29 @@ export function AgentEditor({ agent }: { agent: any }) {
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="font-bold text-base md:text-lg truncate">{agent.name}</h2>
+            <h2 className="font-bold text-base md:text-lg truncate">
+              {agent.name}
+            </h2>
             {carmen && <Crown className="h-4 w-4 text-amber-500" />}
             {agent.active ? (
-              <Badge className="bg-green-500/15 text-green-700 dark:text-green-300">● פעיל</Badge>
+              <Badge className="bg-green-500/15 text-green-700 dark:text-green-300">
+                ● פעיל
+              </Badge>
             ) : (
               <Badge variant="secondary">כבוי</Badge>
             )}
           </div>
-          {agent.talent && <p className="text-xs md:text-sm text-muted-foreground truncate">{agent.talent}</p>}
+          {agent.talent && (
+            <p className="text-xs md:text-sm text-muted-foreground truncate">
+              {agent.talent}
+            </p>
+          )}
         </div>
         <div className="w-full md:w-72">
-          <BrainSelector value={agent.engine} onChange={(v) => updateEngine.mutate(v)} />
+          <BrainSelector
+            value={agent.engine}
+            onChange={(v) => updateEngine.mutate(v)}
+          />
         </div>
       </div>
 
@@ -100,54 +119,66 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
   const initial = params.get("tab") || "profile";
   const carmen = isCarmen(agent.name);
 
-  const groups: { label: string; items: { value: string; label: string }[] }[] = [
-    {
-      label: "תצורה",
-      items: [
-        { value: "profile", label: "⚙️ פרופיל" },
-        { value: "goals", label: "🎯 מטרות" },
-        { value: "tools", label: "🛠️ כלים" },
-        { value: "registry", label: "📚 מאגר כלים" },
-        { value: "mcp", label: "🔌 MCP" },
-        { value: "supervisor", label: "👑 Supervisor" },
-        ...(carmen ? [{ value: "conversation-access", label: "📱 הרשאות WhatsApp" as const }] : []),
-      ],
-    },
-    {
-      label: "תפעול וניטור",
-      items: [
-        { value: "tasks", label: "📋 משימות (סוכן זה)" },
-        { value: "runs", label: "🔁 ריצות" },
-        { value: "evals", label: "✅ Evals" },
-        { value: "approvals", label: "🛡️ אישורים" },
-        { value: "cost", label: "💰 עלות" },
-      ],
-    },
-    {
-      label: "ידע ופרסונליזציה",
-      items: [
-        { value: "knowledge", label: "📖 ידע" },
-        { value: "memory", label: "🧠 זיכרון" },
-        { value: "user-profiles", label: "👥 פרופילי משתמשים" },
-      ],
-    },
-    {
-      label: "זהות והתפתחות",
-      items: [
-        { value: "skins", label: "🎭 סקינז" },
-        { value: "access", label: "🛡️ גישות" },
-        { value: "learning", label: "🧬 למידה עצמית" },
-      ],
-    },
-  ];
+  const groups: { label: string; items: { value: string; label: string }[] }[] =
+    [
+      {
+        label: "תצורה",
+        items: [
+          { value: "profile", label: "⚙️ פרופיל" },
+          { value: "goals", label: "🎯 מטרות" },
+          { value: "tools", label: "🛠️ כלים" },
+          { value: "registry", label: "📚 מאגר כלים" },
+          { value: "mcp", label: "🔌 MCP" },
+          { value: "supervisor", label: "👑 Supervisor" },
+          ...(carmen
+            ? [
+                {
+                  value: "conversation-access",
+                  label: "📱 הרשאות WhatsApp" as const,
+                },
+              ]
+            : []),
+        ],
+      },
+      {
+        label: "תפעול וניטור",
+        items: [
+          { value: "tasks", label: "📋 משימות (סוכן זה)" },
+          { value: "runs", label: "🔁 ריצות" },
+          { value: "evals", label: "✅ Evals" },
+          { value: "approvals", label: "🛡️ אישורים" },
+          { value: "cost", label: "💰 עלות" },
+        ],
+      },
+      {
+        label: "ידע ופרסונליזציה",
+        items: [
+          { value: "knowledge", label: "📖 ידע" },
+          { value: "memory", label: "🧠 זיכרון" },
+          { value: "user-profiles", label: "👥 פרופילי משתמשים" },
+        ],
+      },
+      {
+        label: "זהות והתפתחות",
+        items: [
+          { value: "skins", label: "🎭 סקינז" },
+          { value: "access", label: "🛡️ גישות" },
+          { value: "learning", label: "🧬 למידה עצמית" },
+        ],
+      },
+    ];
 
   const allItems = groups.flatMap((g) => g.items);
-  const activeLabel = allItems.find((i) => i.value === initial)?.label || "פרופיל";
+  const activeLabel =
+    allItems.find((i) => i.value === initial)?.label || "פרופיל";
 
   return (
     <Tabs
       value={initial}
-      onValueChange={(v) => { params.set("tab", v); setParams(params, { replace: true }); }}
+      onValueChange={(v) => {
+        params.set("tab", v);
+        setParams(params, { replace: true });
+      }}
       className="flex-1 flex flex-col overflow-hidden"
     >
       <div className="mx-4 mt-3 flex items-center gap-2 flex-wrap">
@@ -159,11 +190,16 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
               <ChevronDown className="h-4 w-4 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64 bg-popover z-[100]">
+          <DropdownMenuContent
+            align="start"
+            className="w-64 bg-popover z-[100]"
+          >
             {groups.map((g, gi) => (
               <div key={g.label}>
                 {gi > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="text-xs text-muted-foreground">{g.label}</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  {g.label}
+                </DropdownMenuLabel>
                 {g.items.map((it) => (
                   <DropdownMenuItem
                     key={it.value}
@@ -171,7 +207,9 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
                       params.set("tab", it.value);
                       setParams(params, { replace: true });
                     }}
-                    className={it.value === initial ? "bg-accent font-medium" : ""}
+                    className={
+                      it.value === initial ? "bg-accent font-medium" : ""
+                    }
                   >
                     {it.label}
                   </DropdownMenuItem>
@@ -192,29 +230,63 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
         </Button>
       </div>
       <div className="flex-1 overflow-auto p-4">
-        <TabsContent value="profile" className="mt-0"><ProfileTab agent={agent} /></TabsContent>
-        <TabsContent value="goals" className="mt-0"><GoalsTab agentId={agent.id} /></TabsContent>
-        <TabsContent value="tasks" className="mt-0"><TasksTab agent={agent} /></TabsContent>
-        <TabsContent value="tools" className="mt-0"><ToolsTab agent={agent} /></TabsContent>
-        <TabsContent value="registry" className="mt-0"><ToolRegistryTab /></TabsContent>
-        <TabsContent value="mcp" className="mt-0"><McpConnectionsTab agent={agent} /></TabsContent>
-        <TabsContent value="supervisor" className="mt-0"><SupervisorTab agent={agent} /></TabsContent>
-        <TabsContent value="runs" className="mt-0"><RunsTab agent={agent} /></TabsContent>
-        <TabsContent value="evals" className="mt-0"><EvalsTab agent={agent} /></TabsContent>
-        <TabsContent value="knowledge" className="mt-0"><KnowledgeTab agentId={agent.id} /></TabsContent>
-        <TabsContent value="memory" className="mt-0"><MemoryTab agent={agent} /></TabsContent>
-        <TabsContent value="approvals" className="mt-0"><ApprovalsTab agent={agent} /></TabsContent>
-        <TabsContent value="user-profiles" className="mt-0"><UserProfilesTab agent={agent} /></TabsContent>
-        <TabsContent value="cost" className="mt-0"><CostTab agent={agent} /></TabsContent>
+        <TabsContent value="profile" className="mt-0">
+          <ProfileTab agent={agent} />
+        </TabsContent>
+        <TabsContent value="goals" className="mt-0">
+          <GoalsTab agentId={agent.id} />
+        </TabsContent>
+        <TabsContent value="tasks" className="mt-0">
+          <TasksTab agent={agent} />
+        </TabsContent>
+        <TabsContent value="tools" className="mt-0">
+          <ToolsTab agent={agent} />
+        </TabsContent>
+        <TabsContent value="registry" className="mt-0">
+          <ToolRegistryTab />
+        </TabsContent>
+        <TabsContent value="mcp" className="mt-0">
+          <McpConnectionsTab agent={agent} />
+        </TabsContent>
+        <TabsContent value="supervisor" className="mt-0">
+          <SupervisorTab agent={agent} />
+        </TabsContent>
+        <TabsContent value="runs" className="mt-0">
+          <RunsTab agent={agent} />
+        </TabsContent>
+        <TabsContent value="evals" className="mt-0">
+          <EvalsTab agent={agent} />
+        </TabsContent>
+        <TabsContent value="knowledge" className="mt-0">
+          <KnowledgeTab agentId={agent.id} />
+        </TabsContent>
+        <TabsContent value="memory" className="mt-0">
+          <MemoryTab agent={agent} />
+        </TabsContent>
+        <TabsContent value="approvals" className="mt-0">
+          <ApprovalsTab agent={agent} />
+        </TabsContent>
+        <TabsContent value="user-profiles" className="mt-0">
+          <UserProfilesTab agent={agent} />
+        </TabsContent>
+        <TabsContent value="cost" className="mt-0">
+          <CostTab agent={agent} />
+        </TabsContent>
         {/* Identity & growth — available for every agent */}
-        <TabsContent value="skins" className="mt-0"><SkinsManager /></TabsContent>
-        <TabsContent value="access" className="mt-0"><AgentAccessTab agent={agent} /></TabsContent>
+        <TabsContent value="skins" className="mt-0">
+          <SkinsManager />
+        </TabsContent>
+        <TabsContent value="access" className="mt-0">
+          <AgentAccessTab agent={agent} />
+        </TabsContent>
         {carmen && (
           <TabsContent value="conversation-access" className="mt-0">
             <CarmenConversationAccessTab agent={agent} />
           </TabsContent>
         )}
-        <TabsContent value="learning" className="mt-0"><AgentLearningTab agent={agent} /></TabsContent>
+        <TabsContent value="learning" className="mt-0">
+          <AgentLearningTab agent={agent} />
+        </TabsContent>
       </div>
     </Tabs>
   );

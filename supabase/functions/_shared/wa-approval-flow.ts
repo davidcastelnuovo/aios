@@ -10,4 +10,4 @@ export {
   buildApprovalConfirmPromptRule,
   formatApprovalExecutionReply,
   buildApprovalFlowAcceptanceCases,
-} from './wa-approval-flow.mjs'
+} from "./wa-approval-flow.mjs";

@@ -1,9 +1,9 @@
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ADS_ENTITY_LEVEL_LABELS,
   ADS_ENTITY_LEVELS,
   type AdsEntityLevel,
-} from '@/lib/adsEntityLevel';
+} from "@/lib/adsEntityLevel";
 
 interface AdsEntityLevelTabsProps {
   value: AdsEntityLevel;

@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 Deno.serve(async (req) => {
@@ -17,17 +18,27 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "No authorization header" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "No authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Verify user
-    const anonClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: userError } = await anonClient.auth.getUser();
+    const anonClient = createClient(
+      supabaseUrl,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      {
+        global: { headers: { Authorization: authHeader } },
+      },
+    );
+    const {
+      data: { user },
+      error: userError,
+    } = await anonClient.auth.getUser();
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -37,14 +48,14 @@ Deno.serve(async (req) => {
 
     // Get user's tenant - check active tenant first, then fallback to tenant_users
     let tenantId: string | null = null;
-    
+
     // First try user_active_tenant
     const { data: activeTenant } = await supabase
       .from("user_active_tenant")
       .select("tenant_id")
       .eq("user_id", user.id)
       .single();
-    
+
     if (activeTenant?.tenant_id) {
       tenantId = activeTenant.tenant_id;
     } else {
@@ -55,7 +66,7 @@ Deno.serve(async (req) => {
         .eq("user_id", user.id)
         .limit(1)
         .single();
-      
+
       if (tenantUser?.tenant_id) {
         tenantId = tenantUser.tenant_id;
       }
@@ -74,14 +85,14 @@ Deno.serve(async (req) => {
     if (action === "status") {
       // Get integration status - check for dataforseo first, fallback to serpapi for backwards compatibility
       let integration = null;
-      
+
       const { data: dataforSeoIntegration } = await supabase
         .from("tenant_integrations")
         .select("id, is_active, settings, created_at, updated_at")
         .eq("tenant_id", tenantId)
         .eq("integration_type", "dataforseo")
         .single();
-      
+
       if (dataforSeoIntegration) {
         integration = dataforSeoIntegration;
       } else {
@@ -96,14 +107,19 @@ Deno.serve(async (req) => {
       }
 
       const settings = integration?.settings as Record<string, any> | null;
-      return new Response(JSON.stringify({
-        connected: !!integration?.is_active,
-        has_credentials: !!(settings?.email && settings?.password) || !!(integration as any)?.api_key,
-        created_at: integration?.created_at,
-        updated_at: integration?.updated_at,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          connected: !!integration?.is_active,
+          has_credentials:
+            !!(settings?.email && settings?.password) ||
+            !!(integration as any)?.api_key,
+          created_at: integration?.created_at,
+          updated_at: integration?.updated_at,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     if (action === "connect") {
@@ -111,44 +127,56 @@ Deno.serve(async (req) => {
       const { email, password } = body;
 
       if (!email || !password) {
-        return new Response(JSON.stringify({ error: "Email and password are required" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "Email and password are required" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       // Create Base64 token for DataForSEO
       const base64Token = btoa(`${email}:${password}`);
 
       // Test the credentials by getting user data
-      const testResponse = await fetch("https://api.dataforseo.com/v3/appendix/user_data", {
-        method: "GET",
-        headers: {
-          "Authorization": `Basic ${base64Token}`,
-          "Content-Type": "application/json",
+      const testResponse = await fetch(
+        "https://api.dataforseo.com/v3/appendix/user_data",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Basic ${base64Token}`,
+            "Content-Type": "application/json",
+          },
         },
-      });
+      );
 
       if (!testResponse.ok) {
         const errorData = await testResponse.json();
-        return new Response(JSON.stringify({ 
-          error: errorData.status_message || "Invalid credentials" 
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({
+            error: errorData.status_message || "Invalid credentials",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       const testData = await testResponse.json();
-      
+
       // Check if response is successful
       if (testData.status_code !== 20000) {
-        return new Response(JSON.stringify({ 
-          error: testData.status_message || "API Error" 
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({
+            error: testData.status_message || "API Error",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       const userData = testData.tasks?.[0]?.result?.[0];
@@ -161,7 +189,7 @@ Deno.serve(async (req) => {
         .eq("integration_type", "dataforseo")
         .single();
 
-      const settingsData = { 
+      const settingsData = {
         email,
         password,
         balance: userData?.money?.balance,
@@ -196,14 +224,17 @@ Deno.serve(async (req) => {
         .eq("tenant_id", tenantId)
         .eq("integration_type", "serpapi");
 
-      return new Response(JSON.stringify({
-        success: true,
-        login: userData?.login,
-        balance: userData?.money?.balance,
-        currency: userData?.money?.currency,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          login: userData?.login,
+          balance: userData?.money?.balance,
+          currency: userData?.money?.currency,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     if (action === "disconnect") {
@@ -234,26 +265,35 @@ Deno.serve(async (req) => {
         .eq("integration_type", "dataforseo")
         .eq("is_active", true)
         .single();
-      
-      const settings = dataforSeoIntegration?.settings as Record<string, any> | null;
-      
+
+      const settings = dataforSeoIntegration?.settings as Record<
+        string,
+        any
+      > | null;
+
       if (dataforSeoIntegration && settings?.email && settings?.password) {
         // Get fresh data from DataForSEO
         const base64Token = btoa(`${settings.email}:${settings.password}`);
-        
-        const accountResponse = await fetch("https://api.dataforseo.com/v3/appendix/user_data", {
-          method: "GET",
-          headers: {
-            "Authorization": `Basic ${base64Token}`,
-            "Content-Type": "application/json",
+
+        const accountResponse = await fetch(
+          "https://api.dataforseo.com/v3/appendix/user_data",
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Basic ${base64Token}`,
+              "Content-Type": "application/json",
+            },
           },
-        });
+        );
 
         if (!accountResponse.ok) {
-          return new Response(JSON.stringify({ error: "Failed to get account info" }), {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ error: "Failed to get account info" }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
 
         const accountData = await accountResponse.json();
@@ -272,15 +312,18 @@ Deno.serve(async (req) => {
           })
           .eq("id", dataforSeoIntegration.id);
 
-        return new Response(JSON.stringify({
-          provider: "dataforseo",
-          login: userData?.login,
-          balance: userData?.money?.balance,
-          currency: userData?.money?.currency || "USD",
-          limits: userData?.limits,
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({
+            provider: "dataforseo",
+            login: userData?.login,
+            balance: userData?.money?.balance,
+            currency: userData?.money?.currency || "USD",
+            limits: userData?.limits,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       // Fallback to old serpapi
@@ -297,37 +340,46 @@ Deno.serve(async (req) => {
         const accountResponse = await fetch(accountUrl);
 
         if (!accountResponse.ok) {
-          return new Response(JSON.stringify({ error: "Failed to get account info" }), {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ error: "Failed to get account info" }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
 
         const accountInfo = await accountResponse.json();
 
-        return new Response(JSON.stringify({
-          provider: "serpapi",
-          account_email: accountInfo.account_email,
-          plan: accountInfo.plan,
-          searches_per_month: accountInfo.searches_per_month,
-          this_month_searches: accountInfo.this_month_usage,
-          remaining_searches: accountInfo.searches_per_month - accountInfo.this_month_usage,
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({
+            provider: "serpapi",
+            account_email: accountInfo.account_email,
+            plan: accountInfo.plan,
+            searches_per_month: accountInfo.searches_per_month,
+            this_month_searches: accountInfo.this_month_usage,
+            remaining_searches:
+              accountInfo.searches_per_month - accountInfo.this_month_usage,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
-      return new Response(JSON.stringify({ error: "No integration configured" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "No integration configured" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     return new Response(JSON.stringify({ error: "Invalid action" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (error) {
     console.error("DataForSEO auth error:", error);
     return new Response(JSON.stringify({ error: String(error) }), {

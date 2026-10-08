@@ -9,7 +9,8 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const json = (body: unknown, status = 200) =>
@@ -26,7 +27,9 @@ function isServiceRoleJwt(token: string): boolean {
   try {
     const payloadPart = token.split(".")[1];
     if (!payloadPart) return false;
-    const base64 = payloadPart.replace(/-/g, "+").replace(/_/g, "/")
+    const base64 = payloadPart
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
       .padEnd(Math.ceil(payloadPart.length / 4) * 4, "=");
     const payload = JSON.parse(atob(base64));
     return payload?.role === "service_role";
@@ -36,7 +39,8 @@ function isServiceRoleJwt(token: string): boolean {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
@@ -53,10 +57,16 @@ Deno.serve(async (req) => {
 
     let preferredUserId: string | null = null;
     if (!isServiceCall) {
-      const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user } } = await userClient.auth.getUser();
+      const userClient = createClient(
+        SUPABASE_URL,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        {
+          global: { headers: { Authorization: authHeader } },
+        },
+      );
+      const {
+        data: { user },
+      } = await userClient.auth.getUser();
       if (!user) return json({ error: "Unauthorized" }, 401);
       preferredUserId = user.id;
       const { data: membership } = await userClient
@@ -74,7 +84,11 @@ Deno.serve(async (req) => {
     const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const from = new Date(body.from || defaultFrom.toISOString());
     const to = new Date(body.to || now.toISOString());
-    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) {
+    if (
+      !Number.isFinite(from.getTime()) ||
+      !Number.isFinite(to.getTime()) ||
+      from > to
+    ) {
       return json({ error: "Invalid from/to range" }, 400);
     }
     const dryRun = body.dry_run !== false;
@@ -83,7 +97,9 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     const { data: rows, error } = await admin
       .from("zoom_recordings")
-      .select("id, tenant_id, meeting_id, source, meeting_topic, start_time, duration, host_email, client_id, calendar_event_id")
+      .select(
+        "id, tenant_id, meeting_id, source, meeting_topic, start_time, duration, host_email, client_id, calendar_event_id",
+      )
       .eq("tenant_id", tenantId)
       .is("calendar_event_id", null)
       .gte("start_time", from.toISOString())
@@ -109,7 +125,11 @@ Deno.serve(async (req) => {
 
     const matches: Record<string, unknown>[] = [];
     for (const recording of grouped.values()) {
-      const match = chooseCalendarRecordingMatch(recording, context.events, context.clients);
+      const match = chooseCalendarRecordingMatch(
+        recording,
+        context.events,
+        context.clients,
+      );
       if (!match) continue;
       matches.push({
         recording_id: recording.id,
@@ -122,7 +142,10 @@ Deno.serve(async (req) => {
         client_name: match.clientName,
       });
       if (!dryRun) {
-        await enrichRecordingFromCalendar(admin, recording, { preferredUserId, context });
+        await enrichRecordingFromCalendar(admin, recording, {
+          preferredUserId,
+          context,
+        });
       }
     }
 
@@ -136,6 +159,9 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("[match-recordings-calendar] error", error);
-    return json({ error: error instanceof Error ? error.message : "Unknown error" }, 500);
+    return json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      500,
+    );
   }
 });

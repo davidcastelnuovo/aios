@@ -10,7 +10,8 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const BATCH_SIZE = 6;
@@ -22,7 +23,9 @@ type SyncTarget = {
   siteUrl: string;
 };
 
-function collectSyncTargets(integrations: Array<{ tenant_id: string; settings: unknown }>): SyncTarget[] {
+function collectSyncTargets(
+  integrations: Array<{ tenant_id: string; settings: unknown }>,
+): SyncTarget[] {
   const seen = new Set<string>();
   const targets: SyncTarget[] = [];
 
@@ -78,7 +81,9 @@ serve(async (req) => {
     if (!forceAll && allTargets.length > 0) {
       const siteUrls = [...new Set(allTargets.map((t) => t.siteUrl))];
       const tenantIds = [...new Set(allTargets.map((t) => t.tenantId))];
-      const staleBefore = new Date(Date.now() - STALE_HOURS * 60 * 60 * 1000).toISOString();
+      const staleBefore = new Date(
+        Date.now() - STALE_HOURS * 60 * 60 * 1000,
+      ).toISOString();
 
       const { data: freshSnaps } = await supabase
         .from("gsc_keyword_snapshots")
@@ -91,7 +96,9 @@ serve(async (req) => {
       const freshKeys = new Set(
         (freshSnaps || []).map((s) => `${s.tenant_id}|${s.site_url}`),
       );
-      pending = allTargets.filter((t) => !freshKeys.has(`${t.tenantId}|${t.siteUrl}`));
+      pending = allTargets.filter(
+        (t) => !freshKeys.has(`${t.tenantId}|${t.siteUrl}`),
+      );
     }
 
     const batch = pending.slice(batchOffset, batchOffset + BATCH_SIZE);
@@ -108,8 +115,13 @@ serve(async (req) => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${serviceKey}`,
         },
-        body: JSON.stringify({ batch_offset: batchOffset + BATCH_SIZE, force: forceAll }),
-      }).catch((e) => console.error("[cron-gsc-keywords] next batch failed:", e?.message));
+        body: JSON.stringify({
+          batch_offset: batchOffset + BATCH_SIZE,
+          force: forceAll,
+        }),
+      }).catch((e) =>
+        console.error("[cron-gsc-keywords] next batch failed:", e?.message),
+      );
     }
 
     for (const target of batch) {

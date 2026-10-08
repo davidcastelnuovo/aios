@@ -8,7 +8,9 @@ import {
 
 const LEGACY_SIGNATURE = "__signature";
 
-export function isFieldRequired(field: Pick<DocumentField, "required">): boolean {
+export function isFieldRequired(
+  field: Pick<DocumentField, "required">,
+): boolean {
   return field.required === true;
 }
 
@@ -20,11 +22,15 @@ export function isFieldFilled(
 }
 
 export function fieldFillLabel(field: DocumentField): string {
-  return field.label || getFieldPlacerLabel(field.type) || getFieldLabel(field.type);
+  return (
+    field.label || getFieldPlacerLabel(field.type) || getFieldLabel(field.type)
+  );
 }
 
 /** Page, then top-to-bottom, then right-to-left (Hebrew documents). */
-export function sortFieldsReadingOrder(fields: DocumentField[]): DocumentField[] {
+export function sortFieldsReadingOrder(
+  fields: DocumentField[],
+): DocumentField[] {
   return [...fields].sort((a, b) => {
     const pageA = a.position.page ?? 1;
     const pageB = b.position.page ?? 1;
@@ -57,7 +63,9 @@ export function hasAnySignature(
   values: Record<string, string>,
 ): boolean {
   if (values[LEGACY_SIGNATURE]?.trim()) return true;
-  return fields.some((field) => isSignatureFieldType(field.type) && isFieldFilled(field, values));
+  return fields.some(
+    (field) => isSignatureFieldType(field.type) && isFieldFilled(field, values),
+  );
 }
 
 export function missingRequiredForSubmit(
@@ -66,11 +74,18 @@ export function missingRequiredForSubmit(
   stamp: { name: string; companyId: string },
 ): DocumentField[] {
   const ordered = sortFieldsReadingOrder(fields);
-  const missing = ordered.filter((field) => isFieldRequired(field) && !isFieldFilled(field, values));
+  const missing = ordered.filter(
+    (field) => isFieldRequired(field) && !isFieldFilled(field, values),
+  );
 
   if (!hasAnySignature(fields, values)) {
-    const firstSignature = ordered.find((field) => isSignatureFieldType(field.type));
-    if (firstSignature && !missing.some((field) => field.id === firstSignature.id)) {
+    const firstSignature = ordered.find((field) =>
+      isSignatureFieldType(field.type),
+    );
+    if (
+      firstSignature &&
+      !missing.some((field) => field.id === firstSignature.id)
+    ) {
       missing.push(firstSignature);
     }
   }
@@ -79,7 +94,8 @@ export function missingRequiredForSubmit(
     (field) => isStampSignatureType(field.type) && isFieldFilled(field, values),
   );
   if (signedStamp && (!stamp.name.trim() || !stamp.companyId.trim())) {
-    if (!missing.some((field) => field.id === signedStamp.id)) missing.push(signedStamp);
+    if (!missing.some((field) => field.id === signedStamp.id))
+      missing.push(signedStamp);
   }
 
   return missing;

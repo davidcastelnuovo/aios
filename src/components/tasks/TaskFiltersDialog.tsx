@@ -17,7 +17,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { RotateCcw, Repeat } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { defaultTaskFilters, resolveMineTaskAssignee, type TaskFilterState } from "@/lib/taskFilters";
+import {
+  defaultTaskFilters,
+  resolveMineTaskAssignee,
+  type TaskFilterState,
+} from "@/lib/taskFilters";
 
 export { defaultTaskFilters, resolveMineTaskAssignee, type TaskFilterState };
 
@@ -73,9 +77,14 @@ export function TaskFiltersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90dvh] overflow-y-auto" dir="rtl">
+      <DialogContent
+        className="sm:max-w-[500px] max-h-[90dvh] overflow-y-auto"
+        dir="rtl"
+      >
         <DialogHeader>
-          <DialogTitle className="text-xl">{toolbarFilters ? "פילטרים" : "סינון מתקדם"}</DialogTitle>
+          <DialogTitle className="text-xl">
+            {toolbarFilters ? "פילטרים" : "סינון מתקדם"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 py-4">
@@ -132,7 +141,10 @@ export function TaskFiltersDialog({
             <Checkbox
               checked={filters.showAllRecurring}
               onCheckedChange={(checked) =>
-                setFilters((prev) => ({ ...prev, showAllRecurring: Boolean(checked) }))
+                setFilters((prev) => ({
+                  ...prev,
+                  showAllRecurring: Boolean(checked),
+                }))
               }
               className="mt-0.5"
             />

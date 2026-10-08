@@ -3,11 +3,15 @@
  * Picks due goals, runs one iteration each, persists state for recovery.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
-import { listDueAutonomousGoals, runGoalIteration } from "../_shared/autonomous-goal-engine.ts";
+import {
+  listDueAutonomousGoals,
+  runGoalIteration,
+} from "../_shared/autonomous-goal-engine.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const LOCK_HOLDER = "autonomous-goal-worker";
@@ -23,10 +27,20 @@ Deno.serve(async (req) => {
     );
 
     const goals = await listDueAutonomousGoals(supabase, BATCH_LIMIT);
-    const results: Array<{ goal_id: string; tenant_id: string; status: string; summary: string }> = [];
+    const results: Array<{
+      goal_id: string;
+      tenant_id: string;
+      status: string;
+      summary: string;
+    }> = [];
 
     for (const goal of goals) {
-      const outcome = await runGoalIteration(supabase, goal.tenant_id, goal.id, LOCK_HOLDER);
+      const outcome = await runGoalIteration(
+        supabase,
+        goal.tenant_id,
+        goal.id,
+        LOCK_HOLDER,
+      );
       results.push({
         goal_id: goal.id,
         tenant_id: goal.tenant_id,
@@ -35,13 +49,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({
-      processed: results.length,
-      results,
-      at: new Date().toISOString(),
-    }), {
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        processed: results.length,
+        results,
+        at: new Date().toISOString(),
+      }),
+      {
+        headers: { ...cors, "Content-Type": "application/json" },
+      },
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[autonomous-goal-worker]", msg);

@@ -31,8 +31,14 @@ export const AGENT_EDGE_SECRET_ALLOWLIST = [
 export function isForbiddenSecretName(name: string): boolean {
   const u = name.toUpperCase();
   if (u.startsWith("SUPABASE_")) return true;
-  if (u.startsWith("META_") || u.includes("WHATSAPP") || u.includes("FACEBOOK")) return true;
-  if (u === "APP_URL" || u === "RESEND_API_KEY" || u === "RESEND_WEBHOOK_SECRET") return true;
+  if (u.startsWith("META_") || u.includes("WHATSAPP") || u.includes("FACEBOOK"))
+    return true;
+  if (
+    u === "APP_URL" ||
+    u === "RESEND_API_KEY" ||
+    u === "RESEND_WEBHOOK_SECRET"
+  )
+    return true;
   if (u.includes("MANUS")) return true;
   return false;
 }
@@ -43,16 +49,24 @@ export function selectSecretsToCopy(
 ): string[] {
   const src = requested?.length ? requested : [...allowlist];
   const allow = new Set(allowlist);
-  return [...new Set(src.map((n) => String(n).trim()).filter(Boolean))]
-    .filter((n) => allow.has(n) && !isForbiddenSecretName(n));
+  return [...new Set(src.map((n) => String(n).trim()).filter(Boolean))].filter(
+    (n) => allow.has(n) && !isForbiddenSecretName(n),
+  );
 }
 
-export function projectRefFromSupabaseUrl(url: string | undefined | null): string {
-  const host = String(url || "").match(/^https?:\/\/([a-z0-9]+)\.supabase\.co/i);
+export function projectRefFromSupabaseUrl(
+  url: string | undefined | null,
+): string {
+  const host = String(url || "").match(
+    /^https?:\/\/([a-z0-9]+)\.supabase\.co/i,
+  );
   return host?.[1] || "";
 }
 
-export function assertSafeTargetRef(targetRef: string, sourceRef: string): string {
+export function assertSafeTargetRef(
+  targetRef: string,
+  sourceRef: string,
+): string {
   const t = String(targetRef || "").trim();
   const s = String(sourceRef || "").trim();
   if (!/^[a-z]{20}$/.test(t)) throw new Error("invalid target_ref");

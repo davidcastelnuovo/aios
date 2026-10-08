@@ -1,10 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { kickNextBatch } from "../_shared/kick-next-batch.ts";
-import { jerusalemToday, planScheduledSyncWindows } from "../_shared/report-sync-window.ts";
+import {
+  jerusalemToday,
+  planScheduledSyncWindows,
+} from "../_shared/report-sync-window.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const MAKE_API_REGIONS: Record<string, string> = {
@@ -17,7 +21,9 @@ const MAKE_API_REGIONS: Record<string, string> = {
 function isGoogleAdsModule(moduleName: string): boolean {
   if (!moduleName) return false;
   const n = moduleName.toLowerCase();
-  return n.includes("google-ads") || n.includes("googleads") || n.includes("adwords");
+  return (
+    n.includes("google-ads") || n.includes("googleads") || n.includes("adwords")
+  );
 }
 
 function isHttpModule(moduleName: string): boolean {
@@ -25,12 +31,21 @@ function isHttpModule(moduleName: string): boolean {
   return moduleName.toLowerCase().includes("http");
 }
 
-async function makeAPICall(apiToken: string, region: string, endpoint: string, method = "GET", body?: any) {
+async function makeAPICall(
+  apiToken: string,
+  region: string,
+  endpoint: string,
+  method = "GET",
+  body?: any,
+) {
   const baseUrl = MAKE_API_REGIONS[region] || MAKE_API_REGIONS.eu2;
   const url = `${baseUrl}${endpoint}`;
   const options: RequestInit = {
     method,
-    headers: { Authorization: `Token ${apiToken}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Token ${apiToken}`,
+      "Content-Type": "application/json",
+    },
   };
   if (body && method !== "GET") options.body = JSON.stringify(body);
   const res = await fetch(url, options);
@@ -52,10 +67,14 @@ async function patchAndRunScenario(
   connectionId: string | undefined,
   startDate: string,
   endDate: string,
-  webhookUrl: string
+  webhookUrl: string,
 ) {
   // Step 1: Get blueprint
-  const bpResponse = await makeAPICall(apiToken, region, `/scenarios/${scenarioId}/blueprint`);
+  const bpResponse = await makeAPICall(
+    apiToken,
+    region,
+    `/scenarios/${scenarioId}/blueprint`,
+  );
   let bp = bpResponse;
   if (bp.response?.blueprint) bp = bp.response.blueprint;
   else if (bp.blueprint) bp = bp.blueprint;
@@ -106,7 +125,9 @@ async function patchAndRunScenario(
 
       if (mod.module && isHttpModule(mod.module) && mod.mapper) {
         mod.mapper.url = webhookUrl;
-        const gid = bp.flow.find((m: any) => m.module && isGoogleAdsModule(m.module))?.id || 3;
+        const gid =
+          bp.flow.find((m: any) => m.module && isGoogleAdsModule(m.module))
+            ?.id || 3;
         const bodyTemplate = `{"table_id":"${tableId}","campaign_type":"${campaignType}","tenant_id":"${tenantId}","start_date":"${startDate}","end_date":"${endDate}","records":[{"date":"{{${gid}.dimensions.date}}","campaign_id":"{{${gid}.dimensions.campaignId}}","campaign_name":"{{${gid}.dimensions.campaignName}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost":"{{${gid}.metrics.cost}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions_value":"{{${gid}.metrics.conversionsValue}}","all_conversions":"{{${gid}.metrics.allConversions}}"}]}`;
         mod.mapper.jsonStringBodyContent = bodyTemplate;
         if (mod.mapper.data) delete mod.mapper.data;
@@ -120,7 +141,13 @@ async function patchAndRunScenario(
   });
 
   // Step 4: Run scenario
-  const runResult = await makeAPICall(apiToken, region, `/scenarios/${scenarioId}/run`, "POST", {});
+  const runResult = await makeAPICall(
+    apiToken,
+    region,
+    `/scenarios/${scenarioId}/run`,
+    "POST",
+    {},
+  );
   return runResult;
 }
 
@@ -135,7 +162,13 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { backfill_from, backfill_to, table_ids, batch_offset, operational_only } = body as {
+    const {
+      backfill_from,
+      backfill_to,
+      table_ids,
+      batch_offset,
+      operational_only,
+    } = body as {
       backfill_from?: string;
       backfill_to?: string;
       table_ids?: string[];
@@ -161,15 +194,23 @@ Deno.serve(async (req) => {
 
     // Get all Google Ads tables (ordered so batch slicing is stable across the
     // self-chained invocations below).
-    let query = supabase.from("crm_tables").select("*").eq("integration_type", "google_ads").order("id");
+    let query = supabase
+      .from("crm_tables")
+      .select("*")
+      .eq("integration_type", "google_ads")
+      .order("id");
     if (table_ids && table_ids.length > 0) query = query.in("id", table_ids);
 
     const { data: tables, error: tablesError } = await query;
-    if (tablesError) throw new Error(`Failed to fetch tables: ${tablesError.message}`);
+    if (tablesError)
+      throw new Error(`Failed to fetch tables: ${tablesError.message}`);
     if (!tables || tables.length === 0) {
-      return new Response(JSON.stringify({ message: "No Google Ads tables found" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ message: "No Google Ads tables found" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const results: any[] = [];
@@ -189,33 +230,50 @@ Deno.serve(async (req) => {
 
     const allDirect = (tables as any[]).filter((t: any) => {
       const ds = (t.integration_settings as any)?.data_source;
-      return !ds || ds === 'direct_api';
+      return !ds || ds === "direct_api";
     });
     const directBatch = allDirect.slice(offset, offset + BATCH_SIZE);
     const hasMore = allDirect.length > offset + BATCH_SIZE;
-    console.log(`[cron-google-ads] direct batch offset=${offset} size=${directBatch.length} of ${allDirect.length} (hasMore=${hasMore})`);
+    console.log(
+      `[cron-google-ads] direct batch offset=${offset} size=${directBatch.length} of ${allDirect.length} (hasMore=${hasMore})`,
+    );
 
-    const postSync = async (body: Record<string, unknown>): Promise<{ ok: boolean; rateLimited: boolean; reason?: string }> => {
+    const postSync = async (
+      body: Record<string, unknown>,
+    ): Promise<{ ok: boolean; rateLimited: boolean; reason?: string }> => {
       try {
-        const res = await fetch(`${supabaseUrl}/functions/v1/sync-google-ads-data`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-            'x-internal-cron': 'true',
+        const res = await fetch(
+          `${supabaseUrl}/functions/v1/sync-google-ads-data`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseServiceKey}`,
+              "x-internal-cron": "true",
+            },
+            body: JSON.stringify(body),
           },
-          body: JSON.stringify(body),
-        });
+        );
         const txt = await res.text();
         if (res.ok) return { ok: true, rateLimited: false };
         const rateLimited = res.status === 429 || /rate limit/i.test(txt);
-        return { ok: false, rateLimited, reason: `HTTP ${res.status}: ${txt.slice(0, 200)}` };
+        return {
+          ok: false,
+          rateLimited,
+          reason: `HTTP ${res.status}: ${txt.slice(0, 200)}`,
+        };
       } catch (err) {
-        return { ok: false, rateLimited: false, reason: err instanceof Error ? err.message : String(err) };
+        return {
+          ok: false,
+          rateLimited: false,
+          reason: err instanceof Error ? err.message : String(err),
+        };
       }
     };
 
-    const syncOne = async (table: any): Promise<{ ok: boolean; rateLimited: boolean; reason?: string }> => {
+    const syncOne = async (
+      table: any,
+    ): Promise<{ ok: boolean; rateLimited: boolean; reason?: string }> => {
       if (operational_only) {
         return postSync({ table_id: table.id, operational_only: true });
       }
@@ -254,14 +312,30 @@ Deno.serve(async (req) => {
       const retryable: any[] = [];
       for (let i = 0; i < batch.length; i += DIRECT_CHUNK) {
         const chunk = batch.slice(i, i + DIRECT_CHUNK);
-        const outcomes = await Promise.all(chunk.map(async (table: any) => {
-          const r = await syncOne(table);
-          if (r.ok) return { table: table.name, status: 'synced', source: 'direct_api' };
-          if (r.rateLimited) { retryable.push(table); return null; }
-          return { table: table.name, status: 'error', source: 'direct_api', reason: r.reason };
-        }));
+        const outcomes = await Promise.all(
+          chunk.map(async (table: any) => {
+            const r = await syncOne(table);
+            if (r.ok)
+              return {
+                table: table.name,
+                status: "synced",
+                source: "direct_api",
+              };
+            if (r.rateLimited) {
+              retryable.push(table);
+              return null;
+            }
+            return {
+              table: table.name,
+              status: "error",
+              source: "direct_api",
+              reason: r.reason,
+            };
+          }),
+        );
         for (const o of outcomes) if (o) results.push(o);
-        if (i + DIRECT_CHUNK < batch.length) await new Promise((r) => setTimeout(r, CHUNK_GAP_MS));
+        if (i + DIRECT_CHUNK < batch.length)
+          await new Promise((r) => setTimeout(r, CHUNK_GAP_MS));
       }
       return retryable;
     };
@@ -273,7 +347,12 @@ Deno.serve(async (req) => {
       await new Promise((r) => setTimeout(r, 20000));
       const stillFailing = await runInChunks(rateLimitedTables);
       for (const table of stillFailing) {
-        results.push({ table: table.name, status: 'error', source: 'direct_api', reason: 'rate limited (after retry)' });
+        results.push({
+          table: table.name,
+          status: "error",
+          source: "direct_api",
+          reason: "rate limited (after retry)",
+        });
       }
     }
 
@@ -281,7 +360,7 @@ Deno.serve(async (req) => {
     // so the overall request rate stays under the gateway limit.
     if (hasMore) {
       await new Promise((r) => setTimeout(r, NEXT_BATCH_GAP_MS));
-      await kickNextBatch(supabase, 'cron-sync-google-ads', {
+      await kickNextBatch(supabase, "cron-sync-google-ads", {
         batch_offset: offset + BATCH_SIZE,
         ...(operational_only ? { operational_only: true } : {}),
         ...(isBackfill ? { backfill_from, backfill_to } : {}),
@@ -295,25 +374,42 @@ Deno.serve(async (req) => {
     if (offset !== 0 || operational_only) {
       if (!hasMore && !table_ids && !isBackfill) {
         if (operational_only) {
-          return new Response(JSON.stringify({ success: true, operational_only: true, batch_offset: offset, results }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({
+              success: true,
+              operational_only: true,
+              batch_offset: offset,
+              results,
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
-        const pulseResponse = await fetch(`${supabaseUrl}/functions/v1/campaign-pulse-snapshot`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
+        const pulseResponse = await fetch(
+          `${supabaseUrl}/functions/v1/campaign-pulse-snapshot`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({ deliver: false, source: "google_ads_sync" }),
           },
-          body: JSON.stringify({ deliver: false, source: 'google_ads_sync' }),
-        });
+        );
         if (!pulseResponse.ok) {
-          console.error('[cron-google-ads] pulse calculation failed:', await pulseResponse.text());
+          console.error(
+            "[cron-google-ads] pulse calculation failed:",
+            await pulseResponse.text(),
+          );
         }
       }
-      return new Response(JSON.stringify({ success: true, batch_offset: offset, results }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ success: true, batch_offset: offset, results }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Group by tenant
@@ -326,7 +422,7 @@ Deno.serve(async (req) => {
     for (const [tenantId, tenantTables] of byTenant) {
       const makeTables = tenantTables.filter((t: any) => {
         const ds = (t.integration_settings as any)?.data_source;
-        return ds === 'make_api' || ds === 'webhook';
+        return ds === "make_api" || ds === "webhook";
       });
 
       // ---- Make.com path (legacy) ----
@@ -340,7 +436,12 @@ Deno.serve(async (req) => {
         .single();
 
       if (!makeInt) {
-        for (const t of makeTables) results.push({ table: t.name, status: "skipped", reason: "No Make integration" });
+        for (const t of makeTables)
+          results.push({
+            table: t.name,
+            status: "skipped",
+            reason: "No Make integration",
+          });
         continue;
       }
 
@@ -349,7 +450,12 @@ Deno.serve(async (req) => {
       const region = s?.region || "eu2";
 
       if (!apiToken) {
-        for (const t of makeTables) results.push({ table: t.name, status: "skipped", reason: "No API token" });
+        for (const t of makeTables)
+          results.push({
+            table: t.name,
+            status: "skipped",
+            reason: "No API token",
+          });
         continue;
       }
 
@@ -361,7 +467,11 @@ Deno.serve(async (req) => {
         const connectionId = intSettings?.make_connection_id;
 
         if (!scenarioId) {
-          results.push({ table: table.name, status: "skipped", reason: "No scenario ID" });
+          results.push({
+            table: table.name,
+            status: "skipped",
+            reason: "No scenario ID",
+          });
           continue;
         }
 
@@ -387,18 +497,30 @@ Deno.serve(async (req) => {
                 connectionId ? String(connectionId) : undefined,
                 dayStr,
                 dayStr,
-                webhookUrl
+                webhookUrl,
               );
               dayCount++;
               // Wait 5 seconds between days to avoid rate limits
               await new Promise((r) => setTimeout(r, 5000));
             } catch (err) {
-              console.error(`Backfill error ${table.name} ${dayStr}:`, err instanceof Error ? err.message : err);
-              results.push({ table: table.name, date: dayStr, status: "error", reason: err instanceof Error ? err.message : String(err) });
+              console.error(
+                `Backfill error ${table.name} ${dayStr}:`,
+                err instanceof Error ? err.message : err,
+              );
+              results.push({
+                table: table.name,
+                date: dayStr,
+                status: "error",
+                reason: err instanceof Error ? err.message : String(err),
+              });
             }
             current.setDate(current.getDate() + 1);
           }
-          results.push({ table: table.name, status: "backfilled", days: dayCount });
+          results.push({
+            table: table.name,
+            status: "backfilled",
+            days: dayCount,
+          });
         } else {
           // Daily sync: single date
           try {
@@ -413,12 +535,23 @@ Deno.serve(async (req) => {
               connectionId ? String(connectionId) : undefined,
               startDate,
               endDate,
-              webhookUrl
+              webhookUrl,
             );
-            results.push({ table: table.name, status: "triggered", date: startDate });
+            results.push({
+              table: table.name,
+              status: "triggered",
+              date: startDate,
+            });
           } catch (err) {
-            console.error(`Sync error ${table.name}:`, err instanceof Error ? err.message : err);
-            results.push({ table: table.name, status: "error", reason: err instanceof Error ? err.message : String(err) });
+            console.error(
+              `Sync error ${table.name}:`,
+              err instanceof Error ? err.message : err,
+            );
+            results.push({
+              table: table.name,
+              status: "error",
+              reason: err instanceof Error ? err.message : String(err),
+            });
           }
           // Wait between tables
           await new Promise((r) => setTimeout(r, 2000));
@@ -429,29 +562,36 @@ Deno.serve(async (req) => {
       try {
         const todayMs = Date.now();
         const dayMs = 24 * 60 * 60 * 1000;
-        const last2Cutoff = new Date(todayMs - 2 * dayMs).toISOString().split('T')[0];
-        const prior7Cutoff = new Date(todayMs - 9 * dayMs).toISOString().split('T')[0];
+        const last2Cutoff = new Date(todayMs - 2 * dayMs)
+          .toISOString()
+          .split("T")[0];
+        const prior7Cutoff = new Date(todayMs - 9 * dayMs)
+          .toISOString()
+          .split("T")[0];
 
         for (const table of tenantTables) {
           const { data: records } = await supabase
-            .from('crm_records')
-            .select('data')
-            .eq('table_id', table.id)
-            .eq('tenant_id', tenantId)
-            .gte('created_at', new Date(todayMs - 14 * dayMs).toISOString())
+            .from("crm_records")
+            .select("data")
+            .eq("table_id", table.id)
+            .eq("tenant_id", tenantId)
+            .gte("created_at", new Date(todayMs - 14 * dayMs).toISOString())
             .limit(1000);
 
           if (!records || records.length === 0) continue;
 
-          const perCampaign: Record<string, { name: string; recent: number; prior: number }> = {};
+          const perCampaign: Record<
+            string,
+            { name: string; recent: number; prior: number }
+          > = {};
           for (const rec of records) {
             const d = rec.data as any;
-            const date = String(d?.date || '');
-            const cid = String(d?.campaign_id || '');
+            const date = String(d?.date || "");
+            const cid = String(d?.campaign_id || "");
             const name = String(d?.campaign_name || cid);
             const cost = parseFloat(String(d?.cost || d?.spend || 0)) || 0;
             if (!cid || !date) continue;
-            const c = perCampaign[cid] ||= { name, recent: 0, prior: 0 };
+            const c = (perCampaign[cid] ||= { name, recent: 0, prior: 0 });
             if (date >= last2Cutoff) c.recent += cost;
             else if (date >= prior7Cutoff) c.prior += cost;
           }
@@ -460,42 +600,45 @@ Deno.serve(async (req) => {
             if (agg.recent === 0 && agg.prior > 5) {
               const taskTitle = `🚨 חשבון Google Ads עצר: ${agg.name}`;
               const { data: existing } = await supabase
-                .from('agent_tasks')
-                .select('id')
-                .eq('tenant_id', tenantId)
-                .eq('title', taskTitle)
-                .gte('created_at', new Date(todayMs - dayMs).toISOString())
+                .from("agent_tasks")
+                .select("id")
+                .eq("tenant_id", tenantId)
+                .eq("title", taskTitle)
+                .gte("created_at", new Date(todayMs - dayMs).toISOString())
                 .limit(1);
 
               if (!existing || existing.length === 0) {
                 const { data: agent } = await supabase
-                  .from('ai_agents')
-                  .select('id')
-                  .eq('tenant_id', tenantId)
-                  .eq('active', true)
+                  .from("ai_agents")
+                  .select("id")
+                  .eq("tenant_id", tenantId)
+                  .eq("active", true)
                   .limit(1)
                   .maybeSingle();
 
                 if (agent) {
-                  await supabase.from('agent_tasks').insert({
+                  await supabase.from("agent_tasks").insert({
                     tenant_id: tenantId,
                     agent_id: agent.id,
                     title: taskTitle,
                     description: `הקמפיין "${agg.name}" (${cid}) לא הוציא כסף ב-2 הימים האחרונים, למרות שהוציא ${agg.prior.toFixed(2)} ב-7 הימים הקודמים. ייתכן שהחשבון עצר.`,
-                    status: 'open',
+                    status: "open",
                     priority: 1,
-                    task_mode: 'anomaly_alert',
+                    task_mode: "anomaly_alert",
                   });
                 }
 
                 await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${supabaseServiceKey}`,
+                  },
                   body: JSON.stringify({
-                    trigger_type: 'account_stopped_spending',
+                    trigger_type: "account_stopped_spending",
                     tenant_id: tenantId,
                     data: {
-                      provider: 'google_ads',
+                      provider: "google_ads",
                       campaign_name: agg.name,
                       campaign_id: cid,
                       table_name: table.name,
@@ -509,21 +652,30 @@ Deno.serve(async (req) => {
           }
         }
       } catch (zeroErr: any) {
-        console.error(`[google-ads zero-spend] tenant ${tenantId}:`, zeroErr.message);
+        console.error(
+          `[google-ads zero-spend] tenant ${tenantId}:`,
+          zeroErr.message,
+        );
       }
     }
 
     if (!hasMore && !table_ids && !isBackfill) {
-      const pulseResponse = await fetch(`${supabaseUrl}/functions/v1/campaign-pulse-snapshot`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseServiceKey}`,
+      const pulseResponse = await fetch(
+        `${supabaseUrl}/functions/v1/campaign-pulse-snapshot`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({ deliver: false, source: "google_ads_sync" }),
         },
-        body: JSON.stringify({ deliver: false, source: 'google_ads_sync' }),
-      });
+      );
       if (!pulseResponse.ok) {
-        console.error('[cron-google-ads] pulse calculation failed:', await pulseResponse.text());
+        console.error(
+          "[cron-google-ads] pulse calculation failed:",
+          await pulseResponse.text(),
+        );
       }
     }
 
@@ -532,9 +684,14 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("Cron sync error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

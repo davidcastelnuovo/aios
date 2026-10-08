@@ -9,8 +9,14 @@ function pdfjsAssetsPlugin() {
   const copy = (outDir: string) => {
     const from = path.join(__dirname, "node_modules/pdfjs-dist");
     if (!existsSync(from)) return;
-    cpSync(path.join(from, "cmaps"), path.join(outDir, "cmaps"), { recursive: true });
-    cpSync(path.join(from, "standard_fonts"), path.join(outDir, "standard_fonts"), { recursive: true });
+    cpSync(path.join(from, "cmaps"), path.join(outDir, "cmaps"), {
+      recursive: true,
+    });
+    cpSync(
+      path.join(from, "standard_fonts"),
+      path.join(outDir, "standard_fonts"),
+      { recursive: true },
+    );
   };
   return {
     name: "pdfjs-assets",
@@ -33,7 +39,11 @@ export default defineConfig(({ mode }) => ({
     __BUILD_COMMIT_SHA__: JSON.stringify(buildCommitSha),
     __BUILD_GIT_BRANCH__: JSON.stringify(buildGitBranch),
   },
-  plugins: [react(), pdfjsAssetsPlugin(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(),
+    pdfjsAssetsPlugin(),
+    mode === "development" && componentTagger(),
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

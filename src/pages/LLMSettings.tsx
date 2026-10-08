@@ -3,7 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenantPath } from "@/hooks/useTenantPath";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +18,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowRight, Brain, Key, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
+import {
+  ArrowRight,
+  Brain,
+  Key,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+} from "lucide-react";
 
 // LLM providers the user can connect their own API keys for.
 const PROVIDERS = [
@@ -136,9 +149,17 @@ export default function LLMSettings() {
     },
     onSuccess: () => {
       toast({ title: "נשמר בהצלחה", description: "מפתחות ה-AI עודכנו" });
-      setForm({ openai_api_key: "", anthropic_api_key: "", google_api_key: "" });
-      queryClient.invalidateQueries({ queryKey: ["llm-integration", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["llm-connected-providers", tenantId] });
+      setForm({
+        openai_api_key: "",
+        anthropic_api_key: "",
+        google_api_key: "",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["llm-integration", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["llm-connected-providers", tenantId],
+      });
     },
     onError: (e: Error) =>
       toast({ variant: "destructive", title: "שגיאה", description: e.message }),
@@ -164,7 +185,8 @@ export default function LLMSettings() {
         <div>
           <h1 className="text-3xl font-bold">מודלי AI (LLMs)</h1>
           <p className="text-muted-foreground">
-            חבר את מפתחות ה-API שלך ל-GPT, Claude ו-Gemini. הסוכנים (כולל כרמן) ישתמשו במפתחות אלה כ"מוח".
+            חבר את מפתחות ה-API שלך ל-GPT, Claude ו-Gemini. הסוכנים (כולל כרמן)
+            ישתמשו במפתחות אלה כ"מוח".
           </p>
         </div>
       </div>
@@ -172,9 +194,14 @@ export default function LLMSettings() {
       <Alert className="mb-6">
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          המפתחות נשמרים ב-Supabase של הארגון שלך ומשמשים את הסוכנים בלבד. מספיק לחבר ספק אחד כדי להתחיל
+          המפתחות נשמרים ב-Supabase של הארגון שלך ומשמשים את הסוכנים בלבד. מספיק
+          לחבר ספק אחד כדי להתחיל
           {connectedCount > 0 && (
-            <> — כרגע מחוברים <strong>{connectedCount}</strong> מתוך {PROVIDERS.length}.</>
+            <>
+              {" "}
+              — כרגע מחוברים <strong>{connectedCount}</strong> מתוך{" "}
+              {PROVIDERS.length}.
+            </>
           )}
         </AlertDescription>
       </Alert>
@@ -188,12 +215,17 @@ export default function LLMSettings() {
               <CardHeader>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <div className={`p-2 rounded-lg bg-gradient-to-br ${p.color}`}>
+                    <div
+                      className={`p-2 rounded-lg bg-gradient-to-br ${p.color}`}
+                    >
                       <Key className="h-4 w-4 text-white" />
                     </div>
                     <CardTitle className="text-lg">{p.name}</CardTitle>
                     {hasKey(p.key) ? (
-                      <Badge variant="default" className="bg-green-500/10 text-green-700 dark:text-green-400">
+                      <Badge
+                        variant="default"
+                        className="bg-green-500/10 text-green-700 dark:text-green-400"
+                      >
                         <CheckCircle2 className="h-3 w-3 ml-1" />
                         מחובר
                       </Badge>
@@ -218,9 +250,15 @@ export default function LLMSettings() {
                     id={p.key}
                     type="password"
                     dir="ltr"
-                    placeholder={hasKey(p.key) ? `מחובר • מסתיים ב-${last4(p.key)} (השאר ריק כדי לא לשנות)` : p.placeholder}
+                    placeholder={
+                      hasKey(p.key)
+                        ? `מחובר • מסתיים ב-${last4(p.key)} (השאר ריק כדי לא לשנות)`
+                        : p.placeholder
+                    }
                     value={form[p.key]}
-                    onChange={(e) => setForm({ ...form, [p.key]: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, [p.key]: e.target.value })
+                    }
                   />
                 </div>
               </CardContent>
@@ -228,7 +266,10 @@ export default function LLMSettings() {
           ))}
 
           <div className="flex justify-end">
-            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+            >
               <Key className="h-4 w-4 ml-2" />
               {saveMutation.isPending ? "שומר..." : "שמור מפתחות"}
             </Button>

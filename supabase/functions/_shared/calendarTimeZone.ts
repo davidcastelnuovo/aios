@@ -2,7 +2,10 @@
 
 export const APP_TIME_ZONE = "Asia/Jerusalem";
 
-export function jerusalemYmd(date: Date = new Date(), timeZone = APP_TIME_ZONE): string {
+export function jerusalemYmd(
+  date: Date = new Date(),
+  timeZone = APP_TIME_ZONE,
+): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -11,9 +14,23 @@ export function jerusalemYmd(date: Date = new Date(), timeZone = APP_TIME_ZONE):
   }).format(date);
 }
 
-export function jerusalemWeekdayIndex(date: Date = new Date(), timeZone = APP_TIME_ZONE): number {
-  const weekday = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(date);
-  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+export function jerusalemWeekdayIndex(
+  date: Date = new Date(),
+  timeZone = APP_TIME_ZONE,
+): number {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+  }).format(date);
+  const map: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
   return map[weekday] ?? 0;
 }
 
@@ -35,7 +52,8 @@ function timeZoneOffsetMs(date: Date, timeZone: string): number {
     second: "2-digit",
     hour12: false,
   }).formatToParts(date);
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value || 0);
+  const get = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value || 0);
   const asUtc = Date.UTC(
     get("year"),
     get("month") - 1,
@@ -47,18 +65,26 @@ function timeZoneOffsetMs(date: Date, timeZone: string): number {
   return asUtc - date.getTime();
 }
 
-export function jerusalemDayStartIso(dateYmd: string, timeZone = APP_TIME_ZONE): string {
+export function jerusalemDayStartIso(
+  dateYmd: string,
+  timeZone = APP_TIME_ZONE,
+): string {
   const [y, m, d] = dateYmd.split("-").map(Number);
   const noonUtc = new Date(Date.UTC(y, m - 1, d, 12, 0, 0, 0));
   const offset = timeZoneOffsetMs(noonUtc, timeZone);
   return new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0) - offset).toISOString();
 }
 
-export function jerusalemDayEndIso(dateYmd: string, timeZone = APP_TIME_ZONE): string {
+export function jerusalemDayEndIso(
+  dateYmd: string,
+  timeZone = APP_TIME_ZONE,
+): string {
   const [y, m, d] = dateYmd.split("-").map(Number);
   const noonUtc = new Date(Date.UTC(y, m - 1, d, 12, 0, 0, 0));
   const offset = timeZoneOffsetMs(noonUtc, timeZone);
-  return new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) - offset).toISOString();
+  return new Date(
+    Date.UTC(y, m - 1, d, 23, 59, 59, 999) - offset,
+  ).toISOString();
 }
 
 export function jerusalemDateRangeToIso(
@@ -119,10 +145,14 @@ export function getJerusalemDashboardDateRange(
       return { startDate: `${today.slice(0, 7)}-01`, endDate: today };
     case "last_month": {
       const endOfLastMonth = shiftYmd(`${today.slice(0, 7)}-01`, -1);
-      return { startDate: `${endOfLastMonth.slice(0, 7)}-01`, endDate: endOfLastMonth };
+      return {
+        startDate: `${endOfLastMonth.slice(0, 7)}-01`,
+        endDate: endOfLastMonth,
+      };
     }
     case "custom":
-      if (customStart && customEnd) return { startDate: customStart, endDate: customEnd };
+      if (customStart && customEnd)
+        return { startDate: customStart, endDate: customEnd };
       return { startDate: shiftYmd(today, -30), endDate: shiftYmd(today, -1) };
     default:
       return { startDate: shiftYmd(today, -30), endDate: shiftYmd(today, -1) };

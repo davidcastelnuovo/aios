@@ -1,7 +1,16 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SelectGroup,
+  SelectLabel,
+  SelectSeparator,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -26,12 +35,18 @@ const TYPE_LABELS: Record<Recipient["type"], string> = {
 
 function defaultForType(type: Recipient["type"]): Recipient {
   switch (type) {
-    case "phone_field": return { type, field: "phone" };
-    case "phone_manual": return { type, phone: "" };
-    case "group_field": return { type, field: "group_chat_id" };
-    case "group_manual": return { type, group_id: "" };
-    case "contact_lookup": return { type, entity: "lead", id: "" };
-    case "group_lookup": return { type, group_id: "" };
+    case "phone_field":
+      return { type, field: "phone" };
+    case "phone_manual":
+      return { type, phone: "" };
+    case "group_field":
+      return { type, field: "group_chat_id" };
+    case "group_manual":
+      return { type, group_id: "" };
+    case "contact_lookup":
+      return { type, entity: "lead", id: "" };
+    case "group_lookup":
+      return { type, group_id: "" };
   }
 }
 
@@ -42,7 +57,12 @@ interface Props {
   onChange: (next: Recipient[]) => void;
 }
 
-export function RecipientsListEditor({ tenantId, availableFields, value, onChange }: Props) {
+export function RecipientsListEditor({
+  tenantId,
+  availableFields,
+  value,
+  onChange,
+}: Props) {
   const recipients = value.length > 0 ? value : [defaultForType("phone_field")];
 
   const updateAt = (idx: number, next: Recipient) => {
@@ -111,19 +131,29 @@ function RecipientRow({
       <div className="flex items-center gap-2">
         <Select
           value={value.type}
-          onValueChange={(v) => onChange(defaultForType(v as Recipient["type"]))}
+          onValueChange={(v) =>
+            onChange(defaultForType(v as Recipient["type"]))
+          }
         >
           <SelectTrigger className="text-right flex-1 h-9">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {(Object.keys(TYPE_LABELS) as Recipient["type"][]).map((t) => (
-              <SelectItem key={t} value={t}>{TYPE_LABELS[t]}</SelectItem>
+              <SelectItem key={t} value={t}>
+                {TYPE_LABELS[t]}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
         {canRemove && (
-          <Button type="button" variant="ghost" size="icon" onClick={onRemove} className="h-9 w-9 text-destructive">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onRemove}
+            className="h-9 w-9 text-destructive"
+          >
             <Trash2 className="h-4 w-4" />
           </Button>
         )}
@@ -151,27 +181,44 @@ function RecipientValueEditor({
 }) {
   if (value.type === "phone_field") {
     return (
-      <Select value={value.field} onValueChange={(v) => onChange({ ...value, field: v })}>
+      <Select
+        value={value.field}
+        onValueChange={(v) => onChange({ ...value, field: v })}
+      >
         <SelectTrigger className="text-right h-9">
           <SelectValue placeholder="בחר שדה..." />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectLabel className="text-xs font-bold text-muted-foreground">שדות מערכת</SelectLabel>
-            {availableFields.filter(f => !f.key.startsWith("fb_")).map((f) => (
-              <SelectItem key={f.key} value={f.key}>{f.label} ({`{{${f.key}}}`})</SelectItem>
-            ))}
+            <SelectLabel className="text-xs font-bold text-muted-foreground">
+              שדות מערכת
+            </SelectLabel>
+            {availableFields
+              .filter((f) => !f.key.startsWith("fb_"))
+              .map((f) => (
+                <SelectItem key={f.key} value={f.key}>
+                  {f.label} ({`{{${f.key}}}`})
+                </SelectItem>
+              ))}
           </SelectGroup>
-          {availableFields.some(f => f.key.startsWith("fb_")) && (
+          {availableFields.some((f) => f.key.startsWith("fb_")) && (
             <>
               <SelectSeparator />
               <SelectGroup>
-                <SelectLabel className="text-xs font-bold text-blue-600">שדות פייסבוק</SelectLabel>
-                {availableFields.filter(f => f.key.startsWith("fb_")).map((f) => (
-                  <SelectItem key={f.key} value={f.key} className="text-blue-700 bg-blue-50/50">
-                    {f.label} ({`{{${f.key}}}`})
-                  </SelectItem>
-                ))}
+                <SelectLabel className="text-xs font-bold text-blue-600">
+                  שדות פייסבוק
+                </SelectLabel>
+                {availableFields
+                  .filter((f) => f.key.startsWith("fb_"))
+                  .map((f) => (
+                    <SelectItem
+                      key={f.key}
+                      value={f.key}
+                      className="text-blue-700 bg-blue-50/50"
+                    >
+                      {f.label} ({`{{${f.key}}}`})
+                    </SelectItem>
+                  ))}
               </SelectGroup>
             </>
           )}
@@ -194,18 +241,30 @@ function RecipientValueEditor({
 
   if (value.type === "group_field") {
     return (
-      <Select value={value.field} onValueChange={(v) => onChange({ ...value, field: v })}>
+      <Select
+        value={value.field}
+        onValueChange={(v) => onChange({ ...value, field: v })}
+      >
         <SelectTrigger className="text-right h-9">
           <SelectValue placeholder="בחר שדה..." />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="group_chat_id">מזהה צ'אט קבוצה - מומלץ ({`{{group_chat_id}}`})</SelectItem>
-          <SelectItem value="group_id">מזהה קבוצה ({`{{group_id}}`})</SelectItem>
+          <SelectItem value="group_chat_id">
+            מזהה צ'אט קבוצה - מומלץ ({`{{group_chat_id}}`})
+          </SelectItem>
+          <SelectItem value="group_id">
+            מזהה קבוצה ({`{{group_id}}`})
+          </SelectItem>
           {availableFields
-            .filter(f => (f.key.toLowerCase().includes("group") || f.key === "chat_id"))
-            .filter(f => f.key !== "group_id" && f.key !== "group_chat_id")
+            .filter(
+              (f) =>
+                f.key.toLowerCase().includes("group") || f.key === "chat_id",
+            )
+            .filter((f) => f.key !== "group_id" && f.key !== "group_chat_id")
             .map((f) => (
-              <SelectItem key={f.key} value={f.key}>{f.label} ({`{{${f.key}}}`})</SelectItem>
+              <SelectItem key={f.key} value={f.key}>
+                {f.label} ({`{{${f.key}}}`})
+              </SelectItem>
             ))}
         </SelectContent>
       </Select>
@@ -225,11 +284,23 @@ function RecipientValueEditor({
   }
 
   if (value.type === "contact_lookup") {
-    return <ContactLookupEditor tenantId={tenantId} value={value} onChange={onChange} />;
+    return (
+      <ContactLookupEditor
+        tenantId={tenantId}
+        value={value}
+        onChange={onChange}
+      />
+    );
   }
 
   if (value.type === "group_lookup") {
-    return <GroupLookupEditor tenantId={tenantId} value={value} onChange={onChange} />;
+    return (
+      <GroupLookupEditor
+        tenantId={tenantId}
+        value={value}
+        onChange={onChange}
+      />
+    );
   }
 
   return null;
@@ -272,8 +343,8 @@ function ContactLookupEditor({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return contacts || [];
-    return (contacts || []).filter((c) =>
-      c.name?.toLowerCase().includes(q) || c.phone?.includes(q)
+    return (contacts || []).filter(
+      (c) => c.name?.toLowerCase().includes(q) || c.phone?.includes(q),
     );
   }, [contacts, search]);
 
@@ -281,7 +352,9 @@ function ContactLookupEditor({
     <div className="space-y-2">
       <Select
         value={value.entity}
-        onValueChange={(v) => onChange({ ...value, entity: v as "lead" | "client", id: "" })}
+        onValueChange={(v) =>
+          onChange({ ...value, entity: v as "lead" | "client", id: "" })
+        }
       >
         <SelectTrigger className="text-right h-9">
           <SelectValue />
@@ -291,9 +364,14 @@ function ContactLookupEditor({
           <SelectItem value="client">לקוח</SelectItem>
         </SelectContent>
       </Select>
-      <Select value={value.id} onValueChange={(v) => onChange({ ...value, id: v })}>
+      <Select
+        value={value.id}
+        onValueChange={(v) => onChange({ ...value, id: v })}
+      >
         <SelectTrigger className="text-right h-9">
-          <SelectValue placeholder={value.entity === "lead" ? "בחר ליד..." : "בחר לקוח..."} />
+          <SelectValue
+            placeholder={value.entity === "lead" ? "בחר ליד..." : "בחר לקוח..."}
+          />
         </SelectTrigger>
         <SelectContent>
           <div
@@ -313,7 +391,9 @@ function ContactLookupEditor({
             </div>
           </div>
           {filtered.length === 0 ? (
-            <div className="px-2 py-4 text-center text-xs text-muted-foreground">לא נמצאו תוצאות</div>
+            <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+              לא נמצאו תוצאות
+            </div>
           ) : (
             filtered.map((c) => (
               <SelectItem key={c.id} value={c.id}>
@@ -357,11 +437,16 @@ function GroupLookupEditor({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return groups || [];
-    return (groups || []).filter((g) => g.group_name?.toLowerCase().includes(q));
+    return (groups || []).filter((g) =>
+      g.group_name?.toLowerCase().includes(q),
+    );
   }, [groups, search]);
 
   return (
-    <Select value={value.group_id} onValueChange={(v) => onChange({ ...value, group_id: v })}>
+    <Select
+      value={value.group_id}
+      onValueChange={(v) => onChange({ ...value, group_id: v })}
+    >
       <SelectTrigger className="text-right h-9">
         <SelectValue placeholder="בחר קבוצה..." />
       </SelectTrigger>
@@ -383,10 +468,14 @@ function GroupLookupEditor({
           </div>
         </div>
         {filtered.length === 0 ? (
-          <div className="px-2 py-4 text-center text-xs text-muted-foreground">לא נמצאו קבוצות</div>
+          <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+            לא נמצאו קבוצות
+          </div>
         ) : (
           filtered.map((g) => (
-            <SelectItem key={g.id} value={g.group_chat_id}>{g.group_name}</SelectItem>
+            <SelectItem key={g.id} value={g.group_chat_id}>
+              {g.group_name}
+            </SelectItem>
           ))
         )}
       </SelectContent>
@@ -407,7 +496,9 @@ export function migrateLegacyRecipients(cfg: Record<string, any>): Recipient[] {
     return [{ type: "group_manual", group_id: cfg.manual_group_id }];
   }
   if (mode === "group_field") {
-    return [{ type: "group_field", field: cfg.group_id_field || "group_chat_id" }];
+    return [
+      { type: "group_field", field: cfg.group_id_field || "group_chat_id" },
+    ];
   }
   if (mode === "field" && cfg?.phone_field) {
     return [{ type: "phone_field", field: cfg.phone_field }];

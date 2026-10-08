@@ -80,7 +80,16 @@ interface WorkItem {
 
 // ─── Platform best practices ─────────────────────────────────────────────────
 
-const PLATFORM_TIPS: Record<string, { tip: string; bestTime: string; format: string; emoji: string; peakDays: number[] }> = {
+const PLATFORM_TIPS: Record<
+  string,
+  {
+    tip: string;
+    bestTime: string;
+    format: string;
+    emoji: string;
+    peakDays: number[];
+  }
+> = {
   instagram: {
     emoji: "📸",
     tip: "תוכן ויזואלי גבוה ← Reels מקבלים 3× יותר reach",
@@ -120,7 +129,16 @@ const PLATFORM_TIPS: Record<string, { tip: string; bestTime: string; format: str
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
-const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode; dot: string }> = {
+const statusConfig: Record<
+  string,
+  {
+    label: string;
+    color: string;
+    bg: string;
+    icon: React.ReactNode;
+    dot: string;
+  }
+> = {
   draft: {
     label: "טיוטה",
     color: "text-gray-600",
@@ -167,7 +185,10 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
 
 // ─── Channel config ───────────────────────────────────────────────────────────
 
-const channelConfig: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
+const channelConfig: Record<
+  string,
+  { label: string; icon: React.ReactNode; color: string; bg: string }
+> = {
   instagram: {
     label: "Instagram",
     icon: <Instagram className="h-3 w-3" />,
@@ -210,11 +231,11 @@ const channelConfig: Record<string, { label: string; icon: React.ReactNode; colo
 
 const PEAK_HOURS: Record<string, number[]> = {
   instagram: [8, 12, 17, 20],
-  facebook:  [9, 13, 19],
-  twitter:   [8, 12, 17],
-  linkedin:  [8, 12, 17],
-  tiktok:    [7, 12, 19, 21],
-  general:   [9, 12, 18],
+  facebook: [9, 13, 19],
+  twitter: [8, 12, 17],
+  linkedin: [8, 12, 17],
+  tiktok: [7, 12, 19, 21],
+  general: [9, 12, 18],
 };
 
 function getSmartScheduleDate(channel: string): string {
@@ -251,7 +272,7 @@ function PlatformTipsBanner({ platformFilter }: { platformFilter: string }) {
       <div
         className={cn(
           "rounded-2xl border bg-card/60 shadow backdrop-blur-sm overflow-hidden transition-all duration-300",
-          "border-primary/10"
+          "border-primary/10",
         )}
       >
         <button
@@ -259,8 +280,12 @@ function PlatformTipsBanner({ platformFilter }: { platformFilter: string }) {
           className="flex w-full items-center gap-3 px-4 py-2.5 text-right hover:bg-muted/30 transition-colors"
         >
           <span className="text-xl">{tip.emoji}</span>
-          <span className="flex-1 text-sm font-semibold text-foreground">{tip.tip}</span>
-          <span className="text-xs text-muted-foreground ml-2">{channelConfig[platformFilter]?.label}</span>
+          <span className="flex-1 text-sm font-semibold text-foreground">
+            {tip.tip}
+          </span>
+          <span className="text-xs text-muted-foreground ml-2">
+            {channelConfig[platformFilter]?.label}
+          </span>
           {open ? (
             <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
           ) : (
@@ -270,12 +295,20 @@ function PlatformTipsBanner({ platformFilter }: { platformFilter: string }) {
         {open && (
           <div className="grid grid-cols-2 gap-3 px-4 pb-3 pt-1 border-t border-border/50">
             <div className="rounded-xl bg-muted/40 p-2.5">
-              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">שעת פיק</div>
-              <div className="text-xs font-medium text-foreground">{tip.bestTime}</div>
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                שעת פיק
+              </div>
+              <div className="text-xs font-medium text-foreground">
+                {tip.bestTime}
+              </div>
             </div>
             <div className="rounded-xl bg-muted/40 p-2.5">
-              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">פורמט מועדף</div>
-              <div className="text-xs font-medium text-foreground">{tip.format}</div>
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                פורמט מועדף
+              </div>
+              <div className="text-xs font-medium text-foreground">
+                {tip.format}
+              </div>
             </div>
           </div>
         )}
@@ -286,7 +319,17 @@ function PlatformTipsBanner({ platformFilter }: { platformFilter: string }) {
 
 // ─── Post chip (inside calendar cell) ────────────────────────────────────────
 
-function PostChip({ item, onClick, selected, onSelect }: { item: WorkItem; onClick: () => void; selected?: boolean; onSelect?: (e: React.MouseEvent) => void }) {
+function PostChip({
+  item,
+  onClick,
+  selected,
+  onSelect,
+}: {
+  item: WorkItem;
+  onClick: () => void;
+  selected?: boolean;
+  onSelect?: (e: React.MouseEvent) => void;
+}) {
   const cfg = statusConfig[item.status] ?? statusConfig.draft;
   const channel = item.payload?.channel ?? item.target_channel ?? "general";
   const chCfg = channelConfig[channel] ?? channelConfig.general;
@@ -299,17 +342,25 @@ function PostChip({ item, onClick, selected, onSelect }: { item: WorkItem; onCli
         "group w-full rounded-md border px-2 py-1 text-right transition-all hover:shadow-md",
         cfg.bg,
         cfg.color,
-        selected && "ring-2 ring-primary/50"
+        selected && "ring-2 ring-primary/50",
       )}
     >
       <div className="flex items-center gap-1.5">
         <GripVertical className="h-2.5 w-2.5 shrink-0 text-muted-foreground/30 cursor-grab" />
         <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", cfg.dot)} />
         {imageUrl && (
-          <img src={imageUrl} alt="" className="h-4 w-4 rounded object-cover shrink-0" />
+          <img
+            src={imageUrl}
+            alt=""
+            className="h-4 w-4 rounded object-cover shrink-0"
+          />
         )}
-        <span className="truncate text-xs font-medium leading-tight">{item.title || "ללא כותרת"}</span>
-        <span className={cn("mr-auto shrink-0", chCfg.color)}>{chCfg.icon}</span>
+        <span className="truncate text-xs font-medium leading-tight">
+          {item.title || "ללא כותרת"}
+        </span>
+        <span className={cn("mr-auto shrink-0", chCfg.color)}>
+          {chCfg.icon}
+        </span>
       </div>
     </button>
   );
@@ -343,13 +394,22 @@ function PostDetailDialog({
       <DialogContent className="max-w-lg" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <span className={cn("h-2 w-2 rounded-full", statusConfig[item.status]?.dot ?? "bg-gray-400")} />
+            <span
+              className={cn(
+                "h-2 w-2 rounded-full",
+                statusConfig[item.status]?.dot ?? "bg-gray-400",
+              )}
+            />
             {item.title || "ללא כותרת"}
           </DialogTitle>
         </DialogHeader>
 
         {imageUrl && (
-          <img src={imageUrl} alt={item.title} className="w-full rounded-lg object-cover max-h-48" />
+          <img
+            src={imageUrl}
+            alt={item.title}
+            className="w-full rounded-lg object-cover max-h-48"
+          />
         )}
 
         <div className="space-y-3">
@@ -369,8 +429,13 @@ function PostDetailDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">סטטוס</label>
-              <Select value={editStatus || item.status} onValueChange={(v) => setEditStatus(v)}>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                סטטוס
+              </label>
+              <Select
+                value={editStatus || item.status}
+                onValueChange={(v) => setEditStatus(v)}
+              >
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -378,7 +443,9 @@ function PostDetailDialog({
                   {Object.entries(statusConfig).map(([k, v]) => (
                     <SelectItem key={k} value={k} className="text-xs">
                       <span className="flex items-center gap-1.5">
-                        <span className={cn("h-1.5 w-1.5 rounded-full", v.dot)} />
+                        <span
+                          className={cn("h-1.5 w-1.5 rounded-full", v.dot)}
+                        />
                         {v.label}
                       </span>
                     </SelectItem>
@@ -387,7 +454,9 @@ function PostDetailDialog({
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">תאריך פרסום</label>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                תאריך פרסום
+              </label>
               <Input
                 type="date"
                 className="h-8 text-xs"
@@ -460,7 +529,7 @@ function NewItemDialog({
 
   const toggleChannel = (ch: string) => {
     setChannels((prev) =>
-      prev.includes(ch) ? prev.filter((c) => c !== ch) : [...prev, ch]
+      prev.includes(ch) ? prev.filter((c) => c !== ch) : [...prev, ch],
     );
   };
 
@@ -481,7 +550,10 @@ function NewItemDialog({
         tenant_id: tenantId,
         client_id: clientId,
         current_stage_id: stage?.id ?? null,
-        title: channels.length > 1 ? `${title.trim()} – ${channelConfig[ch]?.label ?? ch}` : title.trim(),
+        title:
+          channels.length > 1
+            ? `${title.trim()} – ${channelConfig[ch]?.label ?? ch}`
+            : title.trim(),
         status: "draft",
         scheduled_date: date || null,
         target_channel: ch,
@@ -492,7 +564,9 @@ function NewItemDialog({
         },
       }));
 
-      const { error } = await supabase.from("marketing_work_items").insert(inserts);
+      const { error } = await supabase
+        .from("marketing_work_items")
+        .insert(inserts);
       if (error) throw error;
 
       toast.success(`${inserts.length} פריטי תוכן נוצרו`);
@@ -522,7 +596,9 @@ function NewItemDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">כותרת</label>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              כותרת
+            </label>
             <Input
               placeholder="כותרת הפוסט..."
               value={title}
@@ -533,7 +609,9 @@ function NewItemDialog({
 
           {/* Platform checkboxes */}
           <div>
-            <label className="mb-2 block text-xs text-muted-foreground">פלטפורמות</label>
+            <label className="mb-2 block text-xs text-muted-foreground">
+              פלטפורמות
+            </label>
             <div className="grid grid-cols-3 gap-2">
               {Object.entries(channelConfig)
                 .filter(([k]) => k !== "general")
@@ -545,11 +623,19 @@ function NewItemDialog({
                     className={cn(
                       "flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition-all",
                       channels.includes(k)
-                        ? cn("border-primary/50 bg-primary/10 text-primary shadow-sm")
-                        : "border-border hover:border-muted-foreground/30 text-muted-foreground"
+                        ? cn(
+                            "border-primary/50 bg-primary/10 text-primary shadow-sm",
+                          )
+                        : "border-border hover:border-muted-foreground/30 text-muted-foreground",
                     )}
                   >
-                    <span className={channels.includes(k) ? "text-primary" : v.color}>{v.icon}</span>
+                    <span
+                      className={
+                        channels.includes(k) ? "text-primary" : v.color
+                      }
+                    >
+                      {v.icon}
+                    </span>
                     {v.label}
                   </button>
                 ))}
@@ -558,7 +644,9 @@ function NewItemDialog({
 
           {/* Date picker */}
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">תאריך פרסום</label>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              תאריך פרסום
+            </label>
             <Input
               type="date"
               value={date}
@@ -568,7 +656,9 @@ function NewItemDialog({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">טקסט / קופי (אופציונלי)</label>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              טקסט / קופי (אופציונלי)
+            </label>
             <Textarea
               placeholder="כתוב את הקופי כאן..."
               value={copy}
@@ -584,13 +674,20 @@ function NewItemDialog({
               checked={autoRun}
               onCheckedChange={(v) => setAutoRun(!!v)}
             />
-            <label htmlFor="auto-run" className="cursor-pointer text-xs font-medium text-violet-700">
+            <label
+              htmlFor="auto-run"
+              className="cursor-pointer text-xs font-medium text-violet-700"
+            >
               הרץ אוטומטית את הפייפליין לאחר יצירה
             </label>
             <Sparkles className="h-3.5 w-3.5 text-violet-500 mr-auto" />
           </div>
 
-          <Button className="w-full" onClick={handleSave} disabled={saving || !title.trim() || channels.length === 0}>
+          <Button
+            className="w-full"
+            onClick={handleSave}
+            disabled={saving || !title.trim() || channels.length === 0}
+          >
             {saving ? (
               <Loader2 className="h-4 w-4 animate-spin ml-2" />
             ) : (
@@ -622,7 +719,9 @@ function ListItemRow({
   onPublish: (id: string) => void;
 }) {
   const [editingCopy, setEditingCopy] = useState(false);
-  const [copyDraft, setCopyDraft] = useState(item.payload?.copy_text ?? item.payload?.brief_text ?? "");
+  const [copyDraft, setCopyDraft] = useState(
+    item.payload?.copy_text ?? item.payload?.brief_text ?? "",
+  );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const cfg = statusConfig[item.status] ?? statusConfig.draft;
@@ -630,7 +729,8 @@ function ListItemRow({
   const chCfg = channelConfig[channel] ?? channelConfig.general;
   const imageUrl = item.payload?.image_url;
   const copyText = item.payload?.copy_text ?? item.payload?.brief_text ?? "";
-  const preview = copyText.length > 100 ? copyText.slice(0, 100) + "…" : copyText;
+  const preview =
+    copyText.length > 100 ? copyText.slice(0, 100) + "…" : copyText;
 
   const handleCopySave = () => {
     setEditingCopy(false);
@@ -644,12 +744,15 @@ function ListItemRow({
     <div
       className={cn(
         "flex items-start gap-3 rounded-2xl border p-3 transition-all hover:shadow-lg hover:border-primary/30 hover:scale-[1.005] bg-card/60 backdrop-blur-sm",
-        selected && "border-primary/40 bg-primary/5"
+        selected && "border-primary/40 bg-primary/5",
       )}
     >
       {/* Checkbox */}
       <button
-        onClick={(e) => { e.stopPropagation(); onSelect(); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect();
+        }}
         className="mt-1 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
       >
         {selected ? (
@@ -661,9 +764,18 @@ function ListItemRow({
 
       {/* Thumbnail */}
       {imageUrl ? (
-        <img src={imageUrl} alt="" className="h-10 w-10 rounded-lg object-cover shrink-0 mt-0.5" />
+        <img
+          src={imageUrl}
+          alt=""
+          className="h-10 w-10 rounded-lg object-cover shrink-0 mt-0.5"
+        />
       ) : (
-        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg mt-0.5", chCfg.bg)}>
+        <div
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg mt-0.5",
+            chCfg.bg,
+          )}
+        >
           <span className={chCfg.color}>{chCfg.icon}</span>
         </div>
       )}
@@ -679,7 +791,11 @@ function ListItemRow({
           </button>
           <Badge
             variant="outline"
-            className={cn("shrink-0 text-[10px] px-1.5 py-0 flex items-center gap-1", cfg.bg, cfg.color)}
+            className={cn(
+              "shrink-0 text-[10px] px-1.5 py-0 flex items-center gap-1",
+              cfg.bg,
+              cfg.color,
+            )}
           >
             {cfg.icon}
             {cfg.label}
@@ -700,7 +816,9 @@ function ListItemRow({
           />
         ) : (
           preview && (
-            <p className="text-xs text-muted-foreground leading-relaxed">{preview}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {preview}
+            </p>
           )
         )}
 
@@ -749,7 +867,10 @@ function ListItemRow({
           <Button
             size="sm"
             className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-            onClick={(e) => { e.stopPropagation(); onPublish(item.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPublish(item.id);
+            }}
           >
             <Send className="h-3 w-3 ml-1" />
             פרסם
@@ -777,7 +898,11 @@ function BulkActionsBar({
   return (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-card border rounded-2xl shadow-xl px-6 py-3 flex items-center gap-4 z-50 backdrop-blur-sm">
       <span className="text-sm font-medium">{count} פריטים נבחרו</span>
-      <Button size="sm" onClick={onApprove} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+      <Button
+        size="sm"
+        onClick={onApprove}
+        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+      >
         <CheckCircle2 className="h-3.5 w-3.5 ml-1" />
         אשר הכל
       </Button>
@@ -794,7 +919,10 @@ function BulkActionsBar({
 
 // ─── Platform filter chips ────────────────────────────────────────────────────
 
-const ALL_PLATFORMS = ["all", ...Object.keys(channelConfig).filter((k) => k !== "general")];
+const ALL_PLATFORMS = [
+  "all",
+  ...Object.keys(channelConfig).filter((k) => k !== "general"),
+];
 
 function PlatformFilterChips({
   active,
@@ -816,12 +944,16 @@ function PlatformFilterChips({
               "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all",
               isActive
                 ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                : "border-border bg-card hover:border-muted-foreground/40 text-muted-foreground"
+                : "border-border bg-card hover:border-muted-foreground/40 text-muted-foreground",
             )}
           >
             {ch ? (
               <>
-                <span className={isActive ? "text-primary-foreground" : ch.color}>{ch.icon}</span>
+                <span
+                  className={isActive ? "text-primary-foreground" : ch.color}
+                >
+                  {ch.icon}
+                </span>
                 {ch.label}
               </>
             ) : (
@@ -843,7 +975,12 @@ interface Props {
   onSelectItem?: (id: string) => void;
 }
 
-export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectItem }: Props) {
+export function SocialContentGantt({
+  pipelineId,
+  tenantId,
+  clientId,
+  onSelectItem,
+}: Props) {
   const qc = useQueryClient();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("month");
@@ -868,7 +1005,13 @@ export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectIte
   });
 
   const updateItem = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: Partial<WorkItem> }) => {
+    mutationFn: async ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: Partial<WorkItem>;
+    }) => {
       const { error } = await supabase
         .from("marketing_work_items")
         .update(patch)
@@ -917,7 +1060,10 @@ export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectIte
     return map;
   }, [filteredItems]);
 
-  const unscheduled = useMemo(() => filteredItems.filter((i) => !i.scheduled_date), [filteredItems]);
+  const unscheduled = useMemo(
+    () => filteredItems.filter((i) => !i.scheduled_date),
+    [filteredItems],
+  );
 
   // ─── Peak days for current filter ────────────────────────────────────────
 
@@ -932,28 +1078,38 @@ export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectIte
     const total = items.length;
     const published = items.filter((i) => i.status === "published").length;
     const approved = items.filter((i) => i.status === "approved").length;
-    const draft = items.filter((i) => i.status === "draft" || i.status === "in_progress").length;
+    const draft = items.filter(
+      (i) => i.status === "draft" || i.status === "in_progress",
+    ).length;
     return { total, published, approved, draft };
   }, [items]);
 
   // ─── Bulk actions ─────────────────────────────────────────────────────────
 
   const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   };
 
   const bulkApprove = async () => {
     await Promise.all(
-      selectedIds.map((id) => updateItem.mutateAsync({ id, patch: { status: "approved" } }))
+      selectedIds.map((id) =>
+        updateItem.mutateAsync({ id, patch: { status: "approved" } }),
+      ),
     );
     setSelectedIds([]);
     toast.success("אושרו");
   };
 
   const bulkSchedule = () => {
-    const smartDate = getSmartScheduleDate(platformFilter !== "all" ? platformFilter : "general");
+    const smartDate = getSmartScheduleDate(
+      platformFilter !== "all" ? platformFilter : "general",
+    );
     Promise.all(
-      selectedIds.map((id) => updateItem.mutateAsync({ id, patch: { scheduled_date: smartDate } }))
+      selectedIds.map((id) =>
+        updateItem.mutateAsync({ id, patch: { scheduled_date: smartDate } }),
+      ),
     ).then(() => {
       setSelectedIds([]);
       toast.success(`תוזמן ל-${smartDate}`);
@@ -1017,7 +1173,11 @@ export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectIte
               className="h-6 gap-1 px-2 text-xs"
               onClick={() => setViewMode(v)}
             >
-              {v === "month" ? <LayoutGrid className="h-3 w-3" /> : <List className="h-3 w-3" />}
+              {v === "month" ? (
+                <LayoutGrid className="h-3 w-3" />
+              ) : (
+                <List className="h-3 w-3" />
+              )}
               {v === "month" ? "חודש" : "רשימה"}
             </Button>
           ))}
@@ -1037,10 +1197,15 @@ export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectIte
       </div>
 
       {/* ── Platform filter chips ── */}
-      <PlatformFilterChips active={platformFilter} onChange={setPlatformFilter} />
+      <PlatformFilterChips
+        active={platformFilter}
+        onChange={setPlatformFilter}
+      />
 
       {/* ── Platform tips banner ── */}
-      {platformFilter !== "all" && <PlatformTipsBanner platformFilter={platformFilter} />}
+      {platformFilter !== "all" && (
+        <PlatformTipsBanner platformFilter={platformFilter} />
+      )}
 
       {/* ── Calendar grid ── */}
       {viewMode === "month" && (
@@ -1058,7 +1223,9 @@ export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectIte
                     key={d}
                     className={cn(
                       "py-1 text-center text-xs font-medium",
-                      peakDays.includes(i) ? "text-primary font-bold" : "text-muted-foreground"
+                      peakDays.includes(i)
+                        ? "text-primary font-bold"
+                        : "text-muted-foreground",
                     )}
                   >
                     {d}
@@ -1090,8 +1257,8 @@ export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectIte
                         today
                           ? "border-primary/30 bg-primary/5"
                           : isPeak
-                          ? "border-primary/20 bg-primary/[0.03] hover:border-primary/30"
-                          : "border-border hover:border-muted-foreground/30"
+                            ? "border-primary/20 bg-primary/[0.03] hover:border-primary/30"
+                            : "border-border hover:border-muted-foreground/30",
                       )}
                     >
                       {/* Day number */}
@@ -1102,15 +1269,18 @@ export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectIte
                             today
                               ? "bg-primary text-primary-foreground"
                               : isPeak
-                              ? "text-primary font-bold"
-                              : "text-muted-foreground"
+                                ? "text-primary font-bold"
+                                : "text-muted-foreground",
                           )}
                         >
                           {format(day, "d")}
                         </span>
                         <button
                           className="hidden h-4 w-4 items-center justify-center rounded text-muted-foreground hover:text-foreground group-hover:flex"
-                          onClick={() => { setNewItemDate(key); setNewItemOpen(true); }}
+                          onClick={() => {
+                            setNewItemDate(key);
+                            setNewItemOpen(true);
+                          }}
                         >
                           <Plus className="h-3 w-3" />
                         </button>
@@ -1155,7 +1325,7 @@ export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectIte
                         className={cn(
                           "rounded-md border px-2 py-1 text-xs transition-all hover:shadow-sm",
                           statusConfig[item.status]?.bg ?? "bg-gray-100",
-                          statusConfig[item.status]?.color ?? "text-gray-600"
+                          statusConfig[item.status]?.color ?? "text-gray-600",
                         )}
                       >
                         {item.title || "ללא כותרת"}
@@ -1195,7 +1365,8 @@ export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectIte
                   }}
                   className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {selectedIds.length === filteredItems.length && filteredItems.length > 0 ? (
+                  {selectedIds.length === filteredItems.length &&
+                  filteredItems.length > 0 ? (
                     <CheckSquare className="h-3.5 w-3.5 text-primary" />
                   ) : (
                     <Square className="h-3.5 w-3.5" />
@@ -1246,7 +1417,9 @@ export function SocialContentGantt({ pipelineId, tenantId, clientId, onSelectIte
         tenantId={tenantId}
         clientId={clientId}
         onClose={() => setNewItemOpen(false)}
-        onCreated={() => qc.invalidateQueries({ queryKey: ["social-gantt-items", pipelineId] })}
+        onCreated={() =>
+          qc.invalidateQueries({ queryKey: ["social-gantt-items", pipelineId] })
+        }
       />
     </div>
   );

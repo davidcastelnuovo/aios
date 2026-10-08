@@ -18,15 +18,23 @@
  */
 
 export function isGroupChatId(chatId: string | null | undefined): boolean {
-  return String(chatId || "").toLowerCase().includes("@g.us");
+  return String(chatId || "")
+    .toLowerCase()
+    .includes("@g.us");
 }
 
 /** Canonical conversation key, or null if we cannot identify the chat. */
-export function normalizeCarmenChatId(raw: string | null | undefined): string | null {
+export function normalizeCarmenChatId(
+  raw: string | null | undefined,
+): string | null {
   const v = String(raw || "").trim();
   if (!v) return null;
   const lower = v.toLowerCase();
-  if (lower.includes("@g.us") || lower.includes("@c.us") || lower.includes("@lid")) {
+  if (
+    lower.includes("@g.us") ||
+    lower.includes("@c.us") ||
+    lower.includes("@lid")
+  ) {
     return v;
   }
   const digits = v.replace(/\D/g, "");
@@ -59,7 +67,9 @@ export function replyDestinationIsConsistent(args: {
  */
 export function requireOriginChatId(
   chatId: string | null | undefined,
-): { ok: true; chatId: string; isGroup: boolean } | { ok: false; reason: string } {
+):
+  | { ok: true; chatId: string; isGroup: boolean }
+  | { ok: false; reason: string } {
   const normalized = normalizeCarmenChatId(chatId);
   if (!normalized) {
     return { ok: false, reason: "missing_chat_id" };

@@ -1,27 +1,47 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { CalendarIcon, ChevronDown } from "lucide-react";
-import { format, subDays, startOfDay, endOfDay, startOfWeek, startOfMonth, endOfMonth, subMonths, subYears } from "date-fns";
+import {
+  format,
+  subDays,
+  startOfDay,
+  endOfDay,
+  startOfWeek,
+  startOfMonth,
+  endOfMonth,
+  subMonths,
+  subYears,
+} from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
-export type DatePreset = 
-  | "today" 
-  | "yesterday" 
-  | "this_week" 
-  | "7_days" 
-  | "14_days" 
-  | "30_days" 
-  | "this_month" 
-  | "last_month" 
-  | "3_months" 
+export type DatePreset =
+  | "today"
+  | "yesterday"
+  | "this_week"
+  | "7_days"
+  | "14_days"
+  | "30_days"
+  | "this_month"
+  | "last_month"
+  | "3_months"
   | "3_months_calendar"
-  | "year" 
+  | "year"
   | "all_time"
   | "custom";
 
@@ -53,7 +73,7 @@ const presets: { key: DatePreset; label: string }[] = [
 
 function getDateRangeFromPreset(preset: DatePreset): DateRange {
   const now = new Date();
-  
+
   switch (preset) {
     case "today":
       return { start: startOfDay(now), end: endOfDay(now) };
@@ -61,7 +81,10 @@ function getDateRangeFromPreset(preset: DatePreset): DateRange {
       const yesterday = subDays(now, 1);
       return { start: startOfDay(yesterday), end: endOfDay(yesterday) };
     case "this_week":
-      return { start: startOfWeek(now, { weekStartsOn: 0 }), end: endOfDay(now) };
+      return {
+        start: startOfWeek(now, { weekStartsOn: 0 }),
+        end: endOfDay(now),
+      };
     case "7_days":
       return { start: startOfDay(subDays(now, 6)), end: endOfDay(now) };
     case "14_days":
@@ -89,14 +112,18 @@ function getDateRangeFromPreset(preset: DatePreset): DateRange {
 function getComparisonRange(range: DateRange): DateRange {
   const diff = range.end.getTime() - range.start.getTime();
   const daysInRange = Math.ceil(diff / (1000 * 60 * 60 * 24));
-  
+
   return {
     start: startOfDay(subDays(range.start, daysInRange)),
-    end: endOfDay(subDays(range.start, 1))
+    end: endOfDay(subDays(range.start, 1)),
   };
 }
 
-export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison = true }: DateRangeFilterProps) {
+export function DateRangeFilter({
+  onRangeChange,
+  onCompareChange,
+  showComparison = true,
+}: DateRangeFilterProps) {
   const [selectedPreset, setSelectedPreset] = useState<DatePreset>("7_days");
   const [customStart, setCustomStart] = useState<Date>();
   const [customEnd, setCustomEnd] = useState<Date>();
@@ -106,30 +133,35 @@ export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison
   const handlePresetClick = (preset: DatePreset) => {
     setSelectedPreset(preset);
     const range = getDateRangeFromPreset(preset);
-    const comparisonRange = compareEnabled ? getComparisonRange(range) : undefined;
+    const comparisonRange = compareEnabled
+      ? getComparisonRange(range)
+      : undefined;
     onRangeChange(range, comparisonRange);
   };
 
   const handleCustomApply = () => {
     if (!customStart || !customEnd) return;
-    
+
     setSelectedPreset("custom");
     setIsCustomOpen(false);
-    
+
     const range = { start: startOfDay(customStart), end: endOfDay(customEnd) };
-    const comparisonRange = compareEnabled ? getComparisonRange(range) : undefined;
+    const comparisonRange = compareEnabled
+      ? getComparisonRange(range)
+      : undefined;
     onRangeChange(range, comparisonRange);
   };
 
   const handleCompareToggle = (enabled: boolean) => {
     setCompareEnabled(enabled);
     onCompareChange?.(enabled);
-    
+
     // Re-trigger range change with comparison
-    const range = selectedPreset === "custom" && customStart && customEnd
-      ? { start: startOfDay(customStart), end: endOfDay(customEnd) }
-      : getDateRangeFromPreset(selectedPreset);
-    
+    const range =
+      selectedPreset === "custom" && customStart && customEnd
+        ? { start: startOfDay(customStart), end: endOfDay(customEnd) }
+        : getDateRangeFromPreset(selectedPreset);
+
     const comparisonRange = enabled ? getComparisonRange(range) : undefined;
     onRangeChange(range, comparisonRange);
   };
@@ -141,7 +173,9 @@ export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison
 
   const getSelectedLabel = () => {
     if (selectedPreset === "custom") return formatCustomRange();
-    return presets.find(p => p.key === selectedPreset)?.label || "7 ימים אחרונים";
+    return (
+      presets.find((p) => p.key === selectedPreset)?.label || "7 ימים אחרונים"
+    );
   };
 
   return (
@@ -149,7 +183,10 @@ export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison
       {/* Dropdown for all presets */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="gap-2 min-w-[160px] justify-between">
+          <Button
+            variant="outline"
+            className="gap-2 min-w-[160px] justify-between"
+          >
             <CalendarIcon className="h-4 w-4" />
             <span>{getSelectedLabel()}</span>
             <ChevronDown className="h-4 w-4 opacity-50" />
@@ -162,7 +199,7 @@ export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison
               onClick={() => handlePresetClick(preset.key)}
               className={cn(
                 "cursor-pointer",
-                selectedPreset === preset.key && "bg-accent font-medium"
+                selectedPreset === preset.key && "bg-accent font-medium",
               )}
             >
               {preset.label}
@@ -176,7 +213,11 @@ export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison
                   טווח מותאם אישית...
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 z-50 bg-background" align="start" side="left">
+              <PopoverContent
+                className="w-auto p-0 z-50 bg-background"
+                align="start"
+                side="left"
+              >
                 <div className="p-3 space-y-3">
                   <div className="flex gap-3">
                     <div className="space-y-1">
@@ -185,7 +226,9 @@ export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison
                         mode="single"
                         selected={customStart}
                         onSelect={setCustomStart}
-                        disabled={(date) => date > new Date() || (customEnd && date > customEnd)}
+                        disabled={(date) =>
+                          date > new Date() || (customEnd && date > customEnd)
+                        }
                         initialFocus
                         className={cn("p-3 pointer-events-auto")}
                       />
@@ -196,16 +239,27 @@ export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison
                         mode="single"
                         selected={customEnd}
                         onSelect={setCustomEnd}
-                        disabled={(date) => date > new Date() || (customStart && date < customStart)}
+                        disabled={(date) =>
+                          date > new Date() ||
+                          (customStart && date < customStart)
+                        }
                         className={cn("p-3 pointer-events-auto")}
                       />
                     </div>
                   </div>
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setIsCustomOpen(false)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsCustomOpen(false)}
+                    >
                       ביטול
                     </Button>
-                    <Button size="sm" onClick={handleCustomApply} disabled={!customStart || !customEnd}>
+                    <Button
+                      size="sm"
+                      onClick={handleCustomApply}
+                      disabled={!customStart || !customEnd}
+                    >
                       החל
                     </Button>
                   </div>
@@ -224,7 +278,10 @@ export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison
             checked={compareEnabled}
             onCheckedChange={handleCompareToggle}
           />
-          <Label htmlFor="compare" className="text-sm cursor-pointer whitespace-nowrap">
+          <Label
+            htmlFor="compare"
+            className="text-sm cursor-pointer whitespace-nowrap"
+          >
             השווה לתקופה קודמת
           </Label>
         </div>

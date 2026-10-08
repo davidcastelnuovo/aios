@@ -31,9 +31,9 @@ If the brief says **STYLE CHANGE**, switch grade/material/composition to the new
 
 Each variation has its own text mode — toggled on the card in the grid, or set for the next new ad in the workspace header:
 
-| Mode | What Creative Direct generates |
-|------|--------------------------------|
-| **סופי** | Finished ad — paint quoted RTL Hebrew on the concept photograph |
+| Mode      | What Creative Direct generates                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **סופי**  | Finished ad — paint quoted RTL Hebrew on the concept photograph                                                                                   |
 | **שכבות** | Letter-empty template — no painted letters. RTL type is composited as editable layers after `action=complete`. Open «שכבות» on that card to edit. |
 
 Honor whichever mode the job footer states (`LIVE TEXT` vs `FINISHED AD`). Do not mix them.
@@ -82,11 +82,13 @@ Jobs may attach images. Download each URL and attach it to GenerateImage. Honor 
 The Promo mark is **red on transparent PNG**. It **vanishes** on dark/black heroes. **Do not fix this with a pasted plaster pad** — design the still so the logo reads naturally.
 
 **Design first (composition + palette):**
+
 - **Flip luminance:** paper/white/light blue should **dominate** the frame (~60%+), not charcoal noir. Dark tones are accents only.
 - Build a **light header band or bright wall zone** (part of the layout architecture — hero + footer split, offer-board style) where the logo lives. It must feel designed in, not a floating rectangle patched on later.
 - Match brand lock: Promo reds `#c00000` / `#e00000` / `#a00000` / `#400000` as **accents** on a bright field — chair, CTA, map pin, divider — not a black canvas with red type.
 
 **Integration:**
+
 - Generate the scene **bright by default** with a natural quiet pocket (light wall, paper header, sky band) reserved top-left or top-right — **empty**, no fake logo painted by the model.
 - **Composite the exact downloaded logo PNG** onto that light zone after generation (preserve alpha **and the ribbon gradient** red→black at the O–M fold). **Never AI-redraw** the mark — upscale the brand file if needed.
 - Promo O–M connection: **smooth gradient depth**, not a flat hard red/black cut.

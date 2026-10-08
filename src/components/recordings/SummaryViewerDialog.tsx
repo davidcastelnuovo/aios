@@ -11,11 +11,22 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Share2, FileText, Pencil, X, Loader2, Sparkles } from "lucide-react";
+import {
+  Download,
+  Share2,
+  FileText,
+  Pencil,
+  X,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useRegenerateRecordingSummary } from "@/hooks/useRegenerateRecordingSummary";
-import { ShareSummaryDialog, type ShareableRecording } from "./ShareSummaryDialog";
+import {
+  ShareSummaryDialog,
+  type ShareableRecording,
+} from "./ShareSummaryDialog";
 
 interface SummaryViewerDialogProps {
   open: boolean;
@@ -120,7 +131,9 @@ export function SummaryViewerDialog({
               <FileText className="h-5 w-5 text-primary" />
               סיכום פגישה — {meetingName}
             </DialogTitle>
-            {meetingDate && <DialogDescription>{meetingDate}</DialogDescription>}
+            {meetingDate && (
+              <DialogDescription>{meetingDate}</DialogDescription>
+            )}
           </DialogHeader>
 
           <div className="flex gap-2 flex-wrap">
@@ -131,9 +144,9 @@ export function SummaryViewerDialog({
                   onClick={() => saveMutation.mutate(draft)}
                   disabled={saveMutation.isPending || !dirty}
                 >
-                  {saveMutation.isPending
-                    ? <Loader2 className="h-4 w-4 ml-1 animate-spin" />
-                    : null}
+                  {saveMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 ml-1 animate-spin" />
+                  ) : null}
                   שמור
                 </Button>
                 <Button
@@ -160,10 +173,14 @@ export function SummaryViewerDialog({
                 disabled={regenerateMutation.isPending}
                 title="יוצר סיכום מפורט מחדש מהתמלול, לפי מתודת הסיכום הנוכחית"
               >
+                {regenerateMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 ml-1 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 ml-1" />
+                )}
                 {regenerateMutation.isPending
-                  ? <Loader2 className="h-4 w-4 ml-1 animate-spin" />
-                  : <Sparkles className="h-4 w-4 ml-1" />}
-                {regenerateMutation.isPending ? "מסכם מחדש..." : "סכם מחדש מפורט"}
+                  ? "מסכם מחדש..."
+                  : "סכם מחדש מפורט"}
               </Button>
             )}
             <Button
@@ -176,7 +193,11 @@ export function SummaryViewerDialog({
             </Button>
             {recording.summary_file_url && !editing && (
               <Button size="sm" variant="outline" asChild>
-                <a href={recording.summary_file_url} target="_blank" rel="noreferrer">
+                <a
+                  href={recording.summary_file_url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   <Download className="h-4 w-4 ml-1" />
                   הורד Word
                 </a>
@@ -189,7 +210,11 @@ export function SummaryViewerDialog({
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && dirty) {
+                if (
+                  (event.metaKey || event.ctrlKey) &&
+                  event.key === "Enter" &&
+                  dirty
+                ) {
                   event.preventDefault();
                   saveMutation.mutate(draft);
                 }
@@ -207,18 +232,26 @@ export function SummaryViewerDialog({
             <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border bg-card p-5">
               {summaryMd ? (
                 <div dir="rtl" className={SUMMARY_PROSE_CLASS}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{summaryMd}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {summaryMd}
+                  </ReactMarkdown>
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground text-center py-8">
                   לסיכום הזה אין עדיין גרסת תצוגה — הוא נוצר לפני השדרוג.
                   {recording.summary_file_url && (
                     <>
-                      {" "}ניתן{" "}
-                      <a href={recording.summary_file_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                      {" "}
+                      ניתן{" "}
+                      <a
+                        href={recording.summary_file_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary underline"
+                      >
                         להוריד את קובץ ה-Word
-                      </a>
-                      {" "}או לכתוב סיכום כאן.
+                      </a>{" "}
+                      או לכתוב סיכום כאן.
                     </>
                   )}
                 </div>

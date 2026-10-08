@@ -18,7 +18,10 @@ test("asUuidOrNull accepts real UUIDs", () => {
   const id = "596286e3-f3ae-4a80-859e-bd824ed2f779";
   assert.equal(asUuidOrNull(id), id);
   assert.equal(asUuidOrNull(`  ${id}  `), id);
-  assert.equal(asUuidOrNull("00000000-0000-0000-0000-000000000000"), "00000000-0000-0000-0000-000000000000");
+  assert.equal(
+    asUuidOrNull("00000000-0000-0000-0000-000000000000"),
+    "00000000-0000-0000-0000-000000000000",
+  );
 });
 
 test("approval payload never embeds system as requested_by", () => {

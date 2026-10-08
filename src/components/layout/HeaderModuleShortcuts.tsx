@@ -33,7 +33,9 @@ export function HeaderModuleShortcuts() {
         {selectedModules.map((module) => {
           const Icon = module.icon;
           const path = buildPath(module.route);
-          const active = location.pathname === path || location.pathname.startsWith(`${path}/`);
+          const active =
+            location.pathname === path ||
+            location.pathname.startsWith(`${path}/`);
           return (
             <Button
               key={module.key}
@@ -46,7 +48,9 @@ export function HeaderModuleShortcuts() {
               aria-label={`פתח ${module.label}`}
             >
               <Icon className="h-4 w-4" />
-              <span className="hidden 2xl:inline max-w-24 truncate">{module.label}</span>
+              <span className="hidden 2xl:inline max-w-24 truncate">
+                {module.label}
+              </span>
             </Button>
           );
         })}
@@ -140,4 +144,3 @@ export function HeaderModuleShortcuts() {
     </div>
   );
 }
-

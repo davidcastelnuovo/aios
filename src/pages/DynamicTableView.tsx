@@ -7,14 +7,46 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info, Copy, Loader2, AlertCircle, Play, ShoppingCart, ExternalLink, User } from "lucide-react";
+import {
+  ArrowRight,
+  Plus,
+  Trash2,
+  Send,
+  Pencil,
+  Check,
+  X,
+  MoreVertical,
+  Calendar as CalendarIcon,
+  RefreshCw,
+  Facebook,
+  Settings,
+  Link,
+  BarChart3,
+  Search,
+  TrendingUp,
+  Bell,
+  SearchIcon,
+  Sparkles,
+  Info,
+  Copy,
+  Loader2,
+  AlertCircle,
+  Play,
+  ShoppingCart,
+  ExternalLink,
+  User,
+} from "lucide-react";
 import { AIAnalysisDialog } from "@/components/dynamic-tables/AIAnalysisDialog";
 import { format, subDays } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { shouldShowQueryError } from "@/lib/queryUi";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -57,17 +89,31 @@ import { EditTableDialog } from "@/components/dynamic-tables/EditTableDialog";
 import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
 
 import { MaskyooSiblingCard } from "@/components/dynamic-tables/MaskyooSiblingCard";
-import { CURRENCY_OPTIONS, getCurrencySymbol, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
+import {
+  CURRENCY_OPTIONS,
+  getCurrencySymbol,
+  normalizeCurrencyCode,
+  type CurrencyCode,
+} from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableToClientDialog";
-import { effectiveFacebookCampaignType, getLeadsFromData } from "@/lib/adsMetrics";
+import {
+  effectiveFacebookCampaignType,
+  getLeadsFromData,
+} from "@/lib/adsMetrics";
 import { isSeoReportSource } from "@/lib/seoReports";
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 import { WooAttributionSection } from "@/components/dynamic-tables/WooAttributionSection";
-import { fetchWooReportAttribution, getDynamicTableDateRangeIso } from "@/lib/wooDashboardQueries";
+import {
+  fetchWooReportAttribution,
+  getDynamicTableDateRangeIso,
+} from "@/lib/wooDashboardQueries";
 import { reportRecordsQuery } from "@/lib/reportRecords";
 import { shouldUseGoogleWooAttributionOverlay } from "@/lib/wooAttribution";
-import { reportQueryOptions, getReportLastSyncAt } from "@/lib/reportQueryOptions";
+import {
+  reportQueryOptions,
+  getReportLastSyncAt,
+} from "@/lib/reportQueryOptions";
 import { getAdAccountUrl } from "@/lib/adAccountUrl";
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import { AdsEntityLevelTabs } from "@/components/reports/AdsEntityLevelTabs";
@@ -85,7 +131,7 @@ import {
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/>
+    <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
   </svg>
 );
 
@@ -122,19 +168,25 @@ interface DynamicTableViewProps {
   summaryOnly?: boolean;
 }
 
-export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnly }: DynamicTableViewProps = {}) {
+export default function DynamicTableView({
+  embedTableSlug,
+  embedMode,
+  summaryOnly,
+}: DynamicTableViewProps = {}) {
   const params = useParams<{ tableSlug: string }>();
   const tableSlug = embedTableSlug || params.tableSlug;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isEmbed = embedMode || searchParams.get('embed') === '1';
+  const isEmbed = embedMode || searchParams.get("embed") === "1";
   const { buildPath } = useTenantPath();
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
-  
+
   const [newColumnName, setNewColumnName] = useState("");
   const [showSendReportDialog, setShowSendReportDialog] = useState(false);
-  const [reportScreenshotBlob, setReportScreenshotBlob] = useState<Blob | null>(null);
+  const [reportScreenshotBlob, setReportScreenshotBlob] = useState<Blob | null>(
+    null,
+  );
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showEditTableDialog, setShowEditTableDialog] = useState(false);
@@ -145,31 +197,49 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const [adAccountSearch, setAdAccountSearch] = useState("");
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [editingFieldName, setEditingFieldName] = useState("");
-  const [editingCell, setEditingCell] = useState<{ recordId: string; fieldKey: string; initialValue: string } | null>(null);
+  const [editingCell, setEditingCell] = useState<{
+    recordId: string;
+    fieldKey: string;
+    initialValue: string;
+  } | null>(null);
   const [cellValues, setCellValues] = useState<Record<string, string>>({});
   const [dateFilter, setDateFilter] = useState<string>("last_30_days");
-  const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
+  const [customDateRange, setCustomDateRange] = useState<{
+    from: Date | undefined;
+    to: Date | undefined;
+  }>({ from: undefined, to: undefined });
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
-  const [selectedSyncDateRange, setSelectedSyncDateRange] = useState<string>("last_30_days");
+  const [selectedSyncDateRange, setSelectedSyncDateRange] =
+    useState<string>("last_30_days");
   const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>("ILS");
   const [activeTab, setActiveTab] = useState<string>("main"); // 'main' | 'facebook' | 'google_ads' | 'combined'
-  const [showGoogleSettingsDialog, setShowGoogleSettingsDialog] = useState(false);
-  const [selectedGoogleAccount, setSelectedGoogleAccount] = useState<string>("");
+  const [showGoogleSettingsDialog, setShowGoogleSettingsDialog] =
+    useState(false);
+  const [selectedGoogleAccount, setSelectedGoogleAccount] =
+    useState<string>("");
   const [showAlertsDialog, setShowAlertsDialog] = useState(false);
   const [showMakeWebhookDialog, setShowMakeWebhookDialog] = useState(false);
   const [showDeleteTableDialog, setShowDeleteTableDialog] = useState(false);
   const [showLinkClientDialog, setShowLinkClientDialog] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState("");
-  const [adsEntityLevel, setAdsEntityLevel] = useState<AdsEntityLevel>("campaign");
-  const [adsReportView, setAdsReportView] = useState<"summary" | "weekly">("summary");
+  const [adsEntityLevel, setAdsEntityLevel] =
+    useState<AdsEntityLevel>("campaign");
+  const [adsReportView, setAdsReportView] = useState<"summary" | "weekly">(
+    "summary",
+  );
   const [isCloning, setIsCloning] = useState(false);
   const cellInputRef = useRef<HTMLInputElement>(null);
 
   const debouncedCampaignSearch = useDebouncedValue(campaignSearch, 300);
 
-  const customFromStr = customDateRange.from ? format(customDateRange.from, 'yyyy-MM-dd') : '';
-  const customToStr = customDateRange.to ? format(customDateRange.to, 'yyyy-MM-dd') : '';
-  const isCustomReady = dateFilter !== 'custom' || (!!customFromStr && !!customToStr);
+  const customFromStr = customDateRange.from
+    ? format(customDateRange.from, "yyyy-MM-dd")
+    : "";
+  const customToStr = customDateRange.to
+    ? format(customDateRange.to, "yyyy-MM-dd")
+    : "";
+  const isCustomReady =
+    dateFilter !== "custom" || (!!customFromStr && !!customToStr);
 
   const dateFilterOptions = [
     { value: "all", label: "כל התאריכים" },
@@ -202,7 +272,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     { value: "all_history", label: "כל ההיסטוריה" },
   ];
 
-  const isDateRangeReadyForSync = dateFilter !== 'custom' || (!!customDateRange.from && !!customDateRange.to);
+  const isDateRangeReadyForSync =
+    dateFilter !== "custom" || (!!customDateRange.from && !!customDateRange.to);
 
   const getMainFilterSyncRange = () => {
     // Sync ALWAYS ends today and ALWAYS pulls at least the last 120 days,
@@ -211,88 +282,113 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     // The view layer continues to filter the visible window separately.
     // For longer display windows we still extend the sync range accordingly.
     const today = new Date();
-    const endDate = format(today, 'yyyy-MM-dd');
+    const endDate = format(today, "yyyy-MM-dd");
     const MIN_SYNC_DAYS = 120;
 
     const rangeFromDays = (days: number) => ({
-      startDate: format(subDays(today, Math.max(days, MIN_SYNC_DAYS)), 'yyyy-MM-dd'),
+      startDate: format(
+        subDays(today, Math.max(days, MIN_SYNC_DAYS)),
+        "yyyy-MM-dd",
+      ),
       endDate,
     });
 
     switch (dateFilter) {
-      case 'all':
-        return { startDate: '2020-01-01', endDate };
-      case 'today':
-      case 'yesterday':
-      case 'this_week':
-      case 'last_week':
-      case 'last_7_days':
-      case 'last_14_days':
-      case 'last_30_days':
-      case 'last_60_days':
-      case 'this_month':
-      case 'last_month':
-      case 'last_90_days':
-      case 'last_120_days':
+      case "all":
+        return { startDate: "2020-01-01", endDate };
+      case "today":
+      case "yesterday":
+      case "this_week":
+      case "last_week":
+      case "last_7_days":
+      case "last_14_days":
+      case "last_30_days":
+      case "last_60_days":
+      case "this_month":
+      case "last_month":
+      case "last_90_days":
+      case "last_120_days":
         return rangeFromDays(MIN_SYNC_DAYS);
-      case 'last_180_days':
+      case "last_180_days":
         return rangeFromDays(180);
-      case 'last_365_days':
+      case "last_365_days":
         return rangeFromDays(365);
-      case 'custom':
+      case "custom":
         if (customDateRange.from && customDateRange.to) {
           // Even for custom, never sync less than MIN_SYNC_DAYS to preserve history.
-          const customStart = format(customDateRange.from, 'yyyy-MM-dd');
-          const minStart = format(subDays(today, MIN_SYNC_DAYS), 'yyyy-MM-dd');
+          const customStart = format(customDateRange.from, "yyyy-MM-dd");
+          const minStart = format(subDays(today, MIN_SYNC_DAYS), "yyyy-MM-dd");
           return {
             startDate: customStart < minStart ? customStart : minStart,
-            endDate: format(customDateRange.to, 'yyyy-MM-dd') > endDate ? endDate : format(customDateRange.to, 'yyyy-MM-dd'),
+            endDate:
+              format(customDateRange.to, "yyyy-MM-dd") > endDate
+                ? endDate
+                : format(customDateRange.to, "yyyy-MM-dd"),
           };
         }
-        throw new Error('יש לבחור טווח תאריכים מלא לפני סנכרון');
+        throw new Error("יש לבחור טווח תאריכים מלא לפני סנכרון");
       default:
         return rangeFromDays(MIN_SYNC_DAYS);
     }
   };
 
-  const { data: table, isLoading: tablesLoading, isFetching: tablesFetching, error: tablesError } = useQuery({
-    queryKey: ['crm-tables', tenantId, tableSlug],
+  const {
+    data: table,
+    isLoading: tablesLoading,
+    isFetching: tablesFetching,
+    error: tablesError,
+  } = useQuery({
+    queryKey: ["crm-tables", tenantId, tableSlug],
     queryFn: async () => {
       if (!tableSlug) return null;
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
       const response = await supabase.functions.invoke(
         `crm-tables?tenant_id=${tenantId}&slug=${encodeURIComponent(tableSlug)}`,
-        { method: 'GET' }
+        { method: "GET" },
       );
       if (response.error) {
-        console.error('[DynamicTableView] crm-tables fetch failed:', response.error);
+        console.error(
+          "[DynamicTableView] crm-tables fetch failed:",
+          response.error,
+        );
         throw response.error;
       }
-      const rows = Array.isArray(response.data) ? response.data as CrmTable[] : [];
+      const rows = Array.isArray(response.data)
+        ? (response.data as CrmTable[])
+        : [];
       return rows[0] ?? null;
     },
     enabled: !!tenantId && !!tableSlug,
     ...reportQueryOptions<CrmTable | null>(),
   });
 
-  const reportClientId = table?.client_id
-    || table?.integration_settings?.clientId
-    || table?.integration_settings?.client_id
-    || null;
+  const reportClientId =
+    table?.client_id ||
+    table?.integration_settings?.clientId ||
+    table?.integration_settings?.client_id ||
+    null;
   const adAccountUrl = getAdAccountUrl(table);
 
-  const isGoogleAdsEcommerceReport = table?.integration_type === 'google_ads'
-    && table?.integration_settings?.campaign_type === 'ecommerce';
+  const isGoogleAdsEcommerceReport =
+    table?.integration_type === "google_ads" &&
+    table?.integration_settings?.campaign_type === "ecommerce";
 
   const wooDateRangeIso = useMemo(
-    () => getDynamicTableDateRangeIso(dateFilter, customDateRange.from, customDateRange.to),
+    () =>
+      getDynamicTableDateRangeIso(
+        dateFilter,
+        customDateRange.from,
+        customDateRange.to,
+      ),
     [dateFilter, customDateRange.from, customDateRange.to],
   );
 
   const { data: wooReportAttribution } = useQuery({
     queryKey: [
-      'woo-report-attribution',
+      "woo-report-attribution",
       reportClientId,
       dateFilter,
       customDateRange.from?.toISOString() ?? null,
@@ -302,9 +398,13 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     enabled: !!reportClientId && isGoogleAdsEcommerceReport,
   });
 
-  const useGoogleWooOverlay = isGoogleAdsEcommerceReport
-    && !!wooReportAttribution
-    && shouldUseGoogleWooAttributionOverlay(reportClientId, table?.integration_settings);
+  const useGoogleWooOverlay =
+    isGoogleAdsEcommerceReport &&
+    !!wooReportAttribution &&
+    shouldUseGoogleWooAttributionOverlay(
+      reportClientId,
+      table?.integration_settings,
+    );
   const googleWooPaid = wooReportAttribution?.googlePaid ?? {
     paidOrders: 0,
     paidRevenue: 0,
@@ -317,7 +417,9 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   useEffect(() => {
     if (!table) return;
     if (showSettingsDialog || showGoogleSettingsDialog) return;
-    setSelectedCurrency(normalizeCurrencyCode(table.integration_settings?.currency));
+    setSelectedCurrency(
+      normalizeCurrencyCode(table.integration_settings?.currency),
+    );
   }, [
     table?.id,
     table?.integration_settings?.currency,
@@ -331,40 +433,53 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     if (didSetFbDefaultRef.current) return;
     if (!table) return;
     if (
-      table.integration_type === 'facebook_insights' ||
-      table.integration_type === 'facebook_ecommerce'
+      table.integration_type === "facebook_insights" ||
+      table.integration_type === "facebook_ecommerce"
     ) {
-      setDateFilter('last_7_days');
+      setDateFilter("last_7_days");
       didSetFbDefaultRef.current = true;
     }
   }, [table?.id, table?.integration_type]);
 
   // Fetch ad accounts for settings dialog
   const { data: adAccounts, isLoading: adAccountsLoading } = useQuery({
-    queryKey: ['facebook-ad-accounts'],
+    queryKey: ["facebook-ad-accounts"],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke('get-facebook-ad-accounts', {
-        method: 'POST',
-      });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      const response = await supabase.functions.invoke(
+        "get-facebook-ad-accounts",
+        {
+          method: "POST",
+        },
+      );
       if (response.error) throw response.error;
       // Ensure we always return an array
       const accounts = response.data?.ad_accounts;
       return Array.isArray(accounts) ? accounts : [];
     },
-    enabled: showSettingsDialog && (table?.integration_type === 'facebook_insights' || table?.integration_type === 'facebook_ecommerce'),
+    enabled:
+      showSettingsDialog &&
+      (table?.integration_type === "facebook_insights" ||
+        table?.integration_type === "facebook_ecommerce"),
   });
 
   const { data: fields, isLoading: fieldsLoading } = useQuery({
-    queryKey: ['crm-fields', table?.id],
+    queryKey: ["crm-fields", table?.id],
     queryFn: async () => {
       if (!table?.id) return [];
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke(`crm-fields?table_id=${table.id}`, {
-        method: 'GET',
-      });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      const response = await supabase.functions.invoke(
+        `crm-fields?table_id=${table.id}`,
+        {
+          method: "GET",
+        },
+      );
       if (response.error) throw response.error;
       const fields = (response.data as any)?.fields || [];
       return (fields as CrmField[]).sort((a, b) => a.position - b.position);
@@ -378,7 +493,13 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     isFetching: recordsFetching,
     dataUpdatedAt: recordsUpdatedAt,
   } = useQuery({
-    ...reportRecordsQuery(supabase, table?.id || '', dateFilter, customFromStr, customToStr),
+    ...reportRecordsQuery(
+      supabase,
+      table?.id || "",
+      dateFilter,
+      customFromStr,
+      customToStr,
+    ),
     enabled: !!table?.id && isCustomReady,
     ...reportQueryOptions<CrmRecord[]>(),
   });
@@ -386,15 +507,16 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const displayRecords = records ?? [];
 
   const isAdsReportTable =
-    table?.integration_type === 'facebook_insights'
-    || table?.integration_type === 'facebook_ecommerce'
-    || table?.integration_type === 'google_ads';
+    table?.integration_type === "facebook_insights" ||
+    table?.integration_type === "facebook_ecommerce" ||
+    table?.integration_type === "google_ads";
 
-  const { data: weeklyRecords = [], isPending: weeklyRecordsPending } = useQuery({
-    ...reportRecordsQuery(supabase, table?.id || '', 'last_365_days'),
-    enabled: !!table?.id && isAdsReportTable && adsReportView === 'weekly',
-    ...reportQueryOptions<CrmRecord[]>(),
-  });
+  const { data: weeklyRecords = [], isPending: weeklyRecordsPending } =
+    useQuery({
+      ...reportRecordsQuery(supabase, table?.id || "", "last_365_days"),
+      enabled: !!table?.id && isAdsReportTable && adsReportView === "weekly",
+      ...reportQueryOptions<CrmRecord[]>(),
+    });
 
   const entityLevelRecords = useMemo(() => {
     if (!isAdsReportTable) return displayRecords;
@@ -406,24 +528,33 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     if (!entityLevelRecords.length) return entityLevelRecords;
     if (!debouncedCampaignSearch.trim()) return entityLevelRecords;
     return entityLevelRecords.filter((record) =>
-      recordMatchesEntitySearch(record.data, adsEntityLevel, debouncedCampaignSearch),
+      recordMatchesEntitySearch(
+        record.data,
+        adsEntityLevel,
+        debouncedCampaignSearch,
+      ),
     );
   }, [entityLevelRecords, debouncedCampaignSearch, adsEntityLevel]);
 
   const addColumnMutation = useMutation({
     mutationFn: async (columnName: string) => {
-      if (!table?.id) throw new Error('No table');
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      
-      const key = columnName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_\u0590-\u05FF]/g, '');
-      const response = await supabase.functions.invoke('crm-fields', {
-        method: 'POST',
+      if (!table?.id) throw new Error("No table");
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const key = columnName
+        .toLowerCase()
+        .replace(/\s+/g, "_")
+        .replace(/[^a-z0-9_\u0590-\u05FF]/g, "");
+      const response = await supabase.functions.invoke("crm-fields", {
+        method: "POST",
         body: {
           table_id: table.id,
           key,
           name: columnName,
-          type: 'text',
+          type: "text",
           position: (fields?.length || 0) + 1,
         },
       });
@@ -431,97 +562,109 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
+      queryClient.invalidateQueries({ queryKey: ["crm-fields", table?.id] });
       setNewColumnName("");
-      toast.success('עמודה נוספה בהצלחה');
+      toast.success("עמודה נוספה בהצלחה");
     },
     onError: (error: any) => {
-      toast.error('שגיאה בהוספת עמודה: ' + error.message);
+      toast.error("שגיאה בהוספת עמודה: " + error.message);
     },
   });
 
   const updateFieldNameMutation = useMutation({
-    mutationFn: async ({ fieldId, name }: { fieldId: string; name: string }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      
+    mutationFn: async ({
+      fieldId,
+      name,
+    }: {
+      fieldId: string;
+      name: string;
+    }) => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-fields`,
         {
-          method: 'PATCH',
+          method: "PATCH",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({ field_id: fieldId, name }),
-        }
+        },
       );
-      
+
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to update field');
+        throw new Error(error.error || "Failed to update field");
       }
-      
+
       return await response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
+      queryClient.invalidateQueries({ queryKey: ["crm-fields", table?.id] });
       setEditingFieldId(null);
-      toast.success('שם העמודה עודכן בהצלחה');
+      toast.success("שם העמודה עודכן בהצלחה");
     },
     onError: (error: any) => {
-      toast.error('שגיאה בעדכון שם עמודה: ' + error.message);
+      toast.error("שגיאה בעדכון שם עמודה: " + error.message);
     },
   });
 
   const deleteColumnMutation = useMutation({
     mutationFn: async (fieldId: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-fields`,
         {
-          method: 'DELETE',
+          method: "DELETE",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({ field_id: fieldId }),
-        }
+        },
       );
-      
+
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to delete field');
+        throw new Error(error.error || "Failed to delete field");
       }
-      
+
       return await response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
-      toast.success('עמודה נמחקה בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ["crm-fields", table?.id] });
+      toast.success("עמודה נמחקה בהצלחה");
     },
     onError: (error: any) => {
-      toast.error('שגיאה במחיקת עמודה: ' + error.message);
+      toast.error("שגיאה במחיקת עמודה: " + error.message);
     },
   });
 
   const addRowMutation = useMutation({
     mutationFn: async () => {
-      if (!table?.id) throw new Error('No table');
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      
+      if (!table?.id) throw new Error("No table");
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
       const emptyData: Record<string, any> = {};
-      fields?.forEach(field => {
-        emptyData[field.key] = '';
+      fields?.forEach((field) => {
+        emptyData[field.key] = "";
       });
-      
-      const response = await supabase.functions.invoke('crm-records', {
-        method: 'POST',
+
+      const response = await supabase.functions.invoke("crm-records", {
+        method: "POST",
         body: {
           table_id: table.id,
           data: emptyData,
@@ -531,86 +674,98 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-      toast.success('שורה נוספה בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ["crm-records", table?.id] });
+      toast.success("שורה נוספה בהצלחה");
     },
     onError: (error: any) => {
-      toast.error('שגיאה בהוספת שורה: ' + error.message);
+      toast.error("שגיאה בהוספת שורה: " + error.message);
     },
   });
 
   const deleteRowMutation = useMutation({
     mutationFn: async (recordId: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-records`,
         {
-          method: 'DELETE',
+          method: "DELETE",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({ record_id: recordId }),
-        }
+        },
       );
-      
+
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to delete record');
+        throw new Error(error.error || "Failed to delete record");
       }
-      
+
       return await response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-      toast.success('שורה נמחקה בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ["crm-records", table?.id] });
+      toast.success("שורה נמחקה בהצלחה");
     },
     onError: (error: any) => {
-      toast.error('שגיאה במחיקת שורה: ' + error.message);
+      toast.error("שגיאה במחיקת שורה: " + error.message);
     },
   });
 
   const updateCellMutation = useMutation({
-    mutationFn: async ({ recordId, key, value }: { recordId: string; key: string; value: any }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      
-      const record = displayRecords.find(r => r.id === recordId);
-      if (!record) throw new Error('Record not found');
-      
+    mutationFn: async ({
+      recordId,
+      key,
+      value,
+    }: {
+      recordId: string;
+      key: string;
+      value: any;
+    }) => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const record = displayRecords.find((r) => r.id === recordId);
+      if (!record) throw new Error("Record not found");
+
       const updatedData = { ...record.data, [key]: value };
-      
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-records`,
         {
-          method: 'PATCH',
+          method: "PATCH",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
             record_id: recordId,
             data: updatedData,
           }),
-        }
+        },
       );
-      
+
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to update cell');
+        throw new Error(error.error || "Failed to update cell");
       }
-      
+
       return await response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
+      queryClient.invalidateQueries({ queryKey: ["crm-records", table?.id] });
     },
     onError: (error: any) => {
-      toast.error('שגיאה בעדכון תא: ' + error.message);
+      toast.error("שגיאה בעדכון תא: " + error.message);
     },
   });
 
@@ -619,13 +774,13 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
   const handleSendReport = useCallback(async () => {
     if (!summaryTablesRef.current) {
-      toast.error('לא נמצאו טבלאות מסכמות');
+      toast.error("לא נמצאו טבלאות מסכמות");
       return;
     }
     setIsCapturingScreenshot(true);
     try {
       const dataUrl = await toPng(summaryTablesRef.current, {
-        backgroundColor: '#ffffff',
+        backgroundColor: "#ffffff",
         quality: 0.95,
         pixelRatio: 2,
       });
@@ -634,8 +789,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       setReportScreenshotBlob(blob);
       setShowSendReportDialog(true);
     } catch (error) {
-      console.error('Screenshot error:', error);
-      toast.error('שגיאה ביצירת צילום מסך');
+      console.error("Screenshot error:", error);
+      toast.error("שגיאה ביצירת צילום מסך");
     } finally {
       setIsCapturingScreenshot(false);
     }
@@ -643,74 +798,87 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
   const deleteTableMutation = useMutation({
     mutationFn: async () => {
-      if (!table?.id) throw new Error('No table');
+      if (!table?.id) throw new Error("No table");
       // Delete records first
-      await supabase.from('crm_records').delete().eq('table_id', table.id);
+      await supabase.from("crm_records").delete().eq("table_id", table.id);
       // Delete fields
-      await supabase.from('crm_fields').delete().eq('table_id', table.id);
+      await supabase.from("crm_fields").delete().eq("table_id", table.id);
       // Delete the table
-      const { error } = await supabase.from('crm_tables').delete().eq('id', table.id);
+      const { error } = await supabase
+        .from("crm_tables")
+        .delete()
+        .eq("id", table.id);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('הטבלה נמחקה בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-      navigate(buildPath('/dynamic-tables'));
+      toast.success("הטבלה נמחקה בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      navigate(buildPath("/dynamic-tables"));
     },
     onError: (error: any) => {
-      toast.error('שגיאה במחיקת טבלה: ' + error.message);
+      toast.error("שגיאה במחיקת טבלה: " + error.message);
     },
   });
 
   const syncFacebookMutation = useMutation({
     mutationFn: async () => {
-      if (!table?.id) throw new Error('No table');
-      
+      if (!table?.id) throw new Error("No table");
+
       // Determine which sync function to use based on integration type
-      const syncFunction = table?.integration_type === 'facebook_ecommerce' 
-        ? 'sync-facebook-ecommerce' 
-        : 'sync-facebook-insights';
-      
+      const syncFunction =
+        table?.integration_type === "facebook_ecommerce"
+          ? "sync-facebook-ecommerce"
+          : "sync-facebook-insights";
+
       const response = await supabase.functions.invoke(syncFunction, {
-        method: 'POST',
+        method: "POST",
         body: { table_id: table.id },
       });
       if (response.error) throw response.error;
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-      const typeLabel = table?.integration_type === 'facebook_ecommerce' ? 'נתוני מכירות מפייסבוק' : 'נתוני פייסבוק';
+      queryClient.invalidateQueries({ queryKey: ["crm-records", table?.id] });
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      const typeLabel =
+        table?.integration_type === "facebook_ecommerce"
+          ? "נתוני מכירות מפייסבוק"
+          : "נתוני פייסבוק";
       const byLevel = data?.by_level;
       const levelNote = byLevel
         ? ` — קמפיינים: ${byLevel.campaign ?? 0}, ad sets: ${byLevel.adset ?? 0}, מודעות: ${byLevel.ad ?? 0}`
-        : '';
-      toast.success(`${typeLabel} סונכרנו (${data.records_synced} שורות${levelNote})`);
+        : "";
+      toast.success(
+        `${typeLabel} סונכרנו (${data.records_synced} שורות${levelNote})`,
+      );
       if (byLevel && (!byLevel.adset || !byLevel.ad)) {
-        toast.message('אם ad set / מודעות ריקים — ודא שה-edge functions עודכנו ב-Staging');
+        toast.message(
+          "אם ad set / מודעות ריקים — ודא שה-edge functions עודכנו ב-Staging",
+        );
       }
     },
     onError: (error: any) => {
-      toast.error('שגיאה בסנכרון מפייסבוק: ' + error.message);
+      toast.error("שגיאה בסנכרון מפייסבוק: " + error.message);
     },
   });
 
   // Google Ads sync mutation
   // Check if this Google Ads table uses Make.com for sync (not Direct API)
-  const isGoogleAdsMakeTable = table?.integration_type === 'google_ads' && 
-    (table?.integration_settings?.data_source === 'make_api' || table?.integration_settings?.data_source === 'webhook');
+  const isGoogleAdsMakeTable =
+    table?.integration_type === "google_ads" &&
+    (table?.integration_settings?.data_source === "make_api" ||
+      table?.integration_settings?.data_source === "webhook");
 
   // Fetch Make.com settings for this tenant
   const { data: makeSettings } = useQuery({
-    queryKey: ['make-settings', table?.tenant_id],
+    queryKey: ["make-settings", table?.tenant_id],
     queryFn: async () => {
       if (!table?.tenant_id) return null;
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', table.tenant_id)
-        .eq('integration_type', 'make_api')
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", table.tenant_id)
+        .eq("integration_type", "make_api")
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -721,34 +889,33 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   // Mutation for automatic Make.com scenario creation and sync
   const syncMakeGoogleAdsMutation = useMutation({
     mutationFn: async () => {
-      if (!table?.id) throw new Error('No table');
-      
+      if (!table?.id) throw new Error("No table");
+
       // Prevent double-cloning
       if (isCloning) {
-        throw new Error('שכפול סנריו כבר מתבצע, אנא המתן');
+        throw new Error("שכפול סנריו כבר מתבצע, אנא המתן");
       }
-      
+
       const integrationSettings = table.integration_settings || {};
-      const settings = makeSettings?.settings as Record<string, any> || {};
+      const settings = (makeSettings?.settings as Record<string, any>) || {};
       const makeApiToken = settings.api_token;
       const makeTeamId = settings.team_id;
-      const makeRegion = settings.region || 'eu1';
+      const makeRegion = settings.region || "eu1";
       const templateScenarioId = settings.google_ads_template_scenario_id;
-      
+
       if (!makeApiToken || !makeTeamId) {
-        throw new Error('Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings');
+        throw new Error("Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings");
       }
-      
+
       // Check if scenario already exists in table settings
       let scenarioId = integrationSettings.make_scenario_id;
-      
+
       // If scenario is already selected in table settings, use it directly
       if (scenarioId) {
-        
         // Find the latest date in existing records to avoid fetching duplicates
         const now = new Date();
         let startDate: string;
-        
+
         if (displayRecords.length > 0) {
           const dates = displayRecords
             .map((r: any) => r.data?.date)
@@ -762,24 +929,24 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
             // Fallback to 30 days ago
             const thirtyDaysAgo = new Date(now);
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            startDate = thirtyDaysAgo.toISOString().split('T')[0];
+            startDate = thirtyDaysAgo.toISOString().split("T")[0];
           }
         } else {
           // No records at all - fetch last 30 days
           const thirtyDaysAgo = new Date(now);
           thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          startDate = thirtyDaysAgo.toISOString().split('T')[0];
+          startDate = thirtyDaysAgo.toISOString().split("T")[0];
         }
-        
-        const endDate = now.toISOString().split('T')[0];
-        
+
+        const endDate = now.toISOString().split("T")[0];
+
         const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
-        
+
         // First patch the blueprint with current dates
         try {
-          await supabase.functions.invoke('make-api', {
+          await supabase.functions.invoke("make-api", {
             body: {
-              action: 'patch_scenario_blueprint',
+              action: "patch_scenario_blueprint",
               api_token: makeApiToken,
               team_id: makeTeamId,
               region: makeRegion,
@@ -787,60 +954,72 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               table_id: table.id,
               tenant_id: table.tenant_id,
               webhook_url: webhookUrl,
-              customer_id: integrationSettings.customer_id || integrationSettings.google_ads_customer_id,
-              campaign_type: integrationSettings.campaign_type || 'leads',
-              connection_id: integrationSettings.make_connection_id || undefined,
+              customer_id:
+                integrationSettings.customer_id ||
+                integrationSettings.google_ads_customer_id,
+              campaign_type: integrationSettings.campaign_type || "leads",
+              connection_id:
+                integrationSettings.make_connection_id || undefined,
               start_date: startDate,
               end_date: endDate,
             },
           });
         } catch (patchErr) {
-          console.warn('Failed to patch dates, running scenario anyway:', patchErr);
+          console.warn(
+            "Failed to patch dates, running scenario anyway:",
+            patchErr,
+          );
         }
-        
+
         // Then run the scenario
-        const runResponse = await supabase.functions.invoke('make-api', {
+        const runResponse = await supabase.functions.invoke("make-api", {
           body: {
-            action: 'run_scenario',
+            action: "run_scenario",
             api_token: makeApiToken,
             team_id: makeTeamId,
             region: makeRegion,
             scenario_id: scenarioId,
           },
         });
-        
+
         if (runResponse.error) {
-          throw new Error(runResponse.error.message || 'Failed to run scenario');
+          throw new Error(
+            runResponse.error.message || "Failed to run scenario",
+          );
         }
-        
+
         return runResponse.data;
       }
-      
+
       // No scenario selected - check if we can clone from template
       if (!templateScenarioId) {
-        throw new Error('לא נבחר סנריו. נא לבחור סנריו בהגדרות הטבלה (כפתור 🔗) או להגדיר Template Scenario ID בהגדרות Make Settings.');
+        throw new Error(
+          "לא נבחר סנריו. נא לבחור סנריו בהגדרות הטבלה (כפתור 🔗) או להגדיר Template Scenario ID בהגדרות Make Settings.",
+        );
       }
-      
+
       // Lock cloning to prevent double execution
       setIsCloning(true);
-      
+
       const connectionId = integrationSettings.make_connection_id;
       const customerId = integrationSettings.customer_id;
-      
+
       if (!connectionId) {
-        throw new Error('חיבור Google Ads לא נבחר. נא לבחור חיבור בהגדרות הטבלה.');
+        throw new Error(
+          "חיבור Google Ads לא נבחר. נא לבחור חיבור בהגדרות הטבלה.",
+        );
       }
-      
+
       if (!customerId) {
-        throw new Error('Customer ID לא הוגדר. נא להגדיר בהגדרות הטבלה.');
+        throw new Error("Customer ID לא הוגדר. נא להגדיר בהגדרות הטבלה.");
       }
 
       const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
-      
+
       // Clone the template scenario
-      const cloneResponse = await supabase.functions.invoke('make-api', {
+      const cloneResponse = await supabase.functions.invoke("make-api", {
         body: {
-          action: 'clone_scenario',
+          action: "clone_scenario",
           api_token: makeApiToken,
           team_id: makeTeamId,
           region: makeRegion,
@@ -851,46 +1030,52 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
           webhook_secret: integrationSettings.webhook_secret,
           scenario_name: `Google Ads Sync - ${table.name}`,
           customer_id: customerId,
-          campaign_type: integrationSettings.campaign_type || 'leads',
+          campaign_type: integrationSettings.campaign_type || "leads",
           connection_id: integrationSettings.make_connection_id || undefined,
         },
       });
-      
+
       if (cloneResponse.error) {
-        throw new Error(cloneResponse.error.message || 'Failed to clone scenario');
+        throw new Error(
+          cloneResponse.error.message || "Failed to clone scenario",
+        );
       }
-      
+
       const cloneData = cloneResponse.data;
-      
+
       if (!cloneData.success) {
         // Clone failed - show the error
-        throw new Error(cloneData.message || cloneData.error || 'לא ניתן לשכפל את ה-Template Scenario');
+        throw new Error(
+          cloneData.message ||
+            cloneData.error ||
+            "לא ניתן לשכפל את ה-Template Scenario",
+        );
       }
-      
+
       scenarioId = cloneData.scenario_id;
-      
+
       // Save the scenario ID to the table settings
       await supabase
-        .from('crm_tables')
+        .from("crm_tables")
         .update({
           integration_settings: {
             ...integrationSettings,
             make_scenario_id: scenarioId,
           },
         })
-        .eq('id', table.id);
-      
+        .eq("id", table.id);
+
       // Patch the blueprint with proper date range before running
       const now = new Date();
       const thirtyDaysAgo = new Date(now);
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const cloneStartDate = thirtyDaysAgo.toISOString().split('T')[0];
-      const cloneEndDate = now.toISOString().split('T')[0];
-      
+      const cloneStartDate = thirtyDaysAgo.toISOString().split("T")[0];
+      const cloneEndDate = now.toISOString().split("T")[0];
+
       try {
-        await supabase.functions.invoke('make-api', {
+        await supabase.functions.invoke("make-api", {
           body: {
-            action: 'patch_scenario_blueprint',
+            action: "patch_scenario_blueprint",
             api_token: makeApiToken,
             team_id: makeTeamId,
             region: makeRegion,
@@ -899,48 +1084,53 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
             tenant_id: table.tenant_id,
             webhook_url: webhookUrl,
             customer_id: customerId,
-            campaign_type: integrationSettings.campaign_type || 'leads',
+            campaign_type: integrationSettings.campaign_type || "leads",
             connection_id: connectionId || undefined,
             start_date: cloneStartDate,
             end_date: cloneEndDate,
           },
         });
       } catch (patchErr) {
-        console.warn('Failed to patch dates after clone, running anyway:', patchErr);
+        console.warn(
+          "Failed to patch dates after clone, running anyway:",
+          patchErr,
+        );
       }
-      
+
       // Run the scenario
-      const runResponse = await supabase.functions.invoke('make-api', {
+      const runResponse = await supabase.functions.invoke("make-api", {
         body: {
-          action: 'run_scenario',
+          action: "run_scenario",
           api_token: makeApiToken,
           team_id: makeTeamId,
           region: makeRegion,
           scenario_id: scenarioId,
         },
       });
-      
+
       if (runResponse.error) {
-        throw new Error(runResponse.error.message || 'Failed to run scenario');
+        throw new Error(runResponse.error.message || "Failed to run scenario");
       }
-      
+
       return runResponse.data;
     },
     onSuccess: (data) => {
       if (data?.success) {
-        toast.success('הסנכרון הופעל! הנתונים יתעדכנו בקרוב.');
+        toast.success("הסנכרון הופעל! הנתונים יתעדכנו בקרוב.");
         // Refetch records after a delay to allow webhook to process
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-          queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+          queryClient.invalidateQueries({
+            queryKey: ["crm-records", table?.id],
+          });
+          queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
         }, 5000);
       } else {
-        toast.info(data?.message || 'הסנכרון הופעל');
+        toast.info(data?.message || "הסנכרון הופעל");
       }
     },
     onError: (error: any) => {
-      console.error('Make sync error:', error);
-      toast.error(error.message || 'שגיאה בסנכרון דרך Make.com');
+      console.error("Make sync error:", error);
+      toast.error(error.message || "שגיאה בסנכרון דרך Make.com");
       // If automatic sync fails, show the manual setup dialog
       setShowMakeWebhookDialog(true);
     },
@@ -952,129 +1142,156 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
   const syncGoogleAdsMutation = useMutation({
     mutationFn: async () => {
-      if (!table?.id) throw new Error('No table');
-      
+      if (!table?.id) throw new Error("No table");
+
       // If this table uses Make.com, use the Make sync instead
       if (isGoogleAdsMakeTable) {
         // Trigger Make sync mutation directly
-        throw new Error('USE_MAKE_SYNC');
+        throw new Error("USE_MAKE_SYNC");
       }
-      
-      const response = await supabase.functions.invoke('sync-google-ads-data', {
-        method: 'POST',
+
+      const response = await supabase.functions.invoke("sync-google-ads-data", {
+        method: "POST",
         body: { table_id: table.id },
       });
       if (response.error) throw response.error;
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-      toast.success(`נתוני Google Ads סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`);
+      queryClient.invalidateQueries({ queryKey: ["crm-records", table?.id] });
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      toast.success(
+        `נתוני Google Ads סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`,
+      );
     },
     onError: (error: any) => {
-      if (error.message === 'USE_MAKE_SYNC') {
+      if (error.message === "USE_MAKE_SYNC") {
         // This shouldn't happen now, but just in case
         syncMakeGoogleAdsMutation.mutate();
         return;
       }
-      toast.error('שגיאה בסנכרון מ-Google Ads: ' + error.message);
+      toast.error("שגיאה בסנכרון מ-Google Ads: " + error.message);
     },
   });
 
   // Google Analytics sync mutation
   const syncGoogleAnalyticsMutation = useMutation({
     mutationFn: async () => {
-      if (!table?.id) throw new Error('No table');
+      if (!table?.id) throw new Error("No table");
       const { startDate, endDate } = getMainFilterSyncRange();
 
-      const response = await supabase.functions.invoke('sync-google-analytics-data', {
-        method: 'POST',
-        body: { tableId: table.id, startDate, endDate },
-      });
+      const response = await supabase.functions.invoke(
+        "sync-google-analytics-data",
+        {
+          method: "POST",
+          body: { tableId: table.id, startDate, endDate },
+        },
+      );
       if (response.error) throw response.error;
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-      toast.success(`נתוני Google Analytics סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`);
+      queryClient.invalidateQueries({ queryKey: ["crm-records", table?.id] });
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      toast.success(
+        `נתוני Google Analytics סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`,
+      );
     },
     onError: (error: any) => {
-      toast.error('שגיאה בסנכרון מ-Google Analytics: ' + error.message);
+      toast.error("שגיאה בסנכרון מ-Google Analytics: " + error.message);
     },
   });
 
   // Google Search Console sync mutation
   const syncGoogleSearchConsoleMutation = useMutation({
     mutationFn: async () => {
-      if (!table?.id) throw new Error('No table');
+      if (!table?.id) throw new Error("No table");
       const { startDate, endDate } = getMainFilterSyncRange();
 
-      const response = await supabase.functions.invoke('sync-google-search-console-data', {
-        method: 'POST',
-        body: { tableId: table.id, startDate, endDate },
-      });
+      const response = await supabase.functions.invoke(
+        "sync-google-search-console-data",
+        {
+          method: "POST",
+          body: { tableId: table.id, startDate, endDate },
+        },
+      );
       if (response.error) throw response.error;
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-      toast.success(`נתוני Search Console סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`);
+      queryClient.invalidateQueries({ queryKey: ["crm-records", table?.id] });
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      toast.success(
+        `נתוני Search Console סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`,
+      );
     },
     onError: (error: any) => {
-      toast.error('שגיאה בסנכרון מ-Search Console: ' + error.message);
+      toast.error("שגיאה בסנכרון מ-Search Console: " + error.message);
     },
   });
 
   // Ahrefs sync mutation
   const syncAhrefsMutation = useMutation({
     mutationFn: async () => {
-      if (!table?.id) throw new Error('No table');
+      if (!table?.id) throw new Error("No table");
 
       const settings = table.integration_settings || {};
 
       // If data_source is ahrefs_reports, fetch fresh from Ahrefs API then rebuild from DB
       if (isSeoReportSource(settings.data_source)) {
-        const clientId = (settings.clientId || settings.client_id || table.client_id) as string;
-        if (!clientId) throw new Error('Missing client ID for SEO report');
+        const clientId = (settings.clientId ||
+          settings.client_id ||
+          table.client_id) as string;
+        if (!clientId) throw new Error("Missing client ID for SEO report");
 
         // Step 1: pull a fresh snapshot from Ahrefs (persists into ahrefs_reports via webhook)
-        const targetDomainForFetch = settings.targetDomain || settings.target || settings.domain;
-        const { data: fetchData, error: fetchError } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
-          body: {
-            clientId,
-            domain: targetDomainForFetch,
-            country: settings.country || 'il',
-            ...(settings.ahrefs_project_id ? { projectId: settings.ahrefs_project_id } : {}),
-            ...(settings.ahrefs_mode ? { mode: settings.ahrefs_mode } : {}),
-            ...(settings.ahrefs_protocol ? { protocol: settings.ahrefs_protocol } : {}),
-          },
-        });
+        const targetDomainForFetch =
+          settings.targetDomain || settings.target || settings.domain;
+        const { data: fetchData, error: fetchError } =
+          await supabase.functions.invoke("fetch-ahrefs-snapshot", {
+            body: {
+              clientId,
+              domain: targetDomainForFetch,
+              country: settings.country || "il",
+              ...(settings.ahrefs_project_id
+                ? { projectId: settings.ahrefs_project_id }
+                : {}),
+              ...(settings.ahrefs_mode ? { mode: settings.ahrefs_mode } : {}),
+              ...(settings.ahrefs_protocol
+                ? { protocol: settings.ahrefs_protocol }
+                : {}),
+            },
+          });
         if (fetchError) throw fetchError;
-        if ((fetchData as any)?.error) throw new Error((fetchData as any).error);
+        if ((fetchData as any)?.error)
+          throw new Error((fetchData as any).error);
 
         // Step 2: pull ALL reports for this client (all months) and rebuild
         const { data: reports, error } = await supabase
-          .from('ahrefs_reports')
-          .select('*')
-          .eq('tenant_id', table.tenant_id)
-          .eq('client_id', clientId)
-          .order('report_date', { ascending: false });
+          .from("ahrefs_reports")
+          .select("*")
+          .eq("tenant_id", table.tenant_id)
+          .eq("client_id", clientId)
+          .order("report_date", { ascending: false });
 
         if (error) throw error;
-        if (!reports || reports.length === 0) throw new Error('לא נמצאו דוחות SEO עבור לקוח זה');
+        if (!reports || reports.length === 0)
+          throw new Error("לא נמצאו דוחות SEO עבור לקוח זה");
 
         // Build records from ALL reports, each tagged with report_date
         const allRecordsToInsert: any[] = [];
 
         for (const report of reports) {
-          const rd = (report as any).report_data as any || {};
+          const rd = ((report as any).report_data as any) || {};
           const snapshot = rd.snapshot || {};
-          const reportDate = (report as any).report_date || (report as any).received_at;
-          const organicKeywords = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
-          const trackedKeywords = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+          const reportDate =
+            (report as any).report_date || (report as any).received_at;
+          const organicKeywords = Array.isArray(rd.organic_keywords)
+            ? rd.organic_keywords
+            : [];
+          const trackedKeywords = Array.isArray(rd.tracked_keywords)
+            ? rd.tracked_keywords
+            : [];
           const allKeywords = [...organicKeywords, ...trackedKeywords];
 
           if (allKeywords.length > 0) {
@@ -1083,17 +1300,19 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 table_id: table.id,
                 tenant_id: table.tenant_id,
                 data: {
-                  keyword: String(kw.keyword || ''),
+                  keyword: String(kw.keyword || ""),
                   position: kw.position ?? null,
                   position_prev_month: kw.position_prev_month ?? null,
-                  position_change: kw.position_prev_month != null && kw.position != null
-                    ? kw.position_prev_month - kw.position : null,
+                  position_change:
+                    kw.position_prev_month != null && kw.position != null
+                      ? kw.position_prev_month - kw.position
+                      : null,
                   traffic: kw.traffic ?? 0,
                   traffic_prev_month: kw.traffic_prev_month ?? 0,
                   volume: kw.volume ?? 0,
                   kd: kw.kd ?? null,
                   cpc: kw.cpc ?? null,
-                  url: kw.url ?? '',
+                  url: kw.url ?? "",
                   domain: (report as any).domain,
                   dr: snapshot.dr,
                   report_date: reportDate,
@@ -1123,44 +1342,63 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         const recordsToInsert = allRecordsToInsert;
 
         // Full rebuild - delete and re-insert all historical records
-        await supabase.from('crm_records').delete().eq('table_id', table.id);
+        await supabase.from("crm_records").delete().eq("table_id", table.id);
 
         const { error: insertError } = await supabase
-          .from('crm_records')
+          .from("crm_records")
           .insert(recordsToInsert as any[]);
         if (insertError) throw insertError;
 
         // Auto-create fields if none exist
-        const { data: existingFields } = await supabase.functions.invoke(`crm-fields?table_id=${table.id}`, { method: 'GET' });
+        const { data: existingFields } = await supabase.functions.invoke(
+          `crm-fields?table_id=${table.id}`,
+          { method: "GET" },
+        );
         const fieldsList = (existingFields as any)?.fields || [];
-        
+
         if (fieldsList.length === 0) {
           const hasKeywords = recordsToInsert.some((r: any) => r.data?.keyword);
           const seoFields = hasKeywords
             ? [
-                { key: 'keyword', label: 'מילת מפתח', type: 'text' },
-                { key: 'position', label: 'מיקום', type: 'number' },
-                { key: 'position_prev_month', label: 'מיקום חודש קודם', type: 'number' },
-                { key: 'position_change', label: 'שינוי', type: 'number' },
-                { key: 'traffic', label: 'תנועה', type: 'number' },
-                { key: 'traffic_prev_month', label: 'תנועה חודש קודם', type: 'number' },
-                { key: 'volume', label: 'נפח חיפוש', type: 'number' },
-                { key: 'kd', label: 'KD', type: 'number' },
-                { key: 'url', label: 'URL', type: 'text' },
+                { key: "keyword", label: "מילת מפתח", type: "text" },
+                { key: "position", label: "מיקום", type: "number" },
+                {
+                  key: "position_prev_month",
+                  label: "מיקום חודש קודם",
+                  type: "number",
+                },
+                { key: "position_change", label: "שינוי", type: "number" },
+                { key: "traffic", label: "תנועה", type: "number" },
+                {
+                  key: "traffic_prev_month",
+                  label: "תנועה חודש קודם",
+                  type: "number",
+                },
+                { key: "volume", label: "נפח חיפוש", type: "number" },
+                { key: "kd", label: "KD", type: "number" },
+                { key: "url", label: "URL", type: "text" },
               ]
             : [
-                { key: 'domain', label: 'דומיין', type: 'text' },
-                { key: 'dr', label: 'DR', type: 'number' },
-                { key: 'org_traffic', label: 'תנועה אורגנית', type: 'number' },
-                { key: 'org_keywords_top3', label: 'Top 3', type: 'number' },
-                { key: 'org_keywords_top10', label: 'Top 10', type: 'number' },
-                { key: 'referring_domains', label: 'דומיינים מפנים', type: 'number' },
-                { key: 'backlinks_live', label: 'בקלינקים פעילים', type: 'number' },
+                { key: "domain", label: "דומיין", type: "text" },
+                { key: "dr", label: "DR", type: "number" },
+                { key: "org_traffic", label: "תנועה אורגנית", type: "number" },
+                { key: "org_keywords_top3", label: "Top 3", type: "number" },
+                { key: "org_keywords_top10", label: "Top 10", type: "number" },
+                {
+                  key: "referring_domains",
+                  label: "דומיינים מפנים",
+                  type: "number",
+                },
+                {
+                  key: "backlinks_live",
+                  label: "בקלינקים פעילים",
+                  type: "number",
+                },
               ];
 
           for (let i = 0; i < seoFields.length; i++) {
-            await supabase.functions.invoke('crm-fields', {
-              method: 'POST',
+            await supabase.functions.invoke("crm-fields", {
+              method: "POST",
               body: {
                 table_id: table.id,
                 key: seoFields[i].key,
@@ -1173,9 +1411,9 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         }
 
         // Update last_sync_at
-        await supabase.functions.invoke('crm-tables', {
+        await supabase.functions.invoke("crm-tables", {
           body: {
-            action: 'update',
+            action: "update",
             tableId: table.id,
             tenantId: table.tenant_id,
             integration_settings: {
@@ -1193,35 +1431,41 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       }
 
       // Regular Ahrefs API sync
-      const mapDataType = (reportType: string): 'site_explorer' | 'backlinks' | 'organic_traffic' | 'referring_domains' => {
+      const mapDataType = (
+        reportType: string,
+      ):
+        | "site_explorer"
+        | "backlinks"
+        | "organic_traffic"
+        | "referring_domains" => {
         switch (reportType) {
-          case 'backlinks':
-            return 'backlinks';
-          case 'organic_keywords':
-          case 'organic_traffic':
-            return 'organic_traffic';
-          case 'referring_domains':
-            return 'referring_domains';
-          case 'domain_rating':
-          case 'site_explorer':
+          case "backlinks":
+            return "backlinks";
+          case "organic_keywords":
+          case "organic_traffic":
+            return "organic_traffic";
+          case "referring_domains":
+            return "referring_domains";
+          case "domain_rating":
+          case "site_explorer":
           default:
-            return 'site_explorer';
+            return "site_explorer";
         }
       };
 
-      const dataType = mapDataType(settings.reportType || 'site_explorer');
+      const dataType = mapDataType(settings.reportType || "site_explorer");
       const targetDomain = settings.targetDomain as string | undefined;
 
-      if (!targetDomain) throw new Error('Missing Ahrefs target domain');
+      if (!targetDomain) throw new Error("Missing Ahrefs target domain");
 
-      const response = await supabase.functions.invoke('sync-ahrefs-data', {
-        method: 'POST',
+      const response = await supabase.functions.invoke("sync-ahrefs-data", {
+        method: "POST",
         body: {
           tableId: table.id,
           config: {
             dataType,
             target: targetDomain,
-            country: 'il',
+            country: "il",
             limit: 1000,
           },
         },
@@ -1230,60 +1474,75 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
-      queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
-      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["crm-records", table?.id] });
+      queryClient.invalidateQueries({ queryKey: ["crm-fields", table?.id] });
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["ahrefs-reports", tenantId] });
       const tracked = data?.trackedCount;
       const organic = data?.organicCount;
       const detail =
-        typeof tracked === 'number' && typeof organic === 'number'
+        typeof tracked === "number" && typeof organic === "number"
           ? `${organic} אורגניות, ${tracked} במעקב (${data?.recordsCount || 0} שורות)`
           : `${data?.recordsCount || 0} שורות`;
       toast.success(
-        typeof tracked === 'number' && tracked === 0 && typeof organic === 'number' && organic > 0
+        typeof tracked === "number" &&
+          tracked === 0 &&
+          typeof organic === "number" &&
+          organic > 0
           ? `נתוני SEO סונכרנו (${detail}). לא נמצאו ביטויים במעקב — בדוק פרויקט Rank Tracker ב-Ahrefs.`
           : `נתוני SEO סונכרנו בהצלחה (${detail})`,
       );
     },
     onError: (error: any) => {
-      toast.error('שגיאה בסנכרון: ' + (error?.message || 'Unknown error'));
+      toast.error("שגיאה בסנכרון: " + (error?.message || "Unknown error"));
     },
   });
 
   // Fetch Google Ads accounts for settings dialog
-  const { data: googleAdsAccounts, isLoading: googleAccountsLoading } = useQuery({
-    queryKey: ['google-ads-accounts'],
-    queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke('google-ads-auth', {
-        body: { action: 'get_accounts' },
-      });
-      if (response.error) throw response.error;
-      return Array.isArray(response.data?.accounts) ? response.data.accounts : [];
-    },
-    enabled: showGoogleSettingsDialog && (table?.integration_type === 'google_ads' || !!table?.secondary_integration_type),
-  });
+  const { data: googleAdsAccounts, isLoading: googleAccountsLoading } =
+    useQuery({
+      queryKey: ["google-ads-accounts"],
+      queryFn: async () => {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) throw new Error("Not authenticated");
+        const response = await supabase.functions.invoke("google-ads-auth", {
+          body: { action: "get_accounts" },
+        });
+        if (response.error) throw response.error;
+        return Array.isArray(response.data?.accounts)
+          ? response.data.accounts
+          : [];
+      },
+      enabled:
+        showGoogleSettingsDialog &&
+        (table?.integration_type === "google_ads" ||
+          !!table?.secondary_integration_type),
+    });
 
   const updateTableSettingsMutation = useMutation({
     mutationFn: async (adAccountId: string) => {
-      if (!table?.id) throw new Error('No table');
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      if (!table?.id) throw new Error("No table");
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
 
       // Find the selected ad account to get its currency (only as a fallback)
-      const selectedAccount = adAccounts?.find((acc: any) => acc.id === adAccountId);
+      const selectedAccount = adAccounts?.find(
+        (acc: any) => acc.id === adAccountId,
+      );
       // User's manual choice wins over the ad-account currency
       const currency = normalizeCurrencyCode(
-        selectedCurrency || selectedAccount?.currency || 'ILS',
+        selectedCurrency || selectedAccount?.currency || "ILS",
       );
 
       // Merge-only patch via crm-tables so concurrent sync fields (last_sync_at, etc.)
       // are not wiped by a stale full settings blob.
-      const { error } = await supabase.functions.invoke('crm-tables', {
-        method: 'PATCH',
+      const { error } = await supabase.functions.invoke("crm-tables", {
+        method: "PATCH",
         body: {
           table_id: table.id,
           integration_settings: {
@@ -1299,24 +1558,27 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       return { adAccountId, currency };
     },
     onSuccess: (result) => {
-      queryClient.setQueryData(['crm-tables', tenantId, tableSlug], (old: CrmTable | null | undefined) => {
-        if (!old || !table?.id) return old;
-        return {
-          ...old,
-          integration_settings: {
-            ...(old.integration_settings || {}),
-            currency: result.currency,
-            date_range: selectedSyncDateRange,
-            ad_account_id: result.adAccountId,
-          },
-        };
-      });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+      queryClient.setQueryData(
+        ["crm-tables", tenantId, tableSlug],
+        (old: CrmTable | null | undefined) => {
+          if (!old || !table?.id) return old;
+          return {
+            ...old,
+            integration_settings: {
+              ...(old.integration_settings || {}),
+              currency: result.currency,
+              date_range: selectedSyncDateRange,
+              ad_account_id: result.adAccountId,
+            },
+          };
+        },
+      );
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
       setShowSettingsDialog(false);
-      toast.success('הגדרות הטבלה עודכנו בהצלחה');
+      toast.success("הגדרות הטבלה עודכנו בהצלחה");
     },
     onError: (error: any) => {
-      toast.error('שגיאה בעדכון הגדרות: ' + error.message);
+      toast.error("שגיאה בעדכון הגדרות: " + error.message);
     },
   });
 
@@ -1331,7 +1593,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
   const handleSaveFieldName = (fieldId: string) => {
     if (!editingFieldName.trim()) {
-      toast.error('שם העמודה לא יכול להיות ריק');
+      toast.error("שם העמודה לא יכול להיות ריק");
       return;
     }
     updateFieldNameMutation.mutate({ fieldId, name: editingFieldName });
@@ -1342,36 +1604,48 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     setEditingFieldName("");
   };
 
-  const handleCellClick = (recordId: string, fieldKey: string, currentValue: string) => {
+  const handleCellClick = (
+    recordId: string,
+    fieldKey: string,
+    currentValue: string,
+  ) => {
     const cellKey = `${recordId}-${fieldKey}`;
-    setEditingCell({ recordId, fieldKey, initialValue: currentValue || '' });
-    setCellValues(prev => ({ ...prev, [cellKey]: currentValue || '' }));
+    setEditingCell({ recordId, fieldKey, initialValue: currentValue || "" });
+    setCellValues((prev) => ({ ...prev, [cellKey]: currentValue || "" }));
   };
 
-  const handleCellValueChange = (recordId: string, fieldKey: string, value: string) => {
+  const handleCellValueChange = (
+    recordId: string,
+    fieldKey: string,
+    value: string,
+  ) => {
     const cellKey = `${recordId}-${fieldKey}`;
-    setCellValues(prev => ({ ...prev, [cellKey]: value }));
+    setCellValues((prev) => ({ ...prev, [cellKey]: value }));
   };
 
   const handleCellBlur = (recordId: string, fieldKey: string) => {
     const cellKey = `${recordId}-${fieldKey}`;
-    const newValue = cellValues[cellKey] || '';
-    const record = displayRecords.find(r => r.id === recordId);
-    const oldValue = record?.data[fieldKey] || '';
-    
+    const newValue = cellValues[cellKey] || "";
+    const record = displayRecords.find((r) => r.id === recordId);
+    const oldValue = record?.data[fieldKey] || "";
+
     if (oldValue !== newValue) {
       handleCellChange(recordId, fieldKey, newValue);
     }
     setEditingCell(null);
   };
 
-  const handleCellKeyDown = (e: React.KeyboardEvent, recordId: string, fieldKey: string) => {
-    if (e.key === 'Enter') {
+  const handleCellKeyDown = (
+    e: React.KeyboardEvent,
+    recordId: string,
+    fieldKey: string,
+  ) => {
+    if (e.key === "Enter") {
       e.preventDefault();
       handleCellBlur(recordId, fieldKey);
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       setEditingCell(null);
-    } else if (e.key === 'Tab') {
+    } else if (e.key === "Tab") {
       handleCellBlur(recordId, fieldKey);
     }
   };
@@ -1387,59 +1661,62 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   // This hook must be before any conditional returns
   const cloneScenarioMutation = useMutation({
     mutationFn: async () => {
-      if (!table?.id) throw new Error('No table');
-      
+      if (!table?.id) throw new Error("No table");
+
       const settings = (makeSettings?.settings as Record<string, any>) || {};
       const templateId = settings.google_ads_template_scenario_id;
-      
+
       if (!templateId) {
-        throw new Error('לא הוגדר Template Scenario בהגדרות Make. נא לעבור ל-Make Settings ולבחור סנריו טמפלייט.');
+        throw new Error(
+          "לא הוגדר Template Scenario בהגדרות Make. נא לעבור ל-Make Settings ולבחור סנריו טמפלייט.",
+        );
       }
-      
+
       if (!settings.api_token || !settings.team_id) {
-        throw new Error('Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings');
+        throw new Error("Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings");
       }
 
       const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
       const integrationSettings = table?.integration_settings || {};
-      
-      const { data, error } = await supabase.functions.invoke('make-api', {
+
+      const { data, error } = await supabase.functions.invoke("make-api", {
         body: {
-          action: 'clone_scenario',
+          action: "clone_scenario",
           api_token: settings.api_token,
           team_id: settings.team_id,
-          region: settings.region || 'eu1',
+          region: settings.region || "eu1",
           template_scenario_id: templateId,
           table_id: table.id,
           webhook_url: webhookUrl,
           scenario_name: `חיבור לגוגל - ${table.name}`,
           customer_id: integrationSettings.customer_id,
-          campaign_type: integrationSettings.campaign_type || 'leads',
+          campaign_type: integrationSettings.campaign_type || "leads",
           connection_id: integrationSettings.make_connection_id || undefined,
         },
       });
 
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || data?.message || 'שכפול נכשל');
+      if (!data?.success)
+        throw new Error(data?.error || data?.message || "שכפול נכשל");
 
       // Update the table with the new scenario_id
       const { error: updateError } = await supabase
-        .from('crm_tables')
+        .from("crm_tables")
         .update({
           integration_settings: {
             ...integrationSettings,
             make_scenario_id: data.scenario_id,
-          }
+          },
         })
-        .eq('id', table.id);
+        .eq("id", table.id);
 
       if (updateError) throw updateError;
 
       return data;
     },
     onSuccess: () => {
-      toast.success('הסנריו שוכפל וחובר לטבלה בהצלחה! כעת ניתן לסנכרן נתונים.');
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+      toast.success("הסנריו שוכפל וחובר לטבלה בהצלחה! כעת ניתן לסנכרן נתונים.");
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -1451,33 +1728,34 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     mutationFn: async () => {
       const settings = (makeSettings?.settings as Record<string, any>) || {};
       const scenarioId = table?.integration_settings?.make_scenario_id;
-      
+
       if (!scenarioId) {
-        throw new Error('לא קיים סנריו לטבלה זו');
-      }
-      
-      if (!settings.api_token || !settings.team_id) {
-        throw new Error('Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings');
+        throw new Error("לא קיים סנריו לטבלה זו");
       }
 
-      const { data, error } = await supabase.functions.invoke('make-api', {
+      if (!settings.api_token || !settings.team_id) {
+        throw new Error("Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings");
+      }
+
+      const { data, error } = await supabase.functions.invoke("make-api", {
         body: {
-          action: 'activate_scenario',
+          action: "activate_scenario",
           api_token: settings.api_token,
           team_id: settings.team_id,
-          region: settings.region || 'eu1',
+          region: settings.region || "eu1",
           scenario_id: String(scenarioId),
         },
       });
 
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || data?.message || 'הפעלת הסנריו נכשלה');
+      if (!data?.success)
+        throw new Error(data?.error || data?.message || "הפעלת הסנריו נכשלה");
 
       return data;
     },
     onSuccess: () => {
-      toast.success('הסנריו הופעל בהצלחה! כעת ניתן לסנכרן נתונים.');
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+      toast.success("הסנריו הופעל בהצלחה! כעת ניתן לסנכרן נתונים.");
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -1489,57 +1767,62 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     mutationFn: async () => {
       const settings = (makeSettings?.settings as Record<string, any>) || {};
       const scenarioId = table?.integration_settings?.make_scenario_id;
-      
+
       if (!scenarioId) {
-        throw new Error('לא קיים סנריו לטבלה זו');
+        throw new Error("לא קיים סנריו לטבלה זו");
       }
-      
+
       if (!table?.id) {
-        throw new Error('לא נמצאה טבלה');
+        throw new Error("לא נמצאה טבלה");
       }
-      
+
       if (!settings.api_token || !settings.team_id) {
-        throw new Error('Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings');
+        throw new Error("Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings");
       }
 
       const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
 
-      const integrationSettings = (table?.integration_settings as Record<string, any>) || {};
-      
+      const integrationSettings =
+        (table?.integration_settings as Record<string, any>) || {};
+
       // Calculate date range from latest existing record
       const now = new Date();
       let startDate: string;
-      
+
       if (displayRecords.length > 0) {
         const dates = displayRecords
           .map((r: any) => r.data?.date)
           .filter(Boolean)
           .sort();
         const latestDate = dates[dates.length - 1];
-        startDate = latestDate || (() => {
-          const d = new Date(now);
-          d.setDate(d.getDate() - 30);
-          return d.toISOString().split('T')[0];
-        })();
+        startDate =
+          latestDate ||
+          (() => {
+            const d = new Date(now);
+            d.setDate(d.getDate() - 30);
+            return d.toISOString().split("T")[0];
+          })();
       } else {
         const d = new Date(now);
         d.setDate(d.getDate() - 30);
-        startDate = d.toISOString().split('T')[0];
+        startDate = d.toISOString().split("T")[0];
       }
-      const endDate = now.toISOString().split('T')[0];
-      
-      const { data, error } = await supabase.functions.invoke('make-api', {
+      const endDate = now.toISOString().split("T")[0];
+
+      const { data, error } = await supabase.functions.invoke("make-api", {
         body: {
-          action: 'patch_scenario_blueprint',
+          action: "patch_scenario_blueprint",
           api_token: settings.api_token,
           team_id: settings.team_id,
-          region: settings.region || 'eu1',
+          region: settings.region || "eu1",
           scenario_id: String(scenarioId),
           table_id: table.id,
           tenant_id: table.tenant_id,
           webhook_url: webhookUrl,
-          customer_id: integrationSettings.customer_id || integrationSettings.google_ads_customer_id,
-          campaign_type: integrationSettings.campaign_type || 'leads',
+          customer_id:
+            integrationSettings.customer_id ||
+            integrationSettings.google_ads_customer_id,
+          campaign_type: integrationSettings.campaign_type || "leads",
           connection_id: integrationSettings.make_connection_id || undefined,
           start_date: startDate,
           end_date: endDate,
@@ -1547,13 +1830,14 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       });
 
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || data?.message || 'תיקון הסנריו נכשל');
+      if (!data?.success)
+        throw new Error(data?.error || data?.message || "תיקון הסנריו נכשל");
 
       return data;
     },
     onSuccess: () => {
-      toast.success('הסנריו תוקן! כעת ניתן להריץ סנכרון.');
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+      toast.success("הסנריו תוקן! כעת ניתן להריץ סנכרון.");
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -1568,23 +1852,41 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   if (resolvingTables) {
     return (
       <div className="container mx-auto py-8 px-4">
-        <CarmenLoadingScreen messages={["כרמן פותחת את הטבלה…", "טוענת את השדות והנתונים…"]} />
+        <CarmenLoadingScreen
+          messages={["כרמן פותחת את הטבלה…", "טוענת את השדות והנתונים…"]}
+        />
       </div>
     );
   }
 
-  if (shouldShowQueryError(!!tablesError, tablesFetching, false, tablesLoading)) {
+  if (
+    shouldShowQueryError(!!tablesError, tablesFetching, false, tablesLoading)
+  ) {
     return (
       <div className="container mx-auto py-8 px-4">
         <Card className="p-12 text-center">
           <h2 className="text-2xl font-bold mb-2">שגיאה בטעינת הטבלאות</h2>
-          <p className="text-muted-foreground mb-2">לא ניתן לטעון את רשימת הטבלאות מהשרת. ייתכן שתפוג ההתחברות — נסה להתנתק ולהתחבר מחדש.</p>
-          <p className="text-xs text-muted-foreground mb-4">{(tablesError as any)?.message || String(tablesError)}</p>
+          <p className="text-muted-foreground mb-2">
+            לא ניתן לטעון את רשימת הטבלאות מהשרת. ייתכן שתפוג ההתחברות — נסה
+            להתנתק ולהתחבר מחדש.
+          </p>
+          <p className="text-xs text-muted-foreground mb-4">
+            {(tablesError as any)?.message || String(tablesError)}
+          </p>
           <div className="flex gap-2 justify-center">
-            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] })}>
+            <Button
+              onClick={() =>
+                queryClient.invalidateQueries({
+                  queryKey: ["crm-tables", tenantId],
+                })
+              }
+            >
               נסה שוב
             </Button>
-            <Button variant="outline" onClick={() => navigate(buildPath('/dynamic-tables'))}>
+            <Button
+              variant="outline"
+              onClick={() => navigate(buildPath("/dynamic-tables"))}
+            >
               חזור לטבלאות
             </Button>
           </div>
@@ -1601,7 +1903,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
           <p className="text-muted-foreground mb-4">
             הטבלה שחיפשת לא קיימת במערכת או שאין לך הרשאה לצפות בה.
           </p>
-          <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>
+          <Button onClick={() => navigate(buildPath("/dynamic-tables"))}>
             <ArrowRight className="ml-2 h-4 w-4" />
             חזור לטבלאות
           </Button>
@@ -1612,43 +1914,48 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
   const recordsInitialLoad = recordsPending && displayRecords.length === 0;
   const isLoading = fieldsLoading || recordsInitialLoad;
-  
+
   // Determine which integrations are connected
-  const hasFacebook = table?.integration_type === 'facebook_insights';
-  const hasFacebookEcommerce = table?.integration_type === 'facebook_ecommerce';
+  const hasFacebook = table?.integration_type === "facebook_insights";
+  const hasFacebookEcommerce = table?.integration_type === "facebook_ecommerce";
   const hasAnyFacebook = hasFacebook || hasFacebookEcommerce;
-  const hasGoogleAds = table?.integration_type === 'google_ads';
-  const hasGoogleAnalytics = table?.integration_type === 'google_analytics';
-  const hasGoogleSearchConsole = table?.integration_type === 'google_search_console';
-  const hasAhrefs = table?.integration_type === 'ahrefs';
+  const hasGoogleAds = table?.integration_type === "google_ads";
+  const hasGoogleAnalytics = table?.integration_type === "google_analytics";
+  const hasGoogleSearchConsole =
+    table?.integration_type === "google_search_console";
+  const hasAhrefs = table?.integration_type === "ahrefs";
   const hasMultipleIntegrations = hasFacebook && hasGoogleAds;
 
   // Check if this Google Ads table needs a scenario to be cloned
-  const needsScenarioClone = 
-    table?.integration_type === 'google_ads' &&
-    table?.integration_settings?.data_source === 'make_api' &&
+  const needsScenarioClone =
+    table?.integration_type === "google_ads" &&
+    table?.integration_settings?.data_source === "make_api" &&
     !table?.integration_settings?.make_scenario_id;
 
   // Check if scenario exists but has no data (might need patching or activation)
   // Don't show alert while loading to prevent UI flash when changing filters
-  const hasScenarioButNoData = 
+  const hasScenarioButNoData =
     !recordsPending &&
-    table?.integration_type === 'google_ads' &&
-    table?.integration_settings?.data_source === 'make_api' &&
+    table?.integration_type === "google_ads" &&
+    table?.integration_settings?.data_source === "make_api" &&
     table?.integration_settings?.make_scenario_id &&
     !table?.integration_settings?.last_sync_at &&
-    (displayRecords.length === 0);
-  
+    displayRecords.length === 0;
+
   // Check if scenario exists and has synced before (no alert needed)
-  const scenarioIsWorking = 
-    table?.integration_type === 'google_ads' &&
-    table?.integration_settings?.data_source === 'make_api' &&
+  const scenarioIsWorking =
+    table?.integration_type === "google_ads" &&
+    table?.integration_settings?.data_source === "make_api" &&
     table?.integration_settings?.make_scenario_id &&
-    (table?.integration_settings?.last_sync_at || (!recordsPending && displayRecords.length > 0));
+    (table?.integration_settings?.last_sync_at ||
+      (!recordsPending && displayRecords.length > 0));
 
   return (
     <div
-      className={cn("container mx-auto", summaryOnly ? "p-0" : isEmbed ? "py-2 px-2" : "py-8 px-4")}
+      className={cn(
+        "container mx-auto",
+        summaryOnly ? "p-0" : isEmbed ? "py-2 px-2" : "py-8 px-4",
+      )}
       data-snapshot-ready={!isLoading ? "true" : "false"}
     >
       {/* Alert for tables that need scenario cloning */}
@@ -1660,17 +1967,27 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
           </AlertTitle>
           <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
             <span className="text-orange-700 dark:text-orange-300">
-              יש לשכפל סנריו מ-Make.com כדי לאפשר סנכרון נתונים. 
-              {!(makeSettings?.settings as Record<string, any>)?.google_ads_template_scenario_id && (
+              יש לשכפל סנריו מ-Make.com כדי לאפשר סנכרון נתונים.
+              {!(makeSettings?.settings as Record<string, any>)
+                ?.google_ads_template_scenario_id && (
                 <span className="block text-sm mt-1">
                   ⚠️ תחילה הגדר Template Scenario ב-
-                  <a href={buildPath('/make-settings')} className="underline font-medium">Make Settings</a>
+                  <a
+                    href={buildPath("/make-settings")}
+                    className="underline font-medium"
+                  >
+                    Make Settings
+                  </a>
                 </span>
               )}
             </span>
-            <Button 
+            <Button
               onClick={() => cloneScenarioMutation.mutate()}
-              disabled={cloneScenarioMutation.isPending || !(makeSettings?.settings as Record<string, any>)?.google_ads_template_scenario_id}
+              disabled={
+                cloneScenarioMutation.isPending ||
+                !(makeSettings?.settings as Record<string, any>)
+                  ?.google_ads_template_scenario_id
+              }
               size="sm"
               variant="outline"
               className="shrink-0"
@@ -1687,825 +2004,1013 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       )}
 
       {/* Alert for tables with scenario but no data - offer fix options */}
-      {!isEmbed && hasScenarioButNoData && !activateScenarioMutation.isSuccess && !patchScenarioBlueprintMutation.isSuccess && (
-        <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-          <AlertCircle className="h-4 w-4 text-amber-600" />
-          <AlertTitle className="text-amber-800 dark:text-amber-200">
-            סנריו קיים אבל אין נתונים בטבלה
-          </AlertTitle>
-          <AlertDescription className="flex flex-col gap-3 mt-2">
-            <span className="text-amber-700 dark:text-amber-300">
-              הסנריו נוצר אבל לא הגיעו נתונים. ייתכן שהסנריו מחובר לטבלה אחרת או לא פעיל.
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <Button 
-                onClick={() => patchScenarioBlueprintMutation.mutate()}
-                disabled={patchScenarioBlueprintMutation.isPending}
-                size="sm"
-                variant="default"
-                className="shrink-0"
-              >
-                {patchScenarioBlueprintMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
-                ) : (
-                  <Link className="h-4 w-4 ml-2" />
-                )}
-                תקן חיבור לטבלה
-              </Button>
-              <Button 
-                onClick={() => activateScenarioMutation.mutate()}
-                disabled={activateScenarioMutation.isPending}
-                size="sm"
-                variant="outline"
-                className="shrink-0"
-              >
-                {activateScenarioMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
-                ) : (
-                  <Play className="h-4 w-4 ml-2" />
-                )}
-                הפעל סנריו
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
+      {!isEmbed &&
+        hasScenarioButNoData &&
+        !activateScenarioMutation.isSuccess &&
+        !patchScenarioBlueprintMutation.isSuccess && (
+          <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertTitle className="text-amber-800 dark:text-amber-200">
+              סנריו קיים אבל אין נתונים בטבלה
+            </AlertTitle>
+            <AlertDescription className="flex flex-col gap-3 mt-2">
+              <span className="text-amber-700 dark:text-amber-300">
+                הסנריו נוצר אבל לא הגיעו נתונים. ייתכן שהסנריו מחובר לטבלה אחרת
+                או לא פעיל.
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => patchScenarioBlueprintMutation.mutate()}
+                  disabled={patchScenarioBlueprintMutation.isPending}
+                  size="sm"
+                  variant="default"
+                  className="shrink-0"
+                >
+                  {patchScenarioBlueprintMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  ) : (
+                    <Link className="h-4 w-4 ml-2" />
+                  )}
+                  תקן חיבור לטבלה
+                </Button>
+                <Button
+                  onClick={() => activateScenarioMutation.mutate()}
+                  disabled={activateScenarioMutation.isPending}
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                >
+                  {activateScenarioMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  ) : (
+                    <Play className="h-4 w-4 ml-2" />
+                  )}
+                  הפעל סנריו
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
 
       {!isEmbed && (
-      <div className="flex flex-col gap-4 mb-6">
-        {/* Title Row */}
-        <div className="text-center md:text-right">
-          <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap">
-            <h1 className="text-2xl md:text-3xl font-bold">{table.name}</h1>
-            {hasFacebook && (
-              <Badge variant="secondary" className="gap-1">
-                <Facebook className="h-3 w-3 text-blue-600" />
-                Facebook
-              </Badge>
+        <div className="flex flex-col gap-4 mb-6">
+          {/* Title Row */}
+          <div className="text-center md:text-right">
+            <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap">
+              <h1 className="text-2xl md:text-3xl font-bold">{table.name}</h1>
+              {hasFacebook && (
+                <Badge variant="secondary" className="gap-1">
+                  <Facebook className="h-3 w-3 text-blue-600" />
+                  Facebook
+                </Badge>
+              )}
+              {hasGoogleAds && (
+                <Badge variant="secondary" className="gap-1">
+                  <GoogleAdsIcon className="h-3 w-3" />
+                  Google Ads
+                </Badge>
+              )}
+              {hasGoogleAnalytics && (
+                <Badge variant="secondary" className="gap-1">
+                  <BarChart3 className="h-3 w-3 text-orange-500" />
+                  Google Analytics
+                </Badge>
+              )}
+              {hasGoogleSearchConsole && (
+                <Badge variant="secondary" className="gap-1">
+                  <Search className="h-3 w-3 text-green-600" />
+                  Search Console
+                </Badge>
+              )}
+              {hasAhrefs && (
+                <Badge variant="secondary" className="gap-1">
+                  <TrendingUp className="h-3 w-3" />
+                  Ahrefs
+                </Badge>
+              )}
+            </div>
+            {table.description && (
+              <p className="text-muted-foreground mt-1">{table.description}</p>
             )}
-            {hasGoogleAds && (
-              <Badge variant="secondary" className="gap-1">
-                <GoogleAdsIcon className="h-3 w-3" />
-                Google Ads
-              </Badge>
-            )}
-            {hasGoogleAnalytics && (
-              <Badge variant="secondary" className="gap-1">
-                <BarChart3 className="h-3 w-3 text-orange-500" />
-                Google Analytics
-              </Badge>
-          )}
-          {hasGoogleSearchConsole && (
-              <Badge variant="secondary" className="gap-1">
-                <Search className="h-3 w-3 text-green-600" />
-                Search Console
-              </Badge>
-          )}
-          {hasAhrefs && (
-            <Badge variant="secondary" className="gap-1">
-              <TrendingUp className="h-3 w-3" />
-              Ahrefs
-            </Badge>
-          )}
-        </div>
-          {table.description && <p className="text-muted-foreground mt-1">{table.description}</p>}
-          <ReportDataFreshness
-            lastSyncAt={getReportLastSyncAt(table)}
-            dataUpdatedAt={recordsUpdatedAt}
-            isFetching={recordsFetching}
-            className="mt-1"
-          />
-        </div>
-        
-        {/* Controls Row */}
-        <div className="flex flex-col md:flex-row items-center md:justify-between gap-3">
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <Button variant="ghost" size="sm" onClick={() => navigate(buildPath('/dynamic-tables'))} className="flex-1 md:flex-none">
-              <ArrowRight className="ml-2 h-4 w-4" />
-              חזור
-            </Button>
-            {reportClientId && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 flex-1 md:flex-none"
-                onClick={() => navigate(buildPath(`/clients?clientId=${reportClientId}&tab=report`))}
-              >
-                <User className="h-4 w-4" />
-                כרטיס לקוח
-              </Button>
-            )}
-            {adAccountUrl && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 flex-1 md:flex-none"
-                onClick={() => window.open(adAccountUrl, "_blank", "noopener,noreferrer")}
-              >
-                <ExternalLink className="h-4 w-4" />
-                פתח חשבון מודעות
-              </Button>
-            )}
-            {!table.client_id && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowLinkClientDialog(true)}
-                className="gap-2 border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-950"
-              >
-                <Link className="h-4 w-4" />
-                שייך ללקוח
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setShowLinkClientDialog(true)}>
-                  <Link className="ml-2 h-4 w-4" />
-                  {table.client_id ? 'שנה שיוך לקוח' : 'שייך ללקוח'}
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  className="text-destructive focus:text-destructive"
-                  onClick={() => setShowDeleteTableDialog(true)}
-                >
-                  <Trash2 className="ml-2 h-4 w-4" />
-                  מחק טבלה
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <ReportDataFreshness
+              lastSyncAt={getReportLastSyncAt(table)}
+              dataUpdatedAt={recordsUpdatedAt}
+              isFetching={recordsFetching}
+              className="mt-1"
+            />
           </div>
-          {/* Facebook Insights Sync Controls */}
-          {hasFacebook && (
-            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-              <Button 
-                variant="outline" 
-                onClick={() => syncFacebookMutation.mutate()}
-                disabled={syncFacebookMutation.isPending}
-                className="flex-1 md:flex-none gap-2"
-              >
-                <Facebook className="h-4 w-4 text-blue-600" />
-                <RefreshCw className={`h-4 w-4 ${syncFacebookMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncFacebookMutation.isPending ? 'מסנכרן Facebook...' : 'סנכרן Facebook'}
-              </Button>
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => {
-                  setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
-                  setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
-                  setSelectedCurrency(normalizeCurrencyCode(table.integration_settings?.currency));
-                  setShowSettingsDialog(true);
-                }}
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => setShowAlertsDialog(true)}
-                title="הגדרות התראות"
-              >
-                <Bell className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
 
-          {/* Facebook Ecommerce Sync Controls */}
-          {hasFacebookEcommerce && (
-            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-              <Button 
-                variant="outline" 
-                onClick={() => syncFacebookMutation.mutate()}
-                disabled={syncFacebookMutation.isPending}
-                className="flex-1 md:flex-none gap-2"
-              >
-                <ShoppingCart className="h-4 w-4 text-green-600" />
-                <RefreshCw className={`h-4 w-4 ${syncFacebookMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncFacebookMutation.isPending ? 'מסנכרן מכירות...' : 'סנכרן מכירות'}
-              </Button>
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => {
-                  setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
-                  setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
-                  setSelectedCurrency(normalizeCurrencyCode(table.integration_settings?.currency));
-                  setShowSettingsDialog(true);
-                }}
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
+          {/* Controls Row */}
+          <div className="flex flex-col md:flex-row items-center md:justify-between gap-3">
+            <div className="flex items-center gap-2 w-full md:w-auto">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                title="השווה ל-Facebook (Debug)"
-                onClick={async () => {
-                  setDebugLoading(true);
-                  setDebugDialogOpen(true);
-                  setDebugData(null);
-                  try {
-                    const { data, error } = await supabase.functions.invoke('debug-facebook-ecommerce', {
-                      method: 'POST',
-                      body: { table_id: table.id },
-                    });
-                    if (error) throw error;
-                    setDebugData(data);
-                  } catch (e: any) {
-                    toast.error('שגיאה בדיבאג: ' + e.message);
-                    setDebugDialogOpen(false);
-                  } finally {
-                    setDebugLoading(false);
-                  }
-                }}
+                onClick={() => navigate(buildPath("/dynamic-tables"))}
+                className="flex-1 md:flex-none"
               >
-                <Info className="h-4 w-4" />
-                Debug
+                <ArrowRight className="ml-2 h-4 w-4" />
+                חזור
               </Button>
+              {reportClientId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 flex-1 md:flex-none"
+                  onClick={() =>
+                    navigate(
+                      buildPath(
+                        `/clients?clientId=${reportClientId}&tab=report`,
+                      ),
+                    )
+                  }
+                >
+                  <User className="h-4 w-4" />
+                  כרטיס לקוח
+                </Button>
+              )}
+              {adAccountUrl && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 flex-1 md:flex-none"
+                  onClick={() =>
+                    window.open(adAccountUrl, "_blank", "noopener,noreferrer")
+                  }
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  פתח חשבון מודעות
+                </Button>
+              )}
+              {!table.client_id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowLinkClientDialog(true)}
+                  className="gap-2 border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-950"
+                >
+                  <Link className="h-4 w-4" />
+                  שייך ללקוח
+                </Button>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => setShowLinkClientDialog(true)}
+                  >
+                    <Link className="ml-2 h-4 w-4" />
+                    {table.client_id ? "שנה שיוך לקוח" : "שייך ללקוח"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setShowDeleteTableDialog(true)}
+                  >
+                    <Trash2 className="ml-2 h-4 w-4" />
+                    מחק טבלה
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-          )}
-          
-          {/* Google Ads Sync Controls */}
-          {hasGoogleAds && (
-            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-              {isGoogleAdsMakeTable ? (
-                // For Make.com tables, show automatic sync button
-                <>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => syncMakeGoogleAdsMutation.mutate()}
-                    disabled={syncMakeGoogleAdsMutation.isPending}
+            {/* Facebook Insights Sync Controls */}
+            {hasFacebook && (
+              <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => syncFacebookMutation.mutate()}
+                  disabled={syncFacebookMutation.isPending}
+                  className="flex-1 md:flex-none gap-2"
+                >
+                  <Facebook className="h-4 w-4 text-blue-600" />
+                  <RefreshCw
+                    className={`h-4 w-4 ${syncFacebookMutation.isPending ? "animate-spin" : ""}`}
+                  />
+                  {syncFacebookMutation.isPending
+                    ? "מסנכרן Facebook..."
+                    : "סנכרן Facebook"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    setSelectedAdAccount(
+                      table.integration_settings?.ad_account_id || "",
+                    );
+                    setSelectedSyncDateRange(
+                      table.integration_settings?.date_range || "last_30_days",
+                    );
+                    setSelectedCurrency(
+                      normalizeCurrencyCode(
+                        table.integration_settings?.currency,
+                      ),
+                    );
+                    setShowSettingsDialog(true);
+                  }}
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowAlertsDialog(true)}
+                  title="הגדרות התראות"
+                >
+                  <Bell className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {/* Facebook Ecommerce Sync Controls */}
+            {hasFacebookEcommerce && (
+              <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => syncFacebookMutation.mutate()}
+                  disabled={syncFacebookMutation.isPending}
+                  className="flex-1 md:flex-none gap-2"
+                >
+                  <ShoppingCart className="h-4 w-4 text-green-600" />
+                  <RefreshCw
+                    className={`h-4 w-4 ${syncFacebookMutation.isPending ? "animate-spin" : ""}`}
+                  />
+                  {syncFacebookMutation.isPending
+                    ? "מסנכרן מכירות..."
+                    : "סנכרן מכירות"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    setSelectedAdAccount(
+                      table.integration_settings?.ad_account_id || "",
+                    );
+                    setSelectedSyncDateRange(
+                      table.integration_settings?.date_range || "last_30_days",
+                    );
+                    setSelectedCurrency(
+                      normalizeCurrencyCode(
+                        table.integration_settings?.currency,
+                      ),
+                    );
+                    setShowSettingsDialog(true);
+                  }}
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  title="השווה ל-Facebook (Debug)"
+                  onClick={async () => {
+                    setDebugLoading(true);
+                    setDebugDialogOpen(true);
+                    setDebugData(null);
+                    try {
+                      const { data, error } = await supabase.functions.invoke(
+                        "debug-facebook-ecommerce",
+                        {
+                          method: "POST",
+                          body: { table_id: table.id },
+                        },
+                      );
+                      if (error) throw error;
+                      setDebugData(data);
+                    } catch (e: any) {
+                      toast.error("שגיאה בדיבאג: " + e.message);
+                      setDebugDialogOpen(false);
+                    } finally {
+                      setDebugLoading(false);
+                    }
+                  }}
+                >
+                  <Info className="h-4 w-4" />
+                  Debug
+                </Button>
+              </div>
+            )}
+
+            {/* Google Ads Sync Controls */}
+            {hasGoogleAds && (
+              <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+                {isGoogleAdsMakeTable ? (
+                  // For Make.com tables, show automatic sync button
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => syncMakeGoogleAdsMutation.mutate()}
+                      disabled={syncMakeGoogleAdsMutation.isPending}
+                      className="flex-1 md:flex-none gap-2"
+                    >
+                      <GoogleAdsIcon className="h-4 w-4" />
+                      <RefreshCw
+                        className={`h-4 w-4 ${syncMakeGoogleAdsMutation.isPending ? "animate-spin" : ""}`}
+                      />
+                      {syncMakeGoogleAdsMutation.isPending
+                        ? "מסנכרן..."
+                        : "סנכרן Google Ads"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowMakeWebhookDialog(true)}
+                      title="הגדרות Make.com"
+                    >
+                      <Link className="h-4 w-4" />
+                    </Button>
+                  </>
+                ) : (
+                  // For Direct API tables, show sync button
+                  <Button
+                    variant="outline"
+                    onClick={() => syncGoogleAdsMutation.mutate()}
+                    disabled={syncGoogleAdsMutation.isPending}
                     className="flex-1 md:flex-none gap-2"
                   >
                     <GoogleAdsIcon className="h-4 w-4" />
-                    <RefreshCw className={`h-4 w-4 ${syncMakeGoogleAdsMutation.isPending ? 'animate-spin' : ''}`} />
-                    {syncMakeGoogleAdsMutation.isPending ? 'מסנכרן...' : 'סנכרן Google Ads'}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="icon"
-                    onClick={() => setShowMakeWebhookDialog(true)}
-                    title="הגדרות Make.com"
-                  >
-                    <Link className="h-4 w-4" />
-                  </Button>
-                </>
-              ) : (
-                // For Direct API tables, show sync button
-                <Button 
-                  variant="outline" 
-                  onClick={() => syncGoogleAdsMutation.mutate()}
-                  disabled={syncGoogleAdsMutation.isPending}
-                  className="flex-1 md:flex-none gap-2"
-                >
-                  <GoogleAdsIcon className="h-4 w-4" />
-                  <RefreshCw className={`h-4 w-4 ${syncGoogleAdsMutation.isPending ? 'animate-spin' : ''}`} />
-                  {syncGoogleAdsMutation.isPending ? 'מסנכרן Google Ads...' : 'סנכרן Google Ads'}
-                </Button>
-              )}
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => {
-                  setSelectedGoogleAccount(table.integration_settings?.customer_id || '');
-                  setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
-                  setSelectedCurrency(normalizeCurrencyCode(table.integration_settings?.currency));
-                  setShowGoogleSettingsDialog(true);
-                }}
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-          
-          {/* Google Analytics Sync Controls */}
-          {hasGoogleAnalytics && (
-            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-              <Button 
-                variant="outline" 
-                onClick={() => syncGoogleAnalyticsMutation.mutate()}
-                disabled={syncGoogleAnalyticsMutation.isPending || !isDateRangeReadyForSync}
-                className="flex-1 md:flex-none gap-2"
-              >
-                <BarChart3 className="h-4 w-4 text-orange-500" />
-                <RefreshCw className={`h-4 w-4 ${syncGoogleAnalyticsMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncGoogleAnalyticsMutation.isPending ? 'מסנכרן Analytics...' : 'סנכרן Analytics לפי הטווח שנבחר'}
-              </Button>
-            </div>
-          )}
-          
-          {/* Google Search Console Sync Controls */}
-          {hasGoogleSearchConsole && (
-            <div className="flex items-center gap-2 w-full md:w-auto justify-center flex-wrap">
-              <Button 
-                variant="outline" 
-                onClick={() => syncGoogleSearchConsoleMutation.mutate()}
-                disabled={syncGoogleSearchConsoleMutation.isPending || !isDateRangeReadyForSync}
-                className="flex-1 md:flex-none gap-2"
-              >
-                <Search className="h-4 w-4 text-green-600" />
-                <RefreshCw className={`h-4 w-4 ${syncGoogleSearchConsoleMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncGoogleSearchConsoleMutation.isPending ? 'מסנכרן...' : 'סנכרן Search Console לפי הטווח שנבחר'}
-              </Button>
-            </div>
-          )}
-          {hasAhrefs && (
-            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-              <Button
-                variant="outline"
-                onClick={() => syncAhrefsMutation.mutate()}
-                disabled={syncAhrefsMutation.isPending}
-                className="flex-1 md:flex-none gap-2"
-              >
-                <TrendingUp className="h-4 w-4" />
-                <RefreshCw className={`h-4 w-4 ${syncAhrefsMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncAhrefsMutation.isPending 
-                  ? 'מסנכרן...' 
-                  : isSeoReportSource(table?.integration_settings?.data_source)
-                    ? 'סנכרן מדוחות SEO'
-                    : 'סנכרן Ahrefs'}
-              </Button>
-            </div>
-          )}
-          
-          {/* Campaign Search Filter - Only for Facebook/Google Ads tables */}
-          {(hasAnyFacebook || hasGoogleAds) && (
-            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-              <div className="relative">
-                <SearchIcon className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <Input
-                  type="text"
-                  placeholder={ADS_ENTITY_SEARCH_PLACEHOLDERS[adsEntityLevel]}
-                  value={campaignSearch}
-                  onChange={(e) => setCampaignSearch(e.target.value)}
-                  className="w-full md:w-[200px] pr-9 h-9"
-                />
-                {campaignSearch && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7"
-                    onClick={() => setCampaignSearch("")}
-                  >
-                    <X className="h-3 w-3" />
+                    <RefreshCw
+                      className={`h-4 w-4 ${syncGoogleAdsMutation.isPending ? "animate-spin" : ""}`}
+                    />
+                    {syncGoogleAdsMutation.isPending
+                      ? "מסנכרן Google Ads..."
+                      : "סנכרן Google Ads"}
                   </Button>
                 )}
-              </div>
-              
-              {/* AI Analysis Button */}
-              {table && (
-                <AIAnalysisDialog 
-                  tableId={table.id} 
-                  tableName={table.name}
-                  campaignFilter={debouncedCampaignSearch || undefined}
-                />
-              )}
-            </div>
-          )}
-          
-          {/* Main date filter (controls both displayed data and sync range) */}
-          <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-            <Select 
-              value={dateFilter} 
-              onValueChange={(val) => {
-                if (val === 'custom') {
-                  setShowCustomDatePicker(true);
-                } else {
-                  setDateFilter(val);
-                }
-              }}
-            >
-              <SelectTrigger className="w-full md:w-[180px]">
-                <SelectValue>
-                  {dateFilter === 'custom' && customDateRange.from && customDateRange.to
-                    ? `${format(customDateRange.from, 'dd/MM/yy')} - ${format(customDateRange.to, 'dd/MM/yy')}`
-                    : dateFilterOptions.find(o => o.value === dateFilter)?.label || 'בחר תאריך'
-                  }
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {dateFilterOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Custom Date Range Picker Dialog */}
-          <Dialog open={showCustomDatePicker} onOpenChange={setShowCustomDatePicker}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>בחר טווח תאריכים</DialogTitle>
-                <DialogDescription>בחר תאריך התחלה וסיום לסינון הנתונים</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>מתאריך</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !customDateRange.from && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="ml-2 h-4 w-4" />
-                          {customDateRange.from ? format(customDateRange.from, "dd/MM/yyyy") : "בחר תאריך"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={customDateRange.from}
-                          onSelect={(date) => setCustomDateRange(prev => ({ ...prev, from: date }))}
-                          initialFocus
-                          className="p-3 pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div>
-                    <Label>עד תאריך</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !customDateRange.to && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="ml-2 h-4 w-4" />
-                          {customDateRange.to ? format(customDateRange.to, "dd/MM/yyyy") : "בחר תאריך"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={customDateRange.to}
-                          onSelect={(date) => setCustomDateRange(prev => ({ ...prev, to: date }))}
-                          initialFocus
-                          className="p-3 pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-                <Button 
+                <Button
+                  variant="outline"
+                  size="icon"
                   onClick={() => {
-                    if (customDateRange.from && customDateRange.to) {
-                      setDateFilter('custom');
-                      setShowCustomDatePicker(false);
-                    } else {
-                      toast.error('יש לבחור תאריך התחלה וסיום');
-                    }
+                    setSelectedGoogleAccount(
+                      table.integration_settings?.customer_id || "",
+                    );
+                    setSelectedSyncDateRange(
+                      table.integration_settings?.date_range || "last_30_days",
+                    );
+                    setSelectedCurrency(
+                      normalizeCurrencyCode(
+                        table.integration_settings?.currency,
+                      ),
+                    );
+                    setShowGoogleSettingsDialog(true);
                   }}
-                  className="w-full"
-                  disabled={!customDateRange.from || !customDateRange.to}
                 >
-                  החל סינון
+                  <Settings className="h-4 w-4" />
                 </Button>
               </div>
-            </DialogContent>
-          </Dialog>
-          
-          {table && (
-            <SendReportDialog
-              open={showSendReportDialog}
-              onOpenChange={setShowSendReportDialog}
-              screenshotBlob={reportScreenshotBlob}
-              tableName={table.name}
-              tableId={table.id}
-              clientId={table.integration_settings?.clientId || table.integration_settings?.client_id || table.client_id}
-              tenantId={table.tenant_id}
-            />
-          )}
+            )}
 
-          {/* Debug Dialog for Facebook Ecommerce raw data */}
-          <Dialog open={debugDialogOpen} onOpenChange={setDebugDialogOpen}>
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto" dir="ltr">
-              <DialogHeader>
-                <DialogTitle>Facebook Raw Data — Debug</DialogTitle>
-                <DialogDescription>
-                  השווה את ה-action_types הגולמיים שפייסבוק מחזיר עם מה שאתה רואה ב-Ads Manager UI.
-                  שלוש קריאות עם attribution windows שונים.
-                </DialogDescription>
-              </DialogHeader>
-              {debugLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin" />
-                </div>
-              ) : (
-                <pre className="text-xs bg-muted p-4 rounded overflow-x-auto whitespace-pre-wrap" style={{ direction: 'ltr' }}>
-                  {debugData ? JSON.stringify(debugData, null, 2) : 'No data'}
-                </pre>
-              )}
-            </DialogContent>
-          </Dialog>
+            {/* Google Analytics Sync Controls */}
+            {hasGoogleAnalytics && (
+              <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => syncGoogleAnalyticsMutation.mutate()}
+                  disabled={
+                    syncGoogleAnalyticsMutation.isPending ||
+                    !isDateRangeReadyForSync
+                  }
+                  className="flex-1 md:flex-none gap-2"
+                >
+                  <BarChart3 className="h-4 w-4 text-orange-500" />
+                  <RefreshCw
+                    className={`h-4 w-4 ${syncGoogleAnalyticsMutation.isPending ? "animate-spin" : ""}`}
+                  />
+                  {syncGoogleAnalyticsMutation.isPending
+                    ? "מסנכרן Analytics..."
+                    : "סנכרן Analytics לפי הטווח שנבחר"}
+                </Button>
+              </div>
+            )}
 
-          {/* Settings Dialog for Facebook Insights */}
-          <Dialog open={showSettingsDialog} onOpenChange={(open) => {
-            setShowSettingsDialog(open);
-            if (!open) setAdAccountSearch("");
-          }}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>הגדרות טבלה</DialogTitle>
-                <DialogDescription>שנה את חשבון המודעות המסונכרן</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>חשבון מודעות</Label>
-                  {adAccountsLoading ? (
-                    <Skeleton className="h-10 w-full" />
-                  ) : (
-                    <>
-                      <Input
-                        placeholder="חפש חשבון מודעות..."
-                        value={adAccountSearch}
-                        onChange={(e) => setAdAccountSearch(e.target.value)}
-                        className="mb-2"
-                      />
-                      <Select 
-                        value={selectedAdAccount} 
-                        onValueChange={setSelectedAdAccount}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="בחר חשבון מודעות" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(Array.isArray(adAccounts) ? adAccounts : [])
-                            .filter((account: any) => {
-                              const searchTerm = adAccountSearch.trim().toLowerCase();
-                              if (!searchTerm) return true;
+            {/* Google Search Console Sync Controls */}
+            {hasGoogleSearchConsole && (
+              <div className="flex items-center gap-2 w-full md:w-auto justify-center flex-wrap">
+                <Button
+                  variant="outline"
+                  onClick={() => syncGoogleSearchConsoleMutation.mutate()}
+                  disabled={
+                    syncGoogleSearchConsoleMutation.isPending ||
+                    !isDateRangeReadyForSync
+                  }
+                  className="flex-1 md:flex-none gap-2"
+                >
+                  <Search className="h-4 w-4 text-green-600" />
+                  <RefreshCw
+                    className={`h-4 w-4 ${syncGoogleSearchConsoleMutation.isPending ? "animate-spin" : ""}`}
+                  />
+                  {syncGoogleSearchConsoleMutation.isPending
+                    ? "מסנכרן..."
+                    : "סנכרן Search Console לפי הטווח שנבחר"}
+                </Button>
+              </div>
+            )}
+            {hasAhrefs && (
+              <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => syncAhrefsMutation.mutate()}
+                  disabled={syncAhrefsMutation.isPending}
+                  className="flex-1 md:flex-none gap-2"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  <RefreshCw
+                    className={`h-4 w-4 ${syncAhrefsMutation.isPending ? "animate-spin" : ""}`}
+                  />
+                  {syncAhrefsMutation.isPending
+                    ? "מסנכרן..."
+                    : isSeoReportSource(
+                          table?.integration_settings?.data_source,
+                        )
+                      ? "סנכרן מדוחות SEO"
+                      : "סנכרן Ahrefs"}
+                </Button>
+              </div>
+            )}
 
-                              const normalizedSearchTerm = searchTerm.replace(/\D/g, '');
-                              const formattedAccountId = String(account.id || '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
-
-                              return (
-                                account.name?.toLowerCase().includes(searchTerm) ||
-                                formattedAccountId.includes(searchTerm) ||
-                                String(account.id || '').includes(normalizedSearchTerm)
-                              );
-                            })
-                            .map((account: any) => {
-                              const formattedAccountId = String(account.id || '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
-
-                              return (
-                                <SelectItem key={account.id} value={account.id}>
-                                  {account.name} ({formattedAccountId})
-                                </SelectItem>
-                              );
-                            })}
-                        </SelectContent>
-                      </Select>
-                    </>
+            {/* Campaign Search Filter - Only for Facebook/Google Ads tables */}
+            {(hasAnyFacebook || hasGoogleAds) && (
+              <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+                <div className="relative">
+                  <SearchIcon className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder={ADS_ENTITY_SEARCH_PLACEHOLDERS[adsEntityLevel]}
+                    value={campaignSearch}
+                    onChange={(e) => setCampaignSearch(e.target.value)}
+                    className="w-full md:w-[200px] pr-9 h-9"
+                  />
+                  {campaignSearch && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                      onClick={() => setCampaignSearch("")}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
                   )}
                 </div>
-                <div>
-                  <Label>טווח סנכרון</Label>
-                  <Select 
-                    value={selectedSyncDateRange} 
-                    onValueChange={setSelectedSyncDateRange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחר טווח זמן" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {syncDateRangeOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>מטבע תצוגה</Label>
-                  <Select
-                    value={selectedCurrency}
-                    onValueChange={(v) => setSelectedCurrency(normalizeCurrencyCode(v))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחר מטבע" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CURRENCY_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    משנה רק את סמל המטבע המוצג. אין המרת ערכים.
-                  </p>
-                </div>
-                <Button 
-                  onClick={() => updateTableSettingsMutation.mutate(selectedAdAccount)}
-                  disabled={updateTableSettingsMutation.isPending || !selectedAdAccount}
-                  className="w-full"
-                >
-                  {updateTableSettingsMutation.isPending ? 'שומר...' : 'שמור שינויים'}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
 
-          {/* Google Ads Settings Dialog */}
-          <Dialog open={showGoogleSettingsDialog} onOpenChange={setShowGoogleSettingsDialog}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>הגדרות Google Ads</DialogTitle>
-                <DialogDescription>שנה את חשבון Google Ads המסונכרן</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>חשבון Google Ads</Label>
-                  {googleAccountsLoading ? (
-                    <Skeleton className="h-10 w-full" />
-                  ) : (
-                    <Select 
-                      value={selectedGoogleAccount} 
-                      onValueChange={setSelectedGoogleAccount}
+                {/* AI Analysis Button */}
+                {table && (
+                  <AIAnalysisDialog
+                    tableId={table.id}
+                    tableName={table.name}
+                    campaignFilter={debouncedCampaignSearch || undefined}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Main date filter (controls both displayed data and sync range) */}
+            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+              <Select
+                value={dateFilter}
+                onValueChange={(val) => {
+                  if (val === "custom") {
+                    setShowCustomDatePicker(true);
+                  } else {
+                    setDateFilter(val);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full md:w-[180px]">
+                  <SelectValue>
+                    {dateFilter === "custom" &&
+                    customDateRange.from &&
+                    customDateRange.to
+                      ? `${format(customDateRange.from, "dd/MM/yy")} - ${format(customDateRange.to, "dd/MM/yy")}`
+                      : dateFilterOptions.find((o) => o.value === dateFilter)
+                          ?.label || "בחר תאריך"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {dateFilterOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Custom Date Range Picker Dialog */}
+            <Dialog
+              open={showCustomDatePicker}
+              onOpenChange={setShowCustomDatePicker}
+            >
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>בחר טווח תאריכים</DialogTitle>
+                  <DialogDescription>
+                    בחר תאריך התחלה וסיום לסינון הנתונים
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>מתאריך</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !customDateRange.from && "text-muted-foreground",
+                            )}
+                          >
+                            <CalendarIcon className="ml-2 h-4 w-4" />
+                            {customDateRange.from
+                              ? format(customDateRange.from, "dd/MM/yyyy")
+                              : "בחר תאריך"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={customDateRange.from}
+                            onSelect={(date) =>
+                              setCustomDateRange((prev) => ({
+                                ...prev,
+                                from: date,
+                              }))
+                            }
+                            initialFocus
+                            className="p-3 pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div>
+                      <Label>עד תאריך</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !customDateRange.to && "text-muted-foreground",
+                            )}
+                          >
+                            <CalendarIcon className="ml-2 h-4 w-4" />
+                            {customDateRange.to
+                              ? format(customDateRange.to, "dd/MM/yyyy")
+                              : "בחר תאריך"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={customDateRange.to}
+                            onSelect={(date) =>
+                              setCustomDateRange((prev) => ({
+                                ...prev,
+                                to: date,
+                              }))
+                            }
+                            initialFocus
+                            className="p-3 pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      if (customDateRange.from && customDateRange.to) {
+                        setDateFilter("custom");
+                        setShowCustomDatePicker(false);
+                      } else {
+                        toast.error("יש לבחור תאריך התחלה וסיום");
+                      }
+                    }}
+                    className="w-full"
+                    disabled={!customDateRange.from || !customDateRange.to}
+                  >
+                    החל סינון
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {table && (
+              <SendReportDialog
+                open={showSendReportDialog}
+                onOpenChange={setShowSendReportDialog}
+                screenshotBlob={reportScreenshotBlob}
+                tableName={table.name}
+                tableId={table.id}
+                clientId={
+                  table.integration_settings?.clientId ||
+                  table.integration_settings?.client_id ||
+                  table.client_id
+                }
+                tenantId={table.tenant_id}
+              />
+            )}
+
+            {/* Debug Dialog for Facebook Ecommerce raw data */}
+            <Dialog open={debugDialogOpen} onOpenChange={setDebugDialogOpen}>
+              <DialogContent
+                className="max-w-4xl max-h-[80vh] overflow-y-auto"
+                dir="ltr"
+              >
+                <DialogHeader>
+                  <DialogTitle>Facebook Raw Data — Debug</DialogTitle>
+                  <DialogDescription>
+                    השווה את ה-action_types הגולמיים שפייסבוק מחזיר עם מה שאתה
+                    רואה ב-Ads Manager UI. שלוש קריאות עם attribution windows
+                    שונים.
+                  </DialogDescription>
+                </DialogHeader>
+                {debugLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : (
+                  <pre
+                    className="text-xs bg-muted p-4 rounded overflow-x-auto whitespace-pre-wrap"
+                    style={{ direction: "ltr" }}
+                  >
+                    {debugData ? JSON.stringify(debugData, null, 2) : "No data"}
+                  </pre>
+                )}
+              </DialogContent>
+            </Dialog>
+
+            {/* Settings Dialog for Facebook Insights */}
+            <Dialog
+              open={showSettingsDialog}
+              onOpenChange={(open) => {
+                setShowSettingsDialog(open);
+                if (!open) setAdAccountSearch("");
+              }}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>הגדרות טבלה</DialogTitle>
+                  <DialogDescription>
+                    שנה את חשבון המודעות המסונכרן
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label>חשבון מודעות</Label>
+                    {adAccountsLoading ? (
+                      <Skeleton className="h-10 w-full" />
+                    ) : (
+                      <>
+                        <Input
+                          placeholder="חפש חשבון מודעות..."
+                          value={adAccountSearch}
+                          onChange={(e) => setAdAccountSearch(e.target.value)}
+                          className="mb-2"
+                        />
+                        <Select
+                          value={selectedAdAccount}
+                          onValueChange={setSelectedAdAccount}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר חשבון מודעות" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(Array.isArray(adAccounts) ? adAccounts : [])
+                              .filter((account: any) => {
+                                const searchTerm = adAccountSearch
+                                  .trim()
+                                  .toLowerCase();
+                                if (!searchTerm) return true;
+
+                                const normalizedSearchTerm = searchTerm.replace(
+                                  /\D/g,
+                                  "",
+                                );
+                                const formattedAccountId = String(
+                                  account.id || "",
+                                ).replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3");
+
+                                return (
+                                  account.name
+                                    ?.toLowerCase()
+                                    .includes(searchTerm) ||
+                                  formattedAccountId.includes(searchTerm) ||
+                                  String(account.id || "").includes(
+                                    normalizedSearchTerm,
+                                  )
+                                );
+                              })
+                              .map((account: any) => {
+                                const formattedAccountId = String(
+                                  account.id || "",
+                                ).replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3");
+
+                                return (
+                                  <SelectItem
+                                    key={account.id}
+                                    value={account.id}
+                                  >
+                                    {account.name} ({formattedAccountId})
+                                  </SelectItem>
+                                );
+                              })}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    )}
+                  </div>
+                  <div>
+                    <Label>טווח סנכרון</Label>
+                    <Select
+                      value={selectedSyncDateRange}
+                      onValueChange={setSelectedSyncDateRange}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="בחר חשבון Google Ads" />
+                        <SelectValue placeholder="בחר טווח זמן" />
                       </SelectTrigger>
                       <SelectContent>
-                        {(Array.isArray(googleAdsAccounts) ? googleAdsAccounts : []).map((account: any) => (
-                          <SelectItem key={account.id} value={String(account.id)}>
-                            {account.name} ({account.id})
+                        {syncDateRangeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  )}
-                </div>
-                <div>
-                  <Label>טווח סנכרון</Label>
-                  <Select 
-                    value={selectedSyncDateRange} 
-                    onValueChange={setSelectedSyncDateRange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחר טווח זמן" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {syncDateRangeOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>מזהה חשבון נוכחי</Label>
-                  <Input 
-                    value={selectedGoogleAccount} 
-                    onChange={(e) => setSelectedGoogleAccount(e.target.value)}
-                    placeholder="הזן מזהה חשבון Google Ads"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">ניתן להזין ידנית או לבחור מהרשימה למעלה</p>
-                </div>
-                <div>
-                  <Label>מטבע תצוגה</Label>
-                  <Select
-                    value={selectedCurrency}
-                    onValueChange={(v) => setSelectedCurrency(normalizeCurrencyCode(v))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחר מטבע" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CURRENCY_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    משנה רק את סמל המטבע המוצג. אין המרת ערכים.
-                  </p>
-                </div>
-                <Button 
-                  onClick={async () => {
-                    if (!table?.id || !selectedGoogleAccount) return;
-                    const cleanId = selectedGoogleAccount.replace(/\D/g, '');
-                    const currency = normalizeCurrencyCode(selectedCurrency);
-                    try {
-                      // Merge-only patch so sync metadata (last_sync_at, manager_id, diag)
-                      // is not wiped by a stale full settings blob from the UI.
-                      const { error: tableError } = await supabase.functions.invoke('crm-tables', {
-                        method: 'PATCH',
-                        body: {
-                          table_id: table.id,
-                          integration_settings: {
-                            customer_id: cleanId,
-                            date_range: selectedSyncDateRange,
-                            currency,
-                          },
-                        },
-                      });
-                      if (tableError) throw tableError;
-
-                      // Also link the account to the client card so syncs/refresh work
-                      const linkedClientId = table.client_id || table.integration_settings?.clientId;
-                      if (linkedClientId) {
-                        const { error: clientError } = await supabase
-                          .from('clients')
-                          .update({ google_ads_account_id: cleanId })
-                          .eq('id', linkedClientId);
-                        if (clientError) {
-                          console.error('Failed to link account to client:', clientError);
-                          toast.warning('הטבלה עודכנה, אך השיוך ללקוח נכשל: ' + clientError.message);
-                        }
+                  </div>
+                  <div>
+                    <Label>מטבע תצוגה</Label>
+                    <Select
+                      value={selectedCurrency}
+                      onValueChange={(v) =>
+                        setSelectedCurrency(normalizeCurrencyCode(v))
                       }
-
-                      queryClient.setQueryData(['crm-tables', tenantId, tableSlug], (old: CrmTable | null | undefined) => {
-                        if (!old) return old;
-                        return {
-                          ...old,
-                          integration_settings: {
-                            ...(old.integration_settings || {}),
-                            customer_id: cleanId,
-                            date_range: selectedSyncDateRange,
-                            currency,
-                          },
-                        };
-                      });
-                      setSelectedCurrency(currency);
-                      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-                      queryClient.invalidateQueries({ queryKey: ['clients', tenantId] });
-                      setShowGoogleSettingsDialog(false);
-                      toast.success(linkedClientId ? 'הגדרות נשמרו ושויכו ללקוח' : 'הגדרות Google Ads עודכנו בהצלחה');
-                    } catch (err: any) {
-                      toast.error('שגיאה בעדכון: ' + (err?.message || String(err)));
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר מטבע" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CURRENCY_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      משנה רק את סמל המטבע המוצג. אין המרת ערכים.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() =>
+                      updateTableSettingsMutation.mutate(selectedAdAccount)
                     }
-                  }}
-                  disabled={!selectedGoogleAccount}
-                  className="w-full"
-                >
-                  שמור שינויים
+                    disabled={
+                      updateTableSettingsMutation.isPending ||
+                      !selectedAdAccount
+                    }
+                    className="w-full"
+                  >
+                    {updateTableSettingsMutation.isPending
+                      ? "שומר..."
+                      : "שמור שינויים"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Google Ads Settings Dialog */}
+            <Dialog
+              open={showGoogleSettingsDialog}
+              onOpenChange={setShowGoogleSettingsDialog}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>הגדרות Google Ads</DialogTitle>
+                  <DialogDescription>
+                    שנה את חשבון Google Ads המסונכרן
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label>חשבון Google Ads</Label>
+                    {googleAccountsLoading ? (
+                      <Skeleton className="h-10 w-full" />
+                    ) : (
+                      <Select
+                        value={selectedGoogleAccount}
+                        onValueChange={setSelectedGoogleAccount}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר חשבון Google Ads" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Array.isArray(googleAdsAccounts)
+                            ? googleAdsAccounts
+                            : []
+                          ).map((account: any) => (
+                            <SelectItem
+                              key={account.id}
+                              value={String(account.id)}
+                            >
+                              {account.name} ({account.id})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <div>
+                    <Label>טווח סנכרון</Label>
+                    <Select
+                      value={selectedSyncDateRange}
+                      onValueChange={setSelectedSyncDateRange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר טווח זמן" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {syncDateRangeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>מזהה חשבון נוכחי</Label>
+                    <Input
+                      value={selectedGoogleAccount}
+                      onChange={(e) => setSelectedGoogleAccount(e.target.value)}
+                      placeholder="הזן מזהה חשבון Google Ads"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      ניתן להזין ידנית או לבחור מהרשימה למעלה
+                    </p>
+                  </div>
+                  <div>
+                    <Label>מטבע תצוגה</Label>
+                    <Select
+                      value={selectedCurrency}
+                      onValueChange={(v) =>
+                        setSelectedCurrency(normalizeCurrencyCode(v))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר מטבע" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CURRENCY_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      משנה רק את סמל המטבע המוצג. אין המרת ערכים.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      if (!table?.id || !selectedGoogleAccount) return;
+                      const cleanId = selectedGoogleAccount.replace(/\D/g, "");
+                      const currency = normalizeCurrencyCode(selectedCurrency);
+                      try {
+                        // Merge-only patch so sync metadata (last_sync_at, manager_id, diag)
+                        // is not wiped by a stale full settings blob from the UI.
+                        const { error: tableError } =
+                          await supabase.functions.invoke("crm-tables", {
+                            method: "PATCH",
+                            body: {
+                              table_id: table.id,
+                              integration_settings: {
+                                customer_id: cleanId,
+                                date_range: selectedSyncDateRange,
+                                currency,
+                              },
+                            },
+                          });
+                        if (tableError) throw tableError;
+
+                        // Also link the account to the client card so syncs/refresh work
+                        const linkedClientId =
+                          table.client_id ||
+                          table.integration_settings?.clientId;
+                        if (linkedClientId) {
+                          const { error: clientError } = await supabase
+                            .from("clients")
+                            .update({ google_ads_account_id: cleanId })
+                            .eq("id", linkedClientId);
+                          if (clientError) {
+                            console.error(
+                              "Failed to link account to client:",
+                              clientError,
+                            );
+                            toast.warning(
+                              "הטבלה עודכנה, אך השיוך ללקוח נכשל: " +
+                                clientError.message,
+                            );
+                          }
+                        }
+
+                        queryClient.setQueryData(
+                          ["crm-tables", tenantId, tableSlug],
+                          (old: CrmTable | null | undefined) => {
+                            if (!old) return old;
+                            return {
+                              ...old,
+                              integration_settings: {
+                                ...(old.integration_settings || {}),
+                                customer_id: cleanId,
+                                date_range: selectedSyncDateRange,
+                                currency,
+                              },
+                            };
+                          },
+                        );
+                        setSelectedCurrency(currency);
+                        queryClient.invalidateQueries({
+                          queryKey: ["crm-tables", tenantId],
+                        });
+                        queryClient.invalidateQueries({
+                          queryKey: ["clients", tenantId],
+                        });
+                        setShowGoogleSettingsDialog(false);
+                        toast.success(
+                          linkedClientId
+                            ? "הגדרות נשמרו ושויכו ללקוח"
+                            : "הגדרות Google Ads עודכנו בהצלחה",
+                        );
+                      } catch (err: any) {
+                        toast.error(
+                          "שגיאה בעדכון: " + (err?.message || String(err)),
+                        );
+                      }
+                    }}
+                    disabled={!selectedGoogleAccount}
+                    className="w-full"
+                  >
+                    שמור שינויים
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {table?.id && table?.tenant_id && (
+              <ShareTableDialog
+                tableId={table.id}
+                tableName={table.name}
+                tenantId={table.tenant_id}
+                clientId={
+                  table.client_id ||
+                  table.integration_settings?.clientId ||
+                  null
+                }
+              />
+            )}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <MoreVertical className="h-4 w-4" />
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={handleSendReport}
+                  disabled={isCapturingScreenshot}
+                >
+                  <Send className="ml-2 h-4 w-4" />
+                  {isCapturingScreenshot ? "מצלם..." : "שלח עדכון ללקוח"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowEditTableDialog(true)}>
+                  <Settings className="ml-2 h-4 w-4" />
+                  ערוך טבלה (חיבור, לקוח וסוכנות)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          {table?.id && table?.tenant_id && (
-            <ShareTableDialog
-              tableId={table.id}
-              tableName={table.name}
-              tenantId={table.tenant_id}
-              clientId={table.client_id || table.integration_settings?.clientId || null}
-            />
-          )}
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleSendReport} disabled={isCapturingScreenshot}>
-                <Send className="ml-2 h-4 w-4" />
-                {isCapturingScreenshot ? 'מצלם...' : 'שלח עדכון ללקוח'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowEditTableDialog(true)}>
-                <Settings className="ml-2 h-4 w-4" />
-                ערוך טבלה (חיבור, לקוח וסוכנות)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {table && (
-            <EditTableDialog
-              open={showEditTableDialog}
-              onOpenChange={setShowEditTableDialog}
-              table={table}
-              tenantId={table.tenant_id}
-            />
-          )}
+            {table && (
+              <EditTableDialog
+                open={showEditTableDialog}
+                onOpenChange={setShowEditTableDialog}
+                table={table}
+                tenantId={table.tenant_id}
+              />
+            )}
+          </div>
         </div>
-      </div>
       )}
 
       {/* Active Alerts for Facebook Insights */}
       {!isEmbed && hasFacebook && table?.id && displayRecords.length > 0 && (
-        <ActiveAlerts 
-          tableId={table.id} 
-          records={filterRecordsByEntityLevel(displayRecords, 'campaign')} 
+        <ActiveAlerts
+          tableId={table.id}
+          records={filterRecordsByEntityLevel(displayRecords, "campaign")}
           integrationSettings={table.integration_settings}
         />
       )}
@@ -2520,7 +3025,13 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       )}
 
       {isAdsReportTable && (
-        <Tabs value={adsReportView} onValueChange={(value) => setAdsReportView(value as "summary" | "weekly")} className="mb-4">
+        <Tabs
+          value={adsReportView}
+          onValueChange={(value) =>
+            setAdsReportView(value as "summary" | "weekly")
+          }
+          className="mb-4"
+        >
           <TabsList dir="rtl">
             <TabsTrigger value="summary">הדוח</TabsTrigger>
             <TabsTrigger value="weekly">השוואה שבועית</TabsTrigger>
@@ -2531,939 +3042,1754 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       {isAdsReportTable && adsReportView === "weekly" && (
         <WeeklyCampaignComparison
           records={weeklyRecords}
-          defaultSource={table?.integration_type as "facebook_insights" | "facebook_ecommerce" | "google_ads"}
+          defaultSource={
+            table?.integration_type as
+              "facebook_insights" | "facebook_ecommerce" | "google_ads"
+          }
           currency={getCurrencySymbol(table?.integration_settings?.currency)}
           isLoading={weeklyRecordsPending}
           sourceModes={{
-            facebook_insights: table?.integration_settings?.campaign_type === "leads" ? "leads" : undefined,
+            facebook_insights:
+              table?.integration_settings?.campaign_type === "leads"
+                ? "leads"
+                : undefined,
             facebook_ecommerce: "ecommerce",
-            google_ads: table?.integration_settings?.campaign_type === "ecommerce" ? "ecommerce" : "leads",
+            google_ads:
+              table?.integration_settings?.campaign_type === "ecommerce"
+                ? "ecommerce"
+                : "leads",
           }}
         />
       )}
 
       {(!isAdsReportTable || adsReportView === "summary") && (
-      <div ref={summaryTablesRef}>
-      {(hasAnyFacebook || hasGoogleAds) && displayRecords.length > 0 && (
-        <div className="mb-3">
-          <AdsEntityLevelTabs
-            value={adsEntityLevel}
-            onChange={setAdsEntityLevel}
-          />
-        </div>
-      )}
-      {(hasAnyFacebook || hasGoogleAds) && adsEntityLevel !== 'campaign' && entityLevelRecords.length === 0 && displayRecords.length > 0 && (
-        <Card className="mb-4 border-dashed">
-          <div className="p-6 text-center text-sm text-muted-foreground" dir="rtl">
-            אין עדיין נתונים ברמת {ADS_ENTITY_LEVEL_LABELS[adsEntityLevel]}.
-            {' '}הרץ <strong>סנכרן</strong> {hasGoogleAds ? 'Google Ads' : 'Facebook'} כדי לטעון את הרמה הזו.
-          </div>
-        </Card>
-      )}
-      {/* Summary Stats for Facebook Insights (split by campaign type) */}
-      {hasFacebook && filteredRecords && filteredRecords.length > 0 && (
-        (() => {
-          const entityColumnLabel = adsEntityLevel === 'ad'
-            ? 'מודעה'
-            : adsEntityLevel === 'adset'
-              ? 'קבוצת מודעות'
-              : 'קמפיין';
-          const entityHeader = (suffix: string) =>
-            adsEntityLevel === 'campaign' ? `קמפיין ${suffix}` : entityColumnLabel;
-          const campaignGroups = filteredRecords.reduce((acc, record) => {
-            const groupKey = getEntityGroupKey(record.data, adsEntityLevel);
-            const campaignName = getEntityDisplayName(record.data, adsEntityLevel);
-            if (!acc[groupKey]) {
-              acc[groupKey] = {
-                name: campaignName,
-                impressions: 0,
-                clicks: 0,
-                leads: 0,
-                spend: 0,
-                purchases: 0,
-                purchase_value: 0,
-                add_to_cart: 0,
-                campaign_type: 'other' as 'lead' | 'ecommerce' | 'traffic' | 'other',
-              };
-            }
+        <div ref={summaryTablesRef}>
+          {(hasAnyFacebook || hasGoogleAds) && displayRecords.length > 0 && (
+            <div className="mb-3">
+              <AdsEntityLevelTabs
+                value={adsEntityLevel}
+                onChange={setAdsEntityLevel}
+              />
+            </div>
+          )}
+          {(hasAnyFacebook || hasGoogleAds) &&
+            adsEntityLevel !== "campaign" &&
+            entityLevelRecords.length === 0 &&
+            displayRecords.length > 0 && (
+              <Card className="mb-4 border-dashed">
+                <div
+                  className="p-6 text-center text-sm text-muted-foreground"
+                  dir="rtl"
+                >
+                  אין עדיין נתונים ברמת{" "}
+                  {ADS_ENTITY_LEVEL_LABELS[adsEntityLevel]}. הרץ{" "}
+                  <strong>סנכרן</strong>{" "}
+                  {hasGoogleAds ? "Google Ads" : "Facebook"} כדי לטעון את הרמה
+                  הזו.
+                </div>
+              </Card>
+            )}
+          {/* Summary Stats for Facebook Insights (split by campaign type) */}
+          {hasFacebook &&
+            filteredRecords &&
+            filteredRecords.length > 0 &&
+            (() => {
+              const entityColumnLabel =
+                adsEntityLevel === "ad"
+                  ? "מודעה"
+                  : adsEntityLevel === "adset"
+                    ? "קבוצת מודעות"
+                    : "קמפיין";
+              const entityHeader = (suffix: string) =>
+                adsEntityLevel === "campaign"
+                  ? `קמפיין ${suffix}`
+                  : entityColumnLabel;
+              const campaignGroups = filteredRecords.reduce(
+                (acc, record) => {
+                  const groupKey = getEntityGroupKey(
+                    record.data,
+                    adsEntityLevel,
+                  );
+                  const campaignName = getEntityDisplayName(
+                    record.data,
+                    adsEntityLevel,
+                  );
+                  if (!acc[groupKey]) {
+                    acc[groupKey] = {
+                      name: campaignName,
+                      impressions: 0,
+                      clicks: 0,
+                      leads: 0,
+                      spend: 0,
+                      purchases: 0,
+                      purchase_value: 0,
+                      add_to_cart: 0,
+                      campaign_type: "other" as
+                        "lead" | "ecommerce" | "traffic" | "other",
+                    };
+                  }
 
-            const rowType = effectiveFacebookCampaignType(record.data || {});
-            if (rowType === 'ecommerce' || rowType === 'lead' || rowType === 'traffic') {
-              acc[groupKey].campaign_type = rowType as 'lead' | 'ecommerce' | 'traffic';
-            }
+                  const rowType = effectiveFacebookCampaignType(
+                    record.data || {},
+                  );
+                  if (
+                    rowType === "ecommerce" ||
+                    rowType === "lead" ||
+                    rowType === "traffic"
+                  ) {
+                    acc[groupKey].campaign_type = rowType as
+                      "lead" | "ecommerce" | "traffic";
+                  }
 
-            acc[groupKey].impressions += Number(record.data?.impressions) || 0;
-            acc[groupKey].clicks += Number(record.data?.clicks) || 0;
-            const effectiveLeads = getLeadsFromData(record.data || {});
-            acc[groupKey].leads += effectiveLeads;
-            acc[groupKey].spend += Number(record.data?.spend) || 0;
-            acc[groupKey].purchases += Number(record.data?.purchases) || 0;
-            acc[groupKey].purchase_value += Number(record.data?.purchase_value) || 0;
-            acc[groupKey].add_to_cart += Number(record.data?.add_to_cart) || 0;
+                  acc[groupKey].impressions +=
+                    Number(record.data?.impressions) || 0;
+                  acc[groupKey].clicks += Number(record.data?.clicks) || 0;
+                  const effectiveLeads = getLeadsFromData(record.data || {});
+                  acc[groupKey].leads += effectiveLeads;
+                  acc[groupKey].spend += Number(record.data?.spend) || 0;
+                  acc[groupKey].purchases +=
+                    Number(record.data?.purchases) || 0;
+                  acc[groupKey].purchase_value +=
+                    Number(record.data?.purchase_value) || 0;
+                  acc[groupKey].add_to_cart +=
+                    Number(record.data?.add_to_cart) || 0;
 
-            return acc;
-          }, {} as Record<string, {
-            name: string;
-            impressions: number;
-            clicks: number;
-            leads: number;
-            spend: number;
-            purchases: number;
-            purchase_value: number;
-            add_to_cart: number;
-            campaign_type: 'lead' | 'ecommerce' | 'traffic' | 'other';
-          }>);
+                  return acc;
+                },
+                {} as Record<
+                  string,
+                  {
+                    name: string;
+                    impressions: number;
+                    clicks: number;
+                    leads: number;
+                    spend: number;
+                    purchases: number;
+                    purchase_value: number;
+                    add_to_cart: number;
+                    campaign_type: "lead" | "ecommerce" | "traffic" | "other";
+                  }
+                >,
+              );
 
-          const entries = Object.entries(campaignGroups);
-          // Respect table-level campaign_type setting: if 'leads', NEVER show ecommerce table
-          // (even if Facebook reports stray purchase events from a tracking pixel)
-          const tableCampaignType = String(table?.integration_settings?.campaign_type || '').toLowerCase();
-          const forceLeadsOnly = tableCampaignType === 'leads' || tableCampaignType === 'lead';
-          const trafficCampaigns = entries.filter(([, data]) => data.campaign_type === 'traffic');
-          const ecommerceCampaigns = forceLeadsOnly ? [] : entries.filter(([, data]) =>
-            data.campaign_type !== 'traffic' && (
-              (data.campaign_type === 'ecommerce' ||
-              data.purchases > 0 ||
-              data.purchase_value > 0) &&
-              // If campaign has leads but no purchases/revenue, it's a lead campaign
-              // even if it has add_to_cart events
-              !(data.leads > 0 && data.purchases === 0 && data.purchase_value === 0)
-            )
-          );
-          // Lead campaigns: exclude traffic + ecommerce
-          const leadCampaigns = (forceLeadsOnly ? entries : entries.filter(([, data]) =>
-            data.campaign_type !== 'traffic' &&
-            !(
-              (data.campaign_type === 'ecommerce' ||
-              data.purchases > 0 ||
-              data.purchase_value > 0) &&
-              !(data.leads > 0 && data.purchases === 0 && data.purchase_value === 0)
-            )
-          )).filter(([, data]) => data.campaign_type !== 'traffic');
+              const entries = Object.entries(campaignGroups);
+              // Respect table-level campaign_type setting: if 'leads', NEVER show ecommerce table
+              // (even if Facebook reports stray purchase events from a tracking pixel)
+              const tableCampaignType = String(
+                table?.integration_settings?.campaign_type || "",
+              ).toLowerCase();
+              const forceLeadsOnly =
+                tableCampaignType === "leads" || tableCampaignType === "lead";
+              const trafficCampaigns = entries.filter(
+                ([, data]) => data.campaign_type === "traffic",
+              );
+              const ecommerceCampaigns = forceLeadsOnly
+                ? []
+                : entries.filter(
+                    ([, data]) =>
+                      data.campaign_type !== "traffic" &&
+                      (data.campaign_type === "ecommerce" ||
+                        data.purchases > 0 ||
+                        data.purchase_value > 0) &&
+                      // If campaign has leads but no purchases/revenue, it's a lead campaign
+                      // even if it has add_to_cart events
+                      !(
+                        data.leads > 0 &&
+                        data.purchases === 0 &&
+                        data.purchase_value === 0
+                      ),
+                  );
+              // Lead campaigns: exclude traffic + ecommerce
+              const leadCampaigns = (
+                forceLeadsOnly
+                  ? entries
+                  : entries.filter(
+                      ([, data]) =>
+                        data.campaign_type !== "traffic" &&
+                        !(
+                          (data.campaign_type === "ecommerce" ||
+                            data.purchases > 0 ||
+                            data.purchase_value > 0) &&
+                          !(
+                            data.leads > 0 &&
+                            data.purchases === 0 &&
+                            data.purchase_value === 0
+                          )
+                        ),
+                    )
+              ).filter(([, data]) => data.campaign_type !== "traffic");
 
-          const currency = getCurrencySymbol(table.integration_settings?.currency);
+              const currency = getCurrencySymbol(
+                table.integration_settings?.currency,
+              );
 
-          const leadTotals = leadCampaigns.reduce((acc, [, campaign]) => ({
-            impressions: acc.impressions + campaign.impressions,
-            clicks: acc.clicks + campaign.clicks,
-            leads: acc.leads + campaign.leads,
-            spend: acc.spend + campaign.spend,
-          }), { impressions: 0, clicks: 0, leads: 0, spend: 0 });
+              const leadTotals = leadCampaigns.reduce(
+                (acc, [, campaign]) => ({
+                  impressions: acc.impressions + campaign.impressions,
+                  clicks: acc.clicks + campaign.clicks,
+                  leads: acc.leads + campaign.leads,
+                  spend: acc.spend + campaign.spend,
+                }),
+                { impressions: 0, clicks: 0, leads: 0, spend: 0 },
+              );
 
-          const ecommerceTotals = ecommerceCampaigns.reduce((acc, [, campaign]) => ({
-            impressions: acc.impressions + campaign.impressions,
-            clicks: acc.clicks + campaign.clicks,
-            spend: acc.spend + campaign.spend,
-            purchases: acc.purchases + campaign.purchases,
-            purchase_value: acc.purchase_value + campaign.purchase_value,
-            add_to_cart: acc.add_to_cart + campaign.add_to_cart,
-          }), { impressions: 0, clicks: 0, spend: 0, purchases: 0, purchase_value: 0, add_to_cart: 0 });
-
-          return (
-            <>
-              {ecommerceCampaigns.length > 0 && (() => {
-                // Dynamic columns: hide ROAS / purchase_value / add_to_cart when the
-                // account doesn't track them (e.g. sales page without cart, no pixel value).
-                const showValueCols = ecommerceTotals.purchase_value > 0 || ecommerceTotals.add_to_cart > 0;
-                return (
-                <Card className="mb-4 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm" dir="rtl">
-                      <thead className="bg-muted/50 border-b">
-                        <tr>
-                          <th className="p-2 text-right font-medium">{entityHeader('איקומרס')}</th>
-                          <th className="p-2 text-center font-medium">חשיפות</th>
-                          <th className="p-2 text-center font-medium">קליקים</th>
-                          <th className="p-2 text-center font-medium">הוצאה</th>
-                          {showValueCols && <th className="p-2 text-center font-medium">הוספות לעגלה</th>}
-                          <th className="p-2 text-center font-medium">רכישות</th>
-                          {showValueCols && <th className="p-2 text-center font-medium">ערך רכישות</th>}
-                          {!showValueCols && <th className="p-2 text-center font-medium">עלות לרכישה</th>}
-                          {showValueCols && <th className="p-2 text-center font-medium">ROAS</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ecommerceCampaigns.map(([groupKey, data]) => {
-                          const roas = data.spend > 0 ? data.purchase_value / data.spend : 0;
-                          const costPerPurchase = data.purchases > 0 ? data.spend / data.purchases : 0;
-                          return (
-                            <tr key={`ecom-${groupKey}`} className="border-b hover:bg-muted/30">
-                              <td className="p-2 text-right font-medium">{data.name}</td>
-                              <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
-                              <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
-                              <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                              {showValueCols && <td className="p-2 text-center text-orange-600">{data.add_to_cart.toLocaleString('he-IL')}</td>}
-                              <td className="p-2 text-center text-green-600 font-medium">{data.purchases.toLocaleString('he-IL')}</td>
-                              {showValueCols && <td className="p-2 text-center text-green-600">{currency}{data.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>}
-                              {!showValueCols && <td className="p-2 text-center text-blue-600 font-medium">{currency}{costPerPurchase.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>}
-                              {showValueCols && <td className="p-2 text-center text-blue-600 font-medium">{roas.toLocaleString('he-IL', { maximumFractionDigits: 1 })}x</td>}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot className="bg-primary/10 font-bold">
-                        <tr>
-                          <td className="p-2 text-right">סה״כ</td>
-                          <td className="p-2 text-center">{ecommerceTotals.impressions.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">{ecommerceTotals.clicks.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">{currency}{ecommerceTotals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          {showValueCols && <td className="p-2 text-center text-orange-600">{ecommerceTotals.add_to_cart.toLocaleString('he-IL')}</td>}
-                          <td className="p-2 text-center text-green-600">{ecommerceTotals.purchases.toLocaleString('he-IL')}</td>
-                          {showValueCols && <td className="p-2 text-center text-green-600">{currency}{ecommerceTotals.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>}
-                          {!showValueCols && <td className="p-2 text-center text-blue-600">{currency}{(ecommerceTotals.purchases > 0 ? ecommerceTotals.spend / ecommerceTotals.purchases : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>}
-                          {showValueCols && <td className="p-2 text-center text-blue-600">{(ecommerceTotals.spend > 0 ? ecommerceTotals.purchase_value / ecommerceTotals.spend : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}x</td>}
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </Card>
-                );
-              })()}
-
-              {leadCampaigns.length > 0 && (
-                <Card className="mb-4 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm" dir="rtl">
-                      <thead className="bg-muted/50 border-b">
-                        <tr>
-                          <th className="p-2 text-right font-medium">{entityHeader('לידים')}</th>
-                          <th className="p-2 text-center font-medium">חשיפות</th>
-                          <th className="p-2 text-center font-medium">קליקים</th>
-                          <th className="p-2 text-center font-medium">לידים</th>
-                          <th className="p-2 text-center font-medium">הוצאה</th>
-                          <th className="p-2 text-center font-medium">עלות לליד</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {leadCampaigns.map(([groupKey, data]) => {
-                          const costPerLead = data.leads > 0 ? data.spend / data.leads : 0;
-                          return (
-                            <tr key={`lead-${groupKey}`} className="border-b hover:bg-muted/30">
-                              <td className="p-2 text-right font-medium">{data.name}</td>
-                              <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
-                              <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
-                              <td className="p-2 text-center text-green-600 font-medium">{data.leads.toLocaleString('he-IL')}</td>
-                              <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                              <td className="p-2 text-center text-blue-600 font-medium">{currency}{costPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot className="bg-primary/10 font-bold">
-                        <tr>
-                          <td className="p-2 text-right">סה״כ</td>
-                          <td className="p-2 text-center">{leadTotals.impressions.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">{leadTotals.clicks.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-green-600">{leadTotals.leads.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">{currency}{leadTotals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center text-blue-600">{currency}{(leadTotals.leads > 0 ? leadTotals.spend / leadTotals.leads : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </Card>
-              )}
-
-              {trafficCampaigns.length > 0 && (() => {
-                const trafficTotals = trafficCampaigns.reduce((acc, [, c]) => ({
-                  impressions: acc.impressions + c.impressions,
-                  clicks: acc.clicks + c.clicks,
-                  spend: acc.spend + c.spend,
-                }), { impressions: 0, clicks: 0, spend: 0 });
-                return (
-                <Card className="mb-4 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm" dir="rtl">
-                      <thead className="bg-muted/50 border-b">
-                        <tr>
-                          <th className="p-2 text-right font-medium">{entityHeader('טראפיק')}</th>
-                          <th className="p-2 text-center font-medium">חשיפות</th>
-                          <th className="p-2 text-center font-medium">קליקים</th>
-                          <th className="p-2 text-center font-medium">הוצאה</th>
-                          <th className="p-2 text-center font-medium">CTR</th>
-                          <th className="p-2 text-center font-medium">עלות לקליק</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {trafficCampaigns.map(([groupKey, data]) => {
-                          const ctr = data.impressions > 0 ? (data.clicks / data.impressions) * 100 : 0;
-                          const cpc = data.clicks > 0 ? data.spend / data.clicks : 0;
-                          return (
-                            <tr key={`traffic-${groupKey}`} className="border-b hover:bg-muted/30">
-                              <td className="p-2 text-right font-medium">{data.name}</td>
-                              <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
-                              <td className="p-2 text-center text-green-600 font-medium">{data.clicks.toLocaleString('he-IL')}</td>
-                              <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                              <td className="p-2 text-center">{ctr.toLocaleString('he-IL', { maximumFractionDigits: 2 })}%</td>
-                              <td className="p-2 text-center text-blue-600 font-medium">{currency}{cpc.toLocaleString('he-IL', { maximumFractionDigits: 2 })}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot className="bg-primary/10 font-bold">
-                        <tr>
-                          <td className="p-2 text-right">סה״כ</td>
-                          <td className="p-2 text-center">{trafficTotals.impressions.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-green-600">{trafficTotals.clicks.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">{currency}{trafficTotals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center">{(trafficTotals.impressions > 0 ? (trafficTotals.clicks / trafficTotals.impressions) * 100 : 0).toLocaleString('he-IL', { maximumFractionDigits: 2 })}%</td>
-                          <td className="p-2 text-center text-blue-600">{currency}{(trafficTotals.clicks > 0 ? trafficTotals.spend / trafficTotals.clicks : 0).toLocaleString('he-IL', { maximumFractionDigits: 2 })}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </Card>
-                );
-              })()}
-
-              {leadCampaigns.length > 0 && table?.id && (
-                <ManualROICard
-                  tableId={table.id}
-                  spend={leadTotals.spend}
-                  leads={leadTotals.leads}
-                  currency={currency}
-                  initialClosures={table?.integration_settings?.manual_roi?.closures ?? null}
-                  initialRevenue={table?.integration_settings?.manual_roi?.revenue ?? null}
-                  integrationSettings={table?.integration_settings}
-                  readOnly={isEmbed}
-                />
-              )}
-            </>
-          );
-        })()
-      )}
-
-      {/* Summary Stats for Facebook Ecommerce */}
-      {hasFacebookEcommerce && filteredRecords && filteredRecords.length > 0 && (
-        <Card className="mb-4 overflow-hidden">
-          {(() => {
-            const entityColumnLabel = adsEntityLevel === 'ad'
-              ? 'מודעה'
-              : adsEntityLevel === 'adset'
-                ? 'קבוצת מודעות'
-                : 'קמפיין';
-            const campaignGroups = filteredRecords.reduce((acc, record) => {
-              const groupKey = getEntityGroupKey(record.data, adsEntityLevel);
-              const campaignName = getEntityDisplayName(record.data, adsEntityLevel);
-              if (!acc[groupKey]) {
-                acc[groupKey] = {
-                  name: campaignName,
+              const ecommerceTotals = ecommerceCampaigns.reduce(
+                (acc, [, campaign]) => ({
+                  impressions: acc.impressions + campaign.impressions,
+                  clicks: acc.clicks + campaign.clicks,
+                  spend: acc.spend + campaign.spend,
+                  purchases: acc.purchases + campaign.purchases,
+                  purchase_value: acc.purchase_value + campaign.purchase_value,
+                  add_to_cart: acc.add_to_cart + campaign.add_to_cart,
+                }),
+                {
                   impressions: 0,
                   clicks: 0,
                   spend: 0,
                   purchases: 0,
                   purchase_value: 0,
                   add_to_cart: 0,
-                };
-              }
-              acc[groupKey].impressions += Number(record.data?.impressions) || 0;
-              acc[groupKey].clicks += Number(record.data?.clicks) || 0;
-              acc[groupKey].spend += Number(record.data?.spend) || 0;
-              acc[groupKey].purchases += Number(record.data?.purchases) || 0;
-              acc[groupKey].purchase_value += Number(record.data?.purchase_value) || 0;
-              acc[groupKey].add_to_cart += Number(record.data?.add_to_cart) || 0;
-              return acc;
-            }, {} as Record<string, { name: string; impressions: number; clicks: number; spend: number; purchases: number; purchase_value: number; add_to_cart: number }>);
+                },
+              );
 
-            const totals = Object.values(campaignGroups).reduce((acc, campaign) => ({
-              impressions: acc.impressions + campaign.impressions,
-              clicks: acc.clicks + campaign.clicks,
-              spend: acc.spend + campaign.spend,
-              purchases: acc.purchases + campaign.purchases,
-              purchase_value: acc.purchase_value + campaign.purchase_value,
-              add_to_cart: acc.add_to_cart + campaign.add_to_cart,
-            }), { impressions: 0, clicks: 0, spend: 0, purchases: 0, purchase_value: 0, add_to_cart: 0 });
-
-            return (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm" dir="rtl">
-                  <thead className="bg-muted/50 border-b">
-                    <tr>
-                      <th className="p-2 text-right font-medium">{entityColumnLabel}</th>
-                      <th className="p-2 text-center font-medium">חשיפות</th>
-                      <th className="p-2 text-center font-medium">קליקים</th>
-                      <th className="p-2 text-center font-medium">הוצאה</th>
-                      <th className="p-2 text-center font-medium">הוספות לעגלה</th>
-                      <th className="p-2 text-center font-medium">רכישות</th>
-                      <th className="p-2 text-center font-medium">ערך רכישות</th>
-                      <th className="p-2 text-center font-medium">ROAS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const currency = getCurrencySymbol(table.integration_settings?.currency);
-                      return Object.values(campaignGroups).map((data) => {
-                        const roas = data.spend > 0 ? data.purchase_value / data.spend : 0;
-                        return (
-                          <tr key={data.name} className="border-b hover:bg-muted/30">
-                            <td className="p-2 text-right font-medium">{data.name}</td>
-                            <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
-                            <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
-                            <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                            <td className="p-2 text-center text-orange-600">{data.add_to_cart.toLocaleString('he-IL')}</td>
-                            <td className="p-2 text-center text-green-600 font-medium">{data.purchases.toLocaleString('he-IL')}</td>
-                            <td className="p-2 text-center text-green-600">{currency}{data.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                            <td className="p-2 text-center text-blue-600 font-medium">{roas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                  <tfoot className="bg-primary/10 font-bold">
-                    {(() => {
-                      const currency = getCurrencySymbol(table.integration_settings?.currency);
-                      const totalRoas = totals.spend > 0 ? totals.purchase_value / totals.spend : 0;
+              return (
+                <>
+                  {ecommerceCampaigns.length > 0 &&
+                    (() => {
+                      // Dynamic columns: hide ROAS / purchase_value / add_to_cart when the
+                      // account doesn't track them (e.g. sales page without cart, no pixel value).
+                      const showValueCols =
+                        ecommerceTotals.purchase_value > 0 ||
+                        ecommerceTotals.add_to_cart > 0;
                       return (
-                        <tr>
-                          <td className="p-2 text-right">סה״כ</td>
-                          <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">{currency}{totals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center text-orange-600">{totals.add_to_cart.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-green-600">{totals.purchases.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-green-600">{currency}{totals.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center text-blue-600">{totalRoas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
-                        </tr>
-                      );
-                    })()}
-                  </tfoot>
-                </table>
-              </div>
-            );
-          })()}
-        </Card>
-      )}
-
-      {/* Summary Stats for Google Ads */}
-      {hasGoogleAds && filteredRecords && filteredRecords.length > 0 && (
-        <>
-          {useGoogleWooOverlay && wooReportAttribution && (
-            <div className="mb-4">
-              <WooAttributionSection
-                orders={wooReportAttribution.orders}
-                formatCurrency={(n) => `${getCurrencySymbol(table?.integration_settings?.currency)}${Math.round(n).toLocaleString('he-IL')}`}
-                formatNumber={(n) => Math.round(n).toLocaleString('he-IL')}
-              />
-            </div>
-          )}
-        <Card className="mb-4 overflow-hidden">
-          {(() => {
-            const isEcommerce = table?.integration_settings?.campaign_type === 'ecommerce';
-            const entityColumnLabel = adsEntityLevel === 'ad'
-              ? 'מודעה'
-              : adsEntityLevel === 'adset'
-                ? 'קבוצת מודעות'
-                : 'קמפיין';
-
-            const campaignGroups = filteredRecords.reduce((acc, record) => {
-              const groupKey = getEntityGroupKey(record.data, adsEntityLevel);
-              const campaignName = getEntityDisplayName(record.data, adsEntityLevel);
-              if (!acc[groupKey]) {
-                acc[groupKey] = {
-                  name: campaignName,
-                  impressions: 0,
-                  clicks: 0,
-                  conversions: 0,
-                  cost: 0,
-                  conversions_value: 0,
-                  all_conversions: 0,
-                  all_conversions_value: 0,
-                  roas_sum: 0,
-                  roas_count: 0,
-                  verified_leads: 0,
-                };
-              }
-              acc[groupKey].impressions += Number(record.data?.impressions) || 0;
-              acc[groupKey].clicks += Number(record.data?.clicks) || 0;
-              acc[groupKey].conversions += Number(record.data?.conversions) || Number(record.data?.purchases) || 0;
-              acc[groupKey].cost += Number(record.data?.cost) || 0;
-              acc[groupKey].conversions_value += Number(record.data?.conversions_value) || Number(record.data?.purchase_value) || 0;
-              acc[groupKey].all_conversions += Number(record.data?.all_conversions) || 0;
-              acc[groupKey].all_conversions_value += Number(record.data?.all_conversions_value) || 0;
-              acc[groupKey].verified_leads += Number(record.data?.verified_leads) || 0;
-              if (record.data?.roas) {
-                acc[groupKey].roas_sum += Number(record.data.roas) || 0;
-                acc[groupKey].roas_count += 1;
-              }
-              return acc;
-            }, {} as Record<string, { name: string; impressions: number; clicks: number; conversions: number; cost: number; conversions_value: number; all_conversions: number; all_conversions_value: number; roas_sum: number; roas_count: number; verified_leads: number }>);
-
-            const totals = Object.values(campaignGroups).reduce((acc, campaign) => ({
-              impressions: acc.impressions + campaign.impressions,
-              clicks: acc.clicks + campaign.clicks,
-              conversions: acc.conversions + campaign.conversions,
-              cost: acc.cost + campaign.cost,
-              conversions_value: acc.conversions_value + campaign.conversions_value,
-              all_conversions: acc.all_conversions + campaign.all_conversions,
-              all_conversions_value: acc.all_conversions_value + campaign.all_conversions_value,
-              roas_sum: acc.roas_sum + campaign.roas_sum,
-              roas_count: acc.roas_count + campaign.roas_count,
-              verified_leads: acc.verified_leads + campaign.verified_leads,
-            }), { impressions: 0, clicks: 0, conversions: 0, cost: 0, conversions_value: 0, all_conversions: 0, all_conversions_value: 0, roas_sum: 0, roas_count: 0, verified_leads: 0 });
-
-            // Detect if any record has verification data (means a WP site is connected and was checked)
-            const hasVerifiedData = filteredRecords.some(r => r.data?.verified_leads !== undefined && r.data?.verified_leads !== null);
-            
-            const displayConversions = useGoogleWooOverlay ? googleWooPaid.paidOrders : totals.conversions;
-            const displayRevenue = useGoogleWooOverlay ? googleWooPaid.paidRevenue : totals.conversions_value;
-            const totalRoas = totals.cost > 0 ? displayRevenue / totals.cost : 0;
-            const avgValuePerConv = displayConversions > 0 ? displayRevenue / displayConversions : 0;
-            const gaDiffersFromWoo = useGoogleWooOverlay && (
-              Math.round(displayConversions) !== Math.round(totals.conversions)
-              || Math.abs(displayRevenue - totals.conversions_value) > 1
-            );
-            // Absurdly low AOV from Google Ads primary conv. value (e.g. Avieli ₪7 / 13) —
-            // almost always a tracking/config issue, not a sync math bug.
-            const suspiciousLowValue = !useGoogleWooOverlay && isEcommerce
-              && totals.conversions >= 3
-              && totals.conversions_value > 0
-              && avgValuePerConv < 20;
-            const allValueHigher = isEcommerce
-              && totals.all_conversions_value > totals.conversions_value * 2
-              && totals.all_conversions_value - totals.conversions_value > 50;
-            const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
-
-            return (
-              <div className="overflow-x-auto">
-                {useGoogleWooOverlay && (
-                  <div className="m-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-100">
-                    <p>
-                      שורת הסה&quot;כ מבוססת על WooCommerce (Google Ads): {Math.round(displayConversions)} רכישות, {gaCurrency}{Math.round(displayRevenue).toLocaleString('he-IL')}.
-                      {gaDiffersFromWoo && (
-                        <> דיווח Google Ads API: {Math.round(totals.conversions)} המרות, {gaCurrency}{Math.round(totals.conversions_value).toLocaleString('he-IL')}.</>
-                      )}
-                      {googleWooPaid.organicOrders > 0 && (
-                        <> בנוסף {googleWooPaid.organicOrders} רכישות Google אורגני ({gaCurrency}{Math.round(googleWooPaid.organicRevenue).toLocaleString('he-IL')}).</>
-                      )}
-                    </p>
-                    <p className="mt-1 text-xs opacity-90">
-                      הוספה לעגלה אינה זמינה מ-WooCommerce (רק רכישות). עמודות לפי קמפיין מציגות המרות מ-Google Ads API.
-                    </p>
-                  </div>
-                )}
-                {(suspiciousLowValue || allValueHigher) && (
-                  <div className="m-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
-                    {suspiciousLowValue && (
-                      <p>
-                        ערך המרות נמוך מהצפוי ({gaCurrency}{Math.round(totals.conversions_value).toLocaleString('he-IL')} על {Math.round(totals.conversions)} המרות — כ־{gaCurrency}{avgValuePerConv.toFixed(1)} להמרה).
-                        זה בדרך כלל מה ש־Google Ads מדווח ב־Conv. value (פעולות ראשיות), לא באג בשליפה.
-                        בדקו בחשבון: האם Purchase מסומן כראשי, והאם ה־tag באתר שולח value+currency.
-                      </p>
-                    )}
-                    {allValueHigher && (
-                      <p className={suspiciousLowValue ? 'mt-1' : undefined}>
-                        ערך כל ההמרות (All conv. value) גבוה יותר: {gaCurrency}{Math.round(totals.all_conversions_value).toLocaleString('he-IL')} —
-                        ייתכן שערך הרכישות יושב על פעולת המרה משנית.
-                      </p>
-                    )}
-                  </div>
-                )}
-                <table className="w-full text-sm" dir="rtl">
-                  <thead className="bg-muted/50 border-b">
-                    <tr>
-                      <th className="p-2 text-right font-medium">{entityColumnLabel}</th>
-                      <th className="p-2 text-center font-medium">חשיפות</th>
-                      <th className="p-2 text-center font-medium">קליקים</th>
-                      <th className="p-2 text-center font-medium">
-                        {useGoogleWooOverlay ? 'המרות (GA)' : isEcommerce ? 'המרות' : 'לידים'}
-                      </th>
-                      {hasVerifiedData && (
-                        <th className="p-2 text-center font-medium" title="לידים בפועל באתר (Elementor) — לפי שיוך טופס/עמוד לקמפיין">לידים באתר</th>
-                      )}
-                      <th className="p-2 text-center font-medium">עלות</th>
-                      {isEcommerce ? (
-                        <>
-                          <th className="p-2 text-center font-medium">
-                            {useGoogleWooOverlay ? 'ערך (GA)' : 'ערך המרות'}
-                          </th>
-                          <th className="p-2 text-center font-medium">ROAS</th>
-                        </>
-                      ) : (
-                        <th className="p-2 text-center font-medium">עלות לליד</th>
-                      )}
-                    </tr>
-                  </thead>
-                   <tbody>
-                    {Object.values(campaignGroups).map((data) => {
-                      const costPerConversion = data.conversions > 0 ? data.cost / data.conversions : 0;
-                      const roas = data.cost > 0 ? data.conversions_value / data.cost : 0;
-                      const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
-                      const convInt = Math.round(data.conversions);
-                      const verified = data.verified_leads;
-                      const diff = verified - convInt;
-                      const hasDiscrepancy = hasVerifiedData && Math.abs(diff) >= 1;
-                      return (
-                        <tr key={data.name} className="border-b hover:bg-muted/30">
-                          <td className="p-2 text-right font-medium">{data.name}</td>
-                          <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-green-600 font-medium">{convInt.toLocaleString('he-IL')}</td>
-                          {hasVerifiedData && (
-                            <td className="p-2 text-center">
-                              <span
-                                className="font-medium text-foreground"
-                                title={(() => {
-                                  const sources = filteredRecords
-                                    .filter((r) => getEntityDisplayName(r.data, adsEntityLevel) === data.name && r.data?.verified_source)
-                                    .map((r) => r.data?.verified_source as string);
-                                  const uniqueSources = Array.from(new Set(sources));
-                                  return uniqueSources.length > 0 ? `מקור: ${uniqueSources.join(' | ')}` : '';
-                                })()}
-                              >
-                                {verified.toLocaleString('he-IL')}
-                              </span>
-                            </td>
-                          )}
-                          <td className="p-2 text-center">{gaCurrency}{data.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          {isEcommerce ? (
-                            <>
-                              <td className="p-2 text-center text-purple-600 font-medium">{gaCurrency}{data.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                              <td className="p-2 text-center text-blue-600 font-medium">{roas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
-                            </>
-                          ) : (
-                            <td className="p-2 text-center text-blue-600 font-medium">{gaCurrency}{costPerConversion.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot className="bg-primary/10 font-bold">
-                    {(() => {
-                      const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
-                      const totalConvInt = Math.round(useGoogleWooOverlay ? displayConversions : totals.conversions);
-                      const totalDiff = totals.verified_leads - totalConvInt;
-                      const totalDiscrepancy = hasVerifiedData && Math.abs(totalDiff) >= 1;
-                      return (
-                    <tr>
-                      <td className="p-2 text-right">סה״כ</td>
-                      <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
-                      <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
-                      <td className="p-2 text-center text-green-600">{totalConvInt.toLocaleString('he-IL')}</td>
-                      {hasVerifiedData && (
-                        <td className="p-2 text-center text-foreground">
-                          {totals.verified_leads.toLocaleString('he-IL')}
-                        </td>
-                      )}
-                      <td className="p-2 text-center">{gaCurrency}{totals.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                      {isEcommerce ? (
-                        <>
-                          <td className="p-2 text-center text-purple-600">{gaCurrency}{Math.round(displayRevenue).toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-blue-600">{totalRoas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
-                        </>
-                      ) : (
-                        <td className="p-2 text-center text-blue-600">{gaCurrency}{(totals.conversions > 0 ? totals.cost / totals.conversions : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
-                      )}
-                    </tr>
-                      );
-                    })()}
-                  </tfoot>
-                </table>
-              </div>
-            );
-          })()}
-        </Card>
-        {useGoogleWooOverlay && (
-          <p className="mb-4 text-xs text-muted-foreground px-1">
-            * טבלת &quot;רכישות לפי מקור הגעה&quot; למעלה ושורת הסה&quot;כ מבוססים על WooCommerce Order Attribution. עמודות לפי קמפיין = דיווח Google Ads.
-          </p>
-        )}
-        </>
-      )}
-
-      {/* Manual ROI for Google Ads (leads mode only) */}
-      {hasGoogleAds && filteredRecords && filteredRecords.length > 0 && table?.id && table?.integration_settings?.campaign_type !== 'ecommerce' && (() => {
-        const totals = filteredRecords.reduce((acc, record) => {
-          acc.cost += Number(record.data?.cost) || 0;
-          acc.conversions += Number(record.data?.conversions) || Number(record.data?.purchases) || 0;
-          return acc;
-        }, { cost: 0, conversions: 0 });
-        const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
-        return (
-          <ManualROICard
-            tableId={table.id}
-            spend={totals.cost}
-            leads={Math.round(totals.conversions)}
-            currency={gaCurrency}
-            initialClosures={table?.integration_settings?.manual_roi?.closures ?? null}
-            initialRevenue={table?.integration_settings?.manual_roi?.revenue ?? null}
-            integrationSettings={table?.integration_settings}
-            readOnly={isEmbed}
-          />
-        );
-      })()}
-
-      {/* Maskyoo card is rendered inside SeoDashboardView (between KPI cubes and keywords),
-          so we don't render it again here to avoid duplication. */}
-
-      {/* Google Analytics Dashboard */}
-      {!summaryOnly && hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
-        <GoogleAnalyticsDashboard
-          records={filteredRecords}
-          externalDateFilter={dateFilter}
-          externalCustomDateRange={customDateRange}
-          tableId={table?.id}
-          defaultReportMode={resolveAnalyticsReportMode({
-            tableMode: table?.integration_settings?.default_report_mode,
-            tables: table ? [table] : [],
-          })}
-        />
-      )}
-
-      {/* Google Search Console Dashboard */}
-      {!summaryOnly && hasGoogleSearchConsole && table?.id && (
-        <SearchConsoleDashboard tableId={table.id} />
-      )}
-
-      {/* SEO (Ahrefs) Dashboard with GSC & Analytics tabs */}
-      {!summaryOnly && hasAhrefs && isSeoReportSource(table?.integration_settings?.data_source) && (table?.integration_settings?.clientId || table?.integration_settings?.client_id || table?.client_id) && table?.tenant_id && (
-        <SeoReportTabs 
-          tenantId={table.tenant_id} 
-          clientId={table.integration_settings?.clientId || table.integration_settings?.client_id || table.client_id} 
-        />
-      )}
-      </div>
-      )}
-
-      {(!isAdsReportTable || adsReportView === "summary") && !summaryOnly && (hasAhrefs && isSeoReportSource(table?.integration_settings?.data_source) ? null : isLoading ? (
-        <CarmenLoadingScreen variant="card" messages={["כרמן מושכת את נתוני הטבלה…", "מחשבת את התקופה הנבחרת…"]} />
-      ) : (
-        <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
-          <div className="overflow-auto">
-            <div className="min-w-full inline-block">
-              {/* Header */}
-              <div className="flex border-b bg-muted/30 sticky top-0 z-10">
-                {!isEmbed && (
-                <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => addRowMutation.mutate()}
-                    disabled={addRowMutation.isPending}
-                    className="h-6 w-6 p-0"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                </div>
-                )}
-                {fields?.map((field) => (
-                  <div key={field.id} className="w-[150px] flex-shrink-0 border-l p-2">
-                    {editingFieldId === field.id ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          value={editingFieldName}
-                          onChange={(e) => setEditingFieldName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveFieldName(field.id);
-                            if (e.key === 'Escape') handleCancelEdit();
-                          }}
-                          autoFocus
-                          className="h-7 text-sm font-medium"
-                        />
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => handleSaveFieldName(field.id)}
-                          disabled={updateFieldNameMutation.isPending}
-                          className="h-6 w-6 p-0"
-                        >
-                          <Check className="h-3 w-3" />
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          onClick={handleCancelEdit}
-                          className="h-6 w-6 p-0"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between gap-2 group">
-                        <span 
-                          className="text-sm font-medium cursor-pointer hover:text-primary transition-colors truncate text-blue-600 dark:text-blue-400" 
-                          onClick={() => handleStartEdit(field)}
-                        >
-                          {field.name}
-                        </span>
-                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => handleStartEdit(field)}
-                            className="h-6 w-6 p-0"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => deleteColumnMutation.mutate(field.id)}
-                            className="h-6 w-6 p-0"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {!isEmbed && <div className="w-[150px] flex-shrink-0 border-l p-2">
-                  <div className="flex items-center gap-1">
-                    <Input
-                      placeholder="עמודה חדשה"
-                      value={newColumnName}
-                      onChange={(e) => setNewColumnName(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter' && newColumnName.trim()) {
-                          addColumnMutation.mutate(newColumnName);
-                        }
-                      }}
-                      className="h-7 text-sm"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() => newColumnName.trim() && addColumnMutation.mutate(newColumnName)}
-                      disabled={!newColumnName.trim() || addColumnMutation.isPending}
-                      className="h-6 w-6 p-0 flex-shrink-0"
-                    >
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>}
-              </div>
-
-              {/* Rows */}
-              {filteredRecords?.map((record, recordIndex) => (
-                <div key={`${record.id}-${recordIndex}`} className="flex border-b hover:bg-muted/20 transition-colors group">
-                  {!isEmbed && (
-                  <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center bg-muted/10">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => deleteRowMutation.mutate(record.id)}
-                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  )}
-                  {fields?.map((field) => {
-                    const cellKey = `${record.id}-${field.key}`;
-                    const isEditing = editingCell?.recordId === record.id && editingCell?.fieldKey === field.key;
-                    const rawValue = record.data[field.key];
-                    const editValue = isEditing ? (cellValues[cellKey] ?? '') : '';
-                    
-                    // Format display value
-                    const formatDisplayValue = (value: any, fieldType: string, fieldKey: string): string => {
-                      if (value === null || value === undefined || value === '') return '';
-                      
-                      // Format date fields
-                      if (fieldType === 'date' || fieldKey === 'date') {
-                        try {
-                          const date = new Date(value);
-                          if (!isNaN(date.getTime())) {
-                            return date.toLocaleDateString('he-IL', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric'
-                            });
-                          }
-                        } catch {
-                          return String(value);
-                        }
-                      }
-                      
-                      // Check if it's a number (either by field type or by actual type)
-                      if (fieldType === 'number' || typeof value === 'number') {
-                        const num = typeof value === 'number' ? value : parseFloat(value);
-                        if (!isNaN(num)) {
-                          // Check if it has decimals
-                          if (num % 1 !== 0) {
-                            // Format with max 1 decimal place and thousands separator
-                            return num.toLocaleString('he-IL', { 
-                              minimumFractionDigits: 0,
-                              maximumFractionDigits: 1 
-                            });
-                          } else {
-                            // Integer - just add thousands separator
-                            return num.toLocaleString('he-IL');
-                          }
-                        }
-                      }
-                      
-                      return String(value);
-                    };
-                    
-                    const displayValue = isEditing ? editValue : formatDisplayValue(rawValue, field.type, field.key);
-                    
-                    return (
-                      <div 
-                        key={field.id} 
-                        className="w-[150px] flex-shrink-0 border-l p-0 cursor-text"
-                        onClick={() => !isEditing && handleCellClick(record.id, field.key, String(rawValue ?? ''))}
-                      >
-                        {isEditing ? (
-                          <Input
-                            ref={cellInputRef}
-                            value={displayValue}
-                            onChange={(e) => handleCellValueChange(record.id, field.key, e.target.value)}
-                            onBlur={() => handleCellBlur(record.id, field.key)}
-                            onKeyDown={(e) => handleCellKeyDown(e, record.id, field.key)}
-                            className="border-none rounded-none h-10 focus-visible:ring-1 focus-visible:ring-primary bg-background"
-                          />
-                        ) : (
-                          <div className="p-2 h-10 flex items-center text-sm hover:bg-accent/50 transition-colors rounded-sm">
-                            {displayValue || <span className="text-muted-foreground">ריק</span>}
+                        <Card className="mb-4 overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm" dir="rtl">
+                              <thead className="bg-muted/50 border-b">
+                                <tr>
+                                  <th className="p-2 text-right font-medium">
+                                    {entityHeader("איקומרס")}
+                                  </th>
+                                  <th className="p-2 text-center font-medium">
+                                    חשיפות
+                                  </th>
+                                  <th className="p-2 text-center font-medium">
+                                    קליקים
+                                  </th>
+                                  <th className="p-2 text-center font-medium">
+                                    הוצאה
+                                  </th>
+                                  {showValueCols && (
+                                    <th className="p-2 text-center font-medium">
+                                      הוספות לעגלה
+                                    </th>
+                                  )}
+                                  <th className="p-2 text-center font-medium">
+                                    רכישות
+                                  </th>
+                                  {showValueCols && (
+                                    <th className="p-2 text-center font-medium">
+                                      ערך רכישות
+                                    </th>
+                                  )}
+                                  {!showValueCols && (
+                                    <th className="p-2 text-center font-medium">
+                                      עלות לרכישה
+                                    </th>
+                                  )}
+                                  {showValueCols && (
+                                    <th className="p-2 text-center font-medium">
+                                      ROAS
+                                    </th>
+                                  )}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ecommerceCampaigns.map(([groupKey, data]) => {
+                                  const roas =
+                                    data.spend > 0
+                                      ? data.purchase_value / data.spend
+                                      : 0;
+                                  const costPerPurchase =
+                                    data.purchases > 0
+                                      ? data.spend / data.purchases
+                                      : 0;
+                                  return (
+                                    <tr
+                                      key={`ecom-${groupKey}`}
+                                      className="border-b hover:bg-muted/30"
+                                    >
+                                      <td className="p-2 text-right font-medium">
+                                        {data.name}
+                                      </td>
+                                      <td className="p-2 text-center">
+                                        {data.impressions.toLocaleString(
+                                          "he-IL",
+                                        )}
+                                      </td>
+                                      <td className="p-2 text-center">
+                                        {data.clicks.toLocaleString("he-IL")}
+                                      </td>
+                                      <td className="p-2 text-center">
+                                        {currency}
+                                        {data.spend.toLocaleString("he-IL", {
+                                          maximumFractionDigits: 0,
+                                        })}
+                                      </td>
+                                      {showValueCols && (
+                                        <td className="p-2 text-center text-orange-600">
+                                          {data.add_to_cart.toLocaleString(
+                                            "he-IL",
+                                          )}
+                                        </td>
+                                      )}
+                                      <td className="p-2 text-center text-green-600 font-medium">
+                                        {data.purchases.toLocaleString("he-IL")}
+                                      </td>
+                                      {showValueCols && (
+                                        <td className="p-2 text-center text-green-600">
+                                          {currency}
+                                          {data.purchase_value.toLocaleString(
+                                            "he-IL",
+                                            { maximumFractionDigits: 0 },
+                                          )}
+                                        </td>
+                                      )}
+                                      {!showValueCols && (
+                                        <td className="p-2 text-center text-blue-600 font-medium">
+                                          {currency}
+                                          {costPerPurchase.toLocaleString(
+                                            "he-IL",
+                                            { maximumFractionDigits: 1 },
+                                          )}
+                                        </td>
+                                      )}
+                                      {showValueCols && (
+                                        <td className="p-2 text-center text-blue-600 font-medium">
+                                          {roas.toLocaleString("he-IL", {
+                                            maximumFractionDigits: 1,
+                                          })}
+                                          x
+                                        </td>
+                                      )}
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot className="bg-primary/10 font-bold">
+                                <tr>
+                                  <td className="p-2 text-right">סה״כ</td>
+                                  <td className="p-2 text-center">
+                                    {ecommerceTotals.impressions.toLocaleString(
+                                      "he-IL",
+                                    )}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    {ecommerceTotals.clicks.toLocaleString(
+                                      "he-IL",
+                                    )}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    {currency}
+                                    {ecommerceTotals.spend.toLocaleString(
+                                      "he-IL",
+                                      { maximumFractionDigits: 0 },
+                                    )}
+                                  </td>
+                                  {showValueCols && (
+                                    <td className="p-2 text-center text-orange-600">
+                                      {ecommerceTotals.add_to_cart.toLocaleString(
+                                        "he-IL",
+                                      )}
+                                    </td>
+                                  )}
+                                  <td className="p-2 text-center text-green-600">
+                                    {ecommerceTotals.purchases.toLocaleString(
+                                      "he-IL",
+                                    )}
+                                  </td>
+                                  {showValueCols && (
+                                    <td className="p-2 text-center text-green-600">
+                                      {currency}
+                                      {ecommerceTotals.purchase_value.toLocaleString(
+                                        "he-IL",
+                                        { maximumFractionDigits: 0 },
+                                      )}
+                                    </td>
+                                  )}
+                                  {!showValueCols && (
+                                    <td className="p-2 text-center text-blue-600">
+                                      {currency}
+                                      {(ecommerceTotals.purchases > 0
+                                        ? ecommerceTotals.spend /
+                                          ecommerceTotals.purchases
+                                        : 0
+                                      ).toLocaleString("he-IL", {
+                                        maximumFractionDigits: 1,
+                                      })}
+                                    </td>
+                                  )}
+                                  {showValueCols && (
+                                    <td className="p-2 text-center text-blue-600">
+                                      {(ecommerceTotals.spend > 0
+                                        ? ecommerceTotals.purchase_value /
+                                          ecommerceTotals.spend
+                                        : 0
+                                      ).toLocaleString("he-IL", {
+                                        maximumFractionDigits: 1,
+                                      })}
+                                      x
+                                    </td>
+                                  )}
+                                </tr>
+                              </tfoot>
+                            </table>
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <div className="w-[150px] flex-shrink-0 border-l" />
-                </div>
-              ))}
+                        </Card>
+                      );
+                    })()}
 
-              {/* Empty state — never before the refetch for this period settles */}
-              {(!filteredRecords || filteredRecords.length === 0) && (
-                <div className="flex items-center justify-center p-12 text-center">
-                  <div>
-                    {recordsFetching ? (
-                      <CarmenLoadingScreen
-                        variant="inline"
-                        messages={["כרמן מרעננת את הנתונים…"]}
-                      />
-                    ) : campaignSearch ? (
-                      <p className="text-muted-foreground mb-3">לא נמצאו קמפיינים תואמים</p>
-                    ) : table?.integration_type ? (
-                      <>
-                        <Info className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                        <p className="text-muted-foreground mb-1">אין נתונים לתקופה זו</p>
-                        <p className="text-muted-foreground text-xs">נסה לסנכרן מחדש או לשנות את טווח התאריכים</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-muted-foreground mb-3">אין שורות בטבלה</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => addRowMutation.mutate()}
-                          disabled={addRowMutation.isPending}
-                        >
-                          <Plus className="ml-2 h-4 w-4" />
-                          הוסף שורה ראשונה
-                        </Button>
-                      </>
-                    )}
-                  </div>
+                  {leadCampaigns.length > 0 && (
+                    <Card className="mb-4 overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm" dir="rtl">
+                          <thead className="bg-muted/50 border-b">
+                            <tr>
+                              <th className="p-2 text-right font-medium">
+                                {entityHeader("לידים")}
+                              </th>
+                              <th className="p-2 text-center font-medium">
+                                חשיפות
+                              </th>
+                              <th className="p-2 text-center font-medium">
+                                קליקים
+                              </th>
+                              <th className="p-2 text-center font-medium">
+                                לידים
+                              </th>
+                              <th className="p-2 text-center font-medium">
+                                הוצאה
+                              </th>
+                              <th className="p-2 text-center font-medium">
+                                עלות לליד
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {leadCampaigns.map(([groupKey, data]) => {
+                              const costPerLead =
+                                data.leads > 0 ? data.spend / data.leads : 0;
+                              return (
+                                <tr
+                                  key={`lead-${groupKey}`}
+                                  className="border-b hover:bg-muted/30"
+                                >
+                                  <td className="p-2 text-right font-medium">
+                                    {data.name}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    {data.impressions.toLocaleString("he-IL")}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    {data.clicks.toLocaleString("he-IL")}
+                                  </td>
+                                  <td className="p-2 text-center text-green-600 font-medium">
+                                    {data.leads.toLocaleString("he-IL")}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    {currency}
+                                    {data.spend.toLocaleString("he-IL", {
+                                      maximumFractionDigits: 0,
+                                    })}
+                                  </td>
+                                  <td className="p-2 text-center text-blue-600 font-medium">
+                                    {currency}
+                                    {costPerLead.toLocaleString("he-IL", {
+                                      maximumFractionDigits: 1,
+                                    })}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot className="bg-primary/10 font-bold">
+                            <tr>
+                              <td className="p-2 text-right">סה״כ</td>
+                              <td className="p-2 text-center">
+                                {leadTotals.impressions.toLocaleString("he-IL")}
+                              </td>
+                              <td className="p-2 text-center">
+                                {leadTotals.clicks.toLocaleString("he-IL")}
+                              </td>
+                              <td className="p-2 text-center text-green-600">
+                                {leadTotals.leads.toLocaleString("he-IL")}
+                              </td>
+                              <td className="p-2 text-center">
+                                {currency}
+                                {leadTotals.spend.toLocaleString("he-IL", {
+                                  maximumFractionDigits: 0,
+                                })}
+                              </td>
+                              <td className="p-2 text-center text-blue-600">
+                                {currency}
+                                {(leadTotals.leads > 0
+                                  ? leadTotals.spend / leadTotals.leads
+                                  : 0
+                                ).toLocaleString("he-IL", {
+                                  maximumFractionDigits: 1,
+                                })}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </Card>
+                  )}
+
+                  {trafficCampaigns.length > 0 &&
+                    (() => {
+                      const trafficTotals = trafficCampaigns.reduce(
+                        (acc, [, c]) => ({
+                          impressions: acc.impressions + c.impressions,
+                          clicks: acc.clicks + c.clicks,
+                          spend: acc.spend + c.spend,
+                        }),
+                        { impressions: 0, clicks: 0, spend: 0 },
+                      );
+                      return (
+                        <Card className="mb-4 overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm" dir="rtl">
+                              <thead className="bg-muted/50 border-b">
+                                <tr>
+                                  <th className="p-2 text-right font-medium">
+                                    {entityHeader("טראפיק")}
+                                  </th>
+                                  <th className="p-2 text-center font-medium">
+                                    חשיפות
+                                  </th>
+                                  <th className="p-2 text-center font-medium">
+                                    קליקים
+                                  </th>
+                                  <th className="p-2 text-center font-medium">
+                                    הוצאה
+                                  </th>
+                                  <th className="p-2 text-center font-medium">
+                                    CTR
+                                  </th>
+                                  <th className="p-2 text-center font-medium">
+                                    עלות לקליק
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {trafficCampaigns.map(([groupKey, data]) => {
+                                  const ctr =
+                                    data.impressions > 0
+                                      ? (data.clicks / data.impressions) * 100
+                                      : 0;
+                                  const cpc =
+                                    data.clicks > 0
+                                      ? data.spend / data.clicks
+                                      : 0;
+                                  return (
+                                    <tr
+                                      key={`traffic-${groupKey}`}
+                                      className="border-b hover:bg-muted/30"
+                                    >
+                                      <td className="p-2 text-right font-medium">
+                                        {data.name}
+                                      </td>
+                                      <td className="p-2 text-center">
+                                        {data.impressions.toLocaleString(
+                                          "he-IL",
+                                        )}
+                                      </td>
+                                      <td className="p-2 text-center text-green-600 font-medium">
+                                        {data.clicks.toLocaleString("he-IL")}
+                                      </td>
+                                      <td className="p-2 text-center">
+                                        {currency}
+                                        {data.spend.toLocaleString("he-IL", {
+                                          maximumFractionDigits: 0,
+                                        })}
+                                      </td>
+                                      <td className="p-2 text-center">
+                                        {ctr.toLocaleString("he-IL", {
+                                          maximumFractionDigits: 2,
+                                        })}
+                                        %
+                                      </td>
+                                      <td className="p-2 text-center text-blue-600 font-medium">
+                                        {currency}
+                                        {cpc.toLocaleString("he-IL", {
+                                          maximumFractionDigits: 2,
+                                        })}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot className="bg-primary/10 font-bold">
+                                <tr>
+                                  <td className="p-2 text-right">סה״כ</td>
+                                  <td className="p-2 text-center">
+                                    {trafficTotals.impressions.toLocaleString(
+                                      "he-IL",
+                                    )}
+                                  </td>
+                                  <td className="p-2 text-center text-green-600">
+                                    {trafficTotals.clicks.toLocaleString(
+                                      "he-IL",
+                                    )}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    {currency}
+                                    {trafficTotals.spend.toLocaleString(
+                                      "he-IL",
+                                      { maximumFractionDigits: 0 },
+                                    )}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    {(trafficTotals.impressions > 0
+                                      ? (trafficTotals.clicks /
+                                          trafficTotals.impressions) *
+                                        100
+                                      : 0
+                                    ).toLocaleString("he-IL", {
+                                      maximumFractionDigits: 2,
+                                    })}
+                                    %
+                                  </td>
+                                  <td className="p-2 text-center text-blue-600">
+                                    {currency}
+                                    {(trafficTotals.clicks > 0
+                                      ? trafficTotals.spend /
+                                        trafficTotals.clicks
+                                      : 0
+                                    ).toLocaleString("he-IL", {
+                                      maximumFractionDigits: 2,
+                                    })}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </Card>
+                      );
+                    })()}
+
+                  {leadCampaigns.length > 0 && table?.id && (
+                    <ManualROICard
+                      tableId={table.id}
+                      spend={leadTotals.spend}
+                      leads={leadTotals.leads}
+                      currency={currency}
+                      initialClosures={
+                        table?.integration_settings?.manual_roi?.closures ??
+                        null
+                      }
+                      initialRevenue={
+                        table?.integration_settings?.manual_roi?.revenue ?? null
+                      }
+                      integrationSettings={table?.integration_settings}
+                      readOnly={isEmbed}
+                    />
+                  )}
+                </>
+              );
+            })()}
+
+          {/* Summary Stats for Facebook Ecommerce */}
+          {hasFacebookEcommerce &&
+            filteredRecords &&
+            filteredRecords.length > 0 && (
+              <Card className="mb-4 overflow-hidden">
+                {(() => {
+                  const entityColumnLabel =
+                    adsEntityLevel === "ad"
+                      ? "מודעה"
+                      : adsEntityLevel === "adset"
+                        ? "קבוצת מודעות"
+                        : "קמפיין";
+                  const campaignGroups = filteredRecords.reduce(
+                    (acc, record) => {
+                      const groupKey = getEntityGroupKey(
+                        record.data,
+                        adsEntityLevel,
+                      );
+                      const campaignName = getEntityDisplayName(
+                        record.data,
+                        adsEntityLevel,
+                      );
+                      if (!acc[groupKey]) {
+                        acc[groupKey] = {
+                          name: campaignName,
+                          impressions: 0,
+                          clicks: 0,
+                          spend: 0,
+                          purchases: 0,
+                          purchase_value: 0,
+                          add_to_cart: 0,
+                        };
+                      }
+                      acc[groupKey].impressions +=
+                        Number(record.data?.impressions) || 0;
+                      acc[groupKey].clicks += Number(record.data?.clicks) || 0;
+                      acc[groupKey].spend += Number(record.data?.spend) || 0;
+                      acc[groupKey].purchases +=
+                        Number(record.data?.purchases) || 0;
+                      acc[groupKey].purchase_value +=
+                        Number(record.data?.purchase_value) || 0;
+                      acc[groupKey].add_to_cart +=
+                        Number(record.data?.add_to_cart) || 0;
+                      return acc;
+                    },
+                    {} as Record<
+                      string,
+                      {
+                        name: string;
+                        impressions: number;
+                        clicks: number;
+                        spend: number;
+                        purchases: number;
+                        purchase_value: number;
+                        add_to_cart: number;
+                      }
+                    >,
+                  );
+
+                  const totals = Object.values(campaignGroups).reduce(
+                    (acc, campaign) => ({
+                      impressions: acc.impressions + campaign.impressions,
+                      clicks: acc.clicks + campaign.clicks,
+                      spend: acc.spend + campaign.spend,
+                      purchases: acc.purchases + campaign.purchases,
+                      purchase_value:
+                        acc.purchase_value + campaign.purchase_value,
+                      add_to_cart: acc.add_to_cart + campaign.add_to_cart,
+                    }),
+                    {
+                      impressions: 0,
+                      clicks: 0,
+                      spend: 0,
+                      purchases: 0,
+                      purchase_value: 0,
+                      add_to_cart: 0,
+                    },
+                  );
+
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm" dir="rtl">
+                        <thead className="bg-muted/50 border-b">
+                          <tr>
+                            <th className="p-2 text-right font-medium">
+                              {entityColumnLabel}
+                            </th>
+                            <th className="p-2 text-center font-medium">
+                              חשיפות
+                            </th>
+                            <th className="p-2 text-center font-medium">
+                              קליקים
+                            </th>
+                            <th className="p-2 text-center font-medium">
+                              הוצאה
+                            </th>
+                            <th className="p-2 text-center font-medium">
+                              הוספות לעגלה
+                            </th>
+                            <th className="p-2 text-center font-medium">
+                              רכישות
+                            </th>
+                            <th className="p-2 text-center font-medium">
+                              ערך רכישות
+                            </th>
+                            <th className="p-2 text-center font-medium">
+                              ROAS
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const currency = getCurrencySymbol(
+                              table.integration_settings?.currency,
+                            );
+                            return Object.values(campaignGroups).map((data) => {
+                              const roas =
+                                data.spend > 0
+                                  ? data.purchase_value / data.spend
+                                  : 0;
+                              return (
+                                <tr
+                                  key={data.name}
+                                  className="border-b hover:bg-muted/30"
+                                >
+                                  <td className="p-2 text-right font-medium">
+                                    {data.name}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    {data.impressions.toLocaleString("he-IL")}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    {data.clicks.toLocaleString("he-IL")}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    {currency}
+                                    {data.spend.toLocaleString("he-IL", {
+                                      maximumFractionDigits: 0,
+                                    })}
+                                  </td>
+                                  <td className="p-2 text-center text-orange-600">
+                                    {data.add_to_cart.toLocaleString("he-IL")}
+                                  </td>
+                                  <td className="p-2 text-center text-green-600 font-medium">
+                                    {data.purchases.toLocaleString("he-IL")}
+                                  </td>
+                                  <td className="p-2 text-center text-green-600">
+                                    {currency}
+                                    {data.purchase_value.toLocaleString(
+                                      "he-IL",
+                                      { maximumFractionDigits: 0 },
+                                    )}
+                                  </td>
+                                  <td className="p-2 text-center text-blue-600 font-medium">
+                                    {roas.toLocaleString("he-IL", {
+                                      maximumFractionDigits: 2,
+                                    })}
+                                    x
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          })()}
+                        </tbody>
+                        <tfoot className="bg-primary/10 font-bold">
+                          {(() => {
+                            const currency = getCurrencySymbol(
+                              table.integration_settings?.currency,
+                            );
+                            const totalRoas =
+                              totals.spend > 0
+                                ? totals.purchase_value / totals.spend
+                                : 0;
+                            return (
+                              <tr>
+                                <td className="p-2 text-right">סה״כ</td>
+                                <td className="p-2 text-center">
+                                  {totals.impressions.toLocaleString("he-IL")}
+                                </td>
+                                <td className="p-2 text-center">
+                                  {totals.clicks.toLocaleString("he-IL")}
+                                </td>
+                                <td className="p-2 text-center">
+                                  {currency}
+                                  {totals.spend.toLocaleString("he-IL", {
+                                    maximumFractionDigits: 0,
+                                  })}
+                                </td>
+                                <td className="p-2 text-center text-orange-600">
+                                  {totals.add_to_cart.toLocaleString("he-IL")}
+                                </td>
+                                <td className="p-2 text-center text-green-600">
+                                  {totals.purchases.toLocaleString("he-IL")}
+                                </td>
+                                <td className="p-2 text-center text-green-600">
+                                  {currency}
+                                  {totals.purchase_value.toLocaleString(
+                                    "he-IL",
+                                    { maximumFractionDigits: 0 },
+                                  )}
+                                </td>
+                                <td className="p-2 text-center text-blue-600">
+                                  {totalRoas.toLocaleString("he-IL", {
+                                    maximumFractionDigits: 2,
+                                  })}
+                                  x
+                                </td>
+                              </tr>
+                            );
+                          })()}
+                        </tfoot>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </Card>
+            )}
+
+          {/* Summary Stats for Google Ads */}
+          {hasGoogleAds && filteredRecords && filteredRecords.length > 0 && (
+            <>
+              {useGoogleWooOverlay && wooReportAttribution && (
+                <div className="mb-4">
+                  <WooAttributionSection
+                    orders={wooReportAttribution.orders}
+                    formatCurrency={(n) =>
+                      `${getCurrencySymbol(table?.integration_settings?.currency)}${Math.round(n).toLocaleString("he-IL")}`
+                    }
+                    formatNumber={(n) => Math.round(n).toLocaleString("he-IL")}
+                  />
                 </div>
               )}
+              <Card className="mb-4 overflow-hidden">
+                {(() => {
+                  const isEcommerce =
+                    table?.integration_settings?.campaign_type === "ecommerce";
+                  const entityColumnLabel =
+                    adsEntityLevel === "ad"
+                      ? "מודעה"
+                      : adsEntityLevel === "adset"
+                        ? "קבוצת מודעות"
+                        : "קמפיין";
+
+                  const campaignGroups = filteredRecords.reduce(
+                    (acc, record) => {
+                      const groupKey = getEntityGroupKey(
+                        record.data,
+                        adsEntityLevel,
+                      );
+                      const campaignName = getEntityDisplayName(
+                        record.data,
+                        adsEntityLevel,
+                      );
+                      if (!acc[groupKey]) {
+                        acc[groupKey] = {
+                          name: campaignName,
+                          impressions: 0,
+                          clicks: 0,
+                          conversions: 0,
+                          cost: 0,
+                          conversions_value: 0,
+                          all_conversions: 0,
+                          all_conversions_value: 0,
+                          roas_sum: 0,
+                          roas_count: 0,
+                          verified_leads: 0,
+                        };
+                      }
+                      acc[groupKey].impressions +=
+                        Number(record.data?.impressions) || 0;
+                      acc[groupKey].clicks += Number(record.data?.clicks) || 0;
+                      acc[groupKey].conversions +=
+                        Number(record.data?.conversions) ||
+                        Number(record.data?.purchases) ||
+                        0;
+                      acc[groupKey].cost += Number(record.data?.cost) || 0;
+                      acc[groupKey].conversions_value +=
+                        Number(record.data?.conversions_value) ||
+                        Number(record.data?.purchase_value) ||
+                        0;
+                      acc[groupKey].all_conversions +=
+                        Number(record.data?.all_conversions) || 0;
+                      acc[groupKey].all_conversions_value +=
+                        Number(record.data?.all_conversions_value) || 0;
+                      acc[groupKey].verified_leads +=
+                        Number(record.data?.verified_leads) || 0;
+                      if (record.data?.roas) {
+                        acc[groupKey].roas_sum += Number(record.data.roas) || 0;
+                        acc[groupKey].roas_count += 1;
+                      }
+                      return acc;
+                    },
+                    {} as Record<
+                      string,
+                      {
+                        name: string;
+                        impressions: number;
+                        clicks: number;
+                        conversions: number;
+                        cost: number;
+                        conversions_value: number;
+                        all_conversions: number;
+                        all_conversions_value: number;
+                        roas_sum: number;
+                        roas_count: number;
+                        verified_leads: number;
+                      }
+                    >,
+                  );
+
+                  const totals = Object.values(campaignGroups).reduce(
+                    (acc, campaign) => ({
+                      impressions: acc.impressions + campaign.impressions,
+                      clicks: acc.clicks + campaign.clicks,
+                      conversions: acc.conversions + campaign.conversions,
+                      cost: acc.cost + campaign.cost,
+                      conversions_value:
+                        acc.conversions_value + campaign.conversions_value,
+                      all_conversions:
+                        acc.all_conversions + campaign.all_conversions,
+                      all_conversions_value:
+                        acc.all_conversions_value +
+                        campaign.all_conversions_value,
+                      roas_sum: acc.roas_sum + campaign.roas_sum,
+                      roas_count: acc.roas_count + campaign.roas_count,
+                      verified_leads:
+                        acc.verified_leads + campaign.verified_leads,
+                    }),
+                    {
+                      impressions: 0,
+                      clicks: 0,
+                      conversions: 0,
+                      cost: 0,
+                      conversions_value: 0,
+                      all_conversions: 0,
+                      all_conversions_value: 0,
+                      roas_sum: 0,
+                      roas_count: 0,
+                      verified_leads: 0,
+                    },
+                  );
+
+                  // Detect if any record has verification data (means a WP site is connected and was checked)
+                  const hasVerifiedData = filteredRecords.some(
+                    (r) =>
+                      r.data?.verified_leads !== undefined &&
+                      r.data?.verified_leads !== null,
+                  );
+
+                  const displayConversions = useGoogleWooOverlay
+                    ? googleWooPaid.paidOrders
+                    : totals.conversions;
+                  const displayRevenue = useGoogleWooOverlay
+                    ? googleWooPaid.paidRevenue
+                    : totals.conversions_value;
+                  const totalRoas =
+                    totals.cost > 0 ? displayRevenue / totals.cost : 0;
+                  const avgValuePerConv =
+                    displayConversions > 0
+                      ? displayRevenue / displayConversions
+                      : 0;
+                  const gaDiffersFromWoo =
+                    useGoogleWooOverlay &&
+                    (Math.round(displayConversions) !==
+                      Math.round(totals.conversions) ||
+                      Math.abs(displayRevenue - totals.conversions_value) > 1);
+                  // Absurdly low AOV from Google Ads primary conv. value (e.g. Avieli ₪7 / 13) —
+                  // almost always a tracking/config issue, not a sync math bug.
+                  const suspiciousLowValue =
+                    !useGoogleWooOverlay &&
+                    isEcommerce &&
+                    totals.conversions >= 3 &&
+                    totals.conversions_value > 0 &&
+                    avgValuePerConv < 20;
+                  const allValueHigher =
+                    isEcommerce &&
+                    totals.all_conversions_value >
+                      totals.conversions_value * 2 &&
+                    totals.all_conversions_value - totals.conversions_value >
+                      50;
+                  const gaCurrency = getCurrencySymbol(
+                    table.integration_settings?.currency,
+                  );
+
+                  return (
+                    <div className="overflow-x-auto">
+                      {useGoogleWooOverlay && (
+                        <div className="m-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-100">
+                          <p>
+                            שורת הסה&quot;כ מבוססת על WooCommerce (Google Ads):{" "}
+                            {Math.round(displayConversions)} רכישות,{" "}
+                            {gaCurrency}
+                            {Math.round(displayRevenue).toLocaleString("he-IL")}
+                            .
+                            {gaDiffersFromWoo && (
+                              <>
+                                {" "}
+                                דיווח Google Ads API:{" "}
+                                {Math.round(totals.conversions)} המרות,{" "}
+                                {gaCurrency}
+                                {Math.round(
+                                  totals.conversions_value,
+                                ).toLocaleString("he-IL")}
+                                .
+                              </>
+                            )}
+                            {googleWooPaid.organicOrders > 0 && (
+                              <>
+                                {" "}
+                                בנוסף {googleWooPaid.organicOrders} רכישות
+                                Google אורגני ({gaCurrency}
+                                {Math.round(
+                                  googleWooPaid.organicRevenue,
+                                ).toLocaleString("he-IL")}
+                                ).
+                              </>
+                            )}
+                          </p>
+                          <p className="mt-1 text-xs opacity-90">
+                            הוספה לעגלה אינה זמינה מ-WooCommerce (רק רכישות).
+                            עמודות לפי קמפיין מציגות המרות מ-Google Ads API.
+                          </p>
+                        </div>
+                      )}
+                      {(suspiciousLowValue || allValueHigher) && (
+                        <div className="m-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+                          {suspiciousLowValue && (
+                            <p>
+                              ערך המרות נמוך מהצפוי ({gaCurrency}
+                              {Math.round(
+                                totals.conversions_value,
+                              ).toLocaleString("he-IL")}{" "}
+                              על {Math.round(totals.conversions)} המרות — כ־
+                              {gaCurrency}
+                              {avgValuePerConv.toFixed(1)} להמרה). זה בדרך כלל
+                              מה ש־Google Ads מדווח ב־Conv. value (פעולות
+                              ראשיות), לא באג בשליפה. בדקו בחשבון: האם Purchase
+                              מסומן כראשי, והאם ה־tag באתר שולח value+currency.
+                            </p>
+                          )}
+                          {allValueHigher && (
+                            <p
+                              className={
+                                suspiciousLowValue ? "mt-1" : undefined
+                              }
+                            >
+                              ערך כל ההמרות (All conv. value) גבוה יותר:{" "}
+                              {gaCurrency}
+                              {Math.round(
+                                totals.all_conversions_value,
+                              ).toLocaleString("he-IL")}{" "}
+                              — ייתכן שערך הרכישות יושב על פעולת המרה משנית.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      <table className="w-full text-sm" dir="rtl">
+                        <thead className="bg-muted/50 border-b">
+                          <tr>
+                            <th className="p-2 text-right font-medium">
+                              {entityColumnLabel}
+                            </th>
+                            <th className="p-2 text-center font-medium">
+                              חשיפות
+                            </th>
+                            <th className="p-2 text-center font-medium">
+                              קליקים
+                            </th>
+                            <th className="p-2 text-center font-medium">
+                              {useGoogleWooOverlay
+                                ? "המרות (GA)"
+                                : isEcommerce
+                                  ? "המרות"
+                                  : "לידים"}
+                            </th>
+                            {hasVerifiedData && (
+                              <th
+                                className="p-2 text-center font-medium"
+                                title="לידים בפועל באתר (Elementor) — לפי שיוך טופס/עמוד לקמפיין"
+                              >
+                                לידים באתר
+                              </th>
+                            )}
+                            <th className="p-2 text-center font-medium">
+                              עלות
+                            </th>
+                            {isEcommerce ? (
+                              <>
+                                <th className="p-2 text-center font-medium">
+                                  {useGoogleWooOverlay
+                                    ? "ערך (GA)"
+                                    : "ערך המרות"}
+                                </th>
+                                <th className="p-2 text-center font-medium">
+                                  ROAS
+                                </th>
+                              </>
+                            ) : (
+                              <th className="p-2 text-center font-medium">
+                                עלות לליד
+                              </th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.values(campaignGroups).map((data) => {
+                            const costPerConversion =
+                              data.conversions > 0
+                                ? data.cost / data.conversions
+                                : 0;
+                            const roas =
+                              data.cost > 0
+                                ? data.conversions_value / data.cost
+                                : 0;
+                            const gaCurrency = getCurrencySymbol(
+                              table.integration_settings?.currency,
+                            );
+                            const convInt = Math.round(data.conversions);
+                            const verified = data.verified_leads;
+                            const diff = verified - convInt;
+                            const hasDiscrepancy =
+                              hasVerifiedData && Math.abs(diff) >= 1;
+                            return (
+                              <tr
+                                key={data.name}
+                                className="border-b hover:bg-muted/30"
+                              >
+                                <td className="p-2 text-right font-medium">
+                                  {data.name}
+                                </td>
+                                <td className="p-2 text-center">
+                                  {data.impressions.toLocaleString("he-IL")}
+                                </td>
+                                <td className="p-2 text-center">
+                                  {data.clicks.toLocaleString("he-IL")}
+                                </td>
+                                <td className="p-2 text-center text-green-600 font-medium">
+                                  {convInt.toLocaleString("he-IL")}
+                                </td>
+                                {hasVerifiedData && (
+                                  <td className="p-2 text-center">
+                                    <span
+                                      className="font-medium text-foreground"
+                                      title={(() => {
+                                        const sources = filteredRecords
+                                          .filter(
+                                            (r) =>
+                                              getEntityDisplayName(
+                                                r.data,
+                                                adsEntityLevel,
+                                              ) === data.name &&
+                                              r.data?.verified_source,
+                                          )
+                                          .map(
+                                            (r) =>
+                                              r.data?.verified_source as string,
+                                          );
+                                        const uniqueSources = Array.from(
+                                          new Set(sources),
+                                        );
+                                        return uniqueSources.length > 0
+                                          ? `מקור: ${uniqueSources.join(" | ")}`
+                                          : "";
+                                      })()}
+                                    >
+                                      {verified.toLocaleString("he-IL")}
+                                    </span>
+                                  </td>
+                                )}
+                                <td className="p-2 text-center">
+                                  {gaCurrency}
+                                  {data.cost.toLocaleString("he-IL", {
+                                    maximumFractionDigits: 0,
+                                  })}
+                                </td>
+                                {isEcommerce ? (
+                                  <>
+                                    <td className="p-2 text-center text-purple-600 font-medium">
+                                      {gaCurrency}
+                                      {data.conversions_value.toLocaleString(
+                                        "he-IL",
+                                        { maximumFractionDigits: 0 },
+                                      )}
+                                    </td>
+                                    <td className="p-2 text-center text-blue-600 font-medium">
+                                      {roas.toLocaleString("he-IL", {
+                                        maximumFractionDigits: 2,
+                                      })}
+                                      x
+                                    </td>
+                                  </>
+                                ) : (
+                                  <td className="p-2 text-center text-blue-600 font-medium">
+                                    {gaCurrency}
+                                    {costPerConversion.toLocaleString("he-IL", {
+                                      maximumFractionDigits: 1,
+                                    })}
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-primary/10 font-bold">
+                          {(() => {
+                            const gaCurrency = getCurrencySymbol(
+                              table.integration_settings?.currency,
+                            );
+                            const totalConvInt = Math.round(
+                              useGoogleWooOverlay
+                                ? displayConversions
+                                : totals.conversions,
+                            );
+                            const totalDiff =
+                              totals.verified_leads - totalConvInt;
+                            const totalDiscrepancy =
+                              hasVerifiedData && Math.abs(totalDiff) >= 1;
+                            return (
+                              <tr>
+                                <td className="p-2 text-right">סה״כ</td>
+                                <td className="p-2 text-center">
+                                  {totals.impressions.toLocaleString("he-IL")}
+                                </td>
+                                <td className="p-2 text-center">
+                                  {totals.clicks.toLocaleString("he-IL")}
+                                </td>
+                                <td className="p-2 text-center text-green-600">
+                                  {totalConvInt.toLocaleString("he-IL")}
+                                </td>
+                                {hasVerifiedData && (
+                                  <td className="p-2 text-center text-foreground">
+                                    {totals.verified_leads.toLocaleString(
+                                      "he-IL",
+                                    )}
+                                  </td>
+                                )}
+                                <td className="p-2 text-center">
+                                  {gaCurrency}
+                                  {totals.cost.toLocaleString("he-IL", {
+                                    maximumFractionDigits: 0,
+                                  })}
+                                </td>
+                                {isEcommerce ? (
+                                  <>
+                                    <td className="p-2 text-center text-purple-600">
+                                      {gaCurrency}
+                                      {Math.round(
+                                        displayRevenue,
+                                      ).toLocaleString("he-IL")}
+                                    </td>
+                                    <td className="p-2 text-center text-blue-600">
+                                      {totalRoas.toLocaleString("he-IL", {
+                                        maximumFractionDigits: 2,
+                                      })}
+                                      x
+                                    </td>
+                                  </>
+                                ) : (
+                                  <td className="p-2 text-center text-blue-600">
+                                    {gaCurrency}
+                                    {(totals.conversions > 0
+                                      ? totals.cost / totals.conversions
+                                      : 0
+                                    ).toLocaleString("he-IL", {
+                                      maximumFractionDigits: 1,
+                                    })}
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })()}
+                        </tfoot>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </Card>
+              {useGoogleWooOverlay && (
+                <p className="mb-4 text-xs text-muted-foreground px-1">
+                  * טבלת &quot;רכישות לפי מקור הגעה&quot; למעלה ושורת הסה&quot;כ
+                  מבוססים על WooCommerce Order Attribution. עמודות לפי קמפיין =
+                  דיווח Google Ads.
+                </p>
+              )}
+            </>
+          )}
+
+          {/* Manual ROI for Google Ads (leads mode only) */}
+          {hasGoogleAds &&
+            filteredRecords &&
+            filteredRecords.length > 0 &&
+            table?.id &&
+            table?.integration_settings?.campaign_type !== "ecommerce" &&
+            (() => {
+              const totals = filteredRecords.reduce(
+                (acc, record) => {
+                  acc.cost += Number(record.data?.cost) || 0;
+                  acc.conversions +=
+                    Number(record.data?.conversions) ||
+                    Number(record.data?.purchases) ||
+                    0;
+                  return acc;
+                },
+                { cost: 0, conversions: 0 },
+              );
+              const gaCurrency = getCurrencySymbol(
+                table.integration_settings?.currency,
+              );
+              return (
+                <ManualROICard
+                  tableId={table.id}
+                  spend={totals.cost}
+                  leads={Math.round(totals.conversions)}
+                  currency={gaCurrency}
+                  initialClosures={
+                    table?.integration_settings?.manual_roi?.closures ?? null
+                  }
+                  initialRevenue={
+                    table?.integration_settings?.manual_roi?.revenue ?? null
+                  }
+                  integrationSettings={table?.integration_settings}
+                  readOnly={isEmbed}
+                />
+              );
+            })()}
+
+          {/* Maskyoo card is rendered inside SeoDashboardView (between KPI cubes and keywords),
+          so we don't render it again here to avoid duplication. */}
+
+          {/* Google Analytics Dashboard */}
+          {!summaryOnly &&
+            hasGoogleAnalytics &&
+            filteredRecords &&
+            filteredRecords.length > 0 && (
+              <GoogleAnalyticsDashboard
+                records={filteredRecords}
+                externalDateFilter={dateFilter}
+                externalCustomDateRange={customDateRange}
+                tableId={table?.id}
+                defaultReportMode={resolveAnalyticsReportMode({
+                  tableMode: table?.integration_settings?.default_report_mode,
+                  tables: table ? [table] : [],
+                })}
+              />
+            )}
+
+          {/* Google Search Console Dashboard */}
+          {!summaryOnly && hasGoogleSearchConsole && table?.id && (
+            <SearchConsoleDashboard tableId={table.id} />
+          )}
+
+          {/* SEO (Ahrefs) Dashboard with GSC & Analytics tabs */}
+          {!summaryOnly &&
+            hasAhrefs &&
+            isSeoReportSource(table?.integration_settings?.data_source) &&
+            (table?.integration_settings?.clientId ||
+              table?.integration_settings?.client_id ||
+              table?.client_id) &&
+            table?.tenant_id && (
+              <SeoReportTabs
+                tenantId={table.tenant_id}
+                clientId={
+                  table.integration_settings?.clientId ||
+                  table.integration_settings?.client_id ||
+                  table.client_id
+                }
+              />
+            )}
+        </div>
+      )}
+
+      {(!isAdsReportTable || adsReportView === "summary") &&
+        !summaryOnly &&
+        (hasAhrefs &&
+        isSeoReportSource(
+          table?.integration_settings?.data_source,
+        ) ? null : isLoading ? (
+          <CarmenLoadingScreen
+            variant="card"
+            messages={["כרמן מושכת את נתוני הטבלה…", "מחשבת את התקופה הנבחרת…"]}
+          />
+        ) : (
+          <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
+            <div className="overflow-auto">
+              <div className="min-w-full inline-block">
+                {/* Header */}
+                <div className="flex border-b bg-muted/30 sticky top-0 z-10">
+                  {!isEmbed && (
+                    <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => addRowMutation.mutate()}
+                        disabled={addRowMutation.isPending}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                  {fields?.map((field) => (
+                    <div
+                      key={field.id}
+                      className="w-[150px] flex-shrink-0 border-l p-2"
+                    >
+                      {editingFieldId === field.id ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={editingFieldName}
+                            onChange={(e) =>
+                              setEditingFieldName(e.target.value)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter")
+                                handleSaveFieldName(field.id);
+                              if (e.key === "Escape") handleCancelEdit();
+                            }}
+                            autoFocus
+                            className="h-7 text-sm font-medium"
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleSaveFieldName(field.id)}
+                            disabled={updateFieldNameMutation.isPending}
+                            className="h-6 w-6 p-0"
+                          >
+                            <Check className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleCancelEdit}
+                            className="h-6 w-6 p-0"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-2 group">
+                          <span
+                            className="text-sm font-medium cursor-pointer hover:text-primary transition-colors truncate text-blue-600 dark:text-blue-400"
+                            onClick={() => handleStartEdit(field)}
+                          >
+                            {field.name}
+                          </span>
+                          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleStartEdit(field)}
+                              className="h-6 w-6 p-0"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                deleteColumnMutation.mutate(field.id)
+                              }
+                              className="h-6 w-6 p-0"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {!isEmbed && (
+                    <div className="w-[150px] flex-shrink-0 border-l p-2">
+                      <div className="flex items-center gap-1">
+                        <Input
+                          placeholder="עמודה חדשה"
+                          value={newColumnName}
+                          onChange={(e) => setNewColumnName(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === "Enter" && newColumnName.trim()) {
+                              addColumnMutation.mutate(newColumnName);
+                            }
+                          }}
+                          className="h-7 text-sm"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            newColumnName.trim() &&
+                            addColumnMutation.mutate(newColumnName)
+                          }
+                          disabled={
+                            !newColumnName.trim() || addColumnMutation.isPending
+                          }
+                          className="h-6 w-6 p-0 flex-shrink-0"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Rows */}
+                {filteredRecords?.map((record, recordIndex) => (
+                  <div
+                    key={`${record.id}-${recordIndex}`}
+                    className="flex border-b hover:bg-muted/20 transition-colors group"
+                  >
+                    {!isEmbed && (
+                      <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center bg-muted/10">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteRowMutation.mutate(record.id)}
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                    {fields?.map((field) => {
+                      const cellKey = `${record.id}-${field.key}`;
+                      const isEditing =
+                        editingCell?.recordId === record.id &&
+                        editingCell?.fieldKey === field.key;
+                      const rawValue = record.data[field.key];
+                      const editValue = isEditing
+                        ? (cellValues[cellKey] ?? "")
+                        : "";
+
+                      // Format display value
+                      const formatDisplayValue = (
+                        value: any,
+                        fieldType: string,
+                        fieldKey: string,
+                      ): string => {
+                        if (
+                          value === null ||
+                          value === undefined ||
+                          value === ""
+                        )
+                          return "";
+
+                        // Format date fields
+                        if (fieldType === "date" || fieldKey === "date") {
+                          try {
+                            const date = new Date(value);
+                            if (!isNaN(date.getTime())) {
+                              return date.toLocaleDateString("he-IL", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                              });
+                            }
+                          } catch {
+                            return String(value);
+                          }
+                        }
+
+                        // Check if it's a number (either by field type or by actual type)
+                        if (
+                          fieldType === "number" ||
+                          typeof value === "number"
+                        ) {
+                          const num =
+                            typeof value === "number"
+                              ? value
+                              : parseFloat(value);
+                          if (!isNaN(num)) {
+                            // Check if it has decimals
+                            if (num % 1 !== 0) {
+                              // Format with max 1 decimal place and thousands separator
+                              return num.toLocaleString("he-IL", {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 1,
+                              });
+                            } else {
+                              // Integer - just add thousands separator
+                              return num.toLocaleString("he-IL");
+                            }
+                          }
+                        }
+
+                        return String(value);
+                      };
+
+                      const displayValue = isEditing
+                        ? editValue
+                        : formatDisplayValue(rawValue, field.type, field.key);
+
+                      return (
+                        <div
+                          key={field.id}
+                          className="w-[150px] flex-shrink-0 border-l p-0 cursor-text"
+                          onClick={() =>
+                            !isEditing &&
+                            handleCellClick(
+                              record.id,
+                              field.key,
+                              String(rawValue ?? ""),
+                            )
+                          }
+                        >
+                          {isEditing ? (
+                            <Input
+                              ref={cellInputRef}
+                              value={displayValue}
+                              onChange={(e) =>
+                                handleCellValueChange(
+                                  record.id,
+                                  field.key,
+                                  e.target.value,
+                                )
+                              }
+                              onBlur={() =>
+                                handleCellBlur(record.id, field.key)
+                              }
+                              onKeyDown={(e) =>
+                                handleCellKeyDown(e, record.id, field.key)
+                              }
+                              className="border-none rounded-none h-10 focus-visible:ring-1 focus-visible:ring-primary bg-background"
+                            />
+                          ) : (
+                            <div className="p-2 h-10 flex items-center text-sm hover:bg-accent/50 transition-colors rounded-sm">
+                              {displayValue || (
+                                <span className="text-muted-foreground">
+                                  ריק
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div className="w-[150px] flex-shrink-0 border-l" />
+                  </div>
+                ))}
+
+                {/* Empty state — never before the refetch for this period settles */}
+                {(!filteredRecords || filteredRecords.length === 0) && (
+                  <div className="flex items-center justify-center p-12 text-center">
+                    <div>
+                      {recordsFetching ? (
+                        <CarmenLoadingScreen
+                          variant="inline"
+                          messages={["כרמן מרעננת את הנתונים…"]}
+                        />
+                      ) : campaignSearch ? (
+                        <p className="text-muted-foreground mb-3">
+                          לא נמצאו קמפיינים תואמים
+                        </p>
+                      ) : table?.integration_type ? (
+                        <>
+                          <Info className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                          <p className="text-muted-foreground mb-1">
+                            אין נתונים לתקופה זו
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            נסה לסנכרן מחדש או לשנות את טווח התאריכים
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-muted-foreground mb-3">
+                            אין שורות בטבלה
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => addRowMutation.mutate()}
+                            disabled={addRowMutation.isPending}
+                          >
+                            <Plus className="ml-2 h-4 w-4" />
+                            הוסף שורה ראשונה
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        ))}
 
       {/* Make.com Automatic Sync Dialog for Google Ads */}
-      <Dialog open={showMakeWebhookDialog} onOpenChange={setShowMakeWebhookDialog}>
+      <Dialog
+        open={showMakeWebhookDialog}
+        onOpenChange={setShowMakeWebhookDialog}
+      >
         <DialogContent className="sm:max-w-[550px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -3474,8 +4800,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               הגדר את ה-Scenario ID להרצה ישירה מהטבלה
             </DialogDescription>
           </DialogHeader>
-          
-          <MakeScenarioSettings 
+
+          <MakeScenarioSettings
             table={table}
             onSync={() => {
               setShowMakeWebhookDialog(false);
@@ -3487,27 +4813,40 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       </Dialog>
 
       {/* Delete Table Confirmation Dialog */}
-      <Dialog open={showDeleteTableDialog} onOpenChange={setShowDeleteTableDialog}>
+      <Dialog
+        open={showDeleteTableDialog}
+        onOpenChange={setShowDeleteTableDialog}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>מחיקת טבלה</DialogTitle>
             <DialogDescription>
-              האם אתה בטוח שברצונך למחוק את הטבלה "{table?.name}"? פעולה זו תמחק את כל הנתונים, העמודות והרשומות ולא ניתן לשחזר אותה.
+              האם אתה בטוח שברצונך למחוק את הטבלה "{table?.name}"? פעולה זו תמחק
+              את כל הנתונים, העמודות והרשומות ולא ניתן לשחזר אותה.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowDeleteTableDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteTableDialog(false)}
+            >
               ביטול
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={() => deleteTableMutation.mutate()}
               disabled={deleteTableMutation.isPending}
             >
               {deleteTableMutation.isPending ? (
-                <><Loader2 className="ml-2 h-4 w-4 animate-spin" />מוחק...</>
+                <>
+                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  מוחק...
+                </>
               ) : (
-                <><Trash2 className="ml-2 h-4 w-4" />מחק טבלה</>
+                <>
+                  <Trash2 className="ml-2 h-4 w-4" />
+                  מחק טבלה
+                </>
               )}
             </Button>
           </div>

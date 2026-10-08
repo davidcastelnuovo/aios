@@ -16,12 +16,12 @@
 
 ## Why it wasn't caught
 
-| Gate | Would it catch? |
-|------|-----------------|
-| `pnpm build` | No — Vite transpiles without type-checking |
-| `pnpm lint` (whole repo) | Noisy baseline; `Dialog` not reported |
-| `tsc --noEmit` | **Yes** — but not in CI today; repo has many pre-existing TS errors |
-| Preview smoke test | Would catch if anyone opened Clients after the SEO PR |
+| Gate                     | Would it catch?                                                     |
+| ------------------------ | ------------------------------------------------------------------- |
+| `pnpm build`             | No — Vite transpiles without type-checking                          |
+| `pnpm lint` (whole repo) | Noisy baseline; `Dialog` not reported                               |
+| `tsc --noEmit`           | **Yes** — but not in CI today; repo has many pre-existing TS errors |
+| Preview smoke test       | Would catch if anyone opened Clients after the SEO PR               |
 
 ## Prevention (implemented / planned)
 

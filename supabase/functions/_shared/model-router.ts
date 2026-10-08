@@ -2,7 +2,12 @@
  * Carmen Model Router — capability profiles with failover (Autonomous Goal Engine Phase 3 foundation).
  */
 
-import { aiChat, AI_CHAT_MODEL, estimateOpenAICostUSD, resolveOpenAIKey } from "./ai.ts";
+import {
+  aiChat,
+  AI_CHAT_MODEL,
+  estimateOpenAICostUSD,
+  resolveOpenAIKey,
+} from "./ai.ts";
 
 export type ModelProfile = "FAST_CHAT" | "FAST_REASON" | "DEEP_REASON";
 
@@ -34,15 +39,25 @@ const PROFILE_MODELS: Record<ModelProfile, string[]> = {
   DEEP_REASON: ["gpt-4.1-mini", "gpt-4o-mini"],
 };
 
-function classifyHttpError(status: number, body: string): ModelRouterErrorClass {
+function classifyHttpError(
+  status: number,
+  body: string,
+): ModelRouterErrorClass {
   const lower = body.toLowerCase();
   if (status === 429 || lower.includes("rate limit")) return "rate_limit";
-  if (lower.includes("quota") || lower.includes("insufficient") || lower.includes("billing") || lower.includes("credit")) {
+  if (
+    lower.includes("quota") ||
+    lower.includes("insufficient") ||
+    lower.includes("billing") ||
+    lower.includes("credit")
+  ) {
     return "quota_exhausted";
   }
-  if (status === 401 || status === 403 || lower.includes("invalid api key")) return "auth_error";
+  if (status === 401 || status === 403 || lower.includes("invalid api key"))
+    return "auth_error";
   if (status >= 500) return "provider_outage";
-  if (lower.includes("context length") || lower.includes("maximum context")) return "context_incompatible";
+  if (lower.includes("context length") || lower.includes("maximum context"))
+    return "context_incompatible";
   return "unknown";
 }
 
@@ -50,9 +65,13 @@ async function callOpenAIChat(
   prompt: string,
   model: string,
   jsonMode: boolean,
-): Promise<{ ok: true; text: string; tokensIn: number; tokensOut: number } | { ok: false; errorClass: ModelRouterErrorClass; detail: string }> {
+): Promise<
+  | { ok: true; text: string; tokensIn: number; tokensOut: number }
+  | { ok: false; errorClass: ModelRouterErrorClass; detail: string }
+> {
   const resolvedKey = await resolveOpenAIKey();
-  if (!resolvedKey) return { ok: false, errorClass: "auth_error", detail: "no_openai_key" };
+  if (!resolvedKey)
+    return { ok: false, errorClass: "auth_error", detail: "no_openai_key" };
 
   const body: Record<string, unknown> = {
     model,
@@ -62,12 +81,19 @@ async function callOpenAIChat(
 
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
-    headers: { Authorization: `Bearer ${resolvedKey}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${resolvedKey}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
   });
   const raw = await r.text();
   if (!r.ok) {
-    return { ok: false, errorClass: classifyHttpError(r.status, raw), detail: raw.slice(0, 500) };
+    return {
+      ok: false,
+      errorClass: classifyHttpError(r.status, raw),
+      detail: raw.slice(0, 500),
+    };
   }
   try {
     const j = JSON.parse(raw);
@@ -152,7 +178,10 @@ export async function modelRouterJSON<T>(
 }
 
 /** Fallback to aiChat when router exhausts chain. */
-export async function modelRouterChatOrFallback(profile: ModelProfile, prompt: string): Promise<string | null> {
+export async function modelRouterChatOrFallback(
+  profile: ModelProfile,
+  prompt: string,
+): Promise<string | null> {
   const routed = await modelRouterChat(profile, prompt);
   if (routed.ok && routed.data) return routed.data;
   return await aiChat(prompt);

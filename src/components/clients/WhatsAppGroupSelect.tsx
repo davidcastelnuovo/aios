@@ -37,7 +37,7 @@ export function WhatsAppGroupSelect({
     const q = search.trim().toLowerCase();
     if (!q) return groups || [];
     return (groups || []).filter((g) =>
-      g.group_name?.toLowerCase().includes(q)
+      g.group_name?.toLowerCase().includes(q),
     );
   }, [groups, search]);
 

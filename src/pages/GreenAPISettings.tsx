@@ -3,7 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenantPath } from "@/hooks/useTenantPath";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +18,17 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowRight, Webhook, Key, CheckCircle2, AlertCircle, Copy, ExternalLink, UserPlus, Share2 } from "lucide-react";
+import {
+  ArrowRight,
+  Webhook,
+  Key,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  ExternalLink,
+  UserPlus,
+  Share2,
+} from "lucide-react";
 import { ShareIntegrationTenantsDialog } from "@/components/forms/ShareIntegrationTenantsDialog";
 import { IntegrationVisibilitySelector } from "@/components/forms/IntegrationVisibilitySelector";
 import {
@@ -48,16 +64,16 @@ export default function GreenAPISettings() {
 
   // Fetch existing integration for current user
   const { data: integration, isLoading } = useQuery({
-    queryKey: ['green-api-integration', tenantId, userId],
+    queryKey: ["green-api-integration", tenantId, userId],
     queryFn: async () => {
       if (!tenantId || !userId) return null;
-      
+
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('user_id', userId)
-        .eq('integration_type', 'green_api')
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", userId)
+        .eq("integration_type", "green_api")
         .maybeSingle();
 
       if (error) throw error;
@@ -74,43 +90,48 @@ export default function GreenAPISettings() {
 
   // Fetch integrations the user has permission to use (from other users)
   const { data: permittedIntegrations = [] } = useQuery({
-    queryKey: ['permitted-green-api-for-user', tenantId, userId],
+    queryKey: ["permitted-green-api-for-user", tenantId, userId],
     queryFn: async () => {
       if (!tenantId || !userId) return [];
-      
+
       const { data: permissions } = await supabase
-        .from('integration_user_permissions')
-        .select('integration_id')
-        .eq('user_id', userId);
-      
+        .from("integration_user_permissions")
+        .select("integration_id")
+        .eq("user_id", userId);
+
       if (!permissions?.length) return [];
-      
-      const integrationIds = permissions.map(p => p.integration_id);
-      
+
+      const integrationIds = permissions.map((p) => p.integration_id);
+
       const { data: integrations } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .in('id', integrationIds)
-        .eq('integration_type', 'green_api');
-      
+        .from("tenant_integrations")
+        .select("*")
+        .in("id", integrationIds)
+        .eq("integration_type", "green_api");
+
       if (!integrations?.length) return [];
-      
+
       // Get owner profiles
-      const ownerIds = [...new Set(integrations.map(i => i.user_id).filter(Boolean))];
-      if (ownerIds.length === 0) return integrations.map(i => ({ ...i, owner_name: 'משתמש לא ידוע' }));
-      
+      const ownerIds = [
+        ...new Set(integrations.map((i) => i.user_id).filter(Boolean)),
+      ];
+      if (ownerIds.length === 0)
+        return integrations.map((i) => ({ ...i, owner_name: "משתמש לא ידוע" }));
+
       const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .in('id', ownerIds);
-      
-      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
-      
-      return integrations.map(i => ({
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", ownerIds);
+
+      const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+      return integrations.map((i) => ({
         ...i,
-        owner_name: i.user_id && profileMap.get(i.user_id) 
-          ? (profileMap.get(i.user_id)?.full_name || profileMap.get(i.user_id)?.email) 
-          : 'משתמש לא ידוע',
+        owner_name:
+          i.user_id && profileMap.get(i.user_id)
+            ? profileMap.get(i.user_id)?.full_name ||
+              profileMap.get(i.user_id)?.email
+            : "משתמש לא ידוע",
       }));
     },
     enabled: !!tenantId && !!userId,
@@ -118,32 +139,34 @@ export default function GreenAPISettings() {
 
   // Fetch tenant users for assignment
   const { data: tenantUsers = [] } = useQuery({
-    queryKey: ['tenant-users-for-assignment', tenantId],
+    queryKey: ["tenant-users-for-assignment", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      
+
       // First get tenant_users, then fetch profiles separately to avoid RLS issues
       const { data: tuData, error: tuError } = await supabase
-        .from('tenant_users')
-        .select('user_id')
-        .eq('tenant_id', tenantId);
+        .from("tenant_users")
+        .select("user_id")
+        .eq("tenant_id", tenantId);
 
       if (tuError) throw tuError;
       if (!tuData || tuData.length === 0) return [];
-      
-      const userIds = tuData.map(tu => tu.user_id).filter(id => id !== userId);
+
+      const userIds = tuData
+        .map((tu) => tu.user_id)
+        .filter((id) => id !== userId);
       if (userIds.length === 0) return [];
-      
+
       const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .in('id', userIds);
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", userIds);
 
       if (profilesError) throw profilesError;
-      
+
       return (profilesData || []).map((p: any) => ({
         id: p.id,
-        name: p.full_name || p.email || 'משתמש',
+        name: p.full_name || p.email || "משתמש",
         email: p.email,
       }));
     },
@@ -153,9 +176,12 @@ export default function GreenAPISettings() {
   // Configure Green API webhooks
   const configureWebhooks = async (instId: string, token: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('configure-green-api', {
-        body: { instanceId: instId, apiToken: token }
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "configure-green-api",
+        {
+          body: { instanceId: instId, apiToken: token },
+        },
+      );
 
       if (error) {
         console.error("❌ Error configuring webhooks:", error);
@@ -183,7 +209,7 @@ export default function GreenAPISettings() {
       const integrationData = {
         tenant_id: tenantId,
         user_id: userId,
-        integration_type: 'green_api',
+        integration_type: "green_api",
         api_key: apiToken,
         instance_id: instanceId,
         is_active: true,
@@ -195,14 +221,14 @@ export default function GreenAPISettings() {
 
       if (integration) {
         const { error } = await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update(integrationData)
-          .eq('id', integration.id);
+          .eq("id", integration.id);
 
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .insert([integrationData]);
 
         if (error) throw error;
@@ -214,10 +240,15 @@ export default function GreenAPISettings() {
     onSuccess: () => {
       toast({
         title: "החיבור שלך נשמר בהצלחה",
-        description: "הגדרות ה-Webhook הוגדרו אוטומטית - תקבל גם הודעות שאתה שולח מהוואטסאפ",
+        description:
+          "הגדרות ה-Webhook הוגדרו אוטומטית - תקבל גם הודעות שאתה שולח מהוואטסאפ",
       });
-      queryClient.invalidateQueries({ queryKey: ['green-api-integration', tenantId, userId] });
-      queryClient.invalidateQueries({ queryKey: ['chat-integrations', tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["green-api-integration", tenantId, userId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["chat-integrations", tenantId],
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -239,7 +270,8 @@ export default function GreenAPISettings() {
     onSuccess: () => {
       toast({
         title: "הגדרות עודכנו",
-        description: "הגדרות ה-Webhook הוגדרו מחדש - כעת תקבל גם הודעות שאתה שולח מהוואטסאפ",
+        description:
+          "הגדרות ה-Webhook הוגדרו מחדש - כעת תקבל גם הודעות שאתה שולח מהוואטסאפ",
       });
     },
     onError: (error: Error) => {
@@ -260,18 +292,18 @@ export default function GreenAPISettings() {
 
       // Update integration ownership
       const { error: updateError } = await supabase
-        .from('tenant_integrations')
+        .from("tenant_integrations")
         .update({ user_id: selectedUserId })
-        .eq('id', integration.id);
+        .eq("id", integration.id);
 
       if (updateError) throw updateError;
 
       // Update all chat messages to new owner
       const { error: messagesError } = await supabase
-        .from('chat_messages')
+        .from("chat_messages")
         .update({ connection_user_id: selectedUserId })
-        .eq('connection_user_id', userId)
-        .eq('tenant_id', tenantId);
+        .eq("connection_user_id", userId)
+        .eq("tenant_id", tenantId);
 
       if (messagesError) throw messagesError;
     },
@@ -282,10 +314,14 @@ export default function GreenAPISettings() {
       });
       setAssignDialogOpen(false);
       setSelectedUserId("");
-      queryClient.invalidateQueries({ queryKey: ['green-api-integration', tenantId, userId] });
-      queryClient.invalidateQueries({ queryKey: ['chat-integrations', tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["green-api-integration", tenantId, userId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["chat-integrations", tenantId],
+      });
       // Navigate back since user no longer owns this integration
-      navigate(buildPath('/chat-integrations'));
+      navigate(buildPath("/chat-integrations"));
     },
     onError: (error: Error) => {
       toast({
@@ -310,7 +346,7 @@ export default function GreenAPISettings() {
     <div className="container mx-auto p-6 max-w-4xl" dir="rtl">
       <Button
         variant="ghost"
-        onClick={() => navigate(buildPath('/chat-integrations'))}
+        onClick={() => navigate(buildPath("/chat-integrations"))}
         className="mb-6"
       >
         <ArrowRight className="h-4 w-4 ml-2" />
@@ -335,7 +371,9 @@ export default function GreenAPISettings() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
                 <CheckCircle2 className="h-5 w-5" />
-                <span className="font-semibold">האינטגרציה פעילה ומוכנה לשימוש</span>
+                <span className="font-semibold">
+                  האינטגרציה פעילה ומוכנה לשימוש
+                </span>
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Button
@@ -344,7 +382,9 @@ export default function GreenAPISettings() {
                   onClick={() => reconfigureMutation.mutate()}
                   disabled={reconfigureMutation.isPending}
                 >
-                  {reconfigureMutation.isPending ? "מעדכן..." : "רענן הגדרות Webhook"}
+                  {reconfigureMutation.isPending
+                    ? "מעדכן..."
+                    : "רענן הגדרות Webhook"}
                 </Button>
                 <Button
                   variant="outline"
@@ -365,7 +405,8 @@ export default function GreenAPISettings() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              אם הודעות יוצאות לא מופיעות, לחץ על "רענן הגדרות" כדי לעדכן את ההגדרות ב-Green API
+              אם הודעות יוצאות לא מופיעות, לחץ על "רענן הגדרות" כדי לעדכן את
+              ההגדרות ב-Green API
             </p>
           </CardContent>
         </Card>
@@ -376,17 +417,24 @@ export default function GreenAPISettings() {
         <Alert className="mb-6">
           <Share2 className="h-4 w-4" />
           <AlertDescription>
-            <strong>יש לך גישה לאינטגרציות של משתמשים אחרים לשימוש באוטומציות:</strong>
+            <strong>
+              יש לך גישה לאינטגרציות של משתמשים אחרים לשימוש באוטומציות:
+            </strong>
             <ul className="mt-2 list-disc list-inside">
               {permittedIntegrations.map((perm: any) => (
                 <li key={perm.id}>
                   Green API של {perm.owner_name}
-                  {perm.is_active && <Badge variant="outline" className="mr-2 text-xs">פעיל</Badge>}
+                  {perm.is_active && (
+                    <Badge variant="outline" className="mr-2 text-xs">
+                      פעיל
+                    </Badge>
+                  )}
                 </li>
               ))}
             </ul>
             <p className="text-xs mt-2 text-muted-foreground">
-              אינטגרציות אלו זמינות לך לשימוש באוטומציות בלבד. אם אתה רוצה לשלוח הודעות מהצ'אט שלך, עליך להגדיר אינטגרציה משלך.
+              אינטגרציות אלו זמינות לך לשימוש באוטומציות בלבד. אם אתה רוצה לשלוח
+              הודעות מהצ'אט שלך, עליך להגדיר אינטגרציה משלך.
             </p>
           </AlertDescription>
         </Alert>
@@ -407,7 +455,10 @@ export default function GreenAPISettings() {
           <CardContent>
             <ol className="space-y-3 text-sm">
               <li className="flex gap-2">
-                <Badge variant="outline" className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0">
+                <Badge
+                  variant="outline"
+                  className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0"
+                >
                   1
                 </Badge>
                 <span>
@@ -420,24 +471,33 @@ export default function GreenAPISettings() {
                   >
                     green-api.com
                     <ExternalLink className="h-3 w-3" />
-                  </a>
-                  {" "}והתחבר לחשבון שלך
+                  </a>{" "}
+                  והתחבר לחשבון שלך
                 </span>
               </li>
               <li className="flex gap-2">
-                <Badge variant="outline" className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0">
+                <Badge
+                  variant="outline"
+                  className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0"
+                >
                   2
                 </Badge>
                 <span>צור Instance חדש או השתמש בקיים</span>
               </li>
               <li className="flex gap-2">
-                <Badge variant="outline" className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0">
+                <Badge
+                  variant="outline"
+                  className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0"
+                >
                   3
                 </Badge>
                 <span>העתק את ה-Instance ID וה-API Token מהפאנל</span>
               </li>
               <li className="flex gap-2">
-                <Badge variant="outline" className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0">
+                <Badge
+                  variant="outline"
+                  className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0"
+                >
                   4
                 </Badge>
                 <span>הדבק אותם בטופס למטה</span>
@@ -492,7 +552,11 @@ export default function GreenAPISettings() {
               disabled={saveMutation.isPending || !instanceId || !apiToken}
               className="w-full"
             >
-              {saveMutation.isPending ? "שומר..." : integration ? "עדכן הגדרות" : "שמור ואפשר"}
+              {saveMutation.isPending
+                ? "שומר..."
+                : integration
+                  ? "עדכן הגדרות"
+                  : "שמור ואפשר"}
             </Button>
           </CardContent>
         </Card>
@@ -518,11 +582,7 @@ export default function GreenAPISettings() {
                   dir="ltr"
                   className="font-mono text-xs"
                 />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={copyWebhookUrl}
-                >
+                <Button variant="outline" size="icon" onClick={copyWebhookUrl}>
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
@@ -536,14 +596,18 @@ export default function GreenAPISettings() {
             <div className="text-sm space-y-2">
               <p className="font-semibold">הגדרה אוטומטית</p>
               <p className="text-muted-foreground">
-                כשתשמור את פרטי החיבור, המערכת תגדיר אוטומטית את ה-Webhook כדי שתקבל גם הודעות נכנסות וגם הודעות שאתה שולח מהוואטסאפ.
+                כשתשמור את פרטי החיבור, המערכת תגדיר אוטומטית את ה-Webhook כדי
+                שתקבל גם הודעות נכנסות וגם הודעות שאתה שולח מהוואטסאפ.
               </p>
               <p className="font-semibold mt-4">הגדרה ידנית (במידת הצורך)</p>
               <ol className="list-decimal list-inside space-y-1 text-muted-foreground mr-4">
                 <li>עבור ל-Instance Settings בקונסול</li>
                 <li>מצא את הקטגוריה Webhook</li>
                 <li>הדבק את ה-URL למעלה בשדה Webhook URL</li>
-                <li>סמן את האירועים: <strong>incoming messages</strong> וגם <strong>outgoing messages</strong></li>
+                <li>
+                  סמן את האירועים: <strong>incoming messages</strong> וגם{" "}
+                  <strong>outgoing messages</strong>
+                </li>
                 <li>שמור שינויים</li>
               </ol>
             </div>
@@ -589,14 +653,18 @@ export default function GreenAPISettings() {
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  אין משתמשים אחרים בארגון. יש להוסיף משתמשים דרך עמוד ניהול משתמשים כדי לשייך את האינטגרציה.
+                  אין משתמשים אחרים בארגון. יש להוסיף משתמשים דרך עמוד ניהול
+                  משתמשים כדי לשייך את האינטגרציה.
                 </AlertDescription>
               </Alert>
             ) : (
               <>
                 <div className="space-y-2">
                   <Label>בחר משתמש</Label>
-                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                  <Select
+                    value={selectedUserId}
+                    onValueChange={setSelectedUserId}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="בחר משתמש..." />
                     </SelectTrigger>
@@ -613,7 +681,8 @@ export default function GreenAPISettings() {
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    <strong>שים לב:</strong> לאחר השיוך, לא תוכל לראות את הצ'אטים של חיבור זה. המשתמש החדש יראה את כל הצ'אטים.
+                    <strong>שים לב:</strong> לאחר השיוך, לא תוכל לראות את
+                    הצ'אטים של חיבור זה. המשתמש החדש יראה את כל הצ'אטים.
                   </AlertDescription>
                 </Alert>
               </>

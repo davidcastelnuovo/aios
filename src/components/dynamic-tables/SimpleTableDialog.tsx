@@ -29,7 +29,10 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
+import {
+  useAgencyClients,
+  useTableDialogAgencies,
+} from "@/hooks/useAgencyClients";
 
 interface SimpleTableDialogProps {
   open: boolean;
@@ -37,7 +40,11 @@ interface SimpleTableDialogProps {
   assignedClientIds?: string[];
 }
 
-export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: SimpleTableDialogProps) {
+export function SimpleTableDialog({
+  open,
+  onOpenChange,
+  assignedClientIds,
+}: SimpleTableDialogProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
@@ -50,17 +57,20 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
 
   // Fetch agencies
-  const { data: agencies = [] } = useTableDialogAgencies({ includeShared: true, enabled: open });
+  const { data: agencies = [] } = useTableDialogAgencies({
+    includeShared: true,
+    enabled: open,
+  });
 
   // Fetch clients based on selected agency
   const { data: rawClients = [] } = useAgencyClients(
-    agencyId && agencyId !== 'none' ? agencyId : null,
-    { enabled: open }
+    agencyId && agencyId !== "none" ? agencyId : null,
+    { enabled: open },
   );
 
   // Filter clients for campaigners
   const clients = assignedClientIds
-    ? rawClients.filter(c => assignedClientIds.includes(c.id))
+    ? rawClients.filter((c) => assignedClientIds.includes(c.id))
     : rawClients;
 
   // Reset client when agency changes
@@ -71,23 +81,25 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
 
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
 
       const slug = name
         .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9\-\u0590-\u05FF]/g, '');
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9\-\u0590-\u05FF]/g, "");
 
-      const response = await supabase.functions.invoke('crm-tables', {
-        method: 'POST',
-        body: { 
-          name, 
-          slug, 
-          description: '', 
+      const response = await supabase.functions.invoke("crm-tables", {
+        method: "POST",
+        body: {
+          name,
+          slug,
+          description: "",
           category: category || null,
-          agency_id: agencyId && agencyId !== 'none' ? agencyId : null,
-          client_id: clientId && clientId !== 'none' ? clientId : null,
+          agency_id: agencyId && agencyId !== "none" ? agencyId : null,
+          client_id: clientId && clientId !== "none" ? clientId : null,
         },
       });
 
@@ -95,24 +107,24 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-      toast.success('הטבלה נוצרה בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      toast.success("הטבלה נוצרה בהצלחה");
       handleClose();
       navigate(buildPath(`/table/${data.slug}`));
     },
     onError: (error: any) => {
-      toast.error('שגיאה ביצירת הטבלה: ' + error.message);
+      toast.error("שגיאה ביצירת הטבלה: " + error.message);
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tableName.trim()) {
-      toast.error('נא למלא את שם הטבלה');
+      toast.error("נא למלא את שם הטבלה");
       return;
     }
-    if (assignedClientIds && (!clientId || clientId === 'none')) {
-      toast.error('יש לבחור לקוח');
+    if (assignedClientIds && (!clientId || clientId === "none")) {
+      toast.error("יש לבחור לקוח");
       return;
     }
     createMutation.mutate(tableName);
@@ -131,9 +143,7 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>טבלה חדשה</DialogTitle>
-          <DialogDescription>
-            צור טבלה חדשה לניהול נתונים
-          </DialogDescription>
+          <DialogDescription>צור טבלה חדשה לניהול נתונים</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -172,23 +182,32 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
               </SelectContent>
             </Select>
           </div>
-          {agencyId && agencyId !== 'none' && (
+          {agencyId && agencyId !== "none" && (
             <div className="space-y-2">
-              <Label>{assignedClientIds ? 'שיוך ללקוח' : 'שיוך ללקוח (אופציונלי)'}</Label>
-              <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+              <Label>
+                {assignedClientIds ? "שיוך ללקוח" : "שיוך ללקוח (אופציונלי)"}
+              </Label>
+              <Popover
+                open={clientPopoverOpen}
+                onOpenChange={setClientPopoverOpen}
+              >
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     role="combobox"
                     className="w-full justify-between font-normal"
                   >
-                    {clientId && clientId !== 'none'
-                      ? clients.find((c) => c.id === clientId)?.name || 'לקוח נבחר'
-                      : 'ללא שיוך - כל הלקוחות'}
+                    {clientId && clientId !== "none"
+                      ? clients.find((c) => c.id === clientId)?.name ||
+                        "לקוח נבחר"
+                      : "ללא שיוך - כל הלקוחות"}
                     <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <PopoverContent
+                  className="w-[--radix-popover-trigger-width] p-0"
+                  align="start"
+                >
                   <div className="flex items-center border-b px-3">
                     <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     <Input
@@ -202,26 +221,46 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
                     <button
                       type="button"
                       className="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent"
-                      onClick={() => { setClientId("none"); setClientPopoverOpen(false); setClientSearch(""); }}
+                      onClick={() => {
+                        setClientId("none");
+                        setClientPopoverOpen(false);
+                        setClientSearch("");
+                      }}
                     >
-                      <Check className={`ml-2 h-4 w-4 ${clientId === 'none' ? 'opacity-100' : 'opacity-0'}`} />
+                      <Check
+                        className={`ml-2 h-4 w-4 ${clientId === "none" ? "opacity-100" : "opacity-0"}`}
+                      />
                       ללא שיוך - כל הלקוחות
                     </button>
                     {clients
-                      .filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+                      .filter((c) =>
+                        c.name
+                          .toLowerCase()
+                          .includes(clientSearch.toLowerCase()),
+                      )
                       .map((client) => (
                         <button
                           type="button"
                           key={client.id}
                           className="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent"
-                          onClick={() => { setClientId(client.id); setClientPopoverOpen(false); setClientSearch(""); }}
+                          onClick={() => {
+                            setClientId(client.id);
+                            setClientPopoverOpen(false);
+                            setClientSearch("");
+                          }}
                         >
-                          <Check className={`ml-2 h-4 w-4 ${clientId === client.id ? 'opacity-100' : 'opacity-0'}`} />
+                          <Check
+                            className={`ml-2 h-4 w-4 ${clientId === client.id ? "opacity-100" : "opacity-0"}`}
+                          />
                           {client.name}
                         </button>
                       ))}
-                    {clients.filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
-                      <p className="py-4 text-center text-sm text-muted-foreground">לא נמצאו לקוחות</p>
+                    {clients.filter((c) =>
+                      c.name.toLowerCase().includes(clientSearch.toLowerCase()),
+                    ).length === 0 && (
+                      <p className="py-4 text-center text-sm text-muted-foreground">
+                        לא נמצאו לקוחות
+                      </p>
                     )}
                   </div>
                 </PopoverContent>
@@ -233,7 +272,7 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
               ביטול
             </Button>
             <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'יוצר...' : 'צור טבלה'}
+              {createMutation.isPending ? "יוצר..." : "צור טבלה"}
             </Button>
           </DialogFooter>
         </form>

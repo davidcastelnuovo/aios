@@ -73,23 +73,50 @@ function getDateRange(
     }
     case "last_7_days":
       // Match Facebook's "Last 7 days": 7 full days ending yesterday.
-      return { startDate: fmt(subDays(today, 7)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 7)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_14_days":
-      return { startDate: fmt(subDays(today, 14)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 14)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_30_days":
-      return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 30)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_60_days":
-      return { startDate: fmt(subDays(today, 60)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 60)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_70_days":
-      return { startDate: fmt(subDays(today, 70)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 70)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_90_days":
-      return { startDate: fmt(subDays(today, 90)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 90)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_120_days":
-      return { startDate: fmt(subDays(today, 120)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 120)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_180_days":
-      return { startDate: fmt(subDays(today, 180)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 180)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "last_365_days":
-      return { startDate: fmt(subDays(today, 365)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 365)),
+        endDate: fmt(subDays(today, 1)),
+      };
     case "this_month":
       return {
         startDate: fmt(new Date(now.getFullYear(), now.getMonth(), 1)),
@@ -105,16 +132,24 @@ function getDateRange(
         return { startDate: customStart, endDate: customEnd };
       }
       // Fall through to default if custom range incomplete
-      return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 30)),
+        endDate: fmt(subDays(today, 1)),
+      };
     default:
       // Default mirrors internal default: last_30_days
-      return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
+      return {
+        startDate: fmt(subDays(today, 30)),
+        endDate: fmt(subDays(today, 1)),
+      };
   }
 }
 
 /** Mirror of normalizeSeoDomain / seoDomainsMatch in src/lib/seoDomain.ts */
 function normalizeSeoDomain(value?: string | null): string {
-  let v = String(value || "").trim().toLowerCase();
+  let v = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!v) return "";
   v = v.replace(/^sc-domain:/, "");
   v = v.replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
@@ -138,8 +173,10 @@ function filterSeoReportsByDomain<T extends { domain?: string | null }>(
 ): T[] {
   const expected = normalizeSeoDomain(expectedDomain);
   if (!expected) return reports || [];
-  const matching = (reports || []).filter((r) => seoDomainsMatch(r.domain, expected));
-  return matching.length > 0 ? matching : (reports || []);
+  const matching = (reports || []).filter((r) =>
+    seoDomainsMatch(r.domain, expected),
+  );
+  return matching.length > 0 ? matching : reports || [];
 }
 
 /** Mirror of resolve-seo-gsc-integration — no auth required (service-role only). */
@@ -162,7 +199,9 @@ async function resolveGscSiteForClient(
   for (const i of integrations || []) {
     const s: any = i.settings || {};
     const clientSites = s.client_sites || {};
-    const availableSites: any[] = Array.isArray(s.available_sites) ? s.available_sites : [];
+    const availableSites: any[] = Array.isArray(s.available_sites)
+      ? s.available_sites
+      : [];
     const mappedForClient: string | null = clientSites[clientId] || null;
     const isMappingUsable = (siteUrl: string | null) => {
       if (!siteUrl) return false;
@@ -171,7 +210,10 @@ async function resolveGscSiteForClient(
     };
 
     if (mappedForClient && isMappingUsable(mappedForClient)) {
-      if (!expectedSiteUrl || seoDomainsMatch(mappedForClient, expectedSiteUrl)) {
+      if (
+        !expectedSiteUrl ||
+        seoDomainsMatch(mappedForClient, expectedSiteUrl)
+      ) {
         candidates.push({ siteUrl: mappedForClient, rank: 1 });
         continue;
       }
@@ -199,7 +241,10 @@ async function resolveGscSiteForClient(
 }
 
 const SEO_SHARE_CACHE_TTL_MS = 10 * 60 * 1000;
-const seoShareResponseCache = new Map<string, { body: string; expiresAt: number }>();
+const seoShareResponseCache = new Map<
+  string,
+  { body: string; expiresAt: number }
+>();
 
 function readSeoShareCacheLocal(cacheKey: string): string | null {
   const hit = seoShareResponseCache.get(cacheKey);
@@ -239,7 +284,12 @@ async function writeSeoShareCache(
   body: string,
 ) {
   writeSeoShareCacheLocal(cacheKey, body);
-  await writeSeoShareCacheToDb(supabase, cacheKey, body, SEO_SHARE_CACHE_TTL_MS);
+  await writeSeoShareCacheToDb(
+    supabase,
+    cacheKey,
+    body,
+    SEO_SHARE_CACHE_TTL_MS,
+  );
 }
 
 /**
@@ -251,14 +301,19 @@ function withLiveTableSettings(cachedBody: string, table: any): string {
   try {
     const payload = JSON.parse(cachedBody);
     if (!payload?.table) return cachedBody;
-    payload.table.integration_settings = table?.integration_settings ?? payload.table.integration_settings;
+    payload.table.integration_settings =
+      table?.integration_settings ?? payload.table.integration_settings;
     return JSON.stringify(payload);
   } catch {
     return cachedBody;
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  fallback: T,
+): Promise<T> {
   return Promise.race<T>([
     promise,
     new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
@@ -306,7 +361,11 @@ async function fetchGaRecordsForSeoChart(
   supabase: ReturnType<typeof createClient>,
   gaTableId: string,
 ): Promise<any[]> {
-  const reportTypes = ["monthly_channel", "daily_source", "monthly_organic"] as const;
+  const reportTypes = [
+    "monthly_channel",
+    "daily_source",
+    "monthly_organic",
+  ] as const;
   const pages = await Promise.all(
     reportTypes.map((reportType) =>
       supabase
@@ -315,7 +374,7 @@ async function fetchGaRecordsForSeoChart(
         .eq("table_id", gaTableId)
         .eq("data->>report_type", reportType)
         .order("created_at", { ascending: false })
-        .limit(reportType === "daily_source" ? 800 : 120)
+        .limit(reportType === "daily_source" ? 800 : 120),
     ),
   );
   const out: any[] = [];
@@ -340,12 +399,16 @@ Deno.serve(async (req) => {
     try {
       const body = await req.json().catch(() => ({}));
       const shareToken = body?.token as string | undefined;
-      const manualRoi = body?.manual_roi as { closures?: number | null; revenue?: number | null } | undefined;
+      const manualRoi = body?.manual_roi as
+        { closures?: number | null; revenue?: number | null } | undefined;
       if (!shareToken || !manualRoi) {
-        return new Response(JSON.stringify({ error: "Missing token or manual_roi" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "Missing token or manual_roi" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -360,10 +423,13 @@ Deno.serve(async (req) => {
         .single();
 
       if (!share?.table_id) {
-        return new Response(JSON.stringify({ error: "Invalid or inactive share link" }), {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "Invalid or inactive share link" }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       const { data: tbl } = await supabase
@@ -376,8 +442,10 @@ Deno.serve(async (req) => {
       const newSettings = {
         ...baseSettings,
         manual_roi: {
-          closures: manualRoi.closures == null ? null : Number(manualRoi.closures) || 0,
-          revenue: manualRoi.revenue == null ? null : Number(manualRoi.revenue) || 0,
+          closures:
+            manualRoi.closures == null ? null : Number(manualRoi.closures) || 0,
+          revenue:
+            manualRoi.revenue == null ? null : Number(manualRoi.revenue) || 0,
         },
       };
 
@@ -436,16 +504,19 @@ Deno.serve(async (req) => {
     if (shareError || !share) {
       return new Response(
         JSON.stringify({ error: "Invalid or inactive share link" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     const table = share.crm_tables;
     if (!table) {
-      return new Response(
-        JSON.stringify({ error: "Table not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Table not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Fetch agency name via client association
@@ -469,11 +540,12 @@ Deno.serve(async (req) => {
     // For Ahrefs/SEO tables — return the actual SEO reports payload so the
     // public viewer can render the visual SEO dashboard instead of a raw table.
     if (table.integration_type === "ahrefs") {
-      const cacheKey = seoPart === "gsc"
-        ? `${shareToken}:gsc`
-        : seoPart === "core"
-        ? `${shareToken}:core`
-        : shareToken;
+      const cacheKey =
+        seoPart === "gsc"
+          ? `${shareToken}:gsc`
+          : seoPart === "core"
+            ? `${shareToken}:core`
+            : shareToken;
       const cachedSeoBody = await readSeoShareCache(supabase, cacheKey);
       if (cachedSeoBody) {
         return new Response(withLiveTableSettings(cachedSeoBody, table), {
@@ -489,7 +561,8 @@ Deno.serve(async (req) => {
       const settings = (table.integration_settings as any) || {};
       const targetClientId = settings.clientId || table.client_id;
       const targetDomain = settings.targetDomain || null;
-      const linkedGscSiteUrl = settings.linkedGscSiteUrl || settings.gsc_site_url || null;
+      const linkedGscSiteUrl =
+        settings.linkedGscSiteUrl || settings.gsc_site_url || null;
       const linkedGaTableId = settings.linkedGaTableId || null;
       const linkedGscTableId = settings.linkedGscTableId || null;
 
@@ -506,10 +579,13 @@ Deno.serve(async (req) => {
         try {
           const { data: clientRow } = await supabase
             .from("clients")
-            .select("tenant_id, agency_id, name, website, seo_keyword_relevance")
+            .select(
+              "tenant_id, agency_id, name, website, seo_keyword_relevance",
+            )
             .eq("id", targetClientId)
             .maybeSingle();
-          if (clientRow?.tenant_id) accessibleTenantIds.add(clientRow.tenant_id);
+          if (clientRow?.tenant_id)
+            accessibleTenantIds.add(clientRow.tenant_id);
           clientAgencyId = clientRow?.agency_id || null;
           clientName = (clientRow as any)?.name || null;
           clientWebsite = (clientRow as any)?.website || null;
@@ -518,16 +594,22 @@ Deno.serve(async (req) => {
             Array.isArray(v)
               ? v.map((x) => String(x || "").trim()).filter(Boolean)
               : [];
-          seoForceRelevant = asList(relevance.force_relevant ?? relevance.forceRelevant);
-          seoForceIrrelevant = asList(relevance.force_irrelevant ?? relevance.forceIrrelevant);
+          seoForceRelevant = asList(
+            relevance.force_relevant ?? relevance.forceRelevant,
+          );
+          seoForceIrrelevant = asList(
+            relevance.force_irrelevant ?? relevance.forceIrrelevant,
+          );
           if (clientAgencyId) {
             const { data: accessRows } = await supabase
               .from("agency_tenant_access")
               .select("accessing_tenant_id, source_tenant_id")
               .eq("agency_id", clientAgencyId);
             for (const r of accessRows || []) {
-              if (r.accessing_tenant_id) accessibleTenantIds.add(r.accessing_tenant_id);
-              if (r.source_tenant_id) accessibleTenantIds.add(r.source_tenant_id);
+              if (r.accessing_tenant_id)
+                accessibleTenantIds.add(r.accessing_tenant_id);
+              if (r.source_tenant_id)
+                accessibleTenantIds.add(r.source_tenant_id);
             }
           }
         } catch (e) {
@@ -537,25 +619,31 @@ Deno.serve(async (req) => {
 
       const tenantIdList = () => Array.from(accessibleTenantIds);
 
-      const ahrefsPromise = seoPart === "gsc"
-        ? Promise.resolve([] as any[])
-        : (async () => {
-        await clientContextPromise;
-        const tenants = tenantIdList();
-        let reportsQuery = supabase
-          .from("ahrefs_reports")
-          .select("id, domain, report_type, report_date, received_at, report_data, comparison_data, metadata")
-          .in("tenant_id", tenants)
-          .order("received_at", { ascending: false })
-          .order("report_date", { ascending: false, nullsFirst: false })
-          .limit(12);
-        if (targetClientId) reportsQuery = reportsQuery.eq("client_id", targetClientId);
-        const { data: ahrefsReportsRaw, error: reportsErr } = await reportsQuery;
-        if (reportsErr) console.error("Error fetching ahrefs reports:", reportsErr);
-        return trimAhrefsReportsForPublic(
-          filterSeoReportsByDomain(ahrefsReportsRaw || [], targetDomain),
-        );
-      })();
+      const ahrefsPromise =
+        seoPart === "gsc"
+          ? Promise.resolve([] as any[])
+          : (async () => {
+              await clientContextPromise;
+              const tenants = tenantIdList();
+              let reportsQuery = supabase
+                .from("ahrefs_reports")
+                .select(
+                  "id, domain, report_type, report_date, received_at, report_data, comparison_data, metadata",
+                )
+                .in("tenant_id", tenants)
+                .order("received_at", { ascending: false })
+                .order("report_date", { ascending: false, nullsFirst: false })
+                .limit(12);
+              if (targetClientId)
+                reportsQuery = reportsQuery.eq("client_id", targetClientId);
+              const { data: ahrefsReportsRaw, error: reportsErr } =
+                await reportsQuery;
+              if (reportsErr)
+                console.error("Error fetching ahrefs reports:", reportsErr);
+              return trimAhrefsReportsForPublic(
+                filterSeoReportsByDomain(ahrefsReportsRaw || [], targetDomain),
+              );
+            })();
 
       const gaGscTablesPromise = (async () => {
         await clientContextPromise;
@@ -607,118 +695,150 @@ Deno.serve(async (req) => {
         return { gaTable, gscTable };
       })();
 
-      const maskyooPromise = seoPart === "gsc"
-        ? Promise.resolve({ snapshots: [] as any[], period: null })
-        : (async (): Promise<{ snapshots: any[]; period: { start: string; end: string } | null }> => {
-        await clientContextPromise;
-        if (!targetClientId) return { snapshots: [], period: null };
-        try {
-          const now = new Date();
-          const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-          const prevMonthStart = new Date(prevMonthEnd.getFullYear(), prevMonthEnd.getMonth(), 1);
-          const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
-          const period = { start: fmtDate(prevMonthStart), end: fmtDate(prevMonthEnd) };
-          const { data: snaps } = await supabase
-            .from("seo_call_snapshots")
-            .select("category, incoming_count, is_manual")
-            .in("tenant_id", tenantIdList())
-            .eq("client_id", targetClientId)
-            .eq("period_start", period.start)
-            .eq("period_end", period.end);
-          return { snapshots: snaps || [], period };
-        } catch (e) {
-          console.error("Error fetching maskyoo snapshots:", e);
-          return { snapshots: [], period: null };
-        }
-      })();
+      const maskyooPromise =
+        seoPart === "gsc"
+          ? Promise.resolve({ snapshots: [] as any[], period: null })
+          : (async (): Promise<{
+              snapshots: any[];
+              period: { start: string; end: string } | null;
+            }> => {
+              await clientContextPromise;
+              if (!targetClientId) return { snapshots: [], period: null };
+              try {
+                const now = new Date();
+                const prevMonthEnd = new Date(
+                  now.getFullYear(),
+                  now.getMonth(),
+                  0,
+                );
+                const prevMonthStart = new Date(
+                  prevMonthEnd.getFullYear(),
+                  prevMonthEnd.getMonth(),
+                  1,
+                );
+                const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
+                const period = {
+                  start: fmtDate(prevMonthStart),
+                  end: fmtDate(prevMonthEnd),
+                };
+                const { data: snaps } = await supabase
+                  .from("seo_call_snapshots")
+                  .select("category, incoming_count, is_manual")
+                  .in("tenant_id", tenantIdList())
+                  .eq("client_id", targetClientId)
+                  .eq("period_start", period.start)
+                  .eq("period_end", period.end);
+                return { snapshots: snaps || [], period };
+              } catch (e) {
+                console.error("Error fetching maskyoo snapshots:", e);
+                return { snapshots: [], period: null };
+              }
+            })();
 
-      const seoMonthlyPromise = seoPart === "gsc"
-        ? Promise.resolve({
-          client_name: null,
-          domain: null,
-          share_token: null,
-          months: [] as Array<{
-            month: string;
-            status: string;
-            work: unknown;
-            notes: string | null;
-            share_token: string | null;
-            snapshot: unknown | null;
-          }>,
-        })
-        : (async () => {
-        await clientContextPromise;
-        const seoMonthly: {
-          client_name: string | null;
-          domain: string | null;
-          share_token: string | null;
-          months: Array<{
-            month: string;
-            status: string;
-            work: unknown;
-            notes: string | null;
-            share_token: string | null;
-            snapshot: unknown | null;
-          }>;
-        } = {
-          client_name: clientName,
-          domain: targetDomain || clientWebsite,
-          share_token: null,
-          months: [],
-        };
-        if (!targetClientId) return seoMonthly;
-        try {
-          const [{ data: monthlyRows }, { data: monthlyShare }] = await Promise.all([
-            supabase
-              .from("seo_monthly_updates")
-              .select("month, status, work, notes")
-              .eq("client_id", targetClientId)
-              .order("month", { ascending: false })
-              .limit(12),
-            supabase
-              .from("seo_monthly_shares")
-              .select("share_token, month, is_active, snapshot")
-              .eq("client_id", targetClientId)
-              .eq("is_active", true)
-              .order("month", { ascending: false })
-              .limit(12),
-          ]);
-          const shareByMonth = new Map<string, any>();
-          for (const shareRow of monthlyShare || []) {
-            shareByMonth.set(String(shareRow.month || "").slice(0, 10), shareRow);
-          }
-          seoMonthly.months = (monthlyRows || []).map((row: any) => {
-            const month = String(row.month || "").slice(0, 10);
-            const shareRow = shareByMonth.get(month);
-            return {
-              month,
-              status: row.status || "stable",
-              work: row.work ?? {},
-              notes: row.notes ?? null,
-              share_token: shareRow?.share_token || null,
-              snapshot: shareRow?.snapshot && typeof shareRow.snapshot === "object" ? shareRow.snapshot : null,
-            };
-          });
-          const now = new Date();
-          const lastMonthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-          const lastMonth = `${lastMonthDate.getUTCFullYear()}-${String(lastMonthDate.getUTCMonth() + 1).padStart(2, "0")}-01`;
-          const matched =
-            seoMonthly.months.find((m) => m.month === lastMonth && m.share_token) ||
-            seoMonthly.months.find((m) => m.share_token) ||
-            null;
-          seoMonthly.share_token = matched?.share_token || null;
-        } catch (e) {
-          console.error("Error fetching seo monthly work for public table:", e);
-        }
-        return seoMonthly;
-      })();
+      const seoMonthlyPromise =
+        seoPart === "gsc"
+          ? Promise.resolve({
+              client_name: null,
+              domain: null,
+              share_token: null,
+              months: [] as Array<{
+                month: string;
+                status: string;
+                work: unknown;
+                notes: string | null;
+                share_token: string | null;
+                snapshot: unknown | null;
+              }>,
+            })
+          : (async () => {
+              await clientContextPromise;
+              const seoMonthly: {
+                client_name: string | null;
+                domain: string | null;
+                share_token: string | null;
+                months: Array<{
+                  month: string;
+                  status: string;
+                  work: unknown;
+                  notes: string | null;
+                  share_token: string | null;
+                  snapshot: unknown | null;
+                }>;
+              } = {
+                client_name: clientName,
+                domain: targetDomain || clientWebsite,
+                share_token: null,
+                months: [],
+              };
+              if (!targetClientId) return seoMonthly;
+              try {
+                const [{ data: monthlyRows }, { data: monthlyShare }] =
+                  await Promise.all([
+                    supabase
+                      .from("seo_monthly_updates")
+                      .select("month, status, work, notes")
+                      .eq("client_id", targetClientId)
+                      .order("month", { ascending: false })
+                      .limit(12),
+                    supabase
+                      .from("seo_monthly_shares")
+                      .select("share_token, month, is_active, snapshot")
+                      .eq("client_id", targetClientId)
+                      .eq("is_active", true)
+                      .order("month", { ascending: false })
+                      .limit(12),
+                  ]);
+                const shareByMonth = new Map<string, any>();
+                for (const shareRow of monthlyShare || []) {
+                  shareByMonth.set(
+                    String(shareRow.month || "").slice(0, 10),
+                    shareRow,
+                  );
+                }
+                seoMonthly.months = (monthlyRows || []).map((row: any) => {
+                  const month = String(row.month || "").slice(0, 10);
+                  const shareRow = shareByMonth.get(month);
+                  return {
+                    month,
+                    status: row.status || "stable",
+                    work: row.work ?? {},
+                    notes: row.notes ?? null,
+                    share_token: shareRow?.share_token || null,
+                    snapshot:
+                      shareRow?.snapshot &&
+                      typeof shareRow.snapshot === "object"
+                        ? shareRow.snapshot
+                        : null,
+                  };
+                });
+                const now = new Date();
+                const lastMonthDate = new Date(
+                  Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1),
+                );
+                const lastMonth = `${lastMonthDate.getUTCFullYear()}-${String(lastMonthDate.getUTCMonth() + 1).padStart(2, "0")}-01`;
+                const matched =
+                  seoMonthly.months.find(
+                    (m) => m.month === lastMonth && m.share_token,
+                  ) ||
+                  seoMonthly.months.find((m) => m.share_token) ||
+                  null;
+                seoMonthly.share_token = matched?.share_token || null;
+              } catch (e) {
+                console.error(
+                  "Error fetching seo monthly work for public table:",
+                  e,
+                );
+              }
+              return seoMonthly;
+            })();
 
-      const [ahrefsReports, { gaTable, gscTable }, maskyooResult, seoMonthly] = await Promise.all([
-        ahrefsPromise,
-        gaGscTablesPromise,
-        maskyooPromise,
-        seoMonthlyPromise,
-      ]);
+      const [ahrefsReports, { gaTable, gscTable }, maskyooResult, seoMonthly] =
+        await Promise.all([
+          ahrefsPromise,
+          gaGscTablesPromise,
+          maskyooPromise,
+          seoMonthlyPromise,
+        ]);
 
       await clientContextPromise;
 
@@ -727,26 +847,36 @@ Deno.serve(async (req) => {
         (gscTable?.integration_settings as any)?.siteUrl ||
         (targetClientId
           ? await resolveGscSiteForClient(
-            supabase,
-            tenantIdList(),
-            targetClientId,
-            linkedGscSiteUrl || targetDomain || clientWebsite,
-          )
+              supabase,
+              tenantIdList(),
+              targetClientId,
+              linkedGscSiteUrl || targetDomain || clientWebsite,
+            )
           : null);
 
-      const gaRecordsPromise = seoPart === "gsc" || !gaTable?.id
-        ? Promise.resolve([] as any[])
-        : fetchGaRecordsForSeoChart(supabase, gaTable.id);
+      const gaRecordsPromise =
+        seoPart === "gsc" || !gaTable?.id
+          ? Promise.resolve([] as any[])
+          : fetchGaRecordsForSeoChart(supabase, gaTable.id);
 
       const gscBundlePromise = (async () => {
         if (seoPart === "core") {
-          return { gscRecords: [] as any[], gscMultiPeriod: null, gscSyncedAt: null };
+          return {
+            gscRecords: [] as any[],
+            gscMultiPeriod: null,
+            gscSyncedAt: null,
+          };
         }
 
         let gscRecords: any[] = [];
-        let gscMultiPeriod: { prevMonth: GscKeywordRow[]; threeMonth: GscKeywordRow[]; yearly: GscKeywordRow[] } | null = null;
+        let gscMultiPeriod: {
+          prevMonth: GscKeywordRow[];
+          threeMonth: GscKeywordRow[];
+          yearly: GscKeywordRow[];
+        } | null = null;
         let gscSyncedAt: string | null = null;
-        if (!effectiveGscSiteUrl) return { gscRecords, gscMultiPeriod, gscSyncedAt };
+        if (!effectiveGscSiteUrl)
+          return { gscRecords, gscMultiPeriod, gscSyncedAt };
 
         try {
           const snapshotBundle = await readGscSnapshots(
@@ -787,12 +917,23 @@ Deno.serve(async (req) => {
         const needsLiveGsc = liveGsc || gscRecords.length === 0;
         if (needsLiveGsc) {
           try {
-            const accessToken = await resolveGscAccessToken(supabase, tenantIdList());
+            const accessToken = await resolveGscAccessToken(
+              supabase,
+              tenantIdList(),
+            );
             if (accessToken) {
-              const currentDef = GSC_PERIOD_DEFINITIONS.find((p) => p.key === "current_90d")!;
+              const currentDef = GSC_PERIOD_DEFINITIONS.find(
+                (p) => p.key === "current_90d",
+              )!;
               const { startDate, endDate } = gscPeriodBounds(currentDef);
               const [currentRows, pm, tm, yr] = await Promise.all([
-                fetchGscKeywordsFromApi(accessToken, effectiveGscSiteUrl, startDate, endDate, currentDef.maxRows),
+                fetchGscKeywordsFromApi(
+                  accessToken,
+                  effectiveGscSiteUrl,
+                  startDate,
+                  endDate,
+                  currentDef.maxRows,
+                ),
                 withTimeout(
                   fetchGscKeywordsFromApi(
                     accessToken,
@@ -842,10 +983,8 @@ Deno.serve(async (req) => {
         return { gscRecords, gscMultiPeriod, gscSyncedAt };
       })();
 
-      const [gaRecords, { gscRecords, gscMultiPeriod, gscSyncedAt }] = await Promise.all([
-        gaRecordsPromise,
-        gscBundlePromise,
-      ]);
+      const [gaRecords, { gscRecords, gscMultiPeriod, gscSyncedAt }] =
+        await Promise.all([gaRecordsPromise, gscBundlePromise]);
 
       if (seoPart === "gsc") {
         const gscPayload = {
@@ -877,9 +1016,21 @@ Deno.serve(async (req) => {
         fields: fields || [],
         records: [],
         ahrefs_reports: ahrefsReports || [],
-        ga_table: gaTable ? { id: gaTable.id, name: gaTable.name, integration_settings: gaTable.integration_settings } : null,
+        ga_table: gaTable
+          ? {
+              id: gaTable.id,
+              name: gaTable.name,
+              integration_settings: gaTable.integration_settings,
+            }
+          : null,
         ga_records: gaRecords,
-        gsc_table: gscTable ? { id: gscTable.id, name: gscTable.name, integration_settings: gscTable.integration_settings } : null,
+        gsc_table: gscTable
+          ? {
+              id: gscTable.id,
+              name: gscTable.name,
+              integration_settings: gscTable.integration_settings,
+            }
+          : null,
         gsc_records: gscRecords,
         gsc_multi_period: gscMultiPeriod,
         gsc_synced_at: gscSyncedAt,
@@ -907,7 +1058,11 @@ Deno.serve(async (req) => {
     }
 
     // Calculate date range — mirror of internal DynamicTableView logic
-    const { startDate, endDate } = getDateRange(dateFilter, customStart, customEnd);
+    const { startDate, endDate } = getDateRange(
+      dateFilter,
+      customStart,
+      customEnd,
+    );
 
     // Fetch records WITH PAGINATION (bypass 1000-row default limit)
     const allRecords: any[] = [];
@@ -942,8 +1097,6 @@ Deno.serve(async (req) => {
           return recordDate >= startDate;
         });
 
-
-
     return new Response(
       JSON.stringify({
         table: {
@@ -957,7 +1110,7 @@ Deno.serve(async (req) => {
         records: filteredRecords,
         has_email_restriction: false,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
     console.error("Error in public-table:", err);
@@ -967,4 +1120,3 @@ Deno.serve(async (req) => {
     });
   }
 });
-

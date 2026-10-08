@@ -1,19 +1,44 @@
 import { useState, useMemo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileSpreadsheet, Loader2, ArrowLeft, ArrowRight, Check } from "lucide-react";
+import {
+  FileSpreadsheet,
+  Loader2,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface ImportLeadsSheetProps {
   trigger?: React.ReactNode;
@@ -37,7 +62,7 @@ const SYSTEM_FIELDS = [
   { key: "products", label: "מוצרים" },
   { key: "campaign_name", label: "שם קמפיין" },
   { key: "industry", label: "תעשייה/תחום" },
-  { key: "monthly_budget", label: "תקציב חד\"פ" },
+  { key: "monthly_budget", label: 'תקציב חד"פ' },
   { key: "three_month_budget", label: "הצעה 3 חודשים" },
   { key: "estimated_deal_value", label: "שווי עסקה" },
   { key: "proposal_date", label: "תאריך הצעה" },
@@ -48,70 +73,70 @@ const SYSTEM_FIELDS = [
 
 const AUTO_DETECT_MAPPINGS: Record<string, string> = {
   // עברית
-  'שם העסק': 'company_name',
-  'שם החברה': 'company_name',
-  'חברה': 'company_name',
-  'עסק': 'company_name',
-  'שם עסק': 'company_name',
-  'שם': 'company_name',
-  'שם איש קשר': 'contact_name',
-  'איש קשר': 'contact_name',
-  'טלפון': 'phone',
-  'נייד': 'phone',
-  'מייל': 'email',
-  'אימייל': 'email',
-  'מקור': 'source',
-  'מקור הגעה': 'source',
-  'סטטוס': 'status',
-  'הערות': 'notes',
-  'תקציב': 'monthly_budget',
-  'הצעה חד"פ': 'monthly_budget',
-  'הצעה חד״פ': 'monthly_budget',
-  'הצעה 3 חודשים': 'three_month_budget',
-  'מוצרים': 'products',
-  'תעשייה': 'industry',
-  'פרסום': 'industry',
-  'תחום': 'industry',
-  'קמפיין': 'campaign_name',
-  'שם קמפיין': 'campaign_name',
-  'תאריך יצירה': 'created_at',
-  'תאריך': 'created_at',
-  'תאריך הצעה': 'proposal_date',
-  'נסגר': 'won_date',
-  'תאריך סגירה': 'won_date',
-  'שווי הצעות/הסכמים': 'estimated_deal_value',
-  'שווי עסקה': 'estimated_deal_value',
-  'קישור': 'folder_link',
-  'קישור לתיקייה': 'folder_link',
+  "שם העסק": "company_name",
+  "שם החברה": "company_name",
+  חברה: "company_name",
+  עסק: "company_name",
+  "שם עסק": "company_name",
+  שם: "company_name",
+  "שם איש קשר": "contact_name",
+  "איש קשר": "contact_name",
+  טלפון: "phone",
+  נייד: "phone",
+  מייל: "email",
+  אימייל: "email",
+  מקור: "source",
+  "מקור הגעה": "source",
+  סטטוס: "status",
+  הערות: "notes",
+  תקציב: "monthly_budget",
+  'הצעה חד"פ': "monthly_budget",
+  "הצעה חד״פ": "monthly_budget",
+  "הצעה 3 חודשים": "three_month_budget",
+  מוצרים: "products",
+  תעשייה: "industry",
+  פרסום: "industry",
+  תחום: "industry",
+  קמפיין: "campaign_name",
+  "שם קמפיין": "campaign_name",
+  "תאריך יצירה": "created_at",
+  תאריך: "created_at",
+  "תאריך הצעה": "proposal_date",
+  נסגר: "won_date",
+  "תאריך סגירה": "won_date",
+  "שווי הצעות/הסכמים": "estimated_deal_value",
+  "שווי עסקה": "estimated_deal_value",
+  קישור: "folder_link",
+  "קישור לתיקייה": "folder_link",
   // English
-  'company': 'company_name',
-  'company name': 'company_name',
-  'company_name': 'company_name',
-  'business': 'company_name',
-  'contact': 'contact_name',
-  'contact name': 'contact_name',
-  'contact_name': 'contact_name',
-  'name': 'company_name',
-  'phone': 'phone',
-  'mobile': 'phone',
-  'email': 'email',
-  'source': 'source',
-  'lead source': 'source',
-  'status': 'status',
-  'notes': 'notes',
-  'budget': 'monthly_budget',
-  'monthly_budget': 'monthly_budget',
-  'products': 'products',
-  'industry': 'industry',
-  'campaign': 'campaign_name',
-  'campaign_name': 'campaign_name',
-  'created_at': 'created_at',
-  'created': 'created_at',
-  'date': 'created_at',
-  'proposal_date': 'proposal_date',
-  'won_date': 'won_date',
-  'deal_value': 'estimated_deal_value',
-  'folder_link': 'folder_link',
+  company: "company_name",
+  "company name": "company_name",
+  company_name: "company_name",
+  business: "company_name",
+  contact: "contact_name",
+  "contact name": "contact_name",
+  contact_name: "contact_name",
+  name: "company_name",
+  phone: "phone",
+  mobile: "phone",
+  email: "email",
+  source: "source",
+  "lead source": "source",
+  status: "status",
+  notes: "notes",
+  budget: "monthly_budget",
+  monthly_budget: "monthly_budget",
+  products: "products",
+  industry: "industry",
+  campaign: "campaign_name",
+  campaign_name: "campaign_name",
+  created_at: "created_at",
+  created: "created_at",
+  date: "created_at",
+  proposal_date: "proposal_date",
+  won_date: "won_date",
+  deal_value: "estimated_deal_value",
+  folder_link: "folder_link",
 };
 
 export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
@@ -122,30 +147,33 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
   const [agencyId, setAgencyId] = useState<string>("");
   const [addNotesAsUpdates, setAddNotesAsUpdates] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Mapping state
   const [sheetHeaders, setSheetHeaders] = useState<string[]>([]);
   const [sheetData, setSheetData] = useState<any[]>([]);
   const [mappings, setMappings] = useState<FieldMapping[]>([]);
-  const [importResult, setImportResult] = useState<{ imported: number; updated: number } | null>(null);
-  
+  const [importResult, setImportResult] = useState<{
+    imported: number;
+    updated: number;
+  } | null>(null);
+
   const queryClient = useQueryClient();
   const { tenant, tenantId } = useCurrentTenant();
 
   // Fetch agencies for dropdown
   const { data: agencies = [] } = useQuery({
-    queryKey: ['agencies', tenant?.id],
+    queryKey: ["agencies", tenant?.id],
     queryFn: async () => {
       if (!tenant?.id) return [];
       const { data, error } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', tenant.id)
-        .order('name');
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tenant.id)
+        .order("name");
       if (error) throw error;
       return data;
     },
-    enabled: !!tenant?.id
+    enabled: !!tenant?.id,
   });
 
   // Extract sheet ID from URL or use as-is
@@ -187,14 +215,17 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
 
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('import-leads-from-sheets', {
-        body: {
-          sheetId,
-          range,
-          tenantId,
-          fetchHeadersOnly: true
-        }
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "import-leads-from-sheets",
+        {
+          body: {
+            sheetId,
+            range,
+            tenantId,
+            fetchHeadersOnly: true,
+          },
+        },
+      );
 
       if (error) throw error;
       if (data.error) throw new Error(data.error);
@@ -209,10 +240,11 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
       // Auto-detect mappings
       const autoMappings: FieldMapping[] = headers.map((col: string) => {
         const normalizedCol = col.trim().toLowerCase();
-        const detectedField = AUTO_DETECT_MAPPINGS[col] || 
-                             AUTO_DETECT_MAPPINGS[col.trim()] ||
-                             AUTO_DETECT_MAPPINGS[normalizedCol] ||
-                             null;
+        const detectedField =
+          AUTO_DETECT_MAPPINGS[col] ||
+          AUTO_DETECT_MAPPINGS[col.trim()] ||
+          AUTO_DETECT_MAPPINGS[normalizedCol] ||
+          null;
         return { sheetColumn: col, systemField: detectedField };
       });
 
@@ -221,7 +253,7 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
       setMappings(autoMappings);
       setStep("mapping");
     } catch (error: any) {
-      console.error('Fetch headers error:', error);
+      console.error("Fetch headers error:", error);
       toast.error(error.message || "שגיאה בטעינת הגיליון");
     } finally {
       setIsLoading(false);
@@ -229,20 +261,20 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
   };
 
   const updateMapping = (sheetColumn: string, systemField: string | null) => {
-    setMappings(prev => 
-      prev.map(m => 
-        m.sheetColumn === sheetColumn 
+    setMappings((prev) =>
+      prev.map((m) =>
+        m.sheetColumn === sheetColumn
           ? { ...m, systemField: systemField === "skip" ? null : systemField }
-          : m
-      )
+          : m,
+      ),
     );
   };
 
   // Preview data with current mappings
   const previewData = useMemo(() => {
     if (sheetData.length === 0) return [];
-    
-    return sheetData.slice(0, 5).map(row => {
+
+    return sheetData.slice(0, 5).map((row) => {
       const mapped: Record<string, any> = {};
       mappings.forEach((m, idx) => {
         if (m.systemField) {
@@ -256,10 +288,10 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
   // Step 3: Import with mappings
   const handleImport = async () => {
     const sheetId = extractSheetId(sheetUrl);
-    
+
     // Build field map
     const fieldMap: Record<string, string> = {};
-    mappings.forEach(m => {
+    mappings.forEach((m) => {
       if (m.systemField) {
         fieldMap[m.sheetColumn] = m.systemField;
       }
@@ -274,35 +306,40 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('import-leads-from-sheets', {
-        body: {
-          sheetId,
-          range,
-          tenantId,
-          agencyId: agencyId === "none" ? null : agencyId || null,
-          addNotesAsUpdates,
-          fieldMap
-        }
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "import-leads-from-sheets",
+        {
+          body: {
+            sheetId,
+            range,
+            tenantId,
+            agencyId: agencyId === "none" ? null : agencyId || null,
+            addNotesAsUpdates,
+            fieldMap,
+          },
+        },
+      );
 
       if (error) throw error;
       if (data.error) throw new Error(data.error);
-      
+
       setImportResult({ imported: data.imported, updated: data.updated });
-      
+
       const message = `יובאו ${data.imported} לידים חדשים, עודכנו ${data.updated} לידים קיימים`;
-      const updatesMsg = data.updatesAdded ? `, נוספו ${data.updatesAdded} עדכונים` : '';
+      const updatesMsg = data.updatesAdded
+        ? `, נוספו ${data.updatesAdded} עדכונים`
+        : "";
       toast.success(message + updatesMsg);
-      
+
       if (data.errors && data.errors.length > 0) {
-        console.warn('Import errors:', data.errors);
+        console.warn("Import errors:", data.errors);
         toast.warning(`${data.errors.length} שגיאות בייבוא - ראה קונסול`);
       }
-      
-      queryClient.invalidateQueries({ queryKey: ['leads', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['lead-updates', tenantId] });
+
+      queryClient.invalidateQueries({ queryKey: ["leads", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-updates", tenantId] });
     } catch (error: any) {
-      console.error('Import error:', error);
+      console.error("Import error:", error);
       toast.error(error.message || "שגיאה בייבוא הנתונים");
       setStep("mapping");
     } finally {
@@ -334,8 +371,8 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
         />
       </div>
 
-      <Button 
-        onClick={fetchSheetData} 
+      <Button
+        onClick={fetchSheetData}
         disabled={isLoading || !sheetUrl.trim()}
         className="w-full"
       >
@@ -384,9 +421,14 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
             <Checkbox
               id="addNotesAsUpdates"
               checked={addNotesAsUpdates}
-              onCheckedChange={(checked) => setAddNotesAsUpdates(checked as boolean)}
+              onCheckedChange={(checked) =>
+                setAddNotesAsUpdates(checked as boolean)
+              }
             />
-            <Label htmlFor="addNotesAsUpdates" className="cursor-pointer text-sm">
+            <Label
+              htmlFor="addNotesAsUpdates"
+              className="cursor-pointer text-sm"
+            >
               הוסף הערות כעדכונים
             </Label>
           </div>
@@ -398,32 +440,48 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
         <div className="space-y-2">
           {mappings.map((mapping, idx) => {
             const sampleValue = sheetData[0]?.[idx];
-            const displaySample = sampleValue !== undefined && sampleValue !== null && sampleValue !== '' 
-              ? String(sampleValue) 
-              : "(ריק)";
+            const displaySample =
+              sampleValue !== undefined &&
+              sampleValue !== null &&
+              sampleValue !== ""
+                ? String(sampleValue)
+                : "(ריק)";
             return (
-              <div key={idx} className="flex items-center gap-3 p-2 bg-muted/50 rounded">
+              <div
+                key={idx}
+                className="flex items-center gap-3 p-2 bg-muted/50 rounded"
+              >
                 <div className="flex-1 min-w-0">
-                  <div className="font-mono text-sm truncate" title={mapping.sheetColumn}>
+                  <div
+                    className="font-mono text-sm truncate"
+                    title={mapping.sheetColumn}
+                  >
                     {mapping.sheetColumn}
                   </div>
-                  <div className="text-xs text-muted-foreground truncate" title={displaySample}>
+                  <div
+                    className="text-xs text-muted-foreground truncate"
+                    title={displaySample}
+                  >
                     דוגמה: {displaySample}
                   </div>
                 </div>
                 <ArrowLeft className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 <Select
                   value={mapping.systemField || "skip"}
-                  onValueChange={(value) => updateMapping(mapping.sheetColumn, value)}
+                  onValueChange={(value) =>
+                    updateMapping(mapping.sheetColumn, value)
+                  }
                 >
                   <SelectTrigger className="w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="skip">
-                      <span className="text-muted-foreground">דלג על שדה זה</span>
+                      <span className="text-muted-foreground">
+                        דלג על שדה זה
+                      </span>
                     </SelectItem>
-                    {SYSTEM_FIELDS.map(field => (
+                    {SYSTEM_FIELDS.map((field) => (
                       <SelectItem key={field.key} value={field.key}>
                         {field.label}
                       </SelectItem>
@@ -455,7 +513,7 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
         <Badge variant="secondary">5 שורות ראשונות</Badge>
         {agencyId && agencyId !== "none" && (
           <Badge variant="outline">
-            סוכנות: {agencies.find(a => a.id === agencyId)?.name}
+            סוכנות: {agencies.find((a) => a.id === agencyId)?.name}
           </Badge>
         )}
       </div>
@@ -464,7 +522,9 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              {SYSTEM_FIELDS.filter(f => mappings.some(m => m.systemField === f.key)).map(field => (
+              {SYSTEM_FIELDS.filter((f) =>
+                mappings.some((m) => m.systemField === f.key),
+              ).map((field) => (
                 <TableHead key={field.key} className="whitespace-nowrap">
                   {field.label}
                 </TableHead>
@@ -474,7 +534,9 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
           <TableBody>
             {previewData.map((row, idx) => (
               <TableRow key={idx}>
-                {SYSTEM_FIELDS.filter(f => mappings.some(m => m.systemField === f.key)).map(field => (
+                {SYSTEM_FIELDS.filter((f) =>
+                  mappings.some((m) => m.systemField === f.key),
+                ).map((field) => (
                   <TableCell key={field.key} className="max-w-[150px] truncate">
                     {row[field.key] ?? "-"}
                   </TableCell>
@@ -513,7 +575,8 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
           <div>
             <p className="font-medium">הייבוא הושלם בהצלחה!</p>
             <p className="text-sm text-muted-foreground">
-              {importResult.updated} לידים עודכנו, {importResult.imported} לידים חדשים נוספו
+              {importResult.updated} לידים עודכנו, {importResult.imported} לידים
+              חדשים נוספו
             </p>
           </div>
           <Button onClick={handleClose}>סגור</Button>
@@ -523,10 +586,13 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
   );
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-      if (!isOpen) handleClose();
-      else setOpen(true);
-    }}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) handleClose();
+        else setOpen(true);
+      }}
+    >
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="outline" size="sm">
@@ -535,7 +601,10 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-hidden" dir="rtl">
+      <DialogContent
+        className="sm:max-w-xl max-h-[90vh] overflow-hidden"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle>
             {step === "input" && "ייבוא לידים מ-Google Sheets"}

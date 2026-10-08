@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
@@ -18,10 +19,10 @@ serve(async (req) => {
   try {
     const { site_id } = await req.json();
     if (!site_id) {
-      return new Response(
-        JSON.stringify({ error: "site_id is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "site_id is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { data: site, error: siteError } = await supabase
@@ -33,7 +34,10 @@ serve(async (req) => {
     if (siteError || !site) {
       return new Response(
         JSON.stringify({ success: false, error: "Site not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -56,14 +60,21 @@ serve(async (req) => {
         };
       } else {
         const errText = await wpResp.text();
-        results.wordpress = { success: false, error: `HTTP ${wpResp.status}: ${errText}` };
+        results.wordpress = {
+          success: false,
+          error: `HTTP ${wpResp.status}: ${errText}`,
+        };
       }
     } catch (e: any) {
       results.wordpress = { success: false, error: e.message };
     }
 
     // ---- Test WooCommerce API (if enabled) ----
-    if (site.woocommerce_enabled && site.woo_consumer_key && site.woo_consumer_secret) {
+    if (
+      site.woocommerce_enabled &&
+      site.woo_consumer_key &&
+      site.woo_consumer_secret
+    ) {
       try {
         const wooUrl = new URL(`${site.site_url}/wp-json/wc/v3/system_status`);
         wooUrl.searchParams.set("consumer_key", site.woo_consumer_key);
@@ -79,7 +90,10 @@ serve(async (req) => {
           };
         } else {
           const errText = await wooResp.text();
-          results.woocommerce = { success: false, error: `HTTP ${wooResp.status}: ${errText}` };
+          results.woocommerce = {
+            success: false,
+            error: `HTTP ${wooResp.status}: ${errText}`,
+          };
         }
       } catch (e: any) {
         results.woocommerce = { success: false, error: e.message };
@@ -94,13 +108,16 @@ serve(async (req) => {
         site_name: site.site_name || site.site_url,
         results,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error: any) {
     console.error("test-wordpress-connection error:", error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

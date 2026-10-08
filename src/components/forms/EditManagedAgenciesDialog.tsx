@@ -31,7 +31,7 @@ export default function EditManagedAgenciesDialog({
 }: EditManagedAgenciesDialogProps) {
   const [agencySearchEM, setAgencySearchEM] = useState("");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>(
-    user.managed_agencies.map((a) => a.id)
+    user.managed_agencies.map((a) => a.id),
   );
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
@@ -48,16 +48,21 @@ export default function EditManagedAgenciesDialog({
 
       // Insert new managed agencies
       if (agencyIds.length > 0) {
-        const { error } = await supabase
-          .from("user_managed_agencies")
-          .insert(agencyIds.map((agencyId) => ({ user_id: user.id, agency_id: agencyId })));
+        const { error } = await supabase.from("user_managed_agencies").insert(
+          agencyIds.map((agencyId) => ({
+            user_id: user.id,
+            agency_id: agencyId,
+          })),
+        );
 
         if (error) throw error;
       }
     },
     onSuccess: () => {
       toast.success("הסוכנויות עודכנו בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
       onOpenChange(false);
     },
     onError: () => {
@@ -73,7 +78,7 @@ export default function EditManagedAgenciesDialog({
     setSelectedAgencies((prev) =>
       prev.includes(agencyId)
         ? prev.filter((id) => id !== agencyId)
-        : [...prev, agencyId]
+        : [...prev, agencyId],
     );
   };
 
@@ -85,18 +90,28 @@ export default function EditManagedAgenciesDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div className="max-h-96 overflow-y-auto space-y-3 border rounded-md p-4">
-            {agencies?.filter(a => a.name.toLowerCase().includes(agencySearchEM.toLowerCase())).map((agency) => (
-              <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
-                <Checkbox
-                  id={agency.id}
-                  checked={selectedAgencies.includes(agency.id)}
-                  onCheckedChange={() => handleToggle(agency.id)}
-                />
-                <Label htmlFor={agency.id} className="cursor-pointer font-normal">
-                  {agency.name}
-                </Label>
-              </div>
-            ))}
+            {agencies
+              ?.filter((a) =>
+                a.name.toLowerCase().includes(agencySearchEM.toLowerCase()),
+              )
+              .map((agency) => (
+                <div
+                  key={agency.id}
+                  className="flex items-center space-x-2 space-x-reverse"
+                >
+                  <Checkbox
+                    id={agency.id}
+                    checked={selectedAgencies.includes(agency.id)}
+                    onCheckedChange={() => handleToggle(agency.id)}
+                  />
+                  <Label
+                    htmlFor={agency.id}
+                    className="cursor-pointer font-normal"
+                  >
+                    {agency.name}
+                  </Label>
+                </div>
+              ))}
           </div>
           <Button
             onClick={handleSubmit}

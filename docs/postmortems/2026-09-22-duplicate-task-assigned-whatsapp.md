@@ -8,9 +8,9 @@ Assignees in Felix (e.g. Leon) received **two** nearly identical Carmen WhatsApp
 
 Two independent DB paths fired on `INSERT INTO tasks` with a `campaigner_id`:
 
-| Path | Mechanism | Destination |
-| --- | --- | --- |
-| **Legacy** | `trg_notify_task_assigned` → `notify_task_assigned()` → HTTP `trigger-automation` (`task_assigned`) | Carmen WhatsApp |
+| Path        | Mechanism                                                                                                                    | Destination     |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| **Legacy**  | `trg_notify_task_assigned` → `notify_task_assigned()` → HTTP `trigger-automation` (`task_assigned`)                          | Carmen WhatsApp |
 | **Current** | `trg_notify_task_notification_worker` → `task-notification-worker` → `claimAndSend` → `trigger-automation` (`task_assigned`) | Carmen WhatsApp |
 
 Migration `20260728143000_add_task_followup_notifications.sql` **dropped** the legacy trigger, but production (and stale `database/schema.sql`) could still run both if the drop never applied or schema was re-applied from an old dump. There was **no idempotency** inside `sendTaskNotificationFromTenantCarmen`, so two HTTP calls meant two sends.

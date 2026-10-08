@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getClientMoodChanges, normalizeClientMoodStatus } from "./clientMoodHistory.ts";
+import {
+  getClientMoodChanges,
+  normalizeClientMoodStatus,
+} from "./clientMoodHistory.ts";
 
 test("normalizes legacy communication statuses to client mood statuses", () => {
   assert.equal(normalizeClientMoodStatus("normal"), "happy");

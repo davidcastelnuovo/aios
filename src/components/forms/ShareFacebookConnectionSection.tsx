@@ -2,7 +2,13 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -15,9 +21,9 @@ interface ShareFacebookConnectionSectionProps {
   currentTenantId: string;
 }
 
-export function ShareFacebookConnectionSection({ 
-  integrationId, 
-  currentTenantId 
+export function ShareFacebookConnectionSection({
+  integrationId,
+  currentTenantId,
 }: ShareFacebookConnectionSectionProps) {
   const { user } = useCurrentUser();
   const queryClient = useQueryClient();
@@ -25,13 +31,14 @@ export function ShareFacebookConnectionSection({
 
   // Fetch all tenants the user belongs to (except current)
   const { data: userTenants, isLoading: loadingTenants } = useQuery({
-    queryKey: ['user-all-tenants-for-sharing', user?.id],
+    queryKey: ["user-all-tenants-for-sharing", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      
+
       const { data, error } = await supabase
-        .from('tenant_users')
-        .select(`
+        .from("tenant_users")
+        .select(
+          `
           tenant_id,
           role,
           tenants:tenant_id (
@@ -39,15 +46,16 @@ export function ShareFacebookConnectionSection({
             name,
             slug
           )
-        `)
-        .eq('user_id', user.id);
-      
+        `,
+        )
+        .eq("user_id", user.id);
+
       if (error) throw error;
-      
+
       // Filter out current tenant and flatten
       return (data || [])
-        .filter(tu => tu.tenant_id !== currentTenantId && tu.tenants)
-        .map(tu => ({
+        .filter((tu) => tu.tenant_id !== currentTenantId && tu.tenants)
+        .map((tu) => ({
           id: (tu.tenants as any).id,
           name: (tu.tenants as any).name,
           slug: (tu.tenants as any).slug,
@@ -58,16 +66,16 @@ export function ShareFacebookConnectionSection({
 
   // Fetch existing shares for this integration
   const { data: existingShares, isLoading: loadingShares } = useQuery({
-    queryKey: ['facebook-integration-shares', integrationId, currentTenantId],
+    queryKey: ["facebook-integration-shares", integrationId, currentTenantId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('tenant_id')
-        .eq('shared_from_integration_id', integrationId)
-        .eq('is_active', true);
-      
+        .from("tenant_integrations")
+        .select("tenant_id")
+        .eq("shared_from_integration_id", integrationId)
+        .eq("is_active", true);
+
       if (error) throw error;
-      return data?.map(d => d.tenant_id) || [];
+      return data?.map((d) => d.tenant_id) || [];
     },
     enabled: !!integrationId,
   });
@@ -82,23 +90,25 @@ export function ShareFacebookConnectionSection({
   // Save shares mutation
   const saveSharesMutation = useMutation({
     mutationFn: async () => {
-      if (!user?.id) throw new Error('User not found');
+      if (!user?.id) throw new Error("User not found");
 
       // Get current shares
       const currentShares = existingShares || [];
-      
+
       // Find tenants to add
-      const toAdd = selectedTenants.filter(t => !currentShares.includes(t));
-      
+      const toAdd = selectedTenants.filter((t) => !currentShares.includes(t));
+
       // Find tenants to remove
-      const toRemove = currentShares.filter(t => !selectedTenants.includes(t));
+      const toRemove = currentShares.filter(
+        (t) => !selectedTenants.includes(t),
+      );
 
       // Add new shares
       for (const tenantId of toAdd) {
-        await supabase.from('tenant_integrations').insert({
+        await supabase.from("tenant_integrations").insert({
           tenant_id: tenantId,
           user_id: user.id,
-          integration_type: 'facebook_lead_ads',
+          integration_type: "facebook_lead_ads",
           is_active: true,
           shared_from_integration_id: integrationId,
           settings: { shared: true },
@@ -108,33 +118,39 @@ export function ShareFacebookConnectionSection({
       // Remove old shares
       for (const tenantId of toRemove) {
         await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .delete()
-          .eq('tenant_id', tenantId)
-          .eq('shared_from_integration_id', integrationId);
+          .eq("tenant_id", tenantId)
+          .eq("shared_from_integration_id", integrationId);
       }
     },
     onSuccess: () => {
-      toast.success('השיתופים נשמרו בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['facebook-integration-shares', integrationId, currentTenantId] });
+      toast.success("השיתופים נשמרו בהצלחה");
+      queryClient.invalidateQueries({
+        queryKey: [
+          "facebook-integration-shares",
+          integrationId,
+          currentTenantId,
+        ],
+      });
     },
     onError: (error) => {
-      toast.error('שגיאה בשמירת השיתופים: ' + (error as Error).message);
+      toast.error("שגיאה בשמירת השיתופים: " + (error as Error).message);
     },
   });
 
   const handleToggleTenant = (tenantId: string) => {
-    setSelectedTenants(prev => 
-      prev.includes(tenantId) 
-        ? prev.filter(t => t !== tenantId)
-        : [...prev, tenantId]
+    setSelectedTenants((prev) =>
+      prev.includes(tenantId)
+        ? prev.filter((t) => t !== tenantId)
+        : [...prev, tenantId],
     );
   };
 
   const hasChanges = () => {
     const current = existingShares || [];
     if (current.length !== selectedTenants.length) return true;
-    return !current.every(t => selectedTenants.includes(t));
+    return !current.every((t) => selectedTenants.includes(t));
   };
 
   if (loadingTenants || loadingShares) {
@@ -165,8 +181,8 @@ export function ShareFacebookConnectionSection({
       <CardContent className="space-y-4">
         <div className="space-y-3">
           {userTenants.map((tenant) => (
-            <div 
-              key={tenant.id} 
+            <div
+              key={tenant.id}
               className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors flex-row-reverse"
             >
               <Checkbox
@@ -174,8 +190,8 @@ export function ShareFacebookConnectionSection({
                 checked={selectedTenants.includes(tenant.id)}
                 onCheckedChange={() => handleToggleTenant(tenant.id)}
               />
-              <Label 
-                htmlFor={`share-${tenant.id}`} 
+              <Label
+                htmlFor={`share-${tenant.id}`}
                 className="flex-1 cursor-pointer text-right"
               >
                 {tenant.name}

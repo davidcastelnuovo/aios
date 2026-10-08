@@ -7,7 +7,13 @@ import { codexApiModel, runtimeEnv } from "../carmen-brain-flags.ts";
 import type { SendContext, SendResult } from "./types.ts";
 import { capabilitiesForProvider } from "./logic.ts";
 import { wrapDirectPrompt } from "./prompts.ts";
-import { completeSession, insertMessage, logChannelAction, serviceClient, upsertRunningSession } from "./store.ts";
+import {
+  completeSession,
+  insertMessage,
+  logChannelAction,
+  serviceClient,
+  upsertRunningSession,
+} from "./store.ts";
 
 const MAX_PROMPT = 24_000;
 
@@ -15,7 +21,9 @@ function clip(text: string): string {
   return text.length > MAX_PROMPT ? text.slice(0, MAX_PROMPT) : text;
 }
 
-export async function launchCodexViaOpenAiApi(ctx: SendContext): Promise<SendResult> {
+export async function launchCodexViaOpenAiApi(
+  ctx: SendContext,
+): Promise<SendResult> {
   const sb = serviceClient();
   const env = runtimeEnv();
   const model = codexApiModel(env);
@@ -30,7 +38,11 @@ export async function launchCodexViaOpenAiApi(ctx: SendContext): Promise<SendRes
   });
 
   const prompt =
-    wrapDirectPrompt({ origin: "codex", userText: ctx.content, history: ctx.history }) +
+    wrapDirectPrompt({
+      origin: "codex",
+      userText: ctx.content,
+      history: ctx.history,
+    }) +
     "\n\n[CODEX_API] Reply in Hebrew unless asked otherwise. Be concise. Do not call external MCP tools.";
 
   const answer = await aiChat(clip(prompt), { model });
@@ -53,7 +65,11 @@ export async function launchCodexViaOpenAiApi(ctx: SendContext): Promise<SendRes
     });
   }
 
-  await completeSession(sb, session.id, status === "idle" ? "completed" : "failed");
+  await completeSession(
+    sb,
+    session.id,
+    status === "idle" ? "completed" : "failed",
+  );
   await logChannelAction(sb, {
     tenantId: ctx.tenantId,
     agentId: ctx.agentId,
@@ -70,7 +86,9 @@ export async function launchCodexViaOpenAiApi(ctx: SendContext): Promise<SendRes
   });
 
   if (!answer) {
-    throw new Error("Codex API path failed — no response from OpenAI. Check OPENAI_API_KEY / llm integration.");
+    throw new Error(
+      "Codex API path failed — no response from OpenAI. Check OPENAI_API_KEY / llm integration.",
+    );
   }
 
   return {

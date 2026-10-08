@@ -62,15 +62,19 @@ export function ConvertContactDialog({
 
   const form = useForm<ClientFormValues | LeadFormValues | GroupFormValues>({
     resolver: zodResolver(
-      type === "client" ? convertClientSchema : type === "lead" ? convertLeadSchema : convertGroupSchema
+      type === "client"
+        ? convertClientSchema
+        : type === "lead"
+          ? convertLeadSchema
+          : convertGroupSchema,
     ),
     defaultValues: {
       phone: senderPhone,
       ...(type === "client"
         ? { name: senderName || "" }
         : type === "lead"
-        ? { company_name: senderName || "", contact_name: "" }
-        : { group_name: senderName || "" }),
+          ? { company_name: senderName || "", contact_name: "" }
+          : { group_name: senderName || "" }),
     },
   });
 
@@ -99,20 +103,28 @@ export function ConvertContactDialog({
         .select("integration_type")
         .eq("tenant_id", tenantId)
         .eq("is_active", true)
-        .in("integration_type", ["manychat", "green_api", "manus_wa", "meta_whatsapp"])
+        .in("integration_type", [
+          "manychat",
+          "green_api",
+          "manus_wa",
+          "meta_whatsapp",
+        ])
         .limit(1)
         .maybeSingle();
       if (error) {
         console.error("Error fetching active provider:", error);
         return null;
       }
-      return data?.integration_type as "manychat" | "green_api" | "manus_wa" | "meta_whatsapp" | null;
+      return data?.integration_type as
+        "manychat" | "green_api" | "manus_wa" | "meta_whatsapp" | null;
     },
     enabled: !!tenantId && open,
   });
 
   const createMutation = useMutation({
-    mutationFn: async (values: ClientFormValues | LeadFormValues | GroupFormValues) => {
+    mutationFn: async (
+      values: ClientFormValues | LeadFormValues | GroupFormValues,
+    ) => {
       if (type === "group") {
         const groupData = values as GroupFormValues;
         const { data, error } = await supabase
@@ -134,14 +146,17 @@ export function ConvertContactDialog({
         // Use the RPC so a campaigner who converts a contact is auto-assigned to
         // client_team — otherwise the new client is invisible to them (and to
         // anyone filtering clients by that campaigner).
-        const { data: newClientId, error } = await supabase.rpc("create_client_with_assignment", {
-          p_tenant_id: tenantId,
-          p_agency_id: clientData.agency_id,
-          p_name: clientData.name,
-          p_phone: clientData.phone || null,
-          p_email: clientData.email || null,
-          p_notes: clientData.notes || null,
-        });
+        const { data: newClientId, error } = await supabase.rpc(
+          "create_client_with_assignment",
+          {
+            p_tenant_id: tenantId,
+            p_agency_id: clientData.agency_id,
+            p_name: clientData.name,
+            p_phone: clientData.phone || null,
+            p_email: clientData.email || null,
+            p_notes: clientData.notes || null,
+          },
+        );
         if (error) throw error;
 
         if (activeChatProvider && newClientId) {
@@ -149,7 +164,11 @@ export function ConvertContactDialog({
             .from("clients")
             .update({ active_chat_provider: activeChatProvider })
             .eq("id", newClientId);
-          if (providerError) console.error("Failed to set chat provider on new client:", providerError);
+          if (providerError)
+            console.error(
+              "Failed to set chat provider on new client:",
+              providerError,
+            );
         }
 
         return { id: newClientId as string, type: "client" as const };
@@ -169,22 +188,25 @@ export function ConvertContactDialog({
           .select()
           .single();
         if (error) throw error;
-        
+
         return { id: data.id, type: "lead" as const };
       }
     },
     onSuccess: async (result) => {
       setIsConverting(true);
-      
+
       // Call edge function to update all messages
-      const { error } = await supabase.functions.invoke("convert-unknown-contact", {
-        body: {
-          senderPhone,
-          contactId: result.id,
-          contactType: result.type,
-          tenantId,
+      const { error } = await supabase.functions.invoke(
+        "convert-unknown-contact",
+        {
+          body: {
+            senderPhone,
+            contactId: result.id,
+            contactType: result.type,
+            tenantId,
+          },
         },
-      });
+      );
 
       setIsConverting(false);
 
@@ -195,20 +217,23 @@ export function ConvertContactDialog({
         toast.success(
           type === "client"
             ? `${terms?.client?.singular || "לקוח"} נוצר בהצלחה!`
-            : `${terms?.lead?.singular || "ליד"} נוצר בהצלחה!`
+            : `${terms?.lead?.singular || "ליד"} נוצר בהצלחה!`,
         );
       }
 
       queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["chat-messages", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["unknown-contacts", tenantId],
+      });
       onOpenChange(false);
       onSuccess(result.id, result.type);
     },
     onError: (error: any) => {
       console.error("Failed to create contact:", error);
       toast.error(
-        error.message || `שגיאה ביצירת ${type === "client" ? terms?.client?.singular || "לקוח" : terms?.lead?.singular || "ליד"}`
+        error.message ||
+          `שגיאה ביצירת ${type === "client" ? terms?.client?.singular || "לקוח" : terms?.lead?.singular || "ליד"}`,
       );
     },
   });
@@ -222,10 +247,17 @@ export function ConvertContactDialog({
       <DialogContent dir="rtl" className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {type === "client" ? `המר ל${terms?.client?.singular || "לקוח"}` : `המר ל${terms?.lead?.singular || "ליד"}`}
+            {type === "client"
+              ? `המר ל${terms?.client?.singular || "לקוח"}`
+              : `המר ל${terms?.lead?.singular || "ליד"}`}
           </DialogTitle>
           <DialogDescription>
-            מלא את הפרטים כדי להמיר את איש הקשר ל{type === "client" ? terms?.client?.singular || "לקוח" : type === "lead" ? terms?.lead?.singular || "ליד" : "קבוצה"}
+            מלא את הפרטים כדי להמיר את איש הקשר ל
+            {type === "client"
+              ? terms?.client?.singular || "לקוח"
+              : type === "lead"
+                ? terms?.lead?.singular || "ליד"
+                : "קבוצה"}
           </DialogDescription>
         </DialogHeader>
 
@@ -360,10 +392,17 @@ export function ConvertContactDialog({
           )}
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               ביטול
             </Button>
-            <Button type="submit" disabled={createMutation.isPending || isConverting}>
+            <Button
+              type="submit"
+              disabled={createMutation.isPending || isConverting}
+            >
               {createMutation.isPending || isConverting ? (
                 <>
                   <Loader2 className="ml-2 h-4 w-4 animate-spin" />

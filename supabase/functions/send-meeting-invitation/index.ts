@@ -5,7 +5,8 @@ const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface MeetingInvitationRequest {
@@ -39,17 +40,20 @@ const handler = async (req: Request): Promise<Response> => {
     if (!to_email) {
       return new Response(
         JSON.stringify({ error: "Missing recipient email" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        },
       );
     }
 
     // Format the date for display
     const dateObj = new Date(meeting_date);
-    const formattedDate = dateObj.toLocaleDateString('he-IL', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
+    const formattedDate = dateObj.toLocaleDateString("he-IL", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
 
     const emailHtml = `
@@ -67,7 +71,7 @@ const handler = async (req: Request): Promise<Response> => {
           
           <div style="padding: 30px;">
             <p style="font-size: 18px; color: #333; margin-bottom: 20px;">
-              שלום ${to_name || 'לקוח יקר'},
+              שלום ${to_name || "לקוח יקר"},
             </p>
             
             <div style="background-color: #f0f9ff; border-right: 4px solid #3b82f6; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
@@ -86,33 +90,40 @@ const handler = async (req: Request): Promise<Response> => {
               </div>
             </div>
             
-            ${personal_message ? `
+            ${
+              personal_message
+                ? `
               <div style="background-color: #fefce8; border-right: 4px solid #eab308; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                 <p style="color: #713f12; margin: 0; font-size: 14px;">
                   ${personal_message}
                 </p>
               </div>
-            ` : ''}
+            `
+                : ""
+            }
             
-            ${calendar_link ? `
+            ${
+              calendar_link
+                ? `
               <div style="text-align: center; margin-top: 25px;">
                 <a href="${calendar_link}" style="display: inline-block; background-color: #3b82f6; color: white; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
                   הוסף ליומן שלי
                 </a>
               </div>
-            ` : ''}
+            `
+                : ""
+            }
             
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 25px 0;">
             
             <p style="color: #6b7280; font-size: 14px; text-align: center; margin: 0;">
-              ${organizer_name ? `נשלח על ידי ${organizer_name}` : 'נשלח באמצעות Marketing Captain'}
+              ${organizer_name ? `נשלח על ידי ${organizer_name}` : "נשלח באמצעות Marketing Captain"}
             </p>
           </div>
         </div>
       </body>
       </html>
     `;
-
 
     const emailResponse = await resend.emails.send({
       from: "Marketing Captain <onboarding@resend.dev>",
@@ -121,23 +132,19 @@ const handler = async (req: Request): Promise<Response> => {
       html: emailHtml,
     });
 
-
     return new Response(
       JSON.stringify({ success: true, data: emailResponse }),
       {
         status: 200,
         headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      },
     );
   } catch (error: any) {
     console.error("Error sending meeting invitation:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
-    );
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   }
 };
 

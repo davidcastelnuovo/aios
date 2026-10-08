@@ -6,11 +6,26 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Upload, FileText, Trash2, CheckCircle2, Loader2, AlertCircle, Image as ImageIcon, ExternalLink } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  Trash2,
+  CheckCircle2,
+  Loader2,
+  AlertCircle,
+  Image as ImageIcon,
+  ExternalLink,
+} from "lucide-react";
 import { format } from "date-fns";
 
 type Invoice = any;
@@ -41,7 +56,10 @@ export function InvoiceIntakeTab() {
   const { data: suppliers } = useQuery({
     queryKey: ["accounting-suppliers-list", tenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("suppliers").select("id, name").eq("tenant_id", tenantId);
+      const { data } = await supabase
+        .from("suppliers")
+        .select("id, name")
+        .eq("tenant_id", tenantId);
       return data || [];
     },
     enabled: !!tenantId,
@@ -50,7 +68,10 @@ export function InvoiceIntakeTab() {
   const { data: clients } = useQuery({
     queryKey: ["accounting-clients-list", tenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("id, name, agency_id").eq("tenant_id", tenantId);
+      const { data } = await supabase
+        .from("clients")
+        .select("id, name, agency_id")
+        .eq("tenant_id", tenantId);
       return data || [];
     },
     enabled: !!tenantId,
@@ -59,7 +80,10 @@ export function InvoiceIntakeTab() {
   const { data: agencies } = useQuery({
     queryKey: ["accounting-agencies-list", tenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("agencies").select("id, name").eq("tenant_id", tenantId);
+      const { data } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tenantId);
       return data || [];
     },
     enabled: !!tenantId,
@@ -72,10 +96,12 @@ export function InvoiceIntakeTab() {
       for (const file of Array.from(files)) {
         const ext = file.name.split(".").pop() || "bin";
         const path = `${tenantId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("invoices").upload(path, file, {
-          contentType: file.type,
-          upsert: false,
-        });
+        const { error: upErr } = await supabase.storage
+          .from("invoices")
+          .upload(path, file, {
+            contentType: file.type,
+            upsert: false,
+          });
         if (upErr) throw upErr;
 
         const { data: row, error: insErr } = await supabase
@@ -91,9 +117,12 @@ export function InvoiceIntakeTab() {
         if (insErr) throw insErr;
 
         // Trigger extraction
-        const { error: fnErr } = await supabase.functions.invoke("extract-invoice-data", {
-          body: { invoice_id: row.id },
-        });
+        const { error: fnErr } = await supabase.functions.invoke(
+          "extract-invoice-data",
+          {
+            body: { invoice_id: row.id },
+          },
+        );
         if (fnErr) {
           console.error("extract error", fnErr);
           toast.error(`שגיאה בזיהוי AI: ${file.name}`);
@@ -120,7 +149,9 @@ export function InvoiceIntakeTab() {
               e.preventDefault();
               handleFiles(e.dataTransfer.files);
             }}
-            onClick={() => document.getElementById("invoice-file-input")?.click()}
+            onClick={() =>
+              document.getElementById("invoice-file-input")?.click()
+            }
           >
             <input
               id="invoice-file-input"
@@ -139,7 +170,9 @@ export function InvoiceIntakeTab() {
               <>
                 <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
                 <p className="font-medium">גרור קבצים לכאן או לחץ להעלאה</p>
-                <p className="text-sm text-muted-foreground mt-1">תמונות (JPG/PNG) או PDF</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  תמונות (JPG/PNG) או PDF
+                </p>
               </>
             )}
           </div>
@@ -164,7 +197,9 @@ export function InvoiceIntakeTab() {
 
       {isLoading ? (
         <div className="space-y-3">
-          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-32 w-full" />
+          ))}
         </div>
       ) : invoices && invoices.length > 0 ? (
         <div className="space-y-3">
@@ -176,7 +211,11 @@ export function InvoiceIntakeTab() {
               clients={clients || []}
               agencies={agencies || []}
               tenantId={tenantId!}
-              onChanged={() => qc.invalidateQueries({ queryKey: ["invoice-uploads", tenantId] })}
+              onChanged={() =>
+                qc.invalidateQueries({
+                  queryKey: ["invoice-uploads", tenantId],
+                })
+              }
             />
           ))}
         </div>
@@ -224,7 +263,9 @@ function InvoiceCard({
       window.open(signedUrl, "_blank");
       return;
     }
-    const { data } = await supabase.storage.from("invoices").createSignedUrl(invoice.file_path, 3600);
+    const { data } = await supabase.storage
+      .from("invoices")
+      .createSignedUrl(invoice.file_path, 3600);
     if (data?.signedUrl) {
       setSignedUrl(data.signedUrl);
       window.open(data.signedUrl, "_blank");
@@ -282,7 +323,8 @@ function InvoiceCard({
           amount: Number(form.total_amount),
           date: form.invoice_date,
           category: "חשבונית",
-          notes: `${form.vendor_name || ""}${form.description ? " — " + form.description : ""}`.trim(),
+          notes:
+            `${form.vendor_name || ""}${form.description ? " — " + form.description : ""}`.trim(),
         })
         .select("id")
         .single();
@@ -326,13 +368,28 @@ function InvoiceCard({
   const statusBadge = () => {
     switch (invoice.status) {
       case "pending":
-        return <Badge variant="secondary"><Loader2 className="h-3 w-3 ml-1 animate-spin" />בעיבוד</Badge>;
+        return (
+          <Badge variant="secondary">
+            <Loader2 className="h-3 w-3 ml-1 animate-spin" />
+            בעיבוד
+          </Badge>
+        );
       case "processed":
         return <Badge>זוהה</Badge>;
       case "linked":
-        return <Badge variant="default" className="bg-green-600"><CheckCircle2 className="h-3 w-3 ml-1" />נשמר</Badge>;
+        return (
+          <Badge variant="default" className="bg-green-600">
+            <CheckCircle2 className="h-3 w-3 ml-1" />
+            נשמר
+          </Badge>
+        );
       case "failed":
-        return <Badge variant="destructive"><AlertCircle className="h-3 w-3 ml-1" />נכשל</Badge>;
+        return (
+          <Badge variant="destructive">
+            <AlertCircle className="h-3 w-3 ml-1" />
+            נכשל
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{invoice.status}</Badge>;
     }
@@ -347,7 +404,11 @@ function InvoiceCard({
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={openFile}>
-              {isImage ? <ImageIcon className="h-4 w-4 ml-1" /> : <FileText className="h-4 w-4 ml-1" />}
+              {isImage ? (
+                <ImageIcon className="h-4 w-4 ml-1" />
+              ) : (
+                <FileText className="h-4 w-4 ml-1" />
+              )}
               פתח קובץ
               <ExternalLink className="h-3 w-3 mr-1" />
             </Button>
@@ -366,7 +427,9 @@ function InvoiceCard({
             <Label className="text-xs">ספק (טקסט)</Label>
             <Input
               value={form.vendor_name}
-              onChange={(e) => setForm({ ...form, vendor_name: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, vendor_name: e.target.value })
+              }
               disabled={linked}
             />
           </div>
@@ -375,7 +438,9 @@ function InvoiceCard({
             <Input
               type="date"
               value={form.invoice_date}
-              onChange={(e) => setForm({ ...form, invoice_date: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, invoice_date: e.target.value })
+              }
               disabled={linked}
             />
           </div>
@@ -385,7 +450,9 @@ function InvoiceCard({
               type="number"
               step="0.01"
               value={form.total_amount}
-              onChange={(e) => setForm({ ...form, total_amount: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, total_amount: e.target.value })
+              }
               disabled={linked}
             />
           </div>
@@ -403,7 +470,9 @@ function InvoiceCard({
             <Label className="text-xs">תיאור</Label>
             <Input
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, description: e.target.value })
+              }
               disabled={linked}
             />
           </div>
@@ -412,14 +481,20 @@ function InvoiceCard({
             <Label className="text-xs">שיוך לספק</Label>
             <Select
               value={form.supplier_id || "none"}
-              onValueChange={(v) => setForm({ ...form, supplier_id: v === "none" ? "" : v })}
+              onValueChange={(v) =>
+                setForm({ ...form, supplier_id: v === "none" ? "" : v })
+              }
               disabled={linked}
             >
-              <SelectTrigger><SelectValue placeholder="ללא" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="ללא" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">ללא</SelectItem>
                 {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -428,14 +503,20 @@ function InvoiceCard({
             <Label className="text-xs">שיוך ללקוח</Label>
             <Select
               value={form.client_id || "none"}
-              onValueChange={(v) => setForm({ ...form, client_id: v === "none" ? "" : v })}
+              onValueChange={(v) =>
+                setForm({ ...form, client_id: v === "none" ? "" : v })
+              }
               disabled={linked}
             >
-              <SelectTrigger><SelectValue placeholder="ללא" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="ללא" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">ללא</SelectItem>
                 {clients.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -444,29 +525,45 @@ function InvoiceCard({
             <Label className="text-xs">שיוך לסוכנות</Label>
             <Select
               value={form.agency_id || "none"}
-              onValueChange={(v) => setForm({ ...form, agency_id: v === "none" ? "" : v })}
+              onValueChange={(v) =>
+                setForm({ ...form, agency_id: v === "none" ? "" : v })
+              }
               disabled={linked}
             >
-              <SelectTrigger><SelectValue placeholder="ללא" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="ללא" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">ללא</SelectItem>
                 {agencies.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="flex items-end">
             {!linked && (
-              <Button onClick={saveAsExpense} disabled={saving} className="w-full">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמור כהוצאה"}
+              <Button
+                onClick={saveAsExpense}
+                disabled={saving}
+                className="w-full"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "שמור כהוצאה"
+                )}
               </Button>
             )}
           </div>
         </div>
 
         {invoice.error_message && (
-          <p className="text-xs text-destructive mt-2">{invoice.error_message}</p>
+          <p className="text-xs text-destructive mt-2">
+            {invoice.error_message}
+          </p>
         )}
       </CardContent>
     </Card>

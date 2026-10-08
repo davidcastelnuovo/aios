@@ -34,61 +34,64 @@ export function ManageIntegrationPermissionsDialog({
 }: ManageIntegrationPermissionsDialogProps) {
   const { tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
-  const { permissions, grantPermission, revokePermission } = useIntegrationPermissions(integrationId);
+  const { permissions, grantPermission, revokePermission } =
+    useIntegrationPermissions(integrationId);
 
   // Fetch all users in the tenant
-  const { data: tenantUsers, isLoading, error: usersError } = useQuery({
-    queryKey: ['tenant-users', tenantId, open],
+  const {
+    data: tenantUsers,
+    isLoading,
+    error: usersError,
+  } = useQuery({
+    queryKey: ["tenant-users", tenantId, open],
     queryFn: async () => {
       if (!tenantId) {
         return [];
       }
-      
-      
+
       // First, fetch tenant_users to get user_ids
       const { data: tenantUsersData, error: tenantUsersError } = await supabase
-        .from('tenant_users')
-        .select('user_id, role')
-        .eq('tenant_id', tenantId);
-      
+        .from("tenant_users")
+        .select("user_id, role")
+        .eq("tenant_id", tenantId);
+
       if (tenantUsersError) {
-        console.error('Error fetching tenant users:', tenantUsersError);
+        console.error("Error fetching tenant users:", tenantUsersError);
         throw tenantUsersError;
       }
-      
+
       if (!tenantUsersData || tenantUsersData.length === 0) {
         return [];
       }
-      
+
       // Extract user_ids
-      const userIds = tenantUsersData.map(tu => tu.user_id);
-      
+      const userIds = tenantUsersData.map((tu) => tu.user_id);
+
       // Fetch profiles for these users
       const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .in('id', userIds);
-      
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", userIds);
+
       if (profilesError) {
-        console.error('Error fetching profiles:', profilesError);
+        console.error("Error fetching profiles:", profilesError);
         throw profilesError;
       }
-      
+
       // Combine the data
-      const combined = tenantUsersData.map(tu => ({
+      const combined = tenantUsersData.map((tu) => ({
         user_id: tu.user_id,
         role: tu.role,
-        profiles: profilesData?.find(p => p.id === tu.user_id)
+        profiles: profilesData?.find((p) => p.id === tu.user_id),
       }));
-      
-      
+
       return combined;
     },
     enabled: !!tenantId && open,
   });
 
   const hasPermission = (userId: string) => {
-    return permissions?.some(p => p.user_id === userId);
+    return permissions?.some((p) => p.user_id === userId);
   };
 
   const isOwner = (userId: string) => {
@@ -132,7 +135,7 @@ export function ManageIntegrationPermissionsDialog({
                 const isCurrentOwner = isOwner(tenantUser.user_id);
                 const hasAccess = hasPermission(tenantUser.user_id);
                 const isCurrentUser = tenantUser.user_id === userId;
-                
+
                 return (
                   <div
                     key={tenantUser.user_id}
@@ -141,13 +144,19 @@ export function ManageIntegrationPermissionsDialog({
                     <div className="flex items-center gap-3 flex-1">
                       <Checkbox
                         checked={isCurrentOwner || hasAccess}
-                        disabled={isCurrentOwner || grantPermission.isPending || revokePermission.isPending}
-                        onCheckedChange={() => handleTogglePermission(tenantUser.user_id)}
+                        disabled={
+                          isCurrentOwner ||
+                          grantPermission.isPending ||
+                          revokePermission.isPending
+                        }
+                        onCheckedChange={() =>
+                          handleTogglePermission(tenantUser.user_id)
+                        }
                       />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">
-                            {profile?.full_name || 'ללא שם'}
+                            {profile?.full_name || "ללא שם"}
                           </span>
                           {isCurrentUser && (
                             <Badge variant="secondary" className="text-xs">

@@ -24,11 +24,17 @@ test("google ads opens the customer overview", () => {
 
 test("reports without an ads account have no shortcut", () => {
   assert.equal(
-    getAdAccountUrl({ integration_type: "google_analytics", integration_settings: {} }),
+    getAdAccountUrl({
+      integration_type: "google_analytics",
+      integration_settings: {},
+    }),
     null,
   );
   assert.equal(
-    getAdAccountUrl({ integration_type: "facebook_insights", integration_settings: {} }),
+    getAdAccountUrl({
+      integration_type: "facebook_insights",
+      integration_settings: {},
+    }),
     null,
   );
 });

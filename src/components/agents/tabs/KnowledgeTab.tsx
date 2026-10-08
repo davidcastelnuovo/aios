@@ -1,30 +1,58 @@
 import { useState } from "react";
-import { useAgentKnowledge, useAgentKnowledgeMutations } from "@/hooks/useAgentKnowledge";
+import {
+  useAgentKnowledge,
+  useAgentKnowledgeMutations,
+} from "@/hooks/useAgentKnowledge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BookOpen, Folder, FolderPlus, FilePlus, Trash2, Link as LinkIcon, FileText, StickyNote } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  BookOpen,
+  Folder,
+  FolderPlus,
+  FilePlus,
+  Trash2,
+  Link as LinkIcon,
+  FileText,
+  StickyNote,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const KIND_ICON: Record<string, any> = {
-  note: StickyNote, document: FileText, link: LinkIcon, snippet: FileText,
+  note: StickyNote,
+  document: FileText,
+  link: LinkIcon,
+  snippet: FileText,
 };
 
 export function KnowledgeTab({ agentId }: { agentId: string }) {
   const { folders, items } = useAgentKnowledge(agentId);
-  const { createFolder, deleteFolder, createItem, deleteItem } = useAgentKnowledgeMutations(agentId);
+  const { createFolder, deleteFolder, createItem, deleteItem } =
+    useAgentKnowledgeMutations(agentId);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [newItemOpen, setNewItemOpen] = useState(false);
 
-  const itemsInFolder = (items.data ?? []).filter(i =>
-    selectedFolderId ? i.folder_id === selectedFolderId : i.folder_id === null
+  const itemsInFolder = (items.data ?? []).filter((i) =>
+    selectedFolderId ? i.folder_id === selectedFolderId : i.folder_id === null,
   );
 
   return (
@@ -35,27 +63,46 @@ export function KnowledgeTab({ agentId }: { agentId: string }) {
         <div className="flex-1" />
         <Dialog open={newFolderOpen} onOpenChange={setNewFolderOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" variant="outline"><FolderPlus className="h-4 w-4 me-1" /> תיקייה</Button>
+            <Button size="sm" variant="outline">
+              <FolderPlus className="h-4 w-4 me-1" /> תיקייה
+            </Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>תיקייה חדשה</DialogTitle></DialogHeader>
-            <Input value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="שם תיקייה" />
+            <DialogHeader>
+              <DialogTitle>תיקייה חדשה</DialogTitle>
+            </DialogHeader>
+            <Input
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="שם תיקייה"
+            />
             <Button
               onClick={async () => {
-                await createFolder.mutateAsync({ name: newFolderName, parent_folder_id: selectedFolderId });
-                setNewFolderName(""); setNewFolderOpen(false);
+                await createFolder.mutateAsync({
+                  name: newFolderName,
+                  parent_folder_id: selectedFolderId,
+                });
+                setNewFolderName("");
+                setNewFolderOpen(false);
               }}
               disabled={!newFolderName}
-            >צור</Button>
+            >
+              צור
+            </Button>
           </DialogContent>
         </Dialog>
         <Dialog open={newItemOpen} onOpenChange={setNewItemOpen}>
           <DialogTrigger asChild>
-            <Button size="sm"><FilePlus className="h-4 w-4 me-1" /> פריט ידע</Button>
+            <Button size="sm">
+              <FilePlus className="h-4 w-4 me-1" /> פריט ידע
+            </Button>
           </DialogTrigger>
           <ItemDialog
             folderId={selectedFolderId}
-            onSubmit={async (input) => { await createItem.mutateAsync(input); setNewItemOpen(false); }}
+            onSubmit={async (input) => {
+              await createItem.mutateAsync(input);
+              setNewItemOpen(false);
+            }}
             submitting={createItem.isPending}
           />
         </Dialog>
@@ -66,21 +113,34 @@ export function KnowledgeTab({ agentId }: { agentId: string }) {
         <Card className="p-2 max-h-[480px] overflow-auto">
           <button
             onClick={() => setSelectedFolderId(null)}
-            className={cn("w-full flex items-center gap-2 rounded p-2 text-sm text-right",
-              selectedFolderId === null ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+            className={cn(
+              "w-full flex items-center gap-2 rounded p-2 text-sm text-right",
+              selectedFolderId === null
+                ? "bg-primary text-primary-foreground"
+                : "hover:bg-muted",
+            )}
           >
             <Folder className="h-4 w-4" /> שורש
           </button>
-          {(folders.data ?? []).map(f => (
+          {(folders.data ?? []).map((f) => (
             <div key={f.id} className="flex items-center gap-1">
               <button
                 onClick={() => setSelectedFolderId(f.id)}
-                className={cn("flex-1 flex items-center gap-2 rounded p-2 text-sm text-right",
-                  selectedFolderId === f.id ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+                className={cn(
+                  "flex-1 flex items-center gap-2 rounded p-2 text-sm text-right",
+                  selectedFolderId === f.id
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted",
+                )}
               >
                 <Folder className="h-4 w-4" /> {f.name}
               </button>
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteFolder.mutate(f.id)}>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={() => deleteFolder.mutate(f.id)}
+              >
                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
               </Button>
             </div>
@@ -89,7 +149,7 @@ export function KnowledgeTab({ agentId }: { agentId: string }) {
 
         {/* Items */}
         <div className="space-y-2">
-          {itemsInFolder.map(item => {
+          {itemsInFolder.map((item) => {
             const Icon = KIND_ICON[item.kind] || StickyNote;
             return (
               <Card key={item.id} className="p-3">
@@ -98,16 +158,31 @@ export function KnowledgeTab({ agentId }: { agentId: string }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h4 className="font-medium truncate">{item.title}</h4>
-                      <Badge variant="outline" className="text-[10px] h-4">{item.kind}</Badge>
+                      <Badge variant="outline" className="text-[10px] h-4">
+                        {item.kind}
+                      </Badge>
                     </div>
-                    {item.content && <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">{item.content}</p>}
+                    {item.content && (
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">
+                        {item.content}
+                      </p>
+                    )}
                     {item.url && (
-                      <a href={item.url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary underline"
+                      >
                         {item.url}
                       </a>
                     )}
                   </div>
-                  <Button size="icon" variant="ghost" onClick={() => deleteItem.mutate(item.id)}>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => deleteItem.mutate(item.id)}
+                  >
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>
@@ -115,7 +190,9 @@ export function KnowledgeTab({ agentId }: { agentId: string }) {
             );
           })}
           {itemsInFolder.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">אין פריטים בתיקייה זו</p>
+            <p className="text-sm text-muted-foreground text-center py-8">
+              אין פריטים בתיקייה זו
+            </p>
           )}
         </div>
       </div>
@@ -123,7 +200,11 @@ export function KnowledgeTab({ agentId }: { agentId: string }) {
   );
 }
 
-function ItemDialog({ folderId, onSubmit, submitting }: {
+function ItemDialog({
+  folderId,
+  onSubmit,
+  submitting,
+}: {
   folderId: string | null;
   onSubmit: (input: any) => Promise<void>;
   submitting: boolean;
@@ -135,12 +216,16 @@ function ItemDialog({ folderId, onSubmit, submitting }: {
 
   return (
     <DialogContent>
-      <DialogHeader><DialogTitle>פריט ידע חדש</DialogTitle></DialogHeader>
+      <DialogHeader>
+        <DialogTitle>פריט ידע חדש</DialogTitle>
+      </DialogHeader>
       <div className="space-y-3">
         <div>
           <Label>סוג</Label>
           <Select value={kind} onValueChange={setKind}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="note">פתק</SelectItem>
               <SelectItem value="document">מסמך</SelectItem>
@@ -151,20 +236,30 @@ function ItemDialog({ folderId, onSubmit, submitting }: {
         </div>
         <div>
           <Label>כותרת</Label>
-          <Input value={title} onChange={e => setTitle(e.target.value)} />
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
         {kind === "link" && (
           <div>
             <Label>URL</Label>
-            <Input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://" />
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://"
+            />
           </div>
         )}
         <div>
           <Label>תוכן</Label>
-          <Textarea rows={6} value={content} onChange={e => setContent(e.target.value)} />
+          <Textarea
+            rows={6}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+          />
         </div>
         <Button
-          onClick={() => onSubmit({ title, content, kind, url, folder_id: folderId })}
+          onClick={() =>
+            onSubmit({ title, content, kind, url, folder_id: folderId })
+          }
           disabled={!title || submitting}
           className="w-full"
         >

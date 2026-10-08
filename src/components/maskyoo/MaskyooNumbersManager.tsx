@@ -1,15 +1,52 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ListChecks, Loader2, Trash2, Phone, Check, ChevronsUpDown } from "lucide-react";
+import {
+  ListChecks,
+  Loader2,
+  Trash2,
+  Phone,
+  Check,
+  ChevronsUpDown,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -23,7 +60,10 @@ interface NumberRow {
   is_ignored: boolean;
 }
 
-interface ClientOption { id: string; name: string }
+interface ClientOption {
+  id: string;
+  name: string;
+}
 
 export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
   const qc = useQueryClient();
@@ -58,9 +98,9 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
         .eq("accessing_tenant_id", tenantId);
       const agencyIds = Array.from(
         new Set([
-          ...((owned || []).map((a: any) => a.id)),
-          ...((shared || []).map((s: any) => s.agency_id)),
-        ])
+          ...(owned || []).map((a: any) => a.id),
+          ...(shared || []).map((s: any) => s.agency_id),
+        ]),
       ).filter(Boolean);
 
       let query = supabase
@@ -69,7 +109,9 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
         .in("status", ["active", "onboarding"]);
 
       if (agencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${agencyIds.join(",")})`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${agencyIds.join(",")})`,
+        );
       } else {
         query = query.eq("tenant_id", tenantId);
       }
@@ -78,7 +120,9 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
       if (error) throw error;
       // Dedupe by id
       const map = new Map<string, ClientOption>();
-      (data || []).forEach((c: any) => map.set(c.id, { id: c.id, name: c.name }));
+      (data || []).forEach((c: any) =>
+        map.set(c.id, { id: c.id, name: c.name }),
+      );
       return Array.from(map.values());
     },
   });
@@ -109,19 +153,32 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: Partial<NumberRow> }) => {
-      const { error } = await supabase.from("maskyoo_numbers" as any).update(patch).eq("id", id);
+    mutationFn: async ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: Partial<NumberRow>;
+    }) => {
+      const { error } = await supabase
+        .from("maskyoo_numbers" as any)
+        .update(patch)
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maskyoo-numbers", tenantId] });
     },
-    onError: (e: any) => toast.error("שגיאה בעדכון", { description: e.message }),
+    onError: (e: any) =>
+      toast.error("שגיאה בעדכון", { description: e.message }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("maskyoo_numbers" as any).delete().eq("id", id);
+      const { error } = await supabase
+        .from("maskyoo_numbers" as any)
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -137,17 +194,21 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
           <ListChecks className="h-5 w-5" /> מספרי מסקיו שנקלטו
         </CardTitle>
         <CardDescription>
-          כל מספר חדש שמגיע מ-Maskyoo נרשם כאן אוטומטית. שייך לקוח כדי שכל הדוחות שלו יציגו את השיחות,
-          או סמן "התעלם" כדי שלא נשמור עוד שיחות מהמספר הזה.
+          כל מספר חדש שמגיע מ-Maskyoo נרשם כאן אוטומטית. שייך לקוח כדי שכל
+          הדוחות שלו יציגו את השיחות, או סמן "התעלם" כדי שלא נשמור עוד שיחות
+          מהמספר הזה.
         </CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin" /></div>
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </div>
         ) : !numbers || numbers.length === 0 ? (
           <div className="text-center text-sm text-muted-foreground py-6 flex flex-col items-center gap-2">
             <Phone className="h-6 w-6 opacity-40" />
-            עדיין לא נקלטו מספרים. ברגע שמסקיו ישלחו שיחה ראשונה למספר חדש – הוא יופיע כאן.
+            עדיין לא נקלטו מספרים. ברגע שמסקיו ישלחו שיחה ראשונה למספר חדש – הוא
+            יופיע כאן.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -167,8 +228,13 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
                 {numbers.map((row) => {
                   const count = counts?.get(row.phone_last9) ?? 0;
                   return (
-                    <TableRow key={row.id} className={row.is_ignored ? "opacity-60" : ""}>
-                      <TableCell dir="ltr" className="font-mono text-sm">{row.display_number}</TableCell>
+                    <TableRow
+                      key={row.id}
+                      className={row.is_ignored ? "opacity-60" : ""}
+                    >
+                      <TableCell dir="ltr" className="font-mono text-sm">
+                        {row.display_number}
+                      </TableCell>
                       <TableCell>
                         <Input
                           dir="rtl"
@@ -178,7 +244,10 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
                           onBlur={(e) => {
                             const v = e.target.value.trim();
                             if (v !== (row.label || "")) {
-                              updateMutation.mutate({ id: row.id, patch: { label: v || null } });
+                              updateMutation.mutate({
+                                id: row.id,
+                                patch: { label: v || null },
+                              });
                             }
                           }}
                         />
@@ -186,9 +255,16 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
                       <TableCell>
                         <Select
                           value={row.category}
-                          onValueChange={(v) => updateMutation.mutate({ id: row.id, patch: { category: v as any } })}
+                          onValueChange={(v) =>
+                            updateMutation.mutate({
+                              id: row.id,
+                              patch: { category: v as any },
+                            })
+                          }
                         >
-                          <SelectTrigger className="h-8 min-w-[110px]"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-8 min-w-[110px]">
+                            <SelectValue />
+                          </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="organic">אורגני</SelectItem>
                             <SelectItem value="paid">ממומן</SelectItem>
@@ -200,16 +276,28 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
                         <ClientCombobox
                           clients={clients || []}
                           value={row.client_id}
-                          onChange={(v) => updateMutation.mutate({ id: row.id, patch: { client_id: v } })}
+                          onChange={(v) =>
+                            updateMutation.mutate({
+                              id: row.id,
+                              patch: { client_id: v },
+                            })
+                          }
                         />
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant={count > 0 ? "default" : "secondary"}>{count}</Badge>
+                        <Badge variant={count > 0 ? "default" : "secondary"}>
+                          {count}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-center">
                         <Switch
                           checked={row.is_ignored}
-                          onCheckedChange={(checked) => updateMutation.mutate({ id: row.id, patch: { is_ignored: checked } })}
+                          onCheckedChange={(checked) =>
+                            updateMutation.mutate({
+                              id: row.id,
+                              patch: { is_ignored: checked },
+                            })
+                          }
                         />
                       </TableCell>
                       <TableCell>
@@ -217,7 +305,11 @@ export function MaskyooNumbersManager({ tenantId }: { tenantId: string }) {
                           size="icon"
                           variant="ghost"
                           onClick={() => {
-                            if (confirm(`למחוק את המספר ${row.display_number}? הוא יופיע שוב אם תגיע אליו שיחה.`)) {
+                            if (
+                              confirm(
+                                `למחוק את המספר ${row.display_number}? הוא יופיע שוב אם תגיע אליו שיחה.`,
+                              )
+                            ) {
                               deleteMutation.mutate(row.id);
                             }
                           }}
@@ -277,7 +369,12 @@ function ClientCombobox({
                   setOpen(false);
                 }}
               >
-                <Check className={cn("me-2 h-4 w-4", !value ? "opacity-100" : "opacity-0")} />
+                <Check
+                  className={cn(
+                    "me-2 h-4 w-4",
+                    !value ? "opacity-100" : "opacity-0",
+                  )}
+                />
                 — ללא שיוך —
               </CommandItem>
               {clients.map((c) => (
@@ -289,7 +386,12 @@ function ClientCombobox({
                     setOpen(false);
                   }}
                 >
-                  <Check className={cn("me-2 h-4 w-4", value === c.id ? "opacity-100" : "opacity-0")} />
+                  <Check
+                    className={cn(
+                      "me-2 h-4 w-4",
+                      value === c.id ? "opacity-100" : "opacity-0",
+                    )}
+                  />
                   <span className="truncate">{c.name}</span>
                 </CommandItem>
               ))}

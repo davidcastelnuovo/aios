@@ -5,6 +5,7 @@ This project has a knowledge graph at graphify-out/ with god nodes, community st
 When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
 
 Rules:
+
 - Before architecture or implementation work, use the shared `aios-system-graph` MCP tools (`query_system_graph` and `graph_status`) when available to locate existing components, dependencies, database objects, Edge Functions, Carmen skins, tools, and memory paths. Confirm the central graph matches a recent `main` commit; reuse existing functionality and inspect affected dependencies again before opening a PR.
 - For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
 - Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.

@@ -22,13 +22,16 @@ test("facebookIntakeEventSource is a single shared webhook/poll lock", () => {
 });
 
 test("claimFacebookLeadIntake treats unique violations as duplicates", async () => {
-  const result = await claimFacebookLeadIntake({
-    from: () => ({ insert: async () => ({ error: { code: "23505" } }) }),
-  }, {
-    tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
-    leadgenId: "1614307953752490",
-    formId: "2804363709904461",
-  });
+  const result = await claimFacebookLeadIntake(
+    {
+      from: () => ({ insert: async () => ({ error: { code: "23505" } }) }),
+    },
+    {
+      tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
+      leadgenId: "1614307953752490",
+      formId: "2804363709904461",
+    },
+  );
   assert.equal(result.duplicate, true);
   assert.equal(result.inserted, false);
 });
@@ -75,22 +78,34 @@ test("claimFacebookLeadAutomationRun reports inserted on success", async () => {
 });
 
 test("claimFacebookLeadAutomationRun treats 409 and unique-constraint text as duplicates", async () => {
-  const byCode = await claimFacebookLeadAutomationRun({
-    from: () => ({ insert: async () => ({ error: { code: "409", message: "Conflict" } }) }),
-  }, {
-    tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
-    automationId: "82858e4b-3daa-41ed-9b50-5045769b2115",
-    leadgenId: "874979795580881",
-  });
+  const byCode = await claimFacebookLeadAutomationRun(
+    {
+      from: () => ({
+        insert: async () => ({ error: { code: "409", message: "Conflict" } }),
+      }),
+    },
+    {
+      tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
+      automationId: "82858e4b-3daa-41ed-9b50-5045769b2115",
+      leadgenId: "874979795580881",
+    },
+  );
   assert.equal(byCode.duplicate, true);
 
-  const byText = await claimFacebookLeadAutomationRun({
-    from: () => ({ insert: async () => ({ error: { message: "duplicate key value violates unique constraint" } }) }),
-  }, {
-    tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
-    automationId: "82858e4b-3daa-41ed-9b50-5045769b2115",
-    leadgenId: "874979795580881",
-  });
+  const byText = await claimFacebookLeadAutomationRun(
+    {
+      from: () => ({
+        insert: async () => ({
+          error: { message: "duplicate key value violates unique constraint" },
+        }),
+      }),
+    },
+    {
+      tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
+      automationId: "82858e4b-3daa-41ed-9b50-5045769b2115",
+      leadgenId: "874979795580881",
+    },
+  );
   assert.equal(byText.duplicate, true);
 });
 
@@ -114,25 +129,31 @@ test("facebookWhatsAppSendSource normalizes Israeli phone variants", () => {
 });
 
 test("claimFacebookLeadWhatsAppSend treats unique violations as duplicates", async () => {
-  const result = await claimFacebookLeadWhatsAppSend({
-    from: () => ({ insert: async () => ({ error: { code: "23505" } }) }),
-  }, {
-    tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
-    chatId: "972546684466@c.us",
-    leadgenId: "1756054335601891",
-  });
+  const result = await claimFacebookLeadWhatsAppSend(
+    {
+      from: () => ({ insert: async () => ({ error: { code: "23505" } }) }),
+    },
+    {
+      tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
+      chatId: "972546684466@c.us",
+      leadgenId: "1756054335601891",
+    },
+  );
   assert.equal(result.duplicate, true);
   assert.equal(result.inserted, false);
 });
 
 test("claimFacebookLeadWhatsAppSend reports inserted on success", async () => {
-  const result = await claimFacebookLeadWhatsAppSend({
-    from: () => ({ insert: async () => ({ error: null }) }),
-  }, {
-    tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
-    chatId: "0546684466",
-    leadgenId: "1756054335601891",
-  });
+  const result = await claimFacebookLeadWhatsAppSend(
+    {
+      from: () => ({ insert: async () => ({ error: null }) }),
+    },
+    {
+      tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
+      chatId: "0546684466",
+      leadgenId: "1756054335601891",
+    },
+  );
   assert.equal(result.duplicate, false);
   assert.equal(result.inserted, true);
 });
@@ -251,7 +272,10 @@ test("whatsAppBodyEventSource follows the same chat normalization as send locks"
 test("shouldLockWhatsAppBody locks Facebook leads and ליד חדש templates", () => {
   assert.equal(shouldLockWhatsAppBody("שלום", null), false);
   assert.equal(shouldLockWhatsAppBody("שלום", "1384758217138329"), true);
-  assert.equal(shouldLockWhatsAppBody("ליד חדש סקווש:\nשם:Gabriela", null), true);
+  assert.equal(
+    shouldLockWhatsAppBody("ליד חדש סקווש:\nשם:Gabriela", null),
+    true,
+  );
 });
 
 test("hashWhatsAppBody is stable for the same text", async () => {
@@ -264,13 +288,16 @@ test("hashWhatsAppBody is stable for the same text", async () => {
 });
 
 test("claimIdenticalWhatsAppSend treats unique violations as duplicates", async () => {
-  const result = await claimIdenticalWhatsAppSend({
-    from: () => ({ insert: async () => ({ error: { code: "23505" } }) }),
-  }, {
-    tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
-    chatId: "972546684466@c.us",
-    message: "ליד חדש סקווש:\nשם:Gabriela Tajch\nטלפון:+972547905458",
-  });
+  const result = await claimIdenticalWhatsAppSend(
+    {
+      from: () => ({ insert: async () => ({ error: { code: "23505" } }) }),
+    },
+    {
+      tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
+      chatId: "972546684466@c.us",
+      message: "ליד חדש סקווש:\nשם:Gabriela Tajch\nטלפון:+972547905458",
+    },
+  );
   assert.equal(result.duplicate, true);
   assert.equal(result.inserted, false);
 });
@@ -294,7 +321,12 @@ test("facebookTriggerAutomationSucceeded requires a successful inner result", ()
   assert.equal(
     facebookTriggerAutomationSucceeded({
       success: true,
-      results: [{ success: true, automation_id: "82858e4b-3daa-41ed-9b50-5045769b2115" }],
+      results: [
+        {
+          success: true,
+          automation_id: "82858e4b-3daa-41ed-9b50-5045769b2115",
+        },
+      ],
     }),
     true,
   );
@@ -307,11 +339,19 @@ test("shouldCreateCrmLeadForFacebookFlowConfig skips CRM for WhatsApp-only flows
     facebook_integration_id: "1d250a3d-7515-4d85-85d6-c4a8581f8b62",
   };
   assert.equal(
-    shouldCreateCrmLeadForFacebookFlowConfig(squashTrigger, "lead_created", false),
+    shouldCreateCrmLeadForFacebookFlowConfig(
+      squashTrigger,
+      "lead_created",
+      false,
+    ),
     false,
   );
   assert.equal(
-    shouldCreateCrmLeadForFacebookFlowConfig(squashTrigger, "lead_created", true),
+    shouldCreateCrmLeadForFacebookFlowConfig(
+      squashTrigger,
+      "lead_created",
+      true,
+    ),
     true,
   );
   assert.equal(

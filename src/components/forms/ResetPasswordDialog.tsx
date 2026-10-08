@@ -31,16 +31,27 @@ export function ResetPasswordDialog({
   const [showPassword, setShowPassword] = useState(false);
 
   const resetPasswordMutation = useMutation({
-    mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
-      const { data: { session } } = await supabase.auth.getSession();
+    mutationFn: async ({
+      userId,
+      newPassword,
+    }: {
+      userId: string;
+      newPassword: string;
+    }) => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session");
 
-      const { data, error } = await supabase.functions.invoke("reset-user-password", {
-        body: { userId, newPassword },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
+      const { data, error } = await supabase.functions.invoke(
+        "reset-user-password",
+        {
+          body: { userId, newPassword },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
         },
-      });
+      );
 
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
@@ -58,7 +69,7 @@ export function ResetPasswordDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!newPassword) {
       toast.error("נא להזין סיסמה חדשה");
       return;

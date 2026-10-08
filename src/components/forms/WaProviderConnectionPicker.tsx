@@ -23,7 +23,11 @@ interface Props {
   onChange: (id: string) => void;
 }
 
-export function WaProviderConnectionPicker({ integrations, value, onChange }: Props) {
+export function WaProviderConnectionPicker({
+  integrations,
+  value,
+  onChange,
+}: Props) {
   const list = integrations || [];
   const hasGreen = list.some((i) => i.integration_type === "green_api");
   const hasManus = list.some((i) => i.integration_type === "manus_wa");
@@ -37,8 +41,13 @@ export function WaProviderConnectionPicker({ integrations, value, onChange }: Pr
 
   // Keep provider in sync if integration changes externally
   useEffect(() => {
-    if (currentIntegration && currentIntegration.integration_type !== provider) {
-      setProvider(currentIntegration.integration_type as "green_api" | "manus_wa");
+    if (
+      currentIntegration &&
+      currentIntegration.integration_type !== provider
+    ) {
+      setProvider(
+        currentIntegration.integration_type as "green_api" | "manus_wa",
+      );
     }
   }, [currentIntegration?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -68,14 +77,28 @@ export function WaProviderConnectionPicker({ integrations, value, onChange }: Pr
           className="flex gap-4"
         >
           <div className="flex items-center gap-2">
-            <RadioGroupItem value="green_api" id="wa-prov-pick-green" disabled={!hasGreen && !hasManus} />
-            <Label htmlFor="wa-prov-pick-green" className="cursor-pointer text-sm">
+            <RadioGroupItem
+              value="green_api"
+              id="wa-prov-pick-green"
+              disabled={!hasGreen && !hasManus}
+            />
+            <Label
+              htmlFor="wa-prov-pick-green"
+              className="cursor-pointer text-sm"
+            >
               Green API {hasGreen ? "" : "(אין חיבור)"}
             </Label>
           </div>
           <div className="flex items-center gap-2">
-            <RadioGroupItem value="manus_wa" id="wa-prov-pick-manus" disabled={!hasManus && !hasGreen} />
-            <Label htmlFor="wa-prov-pick-manus" className="cursor-pointer text-sm">
+            <RadioGroupItem
+              value="manus_wa"
+              id="wa-prov-pick-manus"
+              disabled={!hasManus && !hasGreen}
+            />
+            <Label
+              htmlFor="wa-prov-pick-manus"
+              className="cursor-pointer text-sm"
+            >
               Manus WA {hasManus ? "" : "(אין חיבור)"}
             </Label>
           </div>
@@ -86,11 +109,19 @@ export function WaProviderConnectionPicker({ integrations, value, onChange }: Pr
         <Label className="text-xs">חיבור</Label>
         <Select value={value || ""} onValueChange={onChange}>
           <SelectTrigger>
-            <SelectValue placeholder={filtered.length ? "בחר חיבור..." : `אין חיבור ${provider === "manus_wa" ? "Manus" : "Green API"} פעיל`} />
+            <SelectValue
+              placeholder={
+                filtered.length
+                  ? "בחר חיבור..."
+                  : `אין חיבור ${provider === "manus_wa" ? "Manus" : "Green API"} פעיל`
+              }
+            />
           </SelectTrigger>
           <SelectContent className="bg-background z-[100]">
             {filtered.length === 0 ? (
-              <div className="py-2 px-3 text-sm text-muted-foreground">לא נמצאו חיבורים</div>
+              <div className="py-2 px-3 text-sm text-muted-foreground">
+                לא נמצאו חיבורים
+              </div>
             ) : (
               filtered.map((i) => {
                 const idShort =
@@ -98,7 +129,8 @@ export function WaProviderConnectionPicker({ integrations, value, onChange }: Pr
                   i.settings?.instance_id?.slice(-4) ||
                   i.settings?.instanceId?.slice(-4) ||
                   "";
-                const providerLabel = i.integration_type === "manus_wa" ? "Manus" : "Green API";
+                const providerLabel =
+                  i.integration_type === "manus_wa" ? "Manus" : "Green API";
                 const name =
                   (i.display_name && String(i.display_name).trim()) ||
                   i.settings?.instance_name ||
@@ -107,7 +139,8 @@ export function WaProviderConnectionPicker({ integrations, value, onChange }: Pr
                   providerLabel;
                 return (
                   <SelectItem key={i.id} value={i.id}>
-                    {name}{idShort ? ` (··${idShort})` : ""}
+                    {name}
+                    {idShort ? ` (··${idShort})` : ""}
                   </SelectItem>
                 );
               })

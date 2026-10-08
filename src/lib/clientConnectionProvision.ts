@@ -2,7 +2,9 @@ import { pickGaPropertyForDomain } from "@/lib/gaPropertyMatch";
 import { normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
 import type { ChannelFieldKey } from "@/config/clientChannels";
 
-export type ConnectionFieldMap = Partial<Record<ChannelFieldKey, string | null | undefined>>;
+export type ConnectionFieldMap = Partial<
+  Record<ChannelFieldKey, string | null | undefined>
+>;
 
 /**
  * Count distinct marketing connections the user has entered on the client card.
@@ -49,7 +51,9 @@ export function pickGscSiteForDomain(
 ): string | null {
   const host = normalizeSeoDomain(domain);
   if (!host || !sites?.length) return null;
-  const preferred = sites.find((s) => String(s.siteUrl || "").toLowerCase() === `sc-domain:${host}`);
+  const preferred = sites.find(
+    (s) => String(s.siteUrl || "").toLowerCase() === `sc-domain:${host}`,
+  );
   if (preferred?.siteUrl) return preferred.siteUrl;
   const match = sites.find((s) => seoDomainsMatch(s.siteUrl, host));
   return match?.siteUrl || null;

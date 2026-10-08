@@ -1,10 +1,24 @@
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Settings2, GripVertical, Plus, Trash2, Search } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useLeadPipelineStages, useLeadPipelineStageMutations, LeadPipelineStage } from "@/hooks/useLeadPipelineStages";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  useLeadPipelineStages,
+  useLeadPipelineStageMutations,
+  LeadPipelineStage,
+} from "@/hooks/useLeadPipelineStages";
 import { cn } from "@/lib/utils";
 import {
   DndContext,
@@ -25,13 +39,35 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 const PRESET_COLORS = [
-  "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16",
-  "#22c55e", "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9",
-  "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7", "#d946ef",
-  "#ec4899", "#f43f5e", "#6b7280", "#374151", "#111827"
+  "#ef4444",
+  "#f97316",
+  "#f59e0b",
+  "#eab308",
+  "#84cc16",
+  "#22c55e",
+  "#10b981",
+  "#14b8a6",
+  "#06b6d4",
+  "#0ea5e9",
+  "#3b82f6",
+  "#6366f1",
+  "#8b5cf6",
+  "#a855f7",
+  "#d946ef",
+  "#ec4899",
+  "#f43f5e",
+  "#6b7280",
+  "#374151",
+  "#111827",
 ];
 
-function ColorPicker({ color, onChange }: { color: string; onChange: (c: string) => void }) {
+function ColorPicker({
+  color,
+  onChange,
+}: {
+  color: string;
+  onChange: (c: string) => void;
+}) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -170,7 +206,8 @@ export function ManagePipelineStagesDialog({
   const [localStages, setLocalStages] = useState<LeadPipelineStage[]>([]);
 
   const { stages, isLoading } = useLeadPipelineStages();
-  const { updateStage, createStage, deleteStage, updateSortOrders } = useLeadPipelineStageMutations();
+  const { updateStage, createStage, deleteStage, updateSortOrders } =
+    useLeadPipelineStageMutations();
 
   useEffect(() => {
     setLocalStages(stages);
@@ -197,10 +234,12 @@ export function ManagePipelineStagesDialog({
 
     const newOrder = arrayMove(localStages, oldIndex, newIndex);
     setLocalStages(newOrder);
-    updateSortOrders.mutate(newOrder.map((stage, index) => ({
-      id: stage.id,
-      sort_order: index,
-    })));
+    updateSortOrders.mutate(
+      newOrder.map((stage, index) => ({
+        id: stage.id,
+        sort_order: index,
+      })),
+    );
   };
 
   const handleAddStage = () => {
@@ -231,7 +270,7 @@ export function ManagePipelineStagesDialog({
         <DialogHeader>
           <DialogTitle>ניהול שלבי משפך</DialogTitle>
         </DialogHeader>
-        
+
         {localStages.length > 3 && (
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -244,7 +283,7 @@ export function ManagePipelineStagesDialog({
             />
           </div>
         )}
-        
+
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
           {isLoading ? (
             <p className="text-sm text-muted-foreground">טוען...</p>
@@ -262,7 +301,9 @@ export function ManagePipelineStagesDialog({
                   <SortableStageRow
                     key={stage.id}
                     stage={stage}
-                    onUpdate={(updates) => updateStage.mutate({ id: stage.id, ...updates })}
+                    onUpdate={(updates) =>
+                      updateStage.mutate({ id: stage.id, ...updates })
+                    }
                     onDelete={() => deleteStage.mutate(stage.id)}
                   />
                 ))}
@@ -280,7 +321,11 @@ export function ManagePipelineStagesDialog({
             className="h-8 flex-1"
             onKeyDown={(e) => e.key === "Enter" && handleAddStage()}
           />
-          <Button size="sm" onClick={handleAddStage} disabled={!newLabel.trim()}>
+          <Button
+            size="sm"
+            onClick={handleAddStage}
+            disabled={!newLabel.trim()}
+          >
             <Plus className="w-4 h-4" />
           </Button>
         </div>

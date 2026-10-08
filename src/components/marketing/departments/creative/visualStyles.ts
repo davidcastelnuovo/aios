@@ -41,10 +41,16 @@ const style = (
 ): CreativeVisualStyle => ({ id, label, hint, group, lock: lock.join(" ") });
 
 export const CREATIVE_VISUAL_STYLES: CreativeVisualStyle[] = [
-  style("adaptive", "מותאם לקופי", "סגנון שנבנה מהקופי, מצבעי הלוגו ומהנושא", "auto", [
-    "ADAPTIVE STYLE: invent a treatment from this copy, this topic, and the logo colors.",
-    "Do not apply a named style-board recipe.",
-  ]),
+  style(
+    "adaptive",
+    "מותאם לקופי",
+    "סגנון שנבנה מהקופי, מצבעי הלוגו ומהנושא",
+    "auto",
+    [
+      "ADAPTIVE STYLE: invent a treatment from this copy, this topic, and the logo colors.",
+      "Do not apply a named style-board recipe.",
+    ],
+  ),
   style("swiss", "מסחרי נקי", "שוויצרי, אוויר, צל רך, גריד נקי", "reference", [
     "ART DIRECTION only: clean Swiss / international commercial still applied to THIS copy's subject.",
     "Light grey-to-white field, generous negative space, catalog-precise 35mm, high-key daylight, one soft contact shadow.",
@@ -171,24 +177,30 @@ export const CREATIVE_VISUAL_STYLES: CreativeVisualStyle[] = [
   ]),
 ];
 
-const STYLE_BY_ID = Object.fromEntries(CREATIVE_VISUAL_STYLES.map((item) => [item.id, item])) as Record<
-  CreativeVisualStyleId,
-  CreativeVisualStyle
->;
+const STYLE_BY_ID = Object.fromEntries(
+  CREATIVE_VISUAL_STYLES.map((item) => [item.id, item]),
+) as Record<CreativeVisualStyleId, CreativeVisualStyle>;
 
-export const isVisualStyleId = (value: unknown): value is CreativeVisualStyleId =>
+export const isVisualStyleId = (
+  value: unknown,
+): value is CreativeVisualStyleId =>
   typeof value === "string" && value in STYLE_BY_ID;
 
-export const getVisualStyleId = (payload: Record<string, unknown> | null | undefined): CreativeVisualStyleId => {
+export const getVisualStyleId = (
+  payload: Record<string, unknown> | null | undefined,
+): CreativeVisualStyleId => {
   const value = payload?.visual_style;
   return isVisualStyleId(value) ? value : DEFAULT_VISUAL_STYLE_ID;
 };
 
-export const visualStyleById = (id: CreativeVisualStyleId): CreativeVisualStyle =>
+export const visualStyleById = (
+  id: CreativeVisualStyleId,
+): CreativeVisualStyle =>
   STYLE_BY_ID[id] ?? STYLE_BY_ID[DEFAULT_VISUAL_STYLE_ID];
 
-export const getVisualStyle = (payload: Record<string, unknown> | null | undefined): CreativeVisualStyle =>
-  visualStyleById(getVisualStyleId(payload));
+export const getVisualStyle = (
+  payload: Record<string, unknown> | null | undefined,
+): CreativeVisualStyle => visualStyleById(getVisualStyleId(payload));
 
 export const stylesInGroup = (group: CreativeVisualStyleGroup) =>
   CREATIVE_VISUAL_STYLES.filter((item) => item.group === group);
@@ -224,16 +236,21 @@ const STATIC_QUALITY_SELECTED = [
   "If this still could be mistaken for another variation, it failed. Logo/brand colors override the style palette if present.",
 ].join(" ");
 
-export const buildStaticQualityLock = (options?: { selectedStyle?: boolean }) =>
-  options?.selectedStyle ? STATIC_QUALITY_SELECTED : STATIC_QUALITY;
+export const buildStaticQualityLock = (options?: {
+  selectedStyle?: boolean;
+}) => (options?.selectedStyle ? STATIC_QUALITY_SELECTED : STATIC_QUALITY);
 
 export const buildVisualStyleLock = (
   payload: Record<string, unknown> | null | undefined,
   options?: { storyboard?: boolean; styleId?: CreativeVisualStyleId },
 ): string => {
-  const selected = options?.styleId ? visualStyleById(options.styleId) : getVisualStyle(payload);
-  if (options?.storyboard) return [selected.lock, STORYBOARD_CONTINUITY].join("\n");
-  if (selected.id === "adaptive") return [selected.lock, STATIC_QUALITY].join("\n");
+  const selected = options?.styleId
+    ? visualStyleById(options.styleId)
+    : getVisualStyle(payload);
+  if (options?.storyboard)
+    return [selected.lock, STORYBOARD_CONTINUITY].join("\n");
+  if (selected.id === "adaptive")
+    return [selected.lock, STATIC_QUALITY].join("\n");
   return [
     `SELECTED STYLE — ${selected.label}. The user chose this TECHNIQUE (craft, color family, composition approach). Apply the technique. Do not reprint the same picture.`,
     selected.lock,
@@ -241,7 +258,9 @@ export const buildVisualStyleLock = (
   ].join("\n");
 };
 
-export const imageSizeForFormat = (format?: string): "1024x1024" | "1024x1536" | "1536x1024" => {
+export const imageSizeForFormat = (
+  format?: string,
+): "1024x1024" | "1024x1536" | "1536x1024" => {
   if (format === "9:16" || format === "4:5") return "1024x1536";
   if (format === "16:9") return "1536x1024";
   return "1024x1024";

@@ -13,17 +13,24 @@ export function workspaceAgentCreds(
       env.CHATGPT_WORK_AGENT_WORKFLOW_ID ||
       "",
   ).trim();
-  const chatgptToken = String(env.CHATGPT_WORK_AGENT_TOKEN || env.CHATGPT_WORK_AGENT_ACCESS_TOKEN || "").trim();
+  const chatgptToken = String(
+    env.CHATGPT_WORK_AGENT_TOKEN || env.CHATGPT_WORK_AGENT_ACCESS_TOKEN || "",
+  ).trim();
   if (provider === "codex") {
     return {
-      triggerId: String(env.CODEX_WORK_AGENT_TRIGGER_ID || chatgptTrigger).trim(),
+      triggerId: String(
+        env.CODEX_WORK_AGENT_TRIGGER_ID || chatgptTrigger,
+      ).trim(),
       accessToken: String(env.CODEX_WORK_AGENT_TOKEN || chatgptToken).trim(),
     };
   }
   return { triggerId: chatgptTrigger, accessToken: chatgptToken };
 }
 
-export function workspaceConversationKey(provider: WorkspaceProvider, conversationId: string): string {
+export function workspaceConversationKey(
+  provider: WorkspaceProvider,
+  conversationId: string,
+): string {
   return `aios:${provider}:${conversationId}`;
 }
 
@@ -31,7 +38,9 @@ const WORKSPACE_API_BASE = "https://api.chatgpt.com/v1";
 
 /** Normalize secret value from Supabase (trim, strip wrapping quotes). */
 export function normalizeWorkspaceTriggerId(triggerId: string): string {
-  return String(triggerId || "").trim().replace(/^["']|["']$/g, "");
+  return String(triggerId || "")
+    .trim()
+    .replace(/^["']|["']$/g, "");
 }
 
 /** Trigger id from the Triggers tab: current ids are UUIDs; legacy ids use `agtch_…`, not About-tab `agt_…`. */
@@ -39,12 +48,12 @@ export function validateWorkspaceTriggerId(triggerId: string): string | null {
   const id = normalizeWorkspaceTriggerId(triggerId);
   if (!id) return "חסר Trigger ID.";
   if (id.startsWith("agt_") && !id.startsWith("agtch_")) {
-    return (
-      "שמת Agent ID (agt_…) במקום Trigger ID. בבuilder של הסוכן: Add channel → API, שמור ו-Publish, והעתק agtch_… ל-CHATGPT_WORK_AGENT_TRIGGER_ID."
-    );
+    return "שמת Agent ID (agt_…) במקום Trigger ID. בבuilder של הסוכן: Add channel → API, שמור ו-Publish, והעתק agtch_… ל-CHATGPT_WORK_AGENT_TRIGGER_ID.";
   }
   const legacyTriggerId = /^agtch_[a-z0-9]+$/i.test(id);
-  const uuidTriggerId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id);
+  const uuidTriggerId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(
+    id,
+  );
   if (!legacyTriggerId && !uuidTriggerId) {
     return "Trigger ID חייב להיות UUID מלשונית Triggers, או מזהה legacy שמתחיל ב-agtch_.";
   }
@@ -53,11 +62,10 @@ export function validateWorkspaceTriggerId(triggerId: string): string | null {
 
 export function assertWorkspaceAccessToken(accessToken: string): string | null {
   const token = String(accessToken || "").trim();
-  if (!token) return "חסר Workspace Agent access token (CHATGPT_WORK_AGENT_TOKEN).";
+  if (!token)
+    return "חסר Workspace Agent access token (CHATGPT_WORK_AGENT_TOKEN).";
   if (token.startsWith("sk-")) {
-    return (
-      "זה נראה כמו OpenAI Platform key (sk-…). צריך ChatGPT Workspace Agent access token מ-Admin → Access tokens (scope Workspace Agents)."
-    );
+    return "זה נראה כמו OpenAI Platform key (sk-…). צריך ChatGPT Workspace Agent access token מ-Admin → Access tokens (scope Workspace Agents).";
   }
   return null;
 }
@@ -68,7 +76,12 @@ export function workspaceAgentTriggerUrl(triggerId: string): string {
 }
 
 export type WorkspaceTriggerResult =
-  | { ok: true; status: number; conversationUrl: string | null; runId: string | null }
+  | {
+      ok: true;
+      status: number;
+      conversationUrl: string | null;
+      runId: string | null;
+    }
   | { ok: false; status: number; error: string };
 
 /** POST /v1/workspace_agents/{agtch_…}/trigger — OpenAI Workspace Agents API. */
@@ -98,7 +111,11 @@ export async function triggerWorkspaceAgentRun(args: {
   }
 
   if (!String(args.input || "").trim()) {
-    return { ok: false, status: 0, error: "input ריק — לא נשלח trigger ל-ChatGPT." };
+    return {
+      ok: false,
+      status: 0,
+      error: "input ריק — לא נשלח trigger ל-ChatGPT.",
+    };
   }
   const fetchImpl = args.fetchImpl ?? fetch;
   const timeoutMs = args.timeoutMs ?? 25_000;
@@ -124,9 +141,10 @@ export async function triggerWorkspaceAgentRun(args: {
       raw = await resp.text();
     } catch (e) {
       resp = null;
-      lastError = (e as Error)?.name === "AbortError"
-        ? `ChatGPT לא ענה תוך ${Math.round(timeoutMs / 1000)} שניות`
-        : `שגיאת רשת מול ChatGPT: ${(e as Error)?.message ?? e}`;
+      lastError =
+        (e as Error)?.name === "AbortError"
+          ? `ChatGPT לא ענה תוך ${Math.round(timeoutMs / 1000)} שניות`
+          : `שגיאת רשת מול ChatGPT: ${(e as Error)?.message ?? e}`;
     } finally {
       clearTimeout(timer);
     }
@@ -134,24 +152,34 @@ export async function triggerWorkspaceAgentRun(args: {
   }
   if (!resp) return { ok: false, status: 0, error: lastError };
   if (resp.status < 200 || resp.status >= 300) {
-    return { ok: false, status: resp.status, error: formatWorkspaceTriggerError(resp.status, raw) };
+    return {
+      ok: false,
+      status: resp.status,
+      error: formatWorkspaceTriggerError(resp.status, raw),
+    };
   }
 
   let data: Record<string, unknown> = {};
   if (raw.trim()) {
-    try { data = JSON.parse(raw) as Record<string, unknown>; } catch { /* 202 may be empty in some modes */ }
+    try {
+      data = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      /* 202 may be empty in some modes */
+    }
   }
-  const conversationUrl = String(data.conversation_url || data.url || "") || null;
+  const conversationUrl =
+    String(data.conversation_url || data.url || "") || null;
   const runId = String(data.agent_trigger_run_id || data.id || "") || null;
   return { ok: true, status: resp.status, conversationUrl, runId };
 }
 
-export function formatWorkspaceTriggerError(status: number, raw: string): string {
+export function formatWorkspaceTriggerError(
+  status: number,
+  raw: string,
+): string {
   const detail = raw.slice(0, 280);
   if (status === 404 || /not_found|not found/i.test(detail)) {
-    return (
-      "ChatGPT לא מוצא את ה-trigger (404). בדוק: (1) ה-ID הועתק מלשונית Triggers, (2) הסוכן Published, (3) TRIGGER_ID + TOKEN ב-Supabase נוצרו יחד עבור הסוכן הזה, (4) הטוקן עם scope Workspace Agents."
-    );
+    return "ChatGPT לא מוצא את ה-trigger (404). בדוק: (1) ה-ID הועתק מלשונית Triggers, (2) הסוכן Published, (3) TRIGGER_ID + TOKEN ב-Supabase נוצרו יחד עבור הסוכן הזה, (4) הטוקן עם scope Workspace Agents.";
   }
   if (status === 401 || status === 403) {
     return "טוקן Workspace Agents לא תקף או בלי הרשאה לסוכן הזה. צור token חדש ב-Admin → Access tokens.";
@@ -166,15 +194,29 @@ export function formatWorkspaceTriggerError(status: number, raw: string): string
 export async function probeWorkspaceAgent(
   provider: WorkspaceProvider,
   env: Record<string, string | undefined> = {},
-): Promise<{ ok: boolean; status?: number; error?: string; trigger_id_prefix?: string }> {
+): Promise<{
+  ok: boolean;
+  status?: number;
+  error?: string;
+  trigger_id_prefix?: string;
+}> {
   const { triggerId, accessToken } = workspaceAgentCreds(provider, env);
   const id = normalizeWorkspaceTriggerId(triggerId);
   const triggerProblem = validateWorkspaceTriggerId(id);
   if (triggerProblem) {
-    return { ok: false, error: triggerProblem, trigger_id_prefix: id.slice(0, 6) || undefined };
+    return {
+      ok: false,
+      error: triggerProblem,
+      trigger_id_prefix: id.slice(0, 6) || undefined,
+    };
   }
   const tokenProblem = assertWorkspaceAccessToken(accessToken);
-  if (tokenProblem) return { ok: false, error: tokenProblem, trigger_id_prefix: id.slice(0, 10) };
+  if (tokenProblem)
+    return {
+      ok: false,
+      error: tokenProblem,
+      trigger_id_prefix: id.slice(0, 10),
+    };
   return { ok: true, status: 200, trigger_id_prefix: id.slice(0, 10) };
 }
 

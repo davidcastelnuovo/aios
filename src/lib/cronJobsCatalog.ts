@@ -1,7 +1,8 @@
 // Friendly catalog for system cron jobs.
 // Keys are the cron.job.jobname values.
 
-export type CronCategory = "carmen" | "sync" | "reminders" | "telegram" | "system";
+export type CronCategory =
+  "carmen" | "sync" | "reminders" | "telegram" | "system";
 
 export interface CronJobMeta {
   label: string;
@@ -31,37 +32,43 @@ export const CRON_JOB_CATALOG: Record<string, CronJobMeta> = {
   },
   "sync-facebook-insights-twice-daily": {
     label: "סנכרון Facebook Insights",
-    description: "מסנכרן ביצועי קמפיינים פעמיים ביום, לפני רענון בדיקת הדופק (07:00 ו-16:00).",
+    description:
+      "מסנכרן ביצועי קמפיינים פעמיים ביום, לפני רענון בדיקת הדופק (07:00 ו-16:00).",
     category: "sync",
     icon: "📊",
   },
   "campaign-pulse-sunday-0730": {
     label: "בדיקת דופק שבועית",
-    description: "מחשב בדיקת דופק דטרמיניסטית ביום ראשון 07:30 (שעון ישראל) ושולח לוואטסאפ — לבעלים ולכל קמפיינר (scoped, מכרמן הארגון).",
+    description:
+      "מחשב בדיקת דופק דטרמיניסטית ביום ראשון 07:30 (שעון ישראל) ושולח לוואטסאפ — לבעלים ולכל קמפיינר (scoped, מכרמן הארגון).",
     category: "carmen",
     icon: "💗",
   },
   "campaign-pulse-morning-0730": {
     label: "בדיקת דופק בוקר",
-    description: "מחשב בדיקת דופק דטרמיניסטית ב-07:30 ושולח לוואטסאפ קישור לדשבורד בדיקת דופק (בלי רשימת לקוחות).",
+    description:
+      "מחשב בדיקת דופק דטרמיניסטית ב-07:30 ושולח לוואטסאפ קישור לדשבורד בדיקת דופק (בלי רשימת לקוחות).",
     category: "carmen",
     icon: "💗",
   },
   "cron-sync-facebook-ecommerce-daily": {
     label: "סנכרון Facebook eCommerce",
-    description: "מושך נתוני eCommerce מ-Facebook פעמיים ביום, לפני רענון בדיקת הדופק.",
+    description:
+      "מושך נתוני eCommerce מ-Facebook פעמיים ביום, לפני רענון בדיקת הדופק.",
     category: "sync",
     icon: "🛒",
   },
   "daily-ga-sync": {
     label: "סנכרון Google Analytics",
-    description: "מושך נתוני GA לכל המחוברים פעמיים ביום, לפני רענון בדיקת הדופק.",
+    description:
+      "מושך נתוני GA לכל המחוברים פעמיים ביום, לפני רענון בדיקת הדופק.",
     category: "sync",
     icon: "📈",
   },
   "daily-google-ads-sync": {
     label: "סנכרון Google Ads",
-    description: "מסנכרן קמפיינים והוצאות Google Ads פעמיים ביום, לפני רענון בדיקת הדופק.",
+    description:
+      "מסנכרן קמפיינים והוצאות Google Ads פעמיים ביום, לפני רענון בדיקת הדופק.",
     category: "sync",
     icon: "🎯",
   },
@@ -124,22 +131,38 @@ export function describeCronExpression(expr: string): string {
   // every minute
   if (expr === "* * * * *") return "כל דקה";
   // every N minutes
-  if (hour === "*" && minute.startsWith("*/")) return `כל ${minute.slice(2)} דקות`;
+  if (hour === "*" && minute.startsWith("*/"))
+    return `כל ${minute.slice(2)} דקות`;
   // every hour at minute X
   if (hour === "*" && /^\d+$/.test(minute)) return `כל שעה ב-:${pad(minute)}`;
   // every N hours
   if (hour.startsWith("*/") && /^\d+$/.test(minute))
     return `כל ${hour.slice(2)} שעות`;
 
-  if (dom === "*" && month === "*" && dow === "*" && /^\d+$/.test(hour) && /^\d+$/.test(minute))
+  if (
+    dom === "*" &&
+    month === "*" &&
+    dow === "*" &&
+    /^\d+$/.test(hour) &&
+    /^\d+$/.test(minute)
+  )
     return `כל יום ב-${timeStr(hour, minute)}`;
 
   if (dom === "*" && month === "*" && /^\d+$/.test(dow) && /^\d+$/.test(hour))
     return `כל יום ${HEBREW_DAYS[parseInt(dow) % 7]} ב-${timeStr(hour, minute)}`;
 
   // multiple hours: "0 5,14 * * *"
-  if (dom === "*" && month === "*" && dow === "*" && hour.includes(",") && /^\d+$/.test(minute)) {
-    const hours = hour.split(",").map(h => `${pad(h)}:${pad(minute)}`).join(", ");
+  if (
+    dom === "*" &&
+    month === "*" &&
+    dow === "*" &&
+    hour.includes(",") &&
+    /^\d+$/.test(minute)
+  ) {
+    const hours = hour
+      .split(",")
+      .map((h) => `${pad(h)}:${pad(minute)}`)
+      .join(", ");
     return `כל יום ב-${hours}`;
   }
 

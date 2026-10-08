@@ -1,6 +1,13 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { aggregateOrdersByAttribution } from "@/lib/wooAttribution";
 
 type Props = {
@@ -9,8 +16,15 @@ type Props = {
   formatNumber: (n: number) => string;
 };
 
-export function WooAttributionSection({ orders, formatCurrency, formatNumber }: Props) {
-  const bySource = useMemo(() => aggregateOrdersByAttribution(orders), [orders]);
+export function WooAttributionSection({
+  orders,
+  formatCurrency,
+  formatNumber,
+}: Props) {
+  const bySource = useMemo(
+    () => aggregateOrdersByAttribution(orders),
+    [orders],
+  );
 
   if (bySource.length === 0) return null;
 
@@ -32,14 +46,20 @@ export function WooAttributionSection({ orders, formatCurrency, formatNumber }: 
             {bySource.map((row) => (
               <TableRow key={row.label}>
                 <TableCell className="font-medium">{row.label}</TableCell>
-                <TableCell className="text-left">{formatNumber(row.orders)}</TableCell>
-                <TableCell className="text-left">{formatCurrency(row.revenue)}</TableCell>
+                <TableCell className="text-left">
+                  {formatNumber(row.orders)}
+                </TableCell>
+                <TableCell className="text-left">
+                  {formatCurrency(row.revenue)}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
         <p className="text-xs text-muted-foreground mt-3">
-          * מקור הגעה מבוסס על WooCommerce Order Attribution (UTM / referrer בשעת הרכישה). הזמנות ללא נתוני attribution מסווגות כ&quot;לא ידוע&quot;.
+          * מקור הגעה מבוסס על WooCommerce Order Attribution (UTM / referrer
+          בשעת הרכישה). הזמנות ללא נתוני attribution מסווגות כ&quot;לא
+          ידוע&quot;.
         </p>
       </CardContent>
     </Card>
@@ -47,5 +67,5 @@ export function WooAttributionSection({ orders, formatCurrency, formatNumber }: 
 }
 
 export function wooAttributionLabel(order: any): string {
-  return order?.attribution?.label || 'לא ידוע';
+  return order?.attribution?.label || "לא ידוע";
 }

@@ -39,12 +39,15 @@ interface CalendarEventEditDialogProps {
   event: CalendarEvent | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (eventId: string, data: {
-    summary: string;
-    description: string;
-    start: string;
-    end: string;
-  }) => void;
+  onSave: (
+    eventId: string,
+    data: {
+      summary: string;
+      description: string;
+      start: string;
+      end: string;
+    },
+  ) => void;
   onDelete: (eventId: string) => void;
   onCreateTask?: (data: {
     title: string;
@@ -76,7 +79,7 @@ export function CalendarEventEditDialog({
     if (event) {
       setTitle(event.title || "");
       setDescription(event.description || "");
-      
+
       try {
         const start = parseISO(event.start);
         const end = parseISO(event.end);
@@ -95,10 +98,10 @@ export function CalendarEventEditDialog({
 
   const handleSave = () => {
     if (!event) return;
-    
+
     const startDateTime = `${startDate}T${startTime}:00`;
     const endDateTime = `${endDate}T${endTime}:00`;
-    
+
     onSave(event.id, {
       summary: title,
       description,
@@ -114,12 +117,12 @@ export function CalendarEventEditDialog({
 
   const handleCreateTask = () => {
     if (!event || !onCreateTask) return;
-    
+
     try {
       const start = parseISO(event.start);
       const end = parseISO(event.end);
       const durationMinutes = differenceInMinutes(end, start);
-      
+
       onCreateTask({
         title,
         notes: description,
@@ -231,24 +234,32 @@ export function CalendarEventEditDialog({
                 <AlertDialogHeader>
                   <AlertDialogTitle>האם למחוק את האירוע?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    פעולה זו תמחק את האירוע מיומן Google שלך ולא ניתן יהיה לשחזר אותו.
+                    פעולה זו תמחק את האירוע מיומן Google שלך ולא ניתן יהיה לשחזר
+                    אותו.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>ביטול</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete}>מחק</AlertDialogAction>
+                  <AlertDialogAction onClick={handleDelete}>
+                    מחק
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-            
+
             {onCreateTask && (
-              <Button variant="outline" size="sm" className="gap-1" onClick={handleCreateTask}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                onClick={handleCreateTask}
+              >
                 <ListTodo className="h-4 w-4" />
                 צור משימה
               </Button>
             )}
           </div>
-          
+
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               ביטול

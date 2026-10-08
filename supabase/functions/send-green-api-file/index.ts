@@ -1,58 +1,65 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { 
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      {
         global: { headers: { Authorization: authHeader } },
-        auth: { persistSession: false, autoRefreshToken: false }
-      }
+        auth: { persistSession: false, autoRefreshToken: false },
+      },
     );
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+    const token = authHeader.replace("Bearer ", "");
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseClient.auth.getUser(token);
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const formData = await req.formData();
-    const rawFile = formData.get('file') as File | null;
-    const clientId = formData.get('clientId') as string | null;
-    const leadId = formData.get('leadId') as string | null;
-    const groupId = formData.get('groupId') as string | null;
-    const phoneNumber = formData.get('phoneNumber') as string | null;
-    const tenantId = formData.get('tenantId') as string | null;
-    const caption = formData.get('caption') as string || '';
-    const fileType = formData.get('fileType') as string || 'document';
+    const rawFile = formData.get("file") as File | null;
+    const clientId = formData.get("clientId") as string | null;
+    const leadId = formData.get("leadId") as string | null;
+    const groupId = formData.get("groupId") as string | null;
+    const phoneNumber = formData.get("phoneNumber") as string | null;
+    const tenantId = formData.get("tenantId") as string | null;
+    const caption = (formData.get("caption") as string) || "";
+    const fileType = (formData.get("fileType") as string) || "document";
     // Optional explicit sender instance chosen by the caller (report/dashboard sender picker).
-    const chosenIntegrationId = formData.get('integrationId') as string | null;
+    const chosenIntegrationId = formData.get("integrationId") as string | null;
 
     if (!rawFile) {
-      return new Response(JSON.stringify({ error: 'No file provided' }), {
+      return new Response(JSON.stringify({ error: "No file provided" }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -61,47 +68,70 @@ Deno.serve(async (req) => {
     // can result in an empty body when the request is re-encoded — Green API then
     // returns: {"error":"file should not be empty"}.
     const fileBytes = new Uint8Array(await rawFile.arrayBuffer());
-    const safeFileName = rawFile.name && rawFile.name.length > 0 ? rawFile.name : 'file';
-    const safeMimeType = rawFile.type && rawFile.type.length > 0 ? rawFile.type : 'application/octet-stream';
+    const safeFileName =
+      rawFile.name && rawFile.name.length > 0 ? rawFile.name : "file";
+    const safeMimeType =
+      rawFile.type && rawFile.type.length > 0
+        ? rawFile.type
+        : "application/octet-stream";
     const file = new File([fileBytes], safeFileName, { type: safeMimeType });
 
-    console.log('[send-green-api-file] received file', {
+    console.log("[send-green-api-file] received file", {
       name: safeFileName,
       type: safeMimeType,
       size: fileBytes.byteLength,
     });
 
     if (fileBytes.byteLength === 0) {
-      return new Response(JSON.stringify({ error: 'File is empty (0 bytes)' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "File is empty (0 bytes)" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
     // Determine tenant_id
     let resolvedTenantId = tenantId;
     let groupChatId: string | undefined;
 
     if (!resolvedTenantId && clientId) {
-      const { data: client } = await supabaseClient.from('clients').select('tenant_id').eq('id', clientId).single();
+      const { data: client } = await supabaseClient
+        .from("clients")
+        .select("tenant_id")
+        .eq("id", clientId)
+        .single();
       resolvedTenantId = client?.tenant_id;
     } else if (!resolvedTenantId && leadId) {
-      const { data: lead } = await supabaseClient.from('leads').select('tenant_id').eq('id', leadId).single();
+      const { data: lead } = await supabaseClient
+        .from("leads")
+        .select("tenant_id")
+        .eq("id", leadId)
+        .single();
       resolvedTenantId = lead?.tenant_id;
     } else if (groupId) {
-      const { data: group } = await supabaseClient.from('whatsapp_groups').select('tenant_id, group_chat_id').eq('id', groupId).single();
+      const { data: group } = await supabaseClient
+        .from("whatsapp_groups")
+        .select("tenant_id, group_chat_id")
+        .eq("id", groupId)
+        .single();
       resolvedTenantId = resolvedTenantId || group?.tenant_id;
       groupChatId = group?.group_chat_id;
     }
 
     if (!resolvedTenantId) {
-      const { data: activeTenant } = await supabaseClient.from('user_active_tenant').select('tenant_id').eq('user_id', user.id).single();
+      const { data: activeTenant } = await supabaseClient
+        .from("user_active_tenant")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .single();
       resolvedTenantId = activeTenant?.tenant_id;
     }
 
     if (!resolvedTenantId) {
-      return new Response(JSON.stringify({ error: 'Tenant not found' }), {
+      return new Response(JSON.stringify({ error: "Tenant not found" }), {
         status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -113,46 +143,50 @@ Deno.serve(async (req) => {
 
     if (chosenIntegrationId) {
       const { data: chosen } = await supabaseClient
-        .from('tenant_integrations')
-        .select('*')
-        .eq('id', chosenIntegrationId)
-        .eq('tenant_id', resolvedTenantId)
-        .eq('integration_type', 'green_api')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("id", chosenIntegrationId)
+        .eq("tenant_id", resolvedTenantId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true)
         .maybeSingle();
-      if (chosen?.api_key && chosen?.settings?.instance_id) integration = chosen;
+      if (chosen?.api_key && chosen?.settings?.instance_id)
+        integration = chosen;
     }
 
     if (!integration?.api_key || !integration?.settings?.instance_id) {
       const { data: userIntegration } = await supabaseClient
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', resolvedTenantId)
-        .eq('user_id', user.id)
-        .eq('integration_type', 'green_api')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", resolvedTenantId)
+        .eq("user_id", user.id)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true)
         .maybeSingle();
       if (userIntegration) integration = userIntegration;
     }
 
     if (!integration?.api_key || !integration?.settings?.instance_id) {
       const { data: tenantIntegration } = await supabaseClient
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', resolvedTenantId)
-        .eq('integration_type', 'green_api')
-        .eq('is_active', true)
-        .order('updated_at', { ascending: false })
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", resolvedTenantId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       integration = tenantIntegration;
     }
 
     if (!integration?.api_key || !integration?.settings?.instance_id) {
-      return new Response(JSON.stringify({ error: 'Green API not configured' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "Green API not configured" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const instanceId = integration.settings.instance_id;
@@ -163,12 +197,16 @@ Deno.serve(async (req) => {
     if (groupChatId) {
       chatId = groupChatId;
     } else {
-      const originalPhone = String(phoneNumber || '');
-      let digits = originalPhone.replace(/[^0-9]/g, '');
-      if (digits.startsWith('00')) digits = digits.slice(2);
-      const defaultCountryCode = (integration.settings?.country_code || '972').toString();
+      const originalPhone = String(phoneNumber || "");
+      let digits = originalPhone.replace(/[^0-9]/g, "");
+      if (digits.startsWith("00")) digits = digits.slice(2);
+      const defaultCountryCode = (
+        integration.settings?.country_code || "972"
+      ).toString();
       if (!digits.startsWith(defaultCountryCode)) {
-        digits = digits.startsWith('0') ? defaultCountryCode + digits.slice(1) : defaultCountryCode + digits;
+        digits = digits.startsWith("0")
+          ? defaultCountryCode + digits.slice(1)
+          : defaultCountryCode + digits;
       }
       chatId = `${digits}@c.us`;
     }
@@ -181,18 +219,17 @@ Deno.serve(async (req) => {
     const fileName = file.name;
     const uploadBlob = new Blob([fileBytes], { type: mimeType });
 
-    if (fileType === 'voice' || mimeType.startsWith('audio/')) {
+    if (fileType === "voice" || mimeType.startsWith("audio/")) {
       endpoint = `https://api.green-api.com/waInstance${instanceId}/sendFileByUpload/${apiToken}`;
-      
+
       // For voice messages, use sendFileByUpload with audio file
       const uploadFormData = new FormData();
-      uploadFormData.append('chatId', chatId);
-      uploadFormData.append('file', uploadBlob, fileName);
-      if (caption) uploadFormData.append('caption', caption);
+      uploadFormData.append("chatId", chatId);
+      uploadFormData.append("file", uploadBlob, fileName);
+      if (caption) uploadFormData.append("caption", caption);
 
-      
       const response = await fetch(endpoint, {
-        method: 'POST',
+        method: "POST",
         body: uploadFormData,
       });
 
@@ -203,30 +240,33 @@ Deno.serve(async (req) => {
       }
 
       // Save to database
-      await supabaseClient.from('chat_messages').insert({
+      await supabaseClient.from("chat_messages").insert({
         client_id: clientId || null,
         lead_id: leadId || null,
         group_id: groupId || null,
         tenant_id: resolvedTenantId,
         connection_user_id: user.id,
-        message_text: `[הודעה קולית]${caption ? ': ' + caption : ''}`,
-        direction: 'outbound',
-        channel: 'whatsapp',
-        provider: 'green_api',
+        message_text: `[הודעה קולית]${caption ? ": " + caption : ""}`,
+        direction: "outbound",
+        channel: "whatsapp",
+        provider: "green_api",
         sent_by_user_id: user.id,
         raw_provider_data: responseData,
-        sender_phone: !groupChatId ? chatId.replace('@c.us', '') : null,
+        sender_phone: !groupChatId ? chatId.replace("@c.us", "") : null,
       });
 
-      return new Response(JSON.stringify({ success: true, messageId: responseData.idMessage }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ success: true, messageId: responseData.idMessage }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // For images, videos, documents
-    if (mimeType.startsWith('image/')) {
+    if (mimeType.startsWith("image/")) {
       endpoint = `https://api.green-api.com/waInstance${instanceId}/sendFileByUpload/${apiToken}`;
-    } else if (mimeType.startsWith('video/')) {
+    } else if (mimeType.startsWith("video/")) {
       endpoint = `https://api.green-api.com/waInstance${instanceId}/sendFileByUpload/${apiToken}`;
     } else {
       endpoint = `https://api.green-api.com/waInstance${instanceId}/sendFileByUpload/${apiToken}`;
@@ -234,13 +274,12 @@ Deno.serve(async (req) => {
 
     // Use FormData for file upload
     const uploadFormData = new FormData();
-    uploadFormData.append('chatId', chatId);
-    uploadFormData.append('file', uploadBlob, fileName);
-    if (caption) uploadFormData.append('caption', caption);
-
+    uploadFormData.append("chatId", chatId);
+    uploadFormData.append("file", uploadBlob, fileName);
+    if (caption) uploadFormData.append("caption", caption);
 
     const response = await fetch(endpoint, {
-      method: 'POST',
+      method: "POST",
       body: uploadFormData,
     });
 
@@ -251,41 +290,44 @@ Deno.serve(async (req) => {
     }
 
     // Determine message text based on file type
-    let messageText = '';
-    if (mimeType.startsWith('image/')) {
-      messageText = caption || '[תמונה]';
-    } else if (mimeType.startsWith('video/')) {
-      messageText = caption || '[וידאו]';
+    let messageText = "";
+    if (mimeType.startsWith("image/")) {
+      messageText = caption || "[תמונה]";
+    } else if (mimeType.startsWith("video/")) {
+      messageText = caption || "[וידאו]";
     } else {
-      messageText = `[מסמך: ${fileName}]${caption ? ' - ' + caption : ''}`;
+      messageText = `[מסמך: ${fileName}]${caption ? " - " + caption : ""}`;
     }
 
     // Save to database
-    await supabaseClient.from('chat_messages').insert({
+    await supabaseClient.from("chat_messages").insert({
       client_id: clientId || null,
       lead_id: leadId || null,
       group_id: groupId || null,
       tenant_id: resolvedTenantId,
       connection_user_id: user.id,
       message_text: messageText,
-      direction: 'outbound',
-      channel: 'whatsapp',
-      provider: 'green_api',
+      direction: "outbound",
+      channel: "whatsapp",
+      provider: "green_api",
       sent_by_user_id: user.id,
       raw_provider_data: responseData,
-      sender_phone: !groupChatId ? chatId.replace('@c.us', '') : null,
+      sender_phone: !groupChatId ? chatId.replace("@c.us", "") : null,
     });
 
-    return new Response(JSON.stringify({ success: true, messageId: responseData.idMessage }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-
+    return new Response(
+      JSON.stringify({ success: true, messageId: responseData.idMessage }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (error) {
-    console.error('❌ Error in send-green-api-file:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error("❌ Error in send-green-api-file:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

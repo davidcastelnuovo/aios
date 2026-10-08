@@ -5,12 +5,34 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShoppingCart, TrendingUp, Package, Users } from "lucide-react";
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
 } from "recharts";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { WooAttributionSection, wooAttributionLabel } from "@/components/dynamic-tables/WooAttributionSection";
-import { fetchWooOrdersInRange, getWooDashboardDateRangeIso } from "@/lib/wooDashboardQueries";
+import {
+  WooAttributionSection,
+  wooAttributionLabel,
+} from "@/components/dynamic-tables/WooAttributionSection";
+import {
+  fetchWooOrdersInRange,
+  getWooDashboardDateRangeIso,
+} from "@/lib/wooDashboardQueries";
 import {
   filterWooOrdersForRevenue,
   sumWooRevenue,
@@ -26,22 +48,32 @@ interface Props {
 }
 
 const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
-const formatNumber = (n: number) => new Intl.NumberFormat('he-IL').format(n);
+  new Intl.NumberFormat("he-IL", {
+    style: "currency",
+    currency: "ILS",
+    maximumFractionDigits: 0,
+  }).format(n);
+const formatNumber = (n: number) => new Intl.NumberFormat("he-IL").format(n);
 
-export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter, customFrom, customTo }: Props) {
+export function WooCommerceDashboard({
+  clientId,
+  tenantId: _tenantId,
+  dateFilter,
+  customFrom,
+  customTo,
+}: Props) {
   // Find linked WooCommerce sites for the client.
   // Filter by client_id only — shared-agency WP sites may live on the agency
   // home tenant while the viewer session is on another tenant in the same agency.
   const { data: sites = [] } = useQuery({
-    queryKey: ['woo-sites-for-client', clientId],
+    queryKey: ["woo-sites-for-client", clientId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('social_media_wordpress_sites' as any)
-        .select('id, site_name, site_url, woo_last_sync_at')
-        .eq('client_id', clientId)
-        .eq('woocommerce_enabled', true)
-        .eq('is_active', true);
+        .from("social_media_wordpress_sites" as any)
+        .select("id, site_name, site_url, woo_last_sync_at")
+        .eq("client_id", clientId)
+        .eq("woocommerce_enabled", true)
+        .eq("is_active", true);
       if (error) throw error;
       return data as any[];
     },
@@ -49,16 +81,27 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
   });
 
   const siteIds = sites.map((s: any) => s.id);
-  const wooDateRange = getWooDashboardDateRangeIso(dateFilter, { customFrom, customTo });
+  const wooDateRange = getWooDashboardDateRangeIso(dateFilter, {
+    customFrom,
+    customTo,
+  });
 
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['woo-orders', siteIds.join(','), dateFilter, customFrom, customTo, wooDateRange.start, wooDateRange.end],
+    queryKey: [
+      "woo-orders",
+      siteIds.join(","),
+      dateFilter,
+      customFrom,
+      customTo,
+      wooDateRange.start,
+      wooDateRange.end,
+    ],
     queryFn: async () => {
       if (siteIds.length === 0) return [];
       return fetchWooOrdersInRange(
         siteIds,
         wooDateRange,
-        'id, total, status, date_created, date_completed, date_paid, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution',
+        "id, total, status, date_created, date_completed, date_paid, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution",
       );
     },
     enabled: siteIds.length > 0,
@@ -68,14 +111,28 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
     const valid = filterWooOrdersForRevenue(orders, wooDateRange);
     const totalRevenue = sumWooRevenue(valid);
     const orderCount = valid.length;
-    const cancelledCount = orders.filter((o: any) => ['cancelled', 'refunded', 'failed'].includes(o.status)).length;
+    const cancelledCount = orders.filter((o: any) =>
+      ["cancelled", "refunded", "failed"].includes(o.status),
+    ).length;
     const aov = orderCount > 0 ? totalRevenue / orderCount : 0;
-    const uniqueCustomers = new Set(valid.map((o: any) => o.customer_email).filter(Boolean)).size;
-    return { totalRevenue, orderCount, cancelledCount, aov, uniqueCustomers, totalOrders: orders.length };
+    const uniqueCustomers = new Set(
+      valid.map((o: any) => o.customer_email).filter(Boolean),
+    ).size;
+    return {
+      totalRevenue,
+      orderCount,
+      cancelledCount,
+      aov,
+      uniqueCustomers,
+      totalOrders: orders.length,
+    };
   }, [orders, wooDateRange]);
 
   const dailyData = useMemo(() => {
-    const map: Record<string, { date: string; revenue: number; orders: number }> = {};
+    const map: Record<
+      string,
+      { date: string; revenue: number; orders: number }
+    > = {};
     filterWooOrdersForRevenue(orders, wooDateRange).forEach((o: any) => {
       const ts = wooOrderRevenueTimestamp(o);
       if (!ts) return;
@@ -88,25 +145,34 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
   }, [orders, wooDateRange]);
 
   const topProducts = useMemo(() => {
-    const map: Record<string, { name: string; quantity: number; revenue: number }> = {};
+    const map: Record<
+      string,
+      { name: string; quantity: number; revenue: number }
+    > = {};
     filterWooOrdersForRevenue(orders, wooDateRange).forEach((o: any) => {
       const items = Array.isArray(o.line_items) ? o.line_items : [];
       items.forEach((item: any) => {
-        const name = item.name || 'מוצר ללא שם';
+        const name = item.name || "מוצר ללא שם";
         if (!map[name]) map[name] = { name, quantity: 0, revenue: 0 };
         map[name].quantity += Number(item.quantity || 0);
         map[name].revenue += Number(item.total || 0);
       });
     });
-    return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+    return Object.values(map)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
   }, [orders, wooDateRange]);
 
   if (sites.length === 0) {
     return (
       <Card className="p-12 text-center">
         <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-40" />
-        <h3 className="text-lg font-semibold mb-2">אין אתר WooCommerce משויך ללקוח</h3>
-        <p className="text-muted-foreground">שייך אתר ללקוח דרך הגדרות WordPress</p>
+        <h3 className="text-lg font-semibold mb-2">
+          אין אתר WooCommerce משויך ללקוח
+        </h3>
+        <p className="text-muted-foreground">
+          שייך אתר ללקוח דרך הגדרות WordPress
+        </p>
       </Card>
     );
   }
@@ -114,7 +180,9 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-4">
-        {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-32" />
+        ))}
       </div>
     );
   }
@@ -126,8 +194,12 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
         <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
           <CardContent className="p-6 flex flex-col items-center justify-center text-center">
             <TrendingUp className="h-5 w-5 text-emerald-600 mb-1" />
-            <p className="text-sm text-muted-foreground">הכנסות (WooCommerce)</p>
-            <p className="text-3xl font-bold mt-2">{formatCurrency(summary.totalRevenue)}</p>
+            <p className="text-sm text-muted-foreground">
+              הכנסות (WooCommerce)
+            </p>
+            <p className="text-3xl font-bold mt-2">
+              {formatCurrency(summary.totalRevenue)}
+            </p>
           </CardContent>
         </Card>
 
@@ -135,7 +207,9 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
           <CardContent className="p-6 flex flex-col items-center justify-center text-center">
             <ShoppingCart className="h-5 w-5 text-blue-600 mb-1" />
             <p className="text-sm text-muted-foreground">הזמנות</p>
-            <p className="text-3xl font-bold mt-2">{formatNumber(summary.orderCount)}</p>
+            <p className="text-3xl font-bold mt-2">
+              {formatNumber(summary.orderCount)}
+            </p>
           </CardContent>
         </Card>
 
@@ -143,7 +217,9 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
           <CardContent className="p-6 flex flex-col items-center justify-center text-center">
             <Package className="h-5 w-5 text-purple-600 mb-1" />
             <p className="text-sm text-muted-foreground">ערך הזמנה ממוצע</p>
-            <p className="text-3xl font-bold mt-2">{formatCurrency(summary.aov)}</p>
+            <p className="text-3xl font-bold mt-2">
+              {formatCurrency(summary.aov)}
+            </p>
           </CardContent>
         </Card>
 
@@ -151,14 +227,18 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
           <CardContent className="p-6 flex flex-col items-center justify-center text-center">
             <Users className="h-5 w-5 text-amber-600 mb-1" />
             <p className="text-sm text-muted-foreground">לקוחות ייחודיים</p>
-            <p className="text-3xl font-bold mt-2">{formatNumber(summary.uniqueCustomers)}</p>
+            <p className="text-3xl font-bold mt-2">
+              {formatNumber(summary.uniqueCustomers)}
+            </p>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950 dark:to-red-900">
           <CardContent className="p-6 flex flex-col items-center justify-center text-center">
             <p className="text-sm text-muted-foreground">בוטלו / הוחזרו</p>
-            <p className="text-3xl font-bold mt-2">{formatNumber(summary.cancelledCount)}</p>
+            <p className="text-3xl font-bold mt-2">
+              {formatNumber(summary.cancelledCount)}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -178,12 +258,28 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
                 <YAxis yAxisId="right" orientation="right" />
                 <Tooltip
                   formatter={(value: any, name: string) =>
-                    name === 'revenue' ? formatCurrency(Number(value)) : formatNumber(Number(value))
+                    name === "revenue"
+                      ? formatCurrency(Number(value))
+                      : formatNumber(Number(value))
                   }
                 />
                 <Legend />
-                <Line yAxisId="left" type="monotone" dataKey="revenue" name="הכנסות" stroke="#10b981" strokeWidth={2} />
-                <Line yAxisId="right" type="monotone" dataKey="orders" name="הזמנות" stroke="#3b82f6" strokeWidth={2} />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="revenue"
+                  name="הכנסות"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="orders"
+                  name="הזמנות"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -209,8 +305,12 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
                 {topProducts.map((p, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-medium">{p.name}</TableCell>
-                    <TableCell className="text-left">{formatNumber(p.quantity)}</TableCell>
-                    <TableCell className="text-left">{formatCurrency(p.revenue)}</TableCell>
+                    <TableCell className="text-left">
+                      {formatNumber(p.quantity)}
+                    </TableCell>
+                    <TableCell className="text-left">
+                      {formatCurrency(p.revenue)}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -220,7 +320,11 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
       )}
 
       {/* Revenue by traffic source */}
-      <WooAttributionSection orders={orders} formatCurrency={formatCurrency} formatNumber={formatNumber} />
+      <WooAttributionSection
+        orders={orders}
+        formatCurrency={formatCurrency}
+        formatNumber={formatNumber}
+      />
 
       {/* Recent orders */}
       <Card>
@@ -243,15 +347,33 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
               {orders.slice(0, 50).map((o: any) => (
                 <TableRow key={o.id}>
                   <TableCell>#{o.order_number}</TableCell>
-                  <TableCell>{new Date(o.date_created).toLocaleDateString('he-IL')}</TableCell>
-                  <TableCell>{[o.customer_first_name, o.customer_last_name].filter(Boolean).join(' ') || o.customer_email || '—'}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{wooAttributionLabel(o)}</TableCell>
                   <TableCell>
-                    <Badge variant={['completed', 'processing'].includes(o.status) ? 'default' : 'secondary'}>
+                    {new Date(o.date_created).toLocaleDateString("he-IL")}
+                  </TableCell>
+                  <TableCell>
+                    {[o.customer_first_name, o.customer_last_name]
+                      .filter(Boolean)
+                      .join(" ") ||
+                      o.customer_email ||
+                      "—"}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {wooAttributionLabel(o)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        ["completed", "processing"].includes(o.status)
+                          ? "default"
+                          : "secondary"
+                      }
+                    >
                       {o.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-left font-medium">{formatCurrency(Number(o.total))}</TableCell>
+                  <TableCell className="text-left font-medium">
+                    {formatCurrency(Number(o.total))}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -1,6 +1,18 @@
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CREATIVE_VISUAL_STYLES, stylesInGroup, type CreativeVisualStyleId } from "./visualStyles";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  CREATIVE_VISUAL_STYLES,
+  stylesInGroup,
+  type CreativeVisualStyleId,
+} from "./visualStyles";
 
 interface Props {
   value: CreativeVisualStyleId;
@@ -9,7 +21,9 @@ interface Props {
 }
 
 export function VisualStyleSelect({ value, onChange, compact }: Props) {
-  const selected = CREATIVE_VISUAL_STYLES.find((item) => item.id === value) ?? CREATIVE_VISUAL_STYLES[0];
+  const selected =
+    CREATIVE_VISUAL_STYLES.find((item) => item.id === value) ??
+    CREATIVE_VISUAL_STYLES[0];
   const auto = stylesInGroup("auto");
   const reference = stylesInGroup("reference");
   const more = stylesInGroup("more");
@@ -17,7 +31,10 @@ export function VisualStyleSelect({ value, onChange, compact }: Props) {
   return (
     <div>
       {!compact && <Label>סגנון ויזואלי</Label>}
-      <Select value={value} onValueChange={(next) => onChange(next as CreativeVisualStyleId)}>
+      <Select
+        value={value}
+        onValueChange={(next) => onChange(next as CreativeVisualStyleId)}
+      >
         <SelectTrigger className={compact ? "h-8 w-[196px]" : "mt-1"}>
           <SelectValue placeholder="בחר סגנון" />
         </SelectTrigger>
@@ -26,10 +43,14 @@ export function VisualStyleSelect({ value, onChange, compact }: Props) {
             <SelectLabel>ברירת מחדל</SelectLabel>
             {auto.map((item) => (
               <SelectItem key={item.id} value={item.id}>
-                {compact ? item.label : (
+                {compact ? (
+                  item.label
+                ) : (
                   <>
                     <span className="font-medium">{item.label}</span>
-                    <span className="ms-2 text-muted-foreground">· {item.hint}</span>
+                    <span className="ms-2 text-muted-foreground">
+                      · {item.hint}
+                    </span>
                   </>
                 )}
               </SelectItem>
@@ -39,10 +60,14 @@ export function VisualStyleSelect({ value, onChange, compact }: Props) {
             <SelectLabel>כיוון אופציונלי</SelectLabel>
             {reference.map((item) => (
               <SelectItem key={item.id} value={item.id}>
-                {compact ? item.label : (
+                {compact ? (
+                  item.label
+                ) : (
                   <>
                     <span className="font-medium">{item.label}</span>
-                    <span className="ms-2 text-muted-foreground">· {item.hint}</span>
+                    <span className="ms-2 text-muted-foreground">
+                      · {item.hint}
+                    </span>
                   </>
                 )}
               </SelectItem>
@@ -52,10 +77,14 @@ export function VisualStyleSelect({ value, onChange, compact }: Props) {
             <SelectLabel>עוד סגנונות</SelectLabel>
             {more.map((item) => (
               <SelectItem key={item.id} value={item.id}>
-                {compact ? item.label : (
+                {compact ? (
+                  item.label
+                ) : (
                   <>
                     <span className="font-medium">{item.label}</span>
-                    <span className="ms-2 text-muted-foreground">· {item.hint}</span>
+                    <span className="ms-2 text-muted-foreground">
+                      · {item.hint}
+                    </span>
                   </>
                 )}
               </SelectItem>
@@ -67,8 +96,8 @@ export function VisualStyleSelect({ value, onChange, compact }: Props) {
         <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
           {selected.id === "adaptive"
             ? "מותאם לקופי: הסגנון נבנה מהקופי, מצבעי הלוגו ומהנושא."
-            : `הסגנון שנבחר (${selected.label}) חל על וריאציה אחת ועל צור לכל הקופי.`}
-          {" "}הטקסט העברי מתווסף אחר כך כשכבה.
+            : `הסגנון שנבחר (${selected.label}) חל על וריאציה אחת ועל צור לכל הקופי.`}{" "}
+          הטקסט העברי מתווסף אחר כך כשכבה.
         </p>
       )}
     </div>

@@ -8,8 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 export function useSessionRefresh() {
   const refreshSession = useCallback(async () => {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
       if (error) {
         console.error("Session check error:", error);
         return;

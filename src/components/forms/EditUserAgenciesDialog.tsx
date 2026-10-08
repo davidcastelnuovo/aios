@@ -38,15 +38,15 @@ export function EditUserAgenciesDialog({
     queryKey: ["agencies-for-edit", currentUserId, currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant?.id) return [];
-      
+
       const { data: userRoles } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", currentUserId);
-      
-      const roles = userRoles?.map(r => r.role) || [];
+
+      const roles = userRoles?.map((r) => r.role) || [];
       const isOwnerRole = roles.includes("owner");
-      
+
       if (isOwnerRole) {
         // Get owned agencies
         const { data: owned, error: ownedErr } = await supabase
@@ -63,12 +63,15 @@ export function EditUserAgenciesDialog({
           .eq("accessing_tenant_id", currentTenant.id);
         if (sharedErr) throw sharedErr;
 
-        const sharedAgencies = shared?.map(s => s.agencies).filter(Boolean) || [];
+        const sharedAgencies =
+          shared?.map((s) => s.agencies).filter(Boolean) || [];
         const uniqueMap = new Map<string, { id: string; name: string }>();
-        [...(owned || []), ...sharedAgencies].forEach(a => {
+        [...(owned || []), ...sharedAgencies].forEach((a) => {
           if (a && a.id) uniqueMap.set(a.id, a as { id: string; name: string });
         });
-        return Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        return Array.from(uniqueMap.values()).sort((a, b) =>
+          a.name.localeCompare(b.name),
+        );
       }
       return [];
     },
@@ -93,7 +96,7 @@ export function EditUserAgenciesDialog({
           .eq("campaigner_id", profile.campaigner_id);
 
         if (error) throw error;
-        return links?.map(link => link.agency_id) || [];
+        return links?.map((link) => link.agency_id) || [];
       }
 
       // Try sales person agencies
@@ -104,7 +107,7 @@ export function EditUserAgenciesDialog({
           .eq("sales_person_id", profile.sales_person_id);
 
         if (error) throw error;
-        return links?.map(link => link.agency_id) || [];
+        return links?.map((link) => link.agency_id) || [];
       }
 
       return [];
@@ -127,8 +130,14 @@ export function EditUserAgenciesDialog({
     enabled: open && !!userId,
   });
 
-  const hasAssignment = !!(userProfile?.campaigner_id || userProfile?.sales_person_id);
-  const userType = userProfile?.campaigner_id ? 'campaigner' : userProfile?.sales_person_id ? 'sales_person' : null;
+  const hasAssignment = !!(
+    userProfile?.campaigner_id || userProfile?.sales_person_id
+  );
+  const userType = userProfile?.campaigner_id
+    ? "campaigner"
+    : userProfile?.sales_person_id
+      ? "sales_person"
+      : null;
 
   // Update selected agencies when current agencies load
   useEffect(() => {
@@ -139,25 +148,32 @@ export function EditUserAgenciesDialog({
 
   const updateAgenciesMutation = useMutation({
     mutationFn: async (agencyIds: string[]) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session) {
         throw new Error("No active session");
       }
 
-      const { data, error } = await supabase.functions.invoke("update-user-agencies", {
-        body: { userId, agencyIds },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
+      const { data, error } = await supabase.functions.invoke(
+        "update-user-agencies",
+        {
+          body: { userId, agencyIds },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
         },
-      });
-      
+      );
+
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles", currentTenant?.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", currentTenant?.id],
+      });
       queryClient.invalidateQueries({ queryKey: ["user-agencies", userId] });
       toast.success("הסוכנויות עודכנו בהצלחה");
       onOpenChange(false);
@@ -169,13 +185,15 @@ export function EditUserAgenciesDialog({
 
   const handleSave = async () => {
     if (!hasAssignment) {
-      toast.error("לא ניתן לעדכן סוכנויות: המשתמש לא משויך לקמפיינר או לאיש מכירות");
+      toast.error(
+        "לא ניתן לעדכן סוכנויות: המשתמש לא משויך לקמפיינר או לאיש מכירות",
+      );
       return;
     }
 
     try {
       // Handle based on user type
-      if (userType === 'sales_person' && userProfile?.sales_person_id) {
+      if (userType === "sales_person" && userProfile?.sales_person_id) {
         // Update sales_person_agencies
         const { error: deleteError } = await supabase
           .from("sales_person_agencies")
@@ -188,16 +206,18 @@ export function EditUserAgenciesDialog({
           const { error: insertError } = await supabase
             .from("sales_person_agencies")
             .insert(
-              selectedAgencies.map(agencyId => ({
+              selectedAgencies.map((agencyId) => ({
                 sales_person_id: userProfile.sales_person_id,
                 agency_id: agencyId,
-              }))
+              })),
             );
 
           if (insertError) throw insertError;
         }
 
-        queryClient.invalidateQueries({ queryKey: ["users-with-roles", currentTenant?.id] });
+        queryClient.invalidateQueries({
+          queryKey: ["users-with-roles", currentTenant?.id],
+        });
         queryClient.invalidateQueries({ queryKey: ["user-agencies", userId] });
         toast.success("הסוכנויות עודכנו בהצלחה");
         onOpenChange(false);
@@ -232,31 +252,47 @@ export function EditUserAgenciesDialog({
             <Label>סוכנויות</Label>
             <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
               {agencies?.length === 0 ? (
-                <p className="text-sm text-muted-foreground">אין סוכנויות זמינות</p>
+                <p className="text-sm text-muted-foreground">
+                  אין סוכנויות זמינות
+                </p>
               ) : (
-                agencies?.filter(a => a.name.toLowerCase().includes(agencySearchEUA.toLowerCase())).map((agency) => (
-                  <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
-                    <input
-                      type="checkbox"
-                      id={`edit-agency-${agency.id}`}
-                      checked={selectedAgencies.includes(agency.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedAgencies([...selectedAgencies, agency.id]);
-                        } else {
-                          setSelectedAgencies(selectedAgencies.filter((id) => id !== agency.id));
-                        }
-                      }}
-                      className="rounded border-gray-300 text-primary focus:ring-primary"
-                    />
-                    <label
-                      htmlFor={`edit-agency-${agency.id}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                agencies
+                  ?.filter((a) =>
+                    a.name
+                      .toLowerCase()
+                      .includes(agencySearchEUA.toLowerCase()),
+                  )
+                  .map((agency) => (
+                    <div
+                      key={agency.id}
+                      className="flex items-center space-x-2 space-x-reverse"
                     >
-                      {agency.name}
-                    </label>
-                  </div>
-                ))
+                      <input
+                        type="checkbox"
+                        id={`edit-agency-${agency.id}`}
+                        checked={selectedAgencies.includes(agency.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedAgencies([
+                              ...selectedAgencies,
+                              agency.id,
+                            ]);
+                          } else {
+                            setSelectedAgencies(
+                              selectedAgencies.filter((id) => id !== agency.id),
+                            );
+                          }
+                        }}
+                        className="rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <label
+                        htmlFor={`edit-agency-${agency.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {agency.name}
+                      </label>
+                    </div>
+                  ))
               )}
             </div>
             {selectedAgencies.length > 0 && (

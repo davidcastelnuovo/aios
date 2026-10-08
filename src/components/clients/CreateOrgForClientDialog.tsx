@@ -68,13 +68,20 @@ function emptySelection(): CreateOrgShareSelection {
   };
 }
 
-function selectionKey(kind: ShareableResourceKind): keyof CreateOrgShareSelection {
+function selectionKey(
+  kind: ShareableResourceKind,
+): keyof CreateOrgShareSelection {
   switch (kind) {
-    case "integration": return "integration_ids";
-    case "social_page": return "social_page_ids";
-    case "wordpress_site": return "wordpress_site_ids";
-    case "crm_table": return "crm_table_ids";
-    case "automation": return "automation_ids";
+    case "integration":
+      return "integration_ids";
+    case "social_page":
+      return "social_page_ids";
+    case "wordpress_site":
+      return "wordpress_site_ids";
+    case "crm_table":
+      return "crm_table_ids";
+    case "automation":
+      return "automation_ids";
   }
 }
 
@@ -89,7 +96,8 @@ export function CreateOrgForClientDialog({
   const [shareLlm, setShareLlm] = useState(false);
   const [cloneCarmen, setCloneCarmen] = useState(true);
   const [copyClientDetails, setCopyClientDetails] = useState(true);
-  const [selection, setSelection] = useState<CreateOrgShareSelection>(emptySelection());
+  const [selection, setSelection] =
+    useState<CreateOrgShareSelection>(emptySelection());
   const [result, setResult] = useState<OrgCreatedResult | null>(null);
 
   const { data: resources = [], isLoading: resourcesLoading } = useQuery({
@@ -162,19 +170,22 @@ export function CreateOrgForClientDialog({
   const mutation = useMutation({
     mutationFn: async () => {
       if (!client) throw new Error("missing client");
-      const { data, error } = await supabase.functions.invoke("create-org-for-client", {
-        body: {
-          client_id: client.id,
-          share_llm: shareLlm,
-          clone_carmen: cloneCarmen,
-          copy_client_details: copyClientDetails,
-          share_integration_ids: selection.integration_ids,
-          share_social_page_ids: selection.social_page_ids,
-          share_wordpress_site_ids: selection.wordpress_site_ids,
-          share_crm_table_ids: selection.crm_table_ids,
-          share_automation_ids: selection.automation_ids,
+      const { data, error } = await supabase.functions.invoke(
+        "create-org-for-client",
+        {
+          body: {
+            client_id: client.id,
+            share_llm: shareLlm,
+            clone_carmen: cloneCarmen,
+            copy_client_details: copyClientDetails,
+            share_integration_ids: selection.integration_ids,
+            share_social_page_ids: selection.social_page_ids,
+            share_wordpress_site_ids: selection.wordpress_site_ids,
+            share_crm_table_ids: selection.crm_table_ids,
+            share_automation_ids: selection.automation_ids,
+          },
         },
-      });
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       return data as OrgCreatedResult;
@@ -207,15 +218,27 @@ export function CreateOrgForClientDialog({
       description={`יוצר תת-ארגון עבור "${client?.name}" — בחר מה לשתף`}
       footer={
         result ? (
-          <Button variant="outline" onClick={() => onOpenChange(false)}>סגור</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            סגור
+          </Button>
         ) : (
           <>
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={mutation.isPending}
+            >
               ביטול
             </Button>
-            <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || resourcesLoading}>
+            <Button
+              onClick={() => mutation.mutate()}
+              disabled={mutation.isPending || resourcesLoading}
+            >
               {mutation.isPending ? (
-                <><Loader2 className="h-4 w-4 animate-spin ml-1" />יוצר...</>
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin ml-1" />
+                  יוצר...
+                </>
               ) : (
                 "צור ארגון"
               )}
@@ -236,7 +259,8 @@ export function CreateOrgForClientDialog({
                 : `${selectedCount} פריטים נבחרו לשיתוף`}
             </p>
             <p className="text-muted-foreground">
-              <span className="font-medium text-foreground">Owner: </span>{ownerLabel}
+              <span className="font-medium text-foreground">Owner: </span>
+              {ownerLabel}
             </p>
           </div>
 
@@ -248,7 +272,8 @@ export function CreateOrgForClientDialog({
               </div>
             ) : resources.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">
-                לא נמצאו משאבים לשיתוף — ניתן עדיין ליצור ארגון עם פרטי הלקוח בלבד.
+                לא נמצאו משאבים לשיתוף — ניתן עדיין ליצור ארגון עם פרטי הלקוח
+                בלבד.
               </p>
             ) : (
               <div className="space-y-4">
@@ -256,7 +281,9 @@ export function CreateOrgForClientDialog({
                   const items = groupedResources.get(kind) || [];
                   if (!items.length) return null;
                   const key = selectionKey(kind);
-                  const selectedInSection = items.filter((item) => selection[key].includes(item.id)).length;
+                  const selectedInSection = items.filter((item) =>
+                    selection[key].includes(item.id),
+                  ).length;
                   const allSelected = selectedInSection === items.length;
 
                   return (
@@ -266,10 +293,16 @@ export function CreateOrgForClientDialog({
                           <Checkbox
                             id={`section-${kind}`}
                             checked={allSelected}
-                            onCheckedChange={(checked) => toggleSection(kind, checked === true)}
+                            onCheckedChange={(checked) =>
+                              toggleSection(kind, checked === true)
+                            }
                           />
-                          <Label htmlFor={`section-${kind}`} className="font-medium">
-                            {SECTION_LABELS[kind]} ({selectedInSection}/{items.length})
+                          <Label
+                            htmlFor={`section-${kind}`}
+                            className="font-medium"
+                          >
+                            {SECTION_LABELS[kind]} ({selectedInSection}/
+                            {items.length})
                           </Label>
                         </div>
                       </div>
@@ -279,20 +312,30 @@ export function CreateOrgForClientDialog({
                             key={item.id}
                             className={cn(
                               "flex items-start gap-2 rounded-md border p-2 cursor-pointer",
-                              selection[key].includes(item.id) ? "border-primary/40 bg-primary/5" : "border-transparent",
+                              selection[key].includes(item.id)
+                                ? "border-primary/40 bg-primary/5"
+                                : "border-transparent",
                             )}
                           >
                             <Checkbox
                               checked={selection[key].includes(item.id)}
-                              onCheckedChange={(checked) => toggleResource(item, checked === true)}
+                              onCheckedChange={(checked) =>
+                                toggleResource(item, checked === true)
+                              }
                             />
                             <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">{item.label}</p>
+                              <p className="text-sm font-medium truncate">
+                                {item.label}
+                              </p>
                               {item.subtitle && (
-                                <p className="text-xs text-muted-foreground truncate">{item.subtitle}</p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {item.subtitle}
+                                </p>
                               )}
                               {item.clientRelated && (
-                                <p className="text-[11px] text-primary mt-0.5">קשור ללקוח</p>
+                                <p className="text-[11px] text-primary mt-0.5">
+                                  קשור ללקוח
+                                </p>
                               )}
                             </div>
                           </label>
@@ -313,7 +356,11 @@ export function CreateOrgForClientDialog({
                   יוצר כרטיס לקוח בארגון החדש עם אנשי קשר ופרטי חיבור
                 </span>
               </Label>
-              <Switch id="copy-client" checked={copyClientDetails} onCheckedChange={setCopyClientDetails} />
+              <Switch
+                id="copy-client"
+                checked={copyClientDetails}
+                onCheckedChange={setCopyClientDetails}
+              />
             </div>
 
             <div className="flex items-center justify-between gap-3">
@@ -323,7 +370,11 @@ export function CreateOrgForClientDialog({
                   משכפל את הסוכן (מושבת — ניתן להפעיל ידנית)
                 </span>
               </Label>
-              <Switch id="clone-carmen" checked={cloneCarmen} onCheckedChange={setCloneCarmen} />
+              <Switch
+                id="clone-carmen"
+                checked={cloneCarmen}
+                onCheckedChange={setCloneCarmen}
+              />
             </div>
 
             <div className="flex items-center justify-between gap-3">
@@ -333,7 +384,11 @@ export function CreateOrgForClientDialog({
                   הארגון החדש ישתמש במפתח ה-AI של הסוכנות שלך
                 </span>
               </Label>
-              <Switch id="share-llm" checked={shareLlm} onCheckedChange={setShareLlm} />
+              <Switch
+                id="share-llm"
+                checked={shareLlm}
+                onCheckedChange={setShareLlm}
+              />
             </div>
           </div>
         </div>
@@ -362,9 +417,12 @@ function ResultView({ result }: { result: OrgCreatedResult }) {
       </div>
 
       <p className="text-muted-foreground">
-        {result.owner_status === "existing_user" && "Owner נוסף — משתמש קיים במערכת."}
-        {result.owner_status === "invited" && `הזמנה נשלחה ל-${result.invited_email}.`}
-        {result.owner_status === "no_email" && "לא נמצא אימייל לאיש קשר — יש להזמין owner ידנית."}
+        {result.owner_status === "existing_user" &&
+          "Owner נוסף — משתמש קיים במערכת."}
+        {result.owner_status === "invited" &&
+          `הזמנה נשלחה ל-${result.invited_email}.`}
+        {result.owner_status === "no_email" &&
+          "לא נמצא אימייל לאיש קשר — יש להזמין owner ידנית."}
         {result.copied_client_id && " כרטיס לקוח הועתק לארגון החדש."}
       </p>
 
@@ -375,7 +433,9 @@ function ResultView({ result }: { result: OrgCreatedResult }) {
             הערות
           </p>
           {result.warnings.map((w, i) => (
-            <p key={i} className="text-xs text-yellow-700">{w}</p>
+            <p key={i} className="text-xs text-yellow-700">
+              {w}
+            </p>
           ))}
         </div>
       )}
@@ -385,7 +445,12 @@ function ResultView({ result }: { result: OrgCreatedResult }) {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className={cn("rounded-md border p-2", value > 0 ? "bg-green-50 border-green-200" : "bg-muted/30")}>
+    <div
+      className={cn(
+        "rounded-md border p-2",
+        value > 0 ? "bg-green-50 border-green-200" : "bg-muted/30",
+      )}
+    >
       <p className="text-lg font-bold">{value}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
     </div>

@@ -6,7 +6,11 @@ interface DataCardsProps {
 
 export function DataCards({ data }: DataCardsProps) {
   if (!data || data.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-4">אין נתונים להצגה</p>;
+    return (
+      <p className="text-sm text-muted-foreground text-center py-4">
+        אין נתונים להצגה
+      </p>
+    );
   }
 
   return (
@@ -17,7 +21,9 @@ export function DataCards({ data }: DataCardsProps) {
             {Object.entries(item).map(([key, value]) => (
               <div key={key} className="flex justify-between text-sm">
                 <span className="text-muted-foreground">{key}</span>
-                <span className="font-medium">{value != null ? String(value) : "—"}</span>
+                <span className="font-medium">
+                  {value != null ? String(value) : "—"}
+                </span>
               </div>
             ))}
           </CardContent>

@@ -37,7 +37,11 @@ const WEEKDAYS = [
   ["6", "שבת"],
 ];
 
-export function ClientReportScheduleSettings({ clientId, tenantId, target }: Props) {
+export function ClientReportScheduleSettings({
+  clientId,
+  tenantId,
+  target,
+}: Props) {
   const queryClient = useQueryClient();
   const [enabled, setEnabled] = useState(false);
   const [frequency, setFrequency] = useState<"weekly" | "monthly">("monthly");
@@ -58,9 +62,10 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
         .select("*")
         .eq("client_id", clientId)
         .eq("target_type", target.kind);
-      query = target.kind === "table"
-        ? query.eq("table_id", target.id)
-        : query.eq("dashboard_id", target.id);
+      query =
+        target.kind === "table"
+          ? query.eq("table_id", target.id)
+          : query.eq("dashboard_id", target.id);
       const { data, error } = await query.maybeSingle();
       if (error) throw error;
       return data;
@@ -71,11 +76,13 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
   useEffect(() => {
     setEnabled(!!schedule?.enabled);
     setFrequency(schedule?.frequency === "weekly" ? "weekly" : "monthly");
-    setDay(String(
-      schedule?.frequency === "weekly"
-        ? schedule?.day_of_week ?? 0
-        : schedule?.day_of_month ?? 1,
-    ));
+    setDay(
+      String(
+        schedule?.frequency === "weekly"
+          ? (schedule?.day_of_week ?? 0)
+          : (schedule?.day_of_month ?? 1),
+      ),
+    );
     setSendTime(String(schedule?.send_time || "09:00").slice(0, 5));
     const channels: string[] = schedule?.channels || ["whatsapp"];
     setSendWhatsApp(channels.includes("whatsapp"));
@@ -100,7 +107,9 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
 
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
       const payload = {
         tenant_id: tenantId,
@@ -123,13 +132,20 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
       };
 
       const result = schedule?.id
-        ? await supabase.from("report_schedules").update(payload).eq("id", schedule.id)
+        ? await supabase
+            .from("report_schedules")
+            .update(payload)
+            .eq("id", schedule.id)
         : await supabase.from("report_schedules").insert(payload);
       if (result.error) throw result.error;
       await queryClient.invalidateQueries({ queryKey });
-      toast.success(enabled ? "תזמון הדוח נשמר והופעל" : "הגדרת התזמון נשמרה ללא הפעלה");
+      toast.success(
+        enabled ? "תזמון הדוח נשמר והופעל" : "הגדרת התזמון נשמרה ללא הפעלה",
+      );
     } catch (error: unknown) {
-      toast.error(`שמירת התזמון נכשלה: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error(
+        `שמירת התזמון נכשלה: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       setSaving(false);
     }
@@ -151,17 +167,26 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
             </p>
           </div>
         </div>
-        <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="הפעל תזמון" />
+        <Switch
+          checked={enabled}
+          onCheckedChange={setEnabled}
+          aria-label="הפעל תזמון"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div className="space-y-1">
           <Label className="text-xs">תדירות</Label>
-          <Select value={frequency} onValueChange={(value) => {
-            setFrequency(value as "weekly" | "monthly");
-            setDay(value === "weekly" ? "0" : "1");
-          }}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <Select
+            value={frequency}
+            onValueChange={(value) => {
+              setFrequency(value as "weekly" | "monthly");
+              setDay(value === "weekly" ? "0" : "1");
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="weekly">שבועי</SelectItem>
               <SelectItem value="monthly">חודשי</SelectItem>
@@ -169,13 +194,19 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">{frequency === "weekly" ? "יום בשבוע" : "יום בחודש"}</Label>
+          <Label className="text-xs">
+            {frequency === "weekly" ? "יום בשבוע" : "יום בחודש"}
+          </Label>
           {frequency === "weekly" ? (
             <Select value={day} onValueChange={setDay}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {WEEKDAYS.map(([value, label]) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -192,17 +223,28 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
         </div>
         <div className="space-y-1">
           <Label className="text-xs">שעה (ישראל)</Label>
-          <Input type="time" value={sendTime} onChange={(event) => setSendTime(event.target.value)} className="h-8 text-xs" />
+          <Input
+            type="time"
+            value={sendTime}
+            onChange={(event) => setSendTime(event.target.value)}
+            className="h-8 text-xs"
+          />
         </div>
       </div>
 
       <div className="flex gap-4">
         <label className="flex items-center gap-2 text-xs">
-          <Checkbox checked={sendWhatsApp} onCheckedChange={(checked) => setSendWhatsApp(!!checked)} />
+          <Checkbox
+            checked={sendWhatsApp}
+            onCheckedChange={(checked) => setSendWhatsApp(!!checked)}
+          />
           וואטסאפ של הלקוח
         </label>
         <label className="flex items-center gap-2 text-xs">
-          <Checkbox checked={sendEmail} onCheckedChange={(checked) => setSendEmail(!!checked)} />
+          <Checkbox
+            checked={sendEmail}
+            onCheckedChange={(checked) => setSendEmail(!!checked)}
+          />
           אימייל
         </label>
       </div>

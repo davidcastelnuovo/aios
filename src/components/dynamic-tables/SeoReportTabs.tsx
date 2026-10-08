@@ -2,8 +2,17 @@ import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  ResponsiveTabsList,
+  type ResponsiveTabItem,
+} from "@/components/ui/responsive-tabs-list";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeoDashboardView } from "./SeoDashboardView";
@@ -12,7 +21,16 @@ import { GoogleAnalyticsDashboard } from "./GoogleAnalyticsDashboard";
 import { GoogleAnalyticsTableDialog } from "./GoogleAnalyticsTableDialog";
 import { GscIntegration, type GscKeywordData } from "./seo/GscIntegration";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
-import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus, Phone, FileText } from "lucide-react";
+import {
+  TrendingUp,
+  Search,
+  BarChart3,
+  Settings2,
+  RefreshCw,
+  Plus,
+  Phone,
+  FileText,
+} from "lucide-react";
 import { MaskyooSiblingCard } from "./MaskyooSiblingCard";
 import { SeoMonthlyWorkTab } from "./seo/SeoMonthlyWorkTab";
 
@@ -23,7 +41,12 @@ import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { filterValidSeoReports } from "./seo/reportValidity";
 import { useSeoScope } from "@/hooks/useSeoScope";
 import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
-import { filterSeoReportsByDomain, resolveLinkedCrmTableId, resolveSeoLinkedGscSiteUrl, sortSeoReportsByRecency } from "@/lib/seoDomain";
+import {
+  filterSeoReportsByDomain,
+  resolveLinkedCrmTableId,
+  resolveSeoLinkedGscSiteUrl,
+  sortSeoReportsByRecency,
+} from "@/lib/seoDomain";
 import { ahrefsPositionsFromReports } from "@/lib/gscPosition";
 
 interface SeoReportTabsProps {
@@ -48,15 +71,17 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   // table from scope; if none, derive a stable tenant_id for the report from
   // either the table's tenant_id, the client's home tenant, or the prop.
   const seoTable = scope?.seoTable || null;
-  const seoSettings = (seoTable?.integration_settings || {}) as Record<string, unknown>;
-  const ahrefsProjectId = (seoSettings.ahrefs_project_id as string | number | undefined) ?? null;
+  const seoSettings = (seoTable?.integration_settings || {}) as Record<
+    string,
+    unknown
+  >;
+  const ahrefsProjectId =
+    (seoSettings.ahrefs_project_id as string | number | undefined) ?? null;
   const ahrefsMode = (seoSettings.ahrefs_mode as string | undefined) ?? null;
-  const ahrefsProtocol = (seoSettings.ahrefs_protocol as string | undefined) ?? null;
+  const ahrefsProtocol =
+    (seoSettings.ahrefs_protocol as string | undefined) ?? null;
   const reportTenantId =
-    seoTable?.tenant_id ||
-    scope?.clientTenantId ||
-    tenantId ||
-    "";
+    seoTable?.tenant_id || scope?.clientTenantId || tenantId || "";
 
   // Check whether we actually have valid Ahrefs SEO reports for this client.
   // Use client-scoped lookup so reports stored under a sibling tenant still load.
@@ -77,7 +102,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
 
   const hasValidAhrefsReports = useMemo(
     () => filterValidSeoReports(ownDomainReports).length > 0,
-    [ownDomainReports]
+    [ownDomainReports],
   );
 
   // Tracked phrases from the latest valid Ahrefs report — shared with the GSC tab.
@@ -85,7 +110,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     const valid = filterValidSeoReports(ownDomainReports);
     for (const report of valid) {
       const rd = (report as any)?.report_data || {};
-      const tracked = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+      const tracked = Array.isArray(rd.tracked_keywords)
+        ? rd.tracked_keywords
+        : [];
       const names = tracked
         .map((k: any) => String(k?.keyword || k || "").trim())
         .filter(Boolean);
@@ -99,37 +126,47 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   }, [ownDomainReports]);
 
   const trackedAhrefsPositions = useMemo(() => {
-    const map = ahrefsPositionsFromReports(sortSeoReportsByRecency(ownDomainReports));
+    const map = ahrefsPositionsFromReports(
+      sortSeoReportsByRecency(ownDomainReports),
+    );
     return Object.fromEntries(map);
   }, [ownDomainReports]);
 
   // Fetch the client's own website as a fallback for GSC domain auto-match
   // (when no Ahrefs SEO table exists for this client, targetDomain is empty).
   const { data: clientRow } = useQuery({
-    queryKey: ['client-website', clientId],
+    queryKey: ["client-website", clientId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('clients')
-        .select('website')
-        .eq('id', clientId)
+        .from("clients")
+        .select("website")
+        .eq("id", clientId)
         .maybeSingle();
       if (error) throw error;
       return data;
     },
     enabled: !!clientId,
   });
-  const clientWebsite = clientRow?.website || '';
+  const clientWebsite = clientRow?.website || "";
 
-  const targetDomain = (seoTable?.integration_settings as any)?.targetDomain || '';
-  const savedGaTableId = (seoTable?.integration_settings as any)?.linkedGaTableId || '';
-  const savedGscTableId = (seoTable?.integration_settings as any)?.linkedGscTableId || '';
-  const savedGscIntegrationId = (seoTable?.integration_settings as any)?.gsc_integration_id || '';
+  const targetDomain =
+    (seoTable?.integration_settings as any)?.targetDomain || "";
+  const savedGaTableId =
+    (seoTable?.integration_settings as any)?.linkedGaTableId || "";
+  const savedGscTableId =
+    (seoTable?.integration_settings as any)?.linkedGscTableId || "";
+  const savedGscIntegrationId =
+    (seoTable?.integration_settings as any)?.gsc_integration_id || "";
   const savedGscSiteUrl = resolveSeoLinkedGscSiteUrl({
-    integrationSettings: (seoTable?.integration_settings || {}) as Record<string, unknown>,
+    integrationSettings: (seoTable?.integration_settings || {}) as Record<
+      string,
+      unknown
+    >,
     clientGscSiteUrl: scope?.clientGscSiteUrl,
     expectedDomain,
   });
-  const savedGscLangFilter = ((seoTable?.integration_settings as any)?.linkedGscLangFilter || 'all') as 'all' | 'he' | 'en';
+  const savedGscLangFilter = ((seoTable?.integration_settings as any)
+    ?.linkedGscLangFilter || "all") as "all" | "he" | "en";
 
   // Org-wide GSC fallback — same path as SeoDashboardView so the Search Console
   // tab works even when the viewer didn't OAuth personally (Anna's connection).
@@ -150,7 +187,11 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const [showGaDialog, setShowGaDialog] = useState(false);
 
   useEffect(() => {
-    const resolved = resolveLinkedCrmTableId(savedGaTableId, gaTables, clientId);
+    const resolved = resolveLinkedCrmTableId(
+      savedGaTableId,
+      gaTables,
+      clientId,
+    );
     setSelectedGaTableId(resolved);
     if (resolved && resolved !== savedGaTableId && seoTable?.id) {
       saveLinkMutation.mutate({ key: "linkedGaTableId", value: resolved });
@@ -158,7 +199,11 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   }, [savedGaTableId, gaTables, clientId, seoTable?.id]);
 
   useEffect(() => {
-    const resolved = resolveLinkedCrmTableId(savedGscTableId, gscTables, clientId);
+    const resolved = resolveLinkedCrmTableId(
+      savedGscTableId,
+      gscTables,
+      clientId,
+    );
     setSelectedGscTableId(resolved);
     if (resolved && resolved !== savedGscTableId && seoTable?.id) {
       saveLinkMutation.mutate({ key: "linkedGscTableId", value: resolved });
@@ -171,25 +216,34 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
       if (!seoTable?.id) return;
       const currentSettings = (seoTable.integration_settings as any) || {};
       const { error } = await supabase
-        .from('crm_tables')
+        .from("crm_tables")
         .update({ integration_settings: { ...currentSettings, [key]: value } })
-        .eq('id', seoTable.id);
+        .eq("id", seoTable.id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['seo-scope', clientId] });
-      toast.success('החיבור נשמר');
+      queryClient.invalidateQueries({ queryKey: ["seo-scope", clientId] });
+      toast.success("החיבור נשמר");
     },
   });
 
   // Fetch GA records for selected table (daily_source, daily, top_pages, traffic_source, event_total)
-  const { data: gaRecordsRaw, isError: gaRecordsError, isSuccess: gaRecordsSuccess } = useQuery({
-    queryKey: ['crm-records', selectedGaTableId],
+  const {
+    data: gaRecordsRaw,
+    isError: gaRecordsError,
+    isSuccess: gaRecordsSuccess,
+  } = useQuery({
+    queryKey: ["crm-records", selectedGaTableId],
     queryFn: async () => {
       if (!selectedGaTableId) return [];
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke(`crm-records?table_id=${selectedGaTableId}`, { method: 'GET' });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      const response = await supabase.functions.invoke(
+        `crm-records?table_id=${selectedGaTableId}`,
+        { method: "GET" },
+      );
       if (response.error) throw response.error;
       return Array.isArray(response.data) ? response.data : [];
     },
@@ -200,15 +254,19 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   // Fetch channel_group and event_aggregate records directly — these are small sets that
   // can get pushed out of the crm-records response when there are many daily_source rows
   const { data: gaAggregateRecords } = useQuery({
-    queryKey: ['crm-records-aggregate', selectedGaTableId],
+    queryKey: ["crm-records-aggregate", selectedGaTableId],
     queryFn: async () => {
       if (!selectedGaTableId) return [];
       const { data, error } = await supabase
-        .from('crm_records')
-        .select('id, data')
-        .eq('table_id', selectedGaTableId)
-        .in('data->>report_type', ['channel_group', 'event_aggregate', 'monthly_organic'])
-        .order('created_at', { ascending: false })
+        .from("crm_records")
+        .select("id, data")
+        .eq("table_id", selectedGaTableId)
+        .in("data->>report_type", [
+          "channel_group",
+          "event_aggregate",
+          "monthly_organic",
+        ])
+        .order("created_at", { ascending: false })
         .limit(600);
       if (error) throw error;
       return data || [];
@@ -231,24 +289,35 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const syncGaMutation = useMutation({
     mutationFn: async (tableId: string) => {
       const now = new Date();
-      const endDate = now.toISOString().split('T')[0];
+      const endDate = now.toISOString().split("T")[0];
       // Sync at least 90 days so we don't wipe historical data when triggering
       // a manual GA sync from the SEO report (which only shows monthly trends).
-      const startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const response = await supabase.functions.invoke('sync-google-analytics-data', {
-        method: 'POST',
-        body: { tableId, startDate, endDate },
-      });
+      const startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0];
+      const response = await supabase.functions.invoke(
+        "sync-google-analytics-data",
+        {
+          method: "POST",
+          body: { tableId, startDate, endDate },
+        },
+      );
       if (response.error) throw response.error;
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-records', selectedGaTableId] });
-      queryClient.invalidateQueries({ queryKey: ['crm-records-aggregate', selectedGaTableId] });
-      toast.success(`נתוני Analytics סונכרנו (${data?.records_synced || 0} שורות)`);
+      queryClient.invalidateQueries({
+        queryKey: ["crm-records", selectedGaTableId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["crm-records-aggregate", selectedGaTableId],
+      });
+      toast.success(
+        `נתוני Analytics סונכרנו (${data?.records_synced || 0} שורות)`,
+      );
     },
     onError: (error: any) => {
-      toast.error('שגיאה בסנכרון Analytics: ' + error.message);
+      toast.error("שגיאה בסנכרון Analytics: " + error.message);
     },
   });
 
@@ -272,8 +341,14 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   // RLS still gates what the user can actually see, but we no longer restrict by
   // the active session tenant — that previously hid integrations created in
   // a sibling tenant for shared-agency clients.
-  const { data: gscUserIntegrations } = useUserIntegrations(accessibleTenantIds, 'google_search_console');
-  const { data: gaUserIntegrations } = useUserIntegrations(accessibleTenantIds, 'google_analytics');
+  const { data: gscUserIntegrations } = useUserIntegrations(
+    accessibleTenantIds,
+    "google_search_console",
+  );
+  const { data: gaUserIntegrations } = useUserIntegrations(
+    accessibleTenantIds,
+    "google_analytics",
+  );
 
   const hasGa =
     gaTables.length > 0 ||
@@ -329,7 +404,10 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
         />
 
         <TabsContent value="maskyoo">
-          <MaskyooSiblingCard clientId={clientId} fallbackTenantId={reportTenantId} />
+          <MaskyooSiblingCard
+            clientId={clientId}
+            fallbackTenantId={reportTenantId}
+          />
         </TabsContent>
 
         <TabsContent value="monthly-work">
@@ -350,56 +428,75 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
             selectedGscIntegrationId={savedGscIntegrationId}
             onGscSiteSelected={(siteUrl) => {
               if (siteUrl && siteUrl !== savedGscSiteUrl) {
-                saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
+                saveLinkMutation.mutate({
+                  key: "linkedGscSiteUrl",
+                  value: siteUrl,
+                });
               }
             }}
             initialLangFilter={savedGscLangFilter}
-            onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
+            onLangFilterChange={(v) =>
+              saveLinkMutation.mutate({ key: "linkedGscLangFilter", value: v })
+            }
             extraGscRows={gscTop20Rows}
           />
         </TabsContent>
 
         {hasGsc && (
-          <TabsContent value="gsc" forceMount className="data-[state=inactive]:hidden">
-            {Array.isArray(gscUserIntegrations) && gscUserIntegrations.length > 0 && (
-              <Card className="mb-3 border-primary/20">
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Settings2 className="h-4 w-4" />
-                      <span>חשבון Search Console לדוח:</span>
+          <TabsContent
+            value="gsc"
+            forceMount
+            className="data-[state=inactive]:hidden"
+          >
+            {Array.isArray(gscUserIntegrations) &&
+              gscUserIntegrations.length > 0 && (
+                <Card className="mb-3 border-primary/20">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Settings2 className="h-4 w-4" />
+                        <span>חשבון Search Console לדוח:</span>
+                      </div>
+                      <Select
+                        value={savedGscIntegrationId}
+                        onValueChange={(integrationId) => {
+                          if (integrationId !== savedGscIntegrationId) {
+                            saveLinkMutation.mutate({
+                              key: "gsc_integration_id",
+                              value: integrationId,
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-8 w-full max-w-full sm:w-[320px] text-sm">
+                          <SelectValue placeholder="בחר משתמש Google" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {gscUserIntegrations.map((integration) => {
+                            const integrationSettings = (integration.settings ||
+                              {}) as Record<string, unknown>;
+                            const email = String(
+                              integrationSettings.google_email ||
+                                "חשבון Google",
+                            );
+                            const owner = integration._isOwn
+                              ? "שלי"
+                              : integration._sharedByName || "משותף";
+                            return (
+                              <SelectItem
+                                key={integration.id}
+                                value={integration.id}
+                              >
+                                {email} · {owner}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <Select
-                      value={savedGscIntegrationId}
-                      onValueChange={(integrationId) => {
-                        if (integrationId !== savedGscIntegrationId) {
-                          saveLinkMutation.mutate({ key: 'gsc_integration_id', value: integrationId });
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="h-8 w-full max-w-full sm:w-[320px] text-sm">
-                        <SelectValue placeholder="בחר משתמש Google" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {gscUserIntegrations.map((integration) => {
-                          const integrationSettings =
-                            (integration.settings || {}) as Record<string, unknown>;
-                          const email = String(integrationSettings.google_email || "חשבון Google");
-                          const owner = integration._isOwn
-                            ? "שלי"
-                            : integration._sharedByName || "משותף";
-                          return (
-                            <SelectItem key={integration.id} value={integration.id}>
-                              {email} · {owner}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                  </CardContent>
+                </Card>
+              )}
             {/* If we have a GSC crm_table with data, show the full dashboard */}
             {selectedGscTableId ? (
               <div className="space-y-3">
@@ -409,14 +506,22 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                     selectedId={selectedGscTableId}
                     onSelect={(id) => {
                       setSelectedGscTableId(id);
-                      saveLinkMutation.mutate({ key: 'linkedGscTableId', value: id });
+                      saveLinkMutation.mutate({
+                        key: "linkedGscTableId",
+                        value: id,
+                      });
                     }}
                   />
                 )}
                 <SearchConsoleDashboard
                   tableId={selectedGscTableId}
                   initialLangFilter={savedGscLangFilter}
-                  onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
+                  onLangFilterChange={(v) =>
+                    saveLinkMutation.mutate({
+                      key: "linkedGscLangFilter",
+                      value: v,
+                    })
+                  }
                   seedTrackedKeywords={ahrefsTrackedKeywords}
                   trackedAhrefsPositions={trackedAhrefsPositions}
                   relevancePersistKey={clientId}
@@ -432,7 +537,10 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                     selectedId={selectedGscTableId}
                     onSelect={(id) => {
                       setSelectedGscTableId(id);
-                      saveLinkMutation.mutate({ key: 'linkedGscTableId', value: id });
+                      saveLinkMutation.mutate({
+                        key: "linkedGscTableId",
+                        value: id,
+                      });
                     }}
                   />
                 )}
@@ -440,7 +548,12 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   tenantId={reportTenantId}
                   tenantIds={accessibleTenantIds}
                   clientId={clientId}
-                  domain={savedGscSiteUrl || expectedDomain || targetDomain || clientWebsite}
+                  domain={
+                    savedGscSiteUrl ||
+                    expectedDomain ||
+                    targetDomain ||
+                    clientWebsite
+                  }
                   initialSiteUrl={savedGscSiteUrl}
                   selectedIntegrationId={savedGscIntegrationId}
                   showIntegrationSelector={false}
@@ -449,10 +562,18 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   trackedKeywords={ahrefsTrackedKeywords}
                   trackedAhrefsPositions={trackedAhrefsPositions}
                   relevancePersistKey={clientId}
-                  onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
+                  onLangFilterChange={(v) =>
+                    saveLinkMutation.mutate({
+                      key: "linkedGscLangFilter",
+                      value: v,
+                    })
+                  }
                   onSiteSelected={(siteUrl) => {
                     if (siteUrl && siteUrl !== savedGscSiteUrl) {
-                      saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
+                      saveLinkMutation.mutate({
+                        key: "linkedGscSiteUrl",
+                        value: siteUrl,
+                      });
                     }
                   }}
                 />
@@ -476,7 +597,10 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                       value={selectedGaTableId}
                       onValueChange={(id) => {
                         setSelectedGaTableId(id);
-                        saveLinkMutation.mutate({ key: 'linkedGaTableId', value: id });
+                        saveLinkMutation.mutate({
+                          key: "linkedGaTableId",
+                          value: id,
+                        });
                       }}
                     >
                       <SelectTrigger className="h-8 w-full max-w-full sm:w-[280px] text-sm">
@@ -485,7 +609,10 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                       <SelectContent>
                         {gaTables.map((table) => {
                           const settings = table.integration_settings as any;
-                          const label = settings?.propertyName || settings?.accountName || table.name;
+                          const label =
+                            settings?.propertyName ||
+                            settings?.accountName ||
+                            table.name;
                           return (
                             <SelectItem key={table.id} value={table.id}>
                               {label}
@@ -506,17 +633,24 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                     {selectedGaTableId && (
                       <>
                         <Badge variant="secondary" className="text-xs">
-                          {gaTables.find(t => t.id === selectedGaTableId)?.name}
+                          {
+                            gaTables.find((t) => t.id === selectedGaTableId)
+                              ?.name
+                          }
                         </Badge>
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-8 gap-1.5"
-                          onClick={() => syncGaMutation.mutate(selectedGaTableId)}
+                          onClick={() =>
+                            syncGaMutation.mutate(selectedGaTableId)
+                          }
                           disabled={syncGaMutation.isPending}
                         >
-                          <RefreshCw className={`h-3.5 w-3.5 ${syncGaMutation.isPending ? 'animate-spin' : ''}`} />
-                          {syncGaMutation.isPending ? 'מסנכרן...' : 'סנכרן'}
+                          <RefreshCw
+                            className={`h-3.5 w-3.5 ${syncGaMutation.isPending ? "animate-spin" : ""}`}
+                          />
+                          {syncGaMutation.isPending ? "מסנכרן..." : "סנכרן"}
                         </Button>
                       </>
                     )}
@@ -529,12 +663,13 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                 <GoogleAnalyticsDashboard
                   records={gaRecords}
                   tableId={selectedGaTableId}
-                  defaultReportMode={
-                    resolveAnalyticsReportMode({
-                      tableMode: (gaTables.find(t => t.id === selectedGaTableId)?.integration_settings as any)?.default_report_mode,
-                      tables: gaTables,
-                    })
-                  }
+                  defaultReportMode={resolveAnalyticsReportMode({
+                    tableMode: (
+                      gaTables.find((t) => t.id === selectedGaTableId)
+                        ?.integration_settings as any
+                    )?.default_report_mode,
+                    tables: gaTables,
+                  })}
                 />
               ) : selectedGaTableId ? (
                 <Card>
@@ -549,7 +684,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                         <p>אין נתונים זמינים עבור חשבון Analytics זה</p>
                         <Button
                           variant="outline"
-                          onClick={() => syncGaMutation.mutate(selectedGaTableId)}
+                          onClick={() =>
+                            syncGaMutation.mutate(selectedGaTableId)
+                          }
                           className="gap-2"
                         >
                           <RefreshCw className="h-4 w-4" />
@@ -576,7 +713,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
         onOpenChange={(open) => {
           setShowGaDialog(open);
           if (!open) {
-            queryClient.invalidateQueries({ queryKey: ['seo-scope', clientId] });
+            queryClient.invalidateQueries({
+              queryKey: ["seo-scope", clientId],
+            });
           }
         }}
       />
@@ -584,7 +723,11 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   );
 }
 
-function GscTableSelector({ tables, selectedId, onSelect }: {
+function GscTableSelector({
+  tables,
+  selectedId,
+  onSelect,
+}: {
   tables: any[];
   selectedId: string;
   onSelect: (id: string) => void;

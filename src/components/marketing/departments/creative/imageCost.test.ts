@@ -39,15 +39,23 @@ test("estimate includes prompt tokens and reference image tokens", () => {
   assert.ok(cost.textTokens > 8);
   assert.ok(cost.costUsd > 0.1664);
   assert.equal(cost.source, "official_table");
-  assert.equal(cost.totalTokens, cost.textTokens + cost.imageInTokens + cost.outputTokens);
+  assert.equal(
+    cost.totalTokens,
+    cost.textTokens + cost.imageInTokens + cost.outputTokens,
+  );
 });
 
 test("API usage with details is treated as exact", () => {
-  const cost = costFromApiUsage({
-    input_tokens: 2000,
-    output_tokens: 4160,
-    input_tokens_details: { text_tokens: 560, image_tokens: 1440 },
-  }, "high", "1024x1024", 1);
+  const cost = costFromApiUsage(
+    {
+      input_tokens: 2000,
+      output_tokens: 4160,
+      input_tokens_details: { text_tokens: 560, image_tokens: 1440 },
+    },
+    "high",
+    "1024x1024",
+    1,
+  );
   assert.ok(cost);
   assert.equal(cost?.source, "api");
   assert.equal(cost?.textTokens, 560);
@@ -57,7 +65,11 @@ test("API usage with details is treated as exact", () => {
 });
 
 test("API usage without details uses input_tokens as text only", () => {
-  const cost = costFromApiUsage({ input_tokens: 800, output_tokens: 4160 }, "high", "1024x1024");
+  const cost = costFromApiUsage(
+    { input_tokens: 800, output_tokens: 4160 },
+    "high",
+    "1024x1024",
+  );
   assert.equal(cost?.textTokens, 800);
   assert.equal(cost?.imageInTokens, 0);
 });
@@ -68,11 +80,16 @@ test("empty API usage is ignored so the official table can be used", () => {
 });
 
 test("Hebrew prompt estimates more tokens than the same Latin length", () => {
-  assert.ok(estimateTextTokens("רודוס עכשיו") > estimateTextTokens("Rhodes now"));
+  assert.ok(
+    estimateTextTokens("רודוס עכשיו") > estimateTextTokens("Rhodes now"),
+  );
 });
 
 test("inferred leftover images count as official output only", () => {
-  const totals = addCost(emptyCostTotals(), inferImageCost("high", "1024x1024"));
+  const totals = addCost(
+    emptyCostTotals(),
+    inferImageCost("high", "1024x1024"),
+  );
   assert.equal(totals.images, 1);
   assert.equal(totals.exactImages, 0);
   assert.equal(totals.estimatedImages, 1);
@@ -83,7 +100,14 @@ test("project summary falls back to marketing_runs when no stored image cost exi
   const totals = summarizeStoredImageCosts(
     [{ imageUrl: "https://example.com/a.png" }],
     "high",
-    [{ tokens_in: 200, tokens_out: 4160, cost_usd: 0.18, model: "gpt-image-1" }],
+    [
+      {
+        tokens_in: 200,
+        tokens_out: 4160,
+        cost_usd: 0.18,
+        model: "gpt-image-1",
+      },
+    ],
   );
   assert.equal(totals.images, 1);
   assert.equal(totals.tokens, 4360);
@@ -91,12 +115,23 @@ test("project summary falls back to marketing_runs when no stored image cost exi
 });
 
 test("project summary prefers stored costs and fills gaps from the official table", () => {
-  const stored = costFromApiUsage({ input_tokens: 100, output_tokens: 4160 }, "high", "1024x1024");
+  const stored = costFromApiUsage(
+    { input_tokens: 100, output_tokens: 4160 },
+    "high",
+    "1024x1024",
+  );
   assert.ok(stored);
-  const totals = summarizeStoredImageCosts([
-    { generationCost: stored, imageUrl: "https://example.com/a.png", format: "1:1" },
-    { imageUrl: "https://example.com/b.png", format: "1:1" },
-  ], "high");
+  const totals = summarizeStoredImageCosts(
+    [
+      {
+        generationCost: stored,
+        imageUrl: "https://example.com/a.png",
+        format: "1:1",
+      },
+      { imageUrl: "https://example.com/b.png", format: "1:1" },
+    ],
+    "high",
+  );
   assert.equal(totals.images, 2);
   assert.equal(totals.exactImages, 1);
   assert.equal(totals.estimatedImages, 1);

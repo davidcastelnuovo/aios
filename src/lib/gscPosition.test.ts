@@ -36,7 +36,11 @@ test("keywordTop20Rank prefers the better Ahrefs rank inside the top 20", () => 
 });
 
 test("keywordTop20Rank reads a GSC-only row from its own position", () => {
-  const rank = keywordTop20Rank({ _source: "gsc", position: 3.5, gsc_position: 3.5 });
+  const rank = keywordTop20Rank({
+    _source: "gsc",
+    position: 3.5,
+    gsc_position: 3.5,
+  });
   assert.deepEqual(rank, { position: 3.5, source: "gsc" });
   assert.equal(keywordTop20Rank({ _source: "gsc", position: 28 }), null);
 });
@@ -113,20 +117,25 @@ test("tracked phrases show the better rank from Ahrefs or Search Console", () =>
     keywordDisplayPosition({ position: null, gsc_position: 27.4 }),
     { position: 27.4, source: "gsc" },
   );
-  assert.deepEqual(
-    keywordDisplayPosition({ position: 6, gsc_position: 27 }),
-    { position: 6, source: "ahrefs" },
-  );
+  assert.deepEqual(keywordDisplayPosition({ position: 6, gsc_position: 27 }), {
+    position: 6,
+    source: "ahrefs",
+  });
   assert.deepEqual(
     betterDisplayRank({ ahrefsPosition: 46, gscPosition: 7.2 }),
     { position: 7.2, source: "gsc" },
   );
+  assert.deepEqual(keywordDisplayPosition({ position: 40, gsc_position: 33 }), {
+    position: 33,
+    source: "gsc",
+  });
   assert.deepEqual(
-    keywordDisplayPosition({ position: 40, gsc_position: 33 }),
-    { position: 33, source: "gsc" },
-  );
-  assert.deepEqual(
-    keywordDisplayPosition({ position: 7, ahrefs_position: 46, gsc_position: 7, _position_source: "gsc" }),
+    keywordDisplayPosition({
+      position: 7,
+      ahrefs_position: 46,
+      gsc_position: 7,
+      _position_source: "gsc",
+    }),
     { position: 7, source: "gsc" },
   );
 });
@@ -158,13 +167,28 @@ test("a tracked phrase on the Search Console list uses the better stored rank", 
 test("a later keyword list without ranks keeps the rank stored on an earlier report", () => {
   const merged = mergeTrackedKeywordRows(
     [{ keyword: "נופר זומר", position: 14, traffic: 8 }],
-    [{ keyword: "נופר זומר", position: null, traffic: 0, _source: "management-project-keywords" }],
+    [
+      {
+        keyword: "נופר זומר",
+        position: null,
+        traffic: 0,
+        _source: "management-project-keywords",
+      },
+    ],
   );
   assert.equal(merged[0].position, 14);
   assert.equal(merged[0].traffic, 8);
   const positions = ahrefsPositionsFromReports([
-    { report_data: { tracked_keywords: [{ keyword: "נופר זומר", position: null }] } },
-    { report_data: { tracked_keywords: [{ keyword: "נופר זומר", position: 14 }] } },
+    {
+      report_data: {
+        tracked_keywords: [{ keyword: "נופר זומר", position: null }],
+      },
+    },
+    {
+      report_data: {
+        tracked_keywords: [{ keyword: "נופר זומר", position: 14 }],
+      },
+    },
   ]);
   assert.equal(positions.get("נופר זומר"), 14);
 });

@@ -5,7 +5,12 @@ import {
   type CrmWhatsappIntegration,
 } from "@/lib/crmWhatsappRoute";
 
-const WA_TYPES = ["manychat", "green_api", "manus_wa", "meta_whatsapp"] as const;
+const WA_TYPES = [
+  "manychat",
+  "green_api",
+  "manus_wa",
+  "meta_whatsapp",
+] as const;
 
 async function loadTenantWhatsappIntegrations(
   tenantId: string,
@@ -39,14 +44,20 @@ async function loadTenantWhatsappIntegrations(
     .from("integration_user_permissions")
     .select("integration_id")
     .eq("user_id", userId);
-  const permittedIds = new Set((permData || []).map((row) => row.integration_id));
+  const permittedIds = new Set(
+    (permData || []).map((row) => row.integration_id),
+  );
   const grantedIdSet = new Set(grantedIds);
 
   return [...(data || []), ...granted].filter((row) => {
     if (grantedIdSet.has(row.id)) return true;
     if (row.integration_type === "manychat") return true;
     if (row.user_id === userId) return true;
-    if ((row as { connection_visibility?: string }).connection_visibility === "org") return true;
+    if (
+      (row as { connection_visibility?: string }).connection_visibility ===
+      "org"
+    )
+      return true;
     if (permittedIds.has(row.id)) return true;
     return false;
   });
@@ -69,8 +80,14 @@ export async function sendCrmWhatsappToLead(input: {
   if (leadError) return { ok: false, error: leadError.message };
   if (!lead?.phone) return { ok: false, skipped: "no_phone" };
 
-  const integrations = await loadTenantWhatsappIntegrations(input.tenantId, userId);
-  const picked = pickCrmWhatsappIntegration(lead.active_chat_provider, integrations);
+  const integrations = await loadTenantWhatsappIntegrations(
+    input.tenantId,
+    userId,
+  );
+  const picked = pickCrmWhatsappIntegration(
+    lead.active_chat_provider,
+    integrations,
+  );
   if (!picked) return { ok: false, skipped: "no_integration" };
 
   const fn = crmWhatsappFunctionName(picked.type);

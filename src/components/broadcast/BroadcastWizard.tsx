@@ -4,13 +4,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import { useLeadPipelineStages } from "@/hooks/useLeadPipelineStages";
-import { useBroadcasts, type AudienceFilter, type AudienceFilterMode } from "@/hooks/useBroadcasts";
+import {
+  useBroadcasts,
+  type AudienceFilter,
+  type AudienceFilterMode,
+} from "@/hooks/useBroadcasts";
 import { useBroadcastLists } from "@/hooks/useBroadcastLists";
 import { useBroadcastDomains } from "@/hooks/useBroadcastDomains";
 import { WaProviderConnectionPicker } from "@/components/forms/WaProviderConnectionPicker";
 import { BroadcastAudienceMultiSelect } from "@/components/broadcast/BroadcastAudienceMultiSelect";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,10 +27,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Users, Image as ImageIcon, Send, CalendarClock, Loader2, MessageSquare, Mail, UsersRound } from "lucide-react";
+import {
+  Users,
+  Image as ImageIcon,
+  Send,
+  CalendarClock,
+  Loader2,
+  MessageSquare,
+  Mail,
+  UsersRound,
+} from "lucide-react";
 
 const CLIENT_STATUSES = [
   { key: "active", label: "פעיל" },
@@ -61,11 +82,14 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   const [integrationId, setIntegrationId] = useState<string | undefined>();
   const [source, setSource] = useState<AudienceFilter["source"]>("leads");
   const [clientStatuses, setClientStatuses] = useState<string[]>([]);
-  const [clientStatusMode, setClientStatusMode] = useState<AudienceFilterMode>("include");
+  const [clientStatusMode, setClientStatusMode] =
+    useState<AudienceFilterMode>("include");
   const [leadStageKeys, setLeadStageKeys] = useState<string[]>([]);
-  const [leadStageMode, setLeadStageMode] = useState<AudienceFilterMode>("include");
+  const [leadStageMode, setLeadStageMode] =
+    useState<AudienceFilterMode>("include");
   const [leadStatusKeys, setLeadStatusKeys] = useState<string[]>([]);
-  const [leadStatusMode, setLeadStatusMode] = useState<AudienceFilterMode>("include");
+  const [leadStatusMode, setLeadStatusMode] =
+    useState<AudienceFilterMode>("include");
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [tagMode, setTagMode] = useState<AudienceFilterMode>("include");
   const [activeOnly, setActiveOnly] = useState(true);
@@ -87,23 +111,44 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   // Reset when reopened
   useEffect(() => {
     if (open) {
-      setStep(0); setName("דיוור חדש"); setChannel("whatsapp"); setSubject("");
-      setFromMode("default"); setFromName(""); setFromLocal(""); setFromDomain(defaultDomain?.domain || ""); setReplyTo("");
-      setIntegrationId(undefined); setSource("leads");
-      setClientStatuses([]); setClientStatusMode("include");
-      setLeadStageKeys([]); setLeadStageMode("include");
-      setLeadStatusKeys([]); setLeadStatusMode("include");
-      setTagIds([]); setTagMode("include"); setActiveOnly(true);
-      setListId(undefined); setPickMode(false); setSelectedIds([]); setCandidateSearch("");
-      setSelectedGroupIds([]); setGroupSearch("");
-      setBodyText(""); setMediaFile(null); setAudienceCount(null);
-      setSendMode("now"); setScheduledAt("");
+      setStep(0);
+      setName("דיוור חדש");
+      setChannel("whatsapp");
+      setSubject("");
+      setFromMode("default");
+      setFromName("");
+      setFromLocal("");
+      setFromDomain(defaultDomain?.domain || "");
+      setReplyTo("");
+      setIntegrationId(undefined);
+      setSource("leads");
+      setClientStatuses([]);
+      setClientStatusMode("include");
+      setLeadStageKeys([]);
+      setLeadStageMode("include");
+      setLeadStatusKeys([]);
+      setLeadStatusMode("include");
+      setTagIds([]);
+      setTagMode("include");
+      setActiveOnly(true);
+      setListId(undefined);
+      setPickMode(false);
+      setSelectedIds([]);
+      setCandidateSearch("");
+      setSelectedGroupIds([]);
+      setGroupSearch("");
+      setBodyText("");
+      setMediaFile(null);
+      setAudienceCount(null);
+      setSendMode("now");
+      setScheduledAt("");
     }
   }, [open]);
 
   // Default the sending domain once the tenant's domains load
   useEffect(() => {
-    if (open && !fromDomain && defaultDomain) setFromDomain(defaultDomain.domain);
+    if (open && !fromDomain && defaultDomain)
+      setFromDomain(defaultDomain.domain);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDomain?.domain]);
 
@@ -127,7 +172,10 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
     enabled: !!tenantId && open,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("chat_tags").select("id, name, color").eq("tenant_id", tenantId).order("sort_order");
+        .from("chat_tags")
+        .select("id, name, color")
+        .eq("tenant_id", tenantId)
+        .order("sort_order");
       if (error) throw error;
       return data || [];
     },
@@ -156,10 +204,19 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   }, [integrations, integrationId, channel]);
 
   const buildFilter = (): AudienceFilter => {
-    if (source === "wa_groups") return { source: "wa_groups", groupIds: selectedGroupIds };
+    if (source === "wa_groups")
+      return { source: "wa_groups", groupIds: selectedGroupIds };
     if (source === "list") return { source: "list", listId };
     const include = pickMode ? { includeIds: selectedIds } : {};
-    if (source === "clients") return { source, statuses: clientStatuses, statusMode: clientStatusMode, tagIds, tagMode, ...include };
+    if (source === "clients")
+      return {
+        source,
+        statuses: clientStatuses,
+        statusMode: clientStatusMode,
+        tagIds,
+        tagMode,
+        ...include,
+      };
     if (source === "leads") {
       return {
         source,
@@ -177,11 +234,30 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
 
   // Candidate contacts for manual selection (base-table filters; tags applied server-side otherwise)
   const candidates = useQuery({
-    queryKey: ["broadcast-candidates", tenantId, source, clientStatuses, clientStatusMode, leadStageKeys, leadStageMode, leadStatusKeys, leadStatusMode, activeOnly],
-    enabled: !!tenantId && open && pickMode && source !== "list" && source !== "wa_groups",
+    queryKey: [
+      "broadcast-candidates",
+      tenantId,
+      source,
+      clientStatuses,
+      clientStatusMode,
+      leadStageKeys,
+      leadStageMode,
+      leadStatusKeys,
+      leadStatusMode,
+      activeOnly,
+    ],
+    enabled:
+      !!tenantId &&
+      open &&
+      pickMode &&
+      source !== "list" &&
+      source !== "wa_groups",
     queryFn: async () => {
       if (source === "clients") {
-        let q = supabase.from("clients").select("id, contact_name, name, phone, email, status").eq("tenant_id", tenantId);
+        let q = supabase
+          .from("clients")
+          .select("id, contact_name, name, phone, email, status")
+          .eq("tenant_id", tenantId);
         const { data } = await q.limit(1000);
         let rows = data || [];
         if (clientStatuses.length) {
@@ -190,10 +266,21 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
             return clientStatusMode === "include" ? matches : !matches;
           });
         }
-        return rows.map((c: any) => ({ id: c.id, label: c.contact_name || c.name || c.phone, phone: c.phone, email: c.email }));
+        return rows.map((c: any) => ({
+          id: c.id,
+          label: c.contact_name || c.name || c.phone,
+          phone: c.phone,
+          email: c.email,
+        }));
       }
       if (source === "leads") {
-        let q = supabase.from("leads").select("id, contact_name, company_name, phone, email, status, response_status").eq("tenant_id", tenantId).is("archived_at", null);
+        let q = supabase
+          .from("leads")
+          .select(
+            "id, contact_name, company_name, phone, email, status, response_status",
+          )
+          .eq("tenant_id", tenantId)
+          .is("archived_at", null);
         const { data } = await q.limit(1000);
         let rows = data || [];
         if (leadStageKeys.length) {
@@ -208,12 +295,25 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
             return leadStatusMode === "include" ? matches : !matches;
           });
         }
-        return rows.map((l: any) => ({ id: l.id, label: l.contact_name || l.company_name || l.phone, phone: l.phone, email: l.email }));
+        return rows.map((l: any) => ({
+          id: l.id,
+          label: l.contact_name || l.company_name || l.phone,
+          phone: l.phone,
+          email: l.email,
+        }));
       }
-      let q = supabase.from("campaigners").select("id, full_name, phone, email").eq("tenant_id", tenantId);
+      let q = supabase
+        .from("campaigners")
+        .select("id, full_name, phone, email")
+        .eq("tenant_id", tenantId);
       if (activeOnly) q = q.eq("active", true);
       const { data } = await q.limit(1000);
-      return (data || []).map((c: any) => ({ id: c.id, label: c.full_name || c.phone, phone: c.phone, email: c.email }));
+      return (data || []).map((c: any) => ({
+        id: c.id,
+        label: c.full_name || c.phone,
+        phone: c.phone,
+        email: c.email,
+      }));
     },
   });
 
@@ -245,13 +345,30 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, source, clientStatuses, clientStatusMode, leadStageKeys, leadStageMode, leadStatusKeys, leadStatusMode, tagIds, tagMode, activeOnly, listId, pickMode, selectedIds, selectedGroupIds]);
+  }, [
+    step,
+    source,
+    clientStatuses,
+    clientStatusMode,
+    leadStageKeys,
+    leadStageMode,
+    leadStatusKeys,
+    leadStatusMode,
+    tagIds,
+    tagMode,
+    activeOnly,
+    listId,
+    pickMode,
+    selectedIds,
+    selectedGroupIds,
+  ]);
 
   const toggle = (arr: string[], v: string, set: (x: string[]) => void) =>
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   const canNext = () => {
-    if (step === 1) return channel === "email" ? domains.length > 0 : !!integrationId;
+    if (step === 1)
+      return channel === "email" ? domains.length > 0 : !!integrationId;
     if (step === 2) {
       if (source === "wa_groups") return selectedGroupIds.length > 0;
       return (audienceCount ?? 0) > 0;
@@ -260,7 +377,11 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
       if (bodyText.trim().length === 0) return false;
       if (channel === "email") {
         if (subject.trim().length === 0) return false;
-        if (fromMode === "custom" && (!/^[a-zA-Z0-9._%+-]+$/.test(fromLocal) || !fromDomain)) return false;
+        if (
+          fromMode === "custom" &&
+          (!/^[a-zA-Z0-9._%+-]+$/.test(fromLocal) || !fromDomain)
+        )
+          return false;
       }
       return true;
     }
@@ -273,19 +394,28 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
     try {
       // 1) create draft
       const draft = await create.mutateAsync({
-        name, channel, provider: selectedProvider,
+        name,
+        channel,
+        provider: selectedProvider,
         integration_id: channel === "email" ? null : integrationId,
         subject: channel === "email" ? subject : null,
-        from_email: channel === "email"
-          ? (fromMode === "custom"
+        from_email:
+          channel === "email"
+            ? fromMode === "custom"
               ? `${fromLocal}@${fromDomain}`
-              : defaultDomain ? `${defaultDomain.default_local}@${defaultDomain.domain}` : null)
-          : null,
-        from_name: channel === "email"
-          ? (fromMode === "custom" ? (fromName.trim() || null) : (defaultDomain?.from_name || null))
-          : null,
+              : defaultDomain
+                ? `${defaultDomain.default_local}@${defaultDomain.domain}`
+                : null
+            : null,
+        from_name:
+          channel === "email"
+            ? fromMode === "custom"
+              ? fromName.trim() || null
+              : defaultDomain?.from_name || null
+            : null,
         reply_to: channel === "email" && replyTo.trim() ? replyTo.trim() : null,
-        body_text: bodyText, audience_filter: buildFilter(),
+        body_text: bodyText,
+        audience_filter: buildFilter(),
       });
 
       // 2) upload media if present → public bucket
@@ -294,9 +424,11 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         const ext = mediaFile.name.split(".").pop() || "jpg";
         const path = `${tenantId}/${draft.id}.${ext}`;
         const { error: upErr } = await supabase.storage
-          .from("broadcast-media").upload(path, mediaFile, { upsert: true });
+          .from("broadcast-media")
+          .upload(path, mediaFile, { upsert: true });
         if (upErr) throw upErr;
-        mediaUrl = supabase.storage.from("broadcast-media").getPublicUrl(path).data.publicUrl;
+        mediaUrl = supabase.storage.from("broadcast-media").getPublicUrl(path)
+          .data.publicUrl;
         await update.mutateAsync({ id: draft.id, media_url: mediaUrl });
       }
 
@@ -304,7 +436,8 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
       const total = await launch.mutateAsync({
         id: draft.id,
         sendNow: sendMode === "now",
-        scheduledAt: sendMode === "schedule" ? new Date(scheduledAt).toISOString() : null,
+        scheduledAt:
+          sendMode === "schedule" ? new Date(scheduledAt).toISOString() : null,
       });
 
       const isGroups = source === "wa_groups";
@@ -322,13 +455,18 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
     }
   };
 
-  const filteredGroups = (waGroups || []).filter((g: any) =>
-    !groupSearch || g.group_name.toLowerCase().includes(groupSearch.toLowerCase())
+  const filteredGroups = (waGroups || []).filter(
+    (g: any) =>
+      !groupSearch ||
+      g.group_name.toLowerCase().includes(groupSearch.toLowerCase()),
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+      <DialogContent
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle>דיוור חדש</DialogTitle>
         </DialogHeader>
@@ -337,8 +475,18 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         <div className="flex items-center justify-between mb-2">
           {STEPS.map((s, i) => (
             <div key={s} className="flex items-center gap-1 text-xs">
-              <span className={`flex h-6 w-6 items-center justify-center rounded-full ${i <= step ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
-              <span className={i === step ? "font-semibold" : "text-muted-foreground"}>{s}</span>
+              <span
+                className={`flex h-6 w-6 items-center justify-center rounded-full ${i <= step ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+              >
+                {i + 1}
+              </span>
+              <span
+                className={
+                  i === step ? "font-semibold" : "text-muted-foreground"
+                }
+              >
+                {s}
+              </span>
             </div>
           ))}
         </div>
@@ -350,13 +498,23 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
             <Input value={name} onChange={(e) => setName(e.target.value)} />
             <Label className="mt-2 block">ערוץ</Label>
             <div className="grid grid-cols-3 gap-2">
-              <button onClick={() => setChannel("whatsapp")}
-                className={`rounded-lg border-2 p-3 text-center text-sm font-medium ${channel === "whatsapp" ? "border-primary" : "border-muted"}`}>
-                <MessageSquare className="mx-auto mb-1 h-5 w-5" /> WhatsApp לא-רשמי
+              <button
+                onClick={() => setChannel("whatsapp")}
+                className={`rounded-lg border-2 p-3 text-center text-sm font-medium ${channel === "whatsapp" ? "border-primary" : "border-muted"}`}
+              >
+                <MessageSquare className="mx-auto mb-1 h-5 w-5" /> WhatsApp
+                לא-רשמי
               </button>
-              <button disabled className="rounded-lg border p-3 text-center text-sm text-muted-foreground opacity-50">WhatsApp רשמי (בקרוב)</button>
-              <button onClick={() => setChannel("email")}
-                className={`rounded-lg border-2 p-3 text-center text-sm font-medium ${channel === "email" ? "border-primary" : "border-muted"}`}>
+              <button
+                disabled
+                className="rounded-lg border p-3 text-center text-sm text-muted-foreground opacity-50"
+              >
+                WhatsApp רשמי (בקרוב)
+              </button>
+              <button
+                onClick={() => setChannel("email")}
+                className={`rounded-lg border-2 p-3 text-center text-sm font-medium ${channel === "email" ? "border-primary" : "border-muted"}`}
+              >
                 <Mail className="mx-auto mb-1 h-5 w-5" /> אימייל
               </button>
             </div>
@@ -364,18 +522,23 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         )}
 
         {/* Step 1 — connection */}
-        {step === 1 && (
-          channel === "email" ? (
+        {step === 1 &&
+          (channel === "email" ? (
             <div className="rounded-lg border p-4 text-sm space-y-1">
-              <div className="flex items-center gap-2 font-medium"><Mail className="h-4 w-4" /> שליחה דרך Resend</div>
+              <div className="flex items-center gap-2 font-medium">
+                <Mail className="h-4 w-4" /> שליחה דרך Resend
+              </div>
               {domains.length === 0 ? (
                 <p className="text-destructive">
-                  לארגון זה עדיין לא הוגדר דומיין שליחה. עבור לטאב "הגדרות שולח" והוסף דומיין מאומת ב-Resend.
+                  לארגון זה עדיין לא הוגדר דומיין שליחה. עבור לטאב "הגדרות שולח"
+                  והוסף דומיין מאומת ב-Resend.
                 </p>
               ) : (
                 <p className="text-muted-foreground">
-                  שולח מהדומיין: <strong dir="ltr">{defaultDomain?.domain}</strong>
-                  {domains.length > 1 ? ` (ועוד ${domains.length - 1})` : ""}. ניתן לבחור כתובת ספציפית בשלב התוכן.
+                  שולח מהדומיין:{" "}
+                  <strong dir="ltr">{defaultDomain?.domain}</strong>
+                  {domains.length > 1 ? ` (ועוד ${domains.length - 1})` : ""}.
+                  ניתן לבחור כתובת ספציפית בשלב התוכן.
                 </p>
               )}
             </div>
@@ -385,20 +548,24 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
               value={integrationId}
               onChange={setIntegrationId}
             />
-          )
-        )}
+          ))}
 
         {/* Step 2 — audience */}
         {step === 2 && (
           <div className="space-y-4">
             <div>
               <Label>מקור</Label>
-              <Select value={source} onValueChange={(v) => {
-                setSource(v as AudienceFilter["source"]);
-                setSelectedGroupIds([]);
-                setGroupSearch("");
-              }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={source}
+                onValueChange={(v) => {
+                  setSource(v as AudienceFilter["source"]);
+                  setSelectedGroupIds([]);
+                  setGroupSearch("");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent className="bg-background z-[100]">
                   <SelectItem value="leads">לידים</SelectItem>
                   <SelectItem value="clients">לקוחות</SelectItem>
@@ -421,7 +588,9 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
                 <div className="flex items-center justify-between">
                   <Label className="text-sm">בחר קבוצות לשליחה</Label>
                   {selectedGroupIds.length > 0 && (
-                    <span className="text-xs text-muted-foreground">נבחרו {selectedGroupIds.length} קבוצות</span>
+                    <span className="text-xs text-muted-foreground">
+                      נבחרו {selectedGroupIds.length} קבוצות
+                    </span>
                   )}
                 </div>
                 <Input
@@ -431,7 +600,9 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
                   className="h-8"
                 />
                 {groupsLoading ? (
-                  <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  </div>
                 ) : filteredGroups.length === 0 ? (
                   <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
                     <UsersRound className="mx-auto mb-2 h-6 w-6 opacity-40" />
@@ -449,25 +620,42 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
                         onClick={() => {
                           const allIds = filteredGroups.map((g: any) => g.id);
                           setSelectedGroupIds(
-                            selectedGroupIds.length === allIds.length ? [] : allIds
+                            selectedGroupIds.length === allIds.length
+                              ? []
+                              : allIds,
                           );
                         }}
                       >
-                        {selectedGroupIds.length === filteredGroups.length ? "נקה הכל" : "בחר הכל"}
+                        {selectedGroupIds.length === filteredGroups.length
+                          ? "נקה הכל"
+                          : "בחר הכל"}
                       </button>
                     </div>
                     <div className="max-h-56 overflow-y-auto space-y-1 rounded-lg border p-2">
                       {filteredGroups.map((g: any) => (
-                        <label key={g.id} className="flex items-center gap-2 rounded p-1.5 text-sm hover:bg-muted cursor-pointer">
+                        <label
+                          key={g.id}
+                          className="flex items-center gap-2 rounded p-1.5 text-sm hover:bg-muted cursor-pointer"
+                        >
                           <Checkbox
                             checked={selectedGroupIds.includes(g.id)}
-                            onCheckedChange={() => toggle(selectedGroupIds, g.id, setSelectedGroupIds)}
+                            onCheckedChange={() =>
+                              toggle(
+                                selectedGroupIds,
+                                g.id,
+                                setSelectedGroupIds,
+                              )
+                            }
                           />
                           <UsersRound className="h-4 w-4 text-muted-foreground shrink-0" />
                           <div className="min-w-0">
-                            <div className="truncate font-medium">{g.group_name}</div>
+                            <div className="truncate font-medium">
+                              {g.group_name}
+                            </div>
                             {g.description && (
-                              <div className="truncate text-xs text-muted-foreground">{g.description}</div>
+                              <div className="truncate text-xs text-muted-foreground">
+                                {g.description}
+                              </div>
                             )}
                           </div>
                         </label>
@@ -478,7 +666,9 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
                 {selectedGroupIds.length > 0 && (
                   <div className="rounded-lg bg-muted p-3 text-sm flex items-center gap-2">
                     <UsersRound className="h-4 w-4" />
-                    <span>ישלח ל-<strong>{selectedGroupIds.length}</strong> קבוצות</span>
+                    <span>
+                      ישלח ל-<strong>{selectedGroupIds.length}</strong> קבוצות
+                    </span>
                   </div>
                 )}
               </div>
@@ -489,13 +679,19 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
               <div>
                 <Label>בחר רשימה</Label>
                 <Select value={listId} onValueChange={setListId}>
-                  <SelectTrigger><SelectValue placeholder="בחר רשימת תפוצה..." /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר רשימת תפוצה..." />
+                  </SelectTrigger>
                   <SelectContent className="bg-background z-[100]">
                     {(lists.data || []).map((l) => (
-                      <SelectItem key={l.id} value={l.id}>{l.name} ({l.member_count})</SelectItem>
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name} ({l.member_count})
+                      </SelectItem>
                     ))}
                     {(lists.data || []).length === 0 && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">אין רשימות — צור בטאב "רשימות תפוצה"</div>
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        אין רשימות — צור בטאב "רשימות תפוצה"
+                      </div>
                     )}
                   </SelectContent>
                 </Select>
@@ -505,7 +701,10 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
             {source === "clients" && (
               <BroadcastAudienceMultiSelect
                 label="סטטוס לקוח"
-                options={CLIENT_STATUSES.map((s) => ({ value: s.key, label: s.label }))}
+                options={CLIENT_STATUSES.map((s) => ({
+                  value: s.key,
+                  label: s.label,
+                }))}
                 selected={clientStatuses}
                 onSelectedChange={setClientStatuses}
                 mode={clientStatusMode}
@@ -545,51 +744,100 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
 
             {source === "campaigners" && (
               <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={activeOnly} onCheckedChange={(v) => setActiveOnly(!!v)} /> רק חברי צוות פעילים
+                <Checkbox
+                  checked={activeOnly}
+                  onCheckedChange={(v) => setActiveOnly(!!v)}
+                />{" "}
+                רק חברי צוות פעילים
               </label>
             )}
 
-            {(source === "clients" || source === "leads") && (chatTags || []).length > 0 && (
-              <BroadcastAudienceMultiSelect
-                label="תגיות (אופציונלי)"
-                options={(chatTags || []).map((t: any) => ({ value: t.id, label: t.name }))}
-                selected={tagIds}
-                onSelectedChange={setTagIds}
-                mode={tagMode}
-                onModeChange={setTagMode}
-                emptyLabel="כל התגיות"
-              />
-            )}
+            {(source === "clients" || source === "leads") &&
+              (chatTags || []).length > 0 && (
+                <BroadcastAudienceMultiSelect
+                  label="תגיות (אופציונלי)"
+                  options={(chatTags || []).map((t: any) => ({
+                    value: t.id,
+                    label: t.name,
+                  }))}
+                  selected={tagIds}
+                  onSelectedChange={setTagIds}
+                  mode={tagMode}
+                  onModeChange={setTagMode}
+                  emptyLabel="כל התגיות"
+                />
+              )}
 
             {source !== "list" && source !== "wa_groups" && (
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={pickMode} onCheckedChange={(v) => { setPickMode(!!v); setSelectedIds([]); }} />
+                  <Checkbox
+                    checked={pickMode}
+                    onCheckedChange={(v) => {
+                      setPickMode(!!v);
+                      setSelectedIds([]);
+                    }}
+                  />
                   בחירת נמענים ספציפית
                 </label>
                 {pickMode && (
                   <div className="rounded-lg border p-2 space-y-2">
-                    <Input value={candidateSearch} onChange={(e) => setCandidateSearch(e.target.value)} placeholder="חיפוש..." className="h-8" />
+                    <Input
+                      value={candidateSearch}
+                      onChange={(e) => setCandidateSearch(e.target.value)}
+                      placeholder="חיפוש..."
+                      className="h-8"
+                    />
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>נבחרו {selectedIds.length}</span>
-                      <button type="button" className="underline" onClick={() => {
-                        const all = (candidates.data || []).map((c: any) => c.id);
-                        setSelectedIds(selectedIds.length === all.length ? [] : all);
-                      }}>בחר/נקה הכל</button>
+                      <button
+                        type="button"
+                        className="underline"
+                        onClick={() => {
+                          const all = (candidates.data || []).map(
+                            (c: any) => c.id,
+                          );
+                          setSelectedIds(
+                            selectedIds.length === all.length ? [] : all,
+                          );
+                        }}
+                      >
+                        בחר/נקה הכל
+                      </button>
                     </div>
                     <div className="max-h-48 overflow-y-auto space-y-1">
                       {candidates.isLoading ? (
                         <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                      ) : (candidates.data || [])
-                        .filter((c: any) => !candidateSearch || (c.label || "").includes(candidateSearch) || (c.phone || "").includes(candidateSearch))
-                        .slice(0, 300)
-                        .map((c: any) => (
-                          <label key={c.id} className="flex items-center gap-2 text-sm">
-                            <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggle(selectedIds, c.id, setSelectedIds)} />
-                            <span className="truncate">{c.label}</span>
-                            <span className="text-xs text-muted-foreground" dir="ltr">{c.phone || c.email}</span>
-                          </label>
-                        ))}
+                      ) : (
+                        (candidates.data || [])
+                          .filter(
+                            (c: any) =>
+                              !candidateSearch ||
+                              (c.label || "").includes(candidateSearch) ||
+                              (c.phone || "").includes(candidateSearch),
+                          )
+                          .slice(0, 300)
+                          .map((c: any) => (
+                            <label
+                              key={c.id}
+                              className="flex items-center gap-2 text-sm"
+                            >
+                              <Checkbox
+                                checked={selectedIds.includes(c.id)}
+                                onCheckedChange={() =>
+                                  toggle(selectedIds, c.id, setSelectedIds)
+                                }
+                              />
+                              <span className="truncate">{c.label}</span>
+                              <span
+                                className="text-xs text-muted-foreground"
+                                dir="ltr"
+                              >
+                                {c.phone || c.email}
+                              </span>
+                            </label>
+                          ))
+                      )}
                     </div>
                   </div>
                 )}
@@ -599,7 +847,12 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
             {source !== "wa_groups" && (
               <div className="rounded-lg bg-muted p-3 text-sm flex items-center gap-2">
                 <Users className="h-4 w-4" />
-                {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <strong>{audienceCount ?? 0}</strong>} נמענים תקינים
+                {previewing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <strong>{audienceCount ?? 0}</strong>
+                )}{" "}
+                נמענים תקינים
               </div>
             )}
           </div>
@@ -612,47 +865,89 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
               <>
                 <div>
                   <Label>נושא האימייל</Label>
-                  <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="נושא ההודעה" />
+                  <Input
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="נושא ההודעה"
+                  />
                 </div>
                 <div className="space-y-2 rounded-lg border p-3">
                   <Label className="text-xs">כתובת שולח (From)</Label>
                   {domains.length === 0 ? (
                     <p className="text-xs text-destructive">
-                      לא הוגדר דומיין שליחה לארגון. הוסף דומיין מאומת בטאב "הגדרות שולח" לפני שליחת אימייל.
+                      לא הוגדר דומיין שליחה לארגון. הוסף דומיין מאומת בטאב
+                      "הגדרות שולח" לפני שליחת אימייל.
                     </p>
                   ) : (
                     <>
                       <div className="flex gap-2 text-sm">
-                        <button type="button" onClick={() => setFromMode("default")}
-                          className={`rounded border px-2 py-1 ${fromMode === "default" ? "bg-primary text-primary-foreground" : ""}`}>
-                          ברירת מחדל ({defaultDomain ? `${defaultDomain.default_local}@${defaultDomain.domain}` : ""})
+                        <button
+                          type="button"
+                          onClick={() => setFromMode("default")}
+                          className={`rounded border px-2 py-1 ${fromMode === "default" ? "bg-primary text-primary-foreground" : ""}`}
+                        >
+                          ברירת מחדל (
+                          {defaultDomain
+                            ? `${defaultDomain.default_local}@${defaultDomain.domain}`
+                            : ""}
+                          )
                         </button>
-                        <button type="button" onClick={() => setFromMode("custom")}
-                          className={`rounded border px-2 py-1 ${fromMode === "custom" ? "bg-primary text-primary-foreground" : ""}`}>
+                        <button
+                          type="button"
+                          onClick={() => setFromMode("custom")}
+                          className={`rounded border px-2 py-1 ${fromMode === "custom" ? "bg-primary text-primary-foreground" : ""}`}
+                        >
                           כתובת מותאמת
                         </button>
                       </div>
                       {fromMode === "custom" && (
                         <div className="space-y-2">
-                          <Input value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="שם השולח (לדוגמה: AfterLead)" />
+                          <Input
+                            value={fromName}
+                            onChange={(e) => setFromName(e.target.value)}
+                            placeholder="שם השולח (לדוגמה: AfterLead)"
+                          />
                           <div className="flex items-center gap-1">
-                            <Input value={fromLocal} onChange={(e) => setFromLocal(e.target.value)} placeholder="info" className="flex-1" />
+                            <Input
+                              value={fromLocal}
+                              onChange={(e) => setFromLocal(e.target.value)}
+                              placeholder="info"
+                              className="flex-1"
+                            />
                             <span className="text-muted-foreground">@</span>
-                            <Select value={fromDomain} onValueChange={setFromDomain}>
-                              <SelectTrigger className="w-44"><SelectValue placeholder="דומיין" /></SelectTrigger>
+                            <Select
+                              value={fromDomain}
+                              onValueChange={setFromDomain}
+                            >
+                              <SelectTrigger className="w-44">
+                                <SelectValue placeholder="דומיין" />
+                              </SelectTrigger>
                               <SelectContent className="bg-background z-[100]">
-                                {domains.map((d) => <SelectItem key={d.id} value={d.domain}>{d.domain}</SelectItem>)}
+                                {domains.map((d) => (
+                                  <SelectItem key={d.id} value={d.domain}>
+                                    {d.domain}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>
-                          <p className="text-xs text-muted-foreground">ניתן לשלוח רק מדומיין מאומת ב-Resend.</p>
+                          <p className="text-xs text-muted-foreground">
+                            ניתן לשלוח רק מדומיין מאומת ב-Resend.
+                          </p>
                         </div>
                       )}
                     </>
                   )}
                   <div>
-                    <Label className="text-xs">Reply-To (לאן יגיעו התשובות — אופציונלי)</Label>
-                    <Input type="email" value={replyTo} onChange={(e) => setReplyTo(e.target.value)} placeholder="david@gmail.com" />
+                    <Label className="text-xs">
+                      Reply-To (לאן יגיעו התשובות — אופציונלי)
+                    </Label>
+                    <Input
+                      type="email"
+                      value={replyTo}
+                      onChange={(e) => setReplyTo(e.target.value)}
+                      placeholder="david@gmail.com"
+                    />
                   </div>
                 </div>
               </>
@@ -661,17 +956,37 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
             {source !== "wa_groups" && (
               <div className="flex flex-wrap gap-2 text-xs">
                 {["{{contact_name}}", "{{phone}}"].map((v) => (
-                  <button key={v} type="button" className="rounded border px-2 py-0.5"
-                    onClick={() => setBodyText((b) => b + " " + v)}>{v}</button>
+                  <button
+                    key={v}
+                    type="button"
+                    className="rounded border px-2 py-0.5"
+                    onClick={() => setBodyText((b) => b + " " + v)}
+                  >
+                    {v}
+                  </button>
                 ))}
               </div>
             )}
-            <Textarea rows={6} value={bodyText} onChange={(e) => setBodyText(e.target.value)}
-              placeholder={source === "wa_groups" ? "שלום לכולם, ..." : "שלום {{contact_name}}, ..."} />
+            <Textarea
+              rows={6}
+              value={bodyText}
+              onChange={(e) => setBodyText(e.target.value)}
+              placeholder={
+                source === "wa_groups"
+                  ? "שלום לכולם, ..."
+                  : "שלום {{contact_name}}, ..."
+              }
+            />
             {channel !== "email" && (
               <div>
-                <Label className="mb-1 flex items-center gap-1"><ImageIcon className="h-4 w-4" /> תמונה (אופציונלי)</Label>
-                <Input type="file" accept="image/*" onChange={(e) => setMediaFile(e.target.files?.[0] || null)} />
+                <Label className="mb-1 flex items-center gap-1">
+                  <ImageIcon className="h-4 w-4" /> תמונה (אופציונלי)
+                </Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setMediaFile(e.target.files?.[0] || null)}
+                />
               </div>
             )}
             {source !== "wa_groups" && (
@@ -688,37 +1003,60 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         {step === 4 && (
           <div className="space-y-3">
             <div className="flex gap-2">
-              <Button variant={sendMode === "now" ? "default" : "outline"} onClick={() => setSendMode("now")} className="flex-1">
+              <Button
+                variant={sendMode === "now" ? "default" : "outline"}
+                onClick={() => setSendMode("now")}
+                className="flex-1"
+              >
                 <Send className="ml-1 h-4 w-4" /> שלח עכשיו
               </Button>
-              <Button variant={sendMode === "schedule" ? "default" : "outline"} onClick={() => setSendMode("schedule")} className="flex-1">
+              <Button
+                variant={sendMode === "schedule" ? "default" : "outline"}
+                onClick={() => setSendMode("schedule")}
+                className="flex-1"
+              >
                 <CalendarClock className="ml-1 h-4 w-4" /> תזמן
               </Button>
             </div>
             {sendMode === "schedule" && (
               <div>
                 <Label>מועד שליחה</Label>
-                <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+                <Input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                />
               </div>
             )}
             <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
               <div>
-                ערוץ: {channel === "email"
+                ערוץ:{" "}
+                {channel === "email"
                   ? "אימייל (Resend)"
                   : `WhatsApp (${selectedProvider === "manus_wa" ? "Manus" : "Green API"})`}
               </div>
               {source === "wa_groups" ? (
                 <div className="space-y-1">
-                  <div>קבוצות: <Badge variant="secondary">{selectedGroupIds.length}</Badge></div>
+                  <div>
+                    קבוצות:{" "}
+                    <Badge variant="secondary">{selectedGroupIds.length}</Badge>
+                  </div>
                   <div className="text-xs text-muted-foreground">
-                    ההודעה תישלח לכל הקבוצות הנבחרות{sendMode === "schedule" ? " במועד המתוזמן" : " מיד"}.
+                    ההודעה תישלח לכל הקבוצות הנבחרות
+                    {sendMode === "schedule" ? " במועד המתוזמן" : " מיד"}.
                   </div>
                 </div>
               ) : (
                 <>
-                  <div>נמענים: <Badge variant="secondary">{audienceCount ?? 0}</Badge></div>
+                  <div>
+                    נמענים:{" "}
+                    <Badge variant="secondary">{audienceCount ?? 0}</Badge>
+                  </div>
                   {channel !== "email" && (
-                    <div className="text-xs text-muted-foreground">שליחה בקצב מבוקר (12–20 שניות בין הודעות) כדי להימנע מחסימה.</div>
+                    <div className="text-xs text-muted-foreground">
+                      שליחה בקצב מבוקר (12–20 שניות בין הודעות) כדי להימנע
+                      מחסימה.
+                    </div>
                   )}
                 </>
               )}
@@ -727,12 +1065,25 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         )}
 
         <DialogFooter className="flex-row justify-between gap-2 sm:justify-between">
-          <Button variant="ghost" disabled={step === 0 || submitting} onClick={() => setStep((s) => s - 1)}>הקודם</Button>
+          <Button
+            variant="ghost"
+            disabled={step === 0 || submitting}
+            onClick={() => setStep((s) => s - 1)}
+          >
+            הקודם
+          </Button>
           {step < STEPS.length - 1 ? (
-            <Button disabled={!canNext()} onClick={() => setStep((s) => s + 1)}>הבא</Button>
+            <Button disabled={!canNext()} onClick={() => setStep((s) => s + 1)}>
+              הבא
+            </Button>
           ) : (
-            <Button disabled={submitting || (sendMode === "schedule" && !scheduledAt)} onClick={submit}>
-              {submitting ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : null}
+            <Button
+              disabled={submitting || (sendMode === "schedule" && !scheduledAt)}
+              onClick={submit}
+            >
+              {submitting ? (
+                <Loader2 className="ml-1 h-4 w-4 animate-spin" />
+              ) : null}
               {sendMode === "now" ? "שלח דיוור" : "תזמן דיוור"}
             </Button>
           )}

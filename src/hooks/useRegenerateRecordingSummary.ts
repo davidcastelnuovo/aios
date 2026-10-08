@@ -1,7 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { pickTranscriptRow, resolveSummaryTarget } from "@/lib/recordingSummaryTarget";
+import {
+  pickTranscriptRow,
+  resolveSummaryTarget,
+} from "@/lib/recordingSummaryTarget";
 
 interface UseRegenerateRecordingSummaryOptions {
   tenantId: string;
@@ -25,7 +28,9 @@ export function useRegenerateRecordingSummary({
     mutationFn: async () => {
       const { data: rows, error: rowsError } = await supabase
         .from("zoom_recordings")
-        .select("id, transcription, client_id, lead_id, campaigner_ids, agency_id, summary_scope")
+        .select(
+          "id, transcription, client_id, lead_id, campaigner_ids, agency_id, summary_scope",
+        )
         .in("id", recordingIds);
       if (rowsError) throw rowsError;
 
@@ -48,20 +53,25 @@ export function useRegenerateRecordingSummary({
         target = resolveSummaryTarget(sourceRow, agency?.id ?? null);
       }
       if (!target) {
-        throw new Error("אין יעד לשיוך הסיכום — שייך את ההקלטה ללקוח, ליד, איש צוות או סוכנות");
+        throw new Error(
+          "אין יעד לשיוך הסיכום — שייך את ההקלטה ללקוח, ליד, איש צוות או סוכנות",
+        );
       }
 
-      const { data, error } = await supabase.functions.invoke("summarize-recording", {
-        body: {
-          recording_id: sourceRow.id,
-          transcript: sourceRow.transcription,
-          focus_points: [],
-          custom_focus: "",
-          target_type: target.target_type,
-          target_id: target.target_id,
-          tenant_id: tenantId,
+      const { data, error } = await supabase.functions.invoke(
+        "summarize-recording",
+        {
+          body: {
+            recording_id: sourceRow.id,
+            transcript: sourceRow.transcription,
+            focus_points: [],
+            custom_focus: "",
+            target_type: target.target_type,
+            target_id: target.target_id,
+            tenant_id: tenantId,
+          },
         },
-      });
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (data?.pending) return null;
@@ -73,7 +83,10 @@ export function useRegenerateRecordingSummary({
       if (siblingIds.length > 0) {
         await supabase
           .from("zoom_recordings")
-          .update({ summary_md: data.summary, summary_file_url: data.file_url ?? null })
+          .update({
+            summary_md: data.summary,
+            summary_file_url: data.file_url ?? null,
+          })
           .in("id", siblingIds);
       }
 

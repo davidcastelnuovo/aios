@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -10,7 +11,8 @@ interface TrackingPayload {
   tracking_id: string;
   visitor_fingerprint: string;
   session_id?: string;
-  event_type: "pageview" | "event" | "session_start" | "session_end" | "heartbeat";
+  event_type:
+    "pageview" | "event" | "session_start" | "session_end" | "heartbeat";
   data: {
     // Pageview data
     page_url?: string;
@@ -55,12 +57,16 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const payload: TrackingPayload = await req.json();
-    const { tracking_id, visitor_fingerprint, event_type, data, timestamp } = payload;
+    const { tracking_id, visitor_fingerprint, event_type, data, timestamp } =
+      payload;
 
     if (!tracking_id || !visitor_fingerprint) {
       return new Response(
         JSON.stringify({ error: "Missing required fields" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -74,7 +80,10 @@ Deno.serve(async (req) => {
     if (configError || !config || !config.is_active) {
       return new Response(
         JSON.stringify({ error: "Invalid or inactive tracking ID" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -91,13 +100,15 @@ Deno.serve(async (req) => {
 
     if (!visitor) {
       // Create new visitor
-      const firstUtm = data.utm_source ? {
-        source: data.utm_source,
-        medium: data.utm_medium,
-        campaign: data.utm_campaign,
-        content: data.utm_content,
-        term: data.utm_term,
-      } : null;
+      const firstUtm = data.utm_source
+        ? {
+            source: data.utm_source,
+            medium: data.utm_medium,
+            campaign: data.utm_campaign,
+            content: data.utm_content,
+            term: data.utm_term,
+          }
+        : null;
 
       const { data: newVisitor, error: visitorError } = await supabase
         .from("site_visitors")
@@ -114,7 +125,10 @@ Deno.serve(async (req) => {
         console.error("Error creating visitor:", visitorError);
         return new Response(
           JSON.stringify({ error: "Failed to create visitor" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
       visitor = newVisitor;
@@ -158,7 +172,7 @@ Deno.serve(async (req) => {
       } else {
         session_id = newSession.id;
         current_session = newSession;
-        
+
         // Increment visit count
         await supabase
           .from("site_visitors")
@@ -198,7 +212,7 @@ Deno.serve(async (req) => {
         .select("id")
         .eq("id", session_id)
         .single();
-      
+
       current_session = existingSession;
     }
 
@@ -208,9 +222,9 @@ Deno.serve(async (req) => {
       if (data.time_on_page) {
         await supabase
           .from("site_pageviews")
-          .update({ 
+          .update({
             time_on_page: data.time_on_page,
-            left_at: new Date().toISOString()
+            left_at: new Date().toISOString(),
           })
           .eq("session_id", session_id)
           .is("left_at", null)
@@ -242,7 +256,7 @@ Deno.serve(async (req) => {
         .select("page_count")
         .eq("id", session_id)
         .single();
-      
+
       if (currentSession) {
         await supabase
           .from("site_sessions")
@@ -253,25 +267,24 @@ Deno.serve(async (req) => {
 
     if (event_type === "event" && session_id && data.event_name) {
       // Extract event value for e-commerce events from event_data if not in event_value
-      const eventValue = data.event_value || 
-        (data.event_data as Record<string, unknown>)?.value || 
-        (data.event_data as Record<string, unknown>)?.revenue || 
+      const eventValue =
+        data.event_value ||
+        (data.event_data as Record<string, unknown>)?.value ||
+        (data.event_data as Record<string, unknown>)?.revenue ||
         null;
-      
-      const { error: eventError } = await supabase
-        .from("site_events")
-        .insert({
-          session_id,
-          visitor_id: visitor.id,
-          tracking_config_id,
-          event_name: data.event_name,
-          event_category: data.event_category,
-          event_label: data.event_label,
-          event_value: typeof eventValue === 'number' ? eventValue : null,
-          event_data: data.event_data,
-          page_url: data.page_url,
-          tenant_id,
-        });
+
+      const { error: eventError } = await supabase.from("site_events").insert({
+        session_id,
+        visitor_id: visitor.id,
+        tracking_config_id,
+        event_name: data.event_name,
+        event_category: data.event_category,
+        event_label: data.event_label,
+        event_value: typeof eventValue === "number" ? eventValue : null,
+        event_data: data.event_data,
+        page_url: data.page_url,
+        tenant_id,
+      });
 
       if (eventError) {
         console.error("Error creating event:", eventError);
@@ -287,12 +300,14 @@ Deno.serve(async (req) => {
         .single();
 
       if (session) {
-        const duration = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
+        const duration = Math.floor(
+          (Date.now() - new Date(session.started_at).getTime()) / 1000,
+        );
         await supabase
           .from("site_sessions")
-          .update({ 
+          .update({
             duration_seconds: duration,
-            is_bounce: false // If we get a heartbeat, it's not a bounce
+            is_bounce: false, // If we get a heartbeat, it's not a bounce
           })
           .eq("id", session_id);
       }
@@ -317,7 +332,9 @@ Deno.serve(async (req) => {
         .single();
 
       if (session) {
-        const duration = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
+        const duration = Math.floor(
+          (Date.now() - new Date(session.started_at).getTime()) / 1000,
+        );
         await supabase
           .from("site_sessions")
           .update({
@@ -331,19 +348,18 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         session_id,
-        visitor_id: visitor.id 
+        visitor_id: visitor.id,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-
   } catch (error) {
     console.error("Analytics track error:", error);
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

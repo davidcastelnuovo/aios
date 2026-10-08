@@ -1,22 +1,26 @@
 import type { CreativeReferenceRole } from "@/components/marketing/lib/creativeImagePrompt";
 import type { CreativeBrandKit } from "./brandKit";
 
-const TALENT_LOCK = /דמות|פרזנטור|שחקן|מהרפרנס|הדמות|talent|spokesman|this (?:man|woman|person|character)|use the (?:man|woman|person|character|face)/i;
+const TALENT_LOCK =
+  /דמות|פרזנטור|שחקן|מהרפרנס|הדמות|talent|spokesman|this (?:man|woman|person|character)|use the (?:man|woman|person|character|face)/i;
 
 export const wantsTalentLock = (instructions?: string | null): boolean =>
   TALENT_LOCK.test(String(instructions ?? "").trim());
 
-export type StaticRefKind = "edit" | "director" | "style" | "talent" | "technique" | "logo";
+export type StaticRefKind =
+  "edit" | "director" | "style" | "talent" | "technique" | "logo";
 
 export type StaticRef = { url: string; kind: StaticRefKind };
 
 export const labelStaticRef = (ref: StaticRef, index: number): string => {
   const n = index + 1;
-  if (ref.kind === "edit") return `Edit target (revise this exact ad, change only the director note): ${ref.url}`;
+  if (ref.kind === "edit")
+    return `Edit target (revise this exact ad, change only the director note): ${ref.url}`;
   if (ref.kind === "director") {
     return `Director / reject reference ${n} (match taste, lighting, crop, material — new people unless this is also the edit target): ${ref.url}`;
   }
-  if (ref.kind === "talent") return `Talent / spokesman ${n} (keep this face, new scene): ${ref.url}`;
+  if (ref.kind === "talent")
+    return `Talent / spokesman ${n} (keep this face, new scene): ${ref.url}`;
   if (ref.kind === "logo") {
     return `LOGO ${n} (download and ATTACH this exact mark. Integrate it into the still — the app will NOT overlay a watermark): ${ref.url}`;
   }
@@ -56,7 +60,11 @@ export const LOGO_PLACEMENT_LOCK = [
 
 const MAX_STATIC_REFS = 3;
 
-const pushRef = (refs: StaticRef[], url: string | undefined, kind: StaticRefKind) => {
+const pushRef = (
+  refs: StaticRef[],
+  url: string | undefined,
+  kind: StaticRefKind,
+) => {
   if (!url || refs.some((item) => item.url === url)) return;
   refs.push({ url, kind });
 };
@@ -79,7 +87,9 @@ export const collectStaticReferencePlan = ({
   directorUrls?: string[];
   logoUrl?: string;
 }): { urls: string[]; role?: CreativeReferenceRole; refs: StaticRef[] } => {
-  const project = (projectRefUrls.length > 0 ? projectRefUrls : talentUrls ?? []).filter(Boolean);
+  const project = (
+    projectRefUrls.length > 0 ? projectRefUrls : (talentUrls ?? [])
+  ).filter(Boolean);
   const talent = wantsTalentLock(instructions);
   const refs: StaticRef[] = [];
   pushRef(refs, editTargetUrl, "edit");
@@ -127,9 +137,9 @@ export const buildCursorArtDirectorLock = ({
       ? "IRON RULE — CONCEPT FIRST. The photograph IS the approved concept (name, big idea, hook, visual language). Copy is type on that photograph. Do not restage the headline. Do not swap the person, product, or place because the copy mentions something else. A stranger should recognize the concept without reading type."
       : "IRON RULE — SUBJECT FIRST. Style is costume, light, material, and crop only. The picture must depict this variation's idea as a concrete situation. A stranger should recognize the idea without reading type.",
     hasTalentRef
-      ? (revising
+      ? revising
         ? "TALENT LOCK: image 1 is the ad to revise. If a second image is attached it is the spokesman — keep that face, glasses, age, hair, and body."
-        : "TALENT LOCK: the first attached image is the exact spokesman. Keep this face, glasses, age, hair, and body. New scene, same person. Do not swap in a different extra. Do not copy the source ad's layout, lettering, logo, or UI chrome.")
+        : "TALENT LOCK: the first attached image is the exact spokesman. Keep this face, glasses, age, hair, and body. New scene, same person. Do not swap in a different extra. Do not copy the source ad's layout, lettering, logo, or UI chrome."
       : STATIC_CAST_LOCK,
     note && `Director instruction (hard): ${note}`,
     kit.brandBook?.name && `Brand: ${kit.brandBook.name}.`,
@@ -143,5 +153,7 @@ export const buildCursorArtDirectorLock = ({
     liveTextLayers
       ? "Forbidden: grey cyclorama, thinking-hand stock pose, caption plates, baked lettering, invented logos, style-board clichés that replace the concept."
       : "Forbidden: grey cyclorama, thinking-hand stock pose, Canva caption templates, invented logos, style-board clichés that replace the concept, reversed or garbled Hebrew, restaging the headline instead of the concept, default bottom-left logo watermarks.",
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 };

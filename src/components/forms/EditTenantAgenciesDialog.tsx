@@ -45,7 +45,7 @@ export default function EditTenantAgenciesDialog({
         .select("id, name")
         .eq("tenant_id", currentTenantId)
         .order("name");
-      
+
       if (error) throw error;
       return data;
     },
@@ -61,7 +61,7 @@ export default function EditTenantAgenciesDialog({
         .select("agency_id")
         .eq("source_tenant_id", currentTenantId)
         .eq("accessing_tenant_id", tenant.id);
-      
+
       if (error) throw error;
       return data?.map((a) => a.agency_id) || [];
     },
@@ -85,23 +85,23 @@ export default function EditTenantAgenciesDialog({
 
       // הוספת גישות חדשות
       if (agencyIds.length > 0) {
-        const { error } = await supabase
-          .from("agency_tenant_access")
-          .insert(
-            agencyIds.map((agencyId) => ({
-              source_tenant_id: currentTenantId,
-              agency_id: agencyId,
-              accessing_tenant_id: tenant.id,
-              access_level: "read_write",
-            }))
-          );
+        const { error } = await supabase.from("agency_tenant_access").insert(
+          agencyIds.map((agencyId) => ({
+            source_tenant_id: currentTenantId,
+            agency_id: agencyId,
+            accessing_tenant_id: tenant.id,
+            access_level: "read_write",
+          })),
+        );
 
         if (error) throw error;
       }
     },
     onSuccess: () => {
       toast.success("הגישות לסוכנויות עודכנו בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["agency-tenant-access", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["agency-tenant-access", currentTenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["clients", currentTenantId] });
       queryClient.invalidateQueries({ queryKey: ["tasks", currentTenantId] });
       onOpenChange(false);
@@ -120,7 +120,7 @@ export default function EditTenantAgenciesDialog({
     setSelectedAgencies((prev) =>
       prev.includes(agencyId)
         ? prev.filter((id) => id !== agencyId)
-        : [...prev, agencyId]
+        : [...prev, agencyId],
     );
   };
 
@@ -139,7 +139,8 @@ export default function EditTenantAgenciesDialog({
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            <strong>שים לב:</strong> שדות כספיים (תקציבים, retainer, תשלומים) יישארו פרטיים לארגון המקורי ולא יוצגו לארגון שמקבל גישה.
+            <strong>שים לב:</strong> שדות כספיים (תקציבים, retainer, תשלומים)
+            יישארו פרטיים לארגון המקורי ולא יוצגו לארגון שמקבל גישה.
           </AlertDescription>
         </Alert>
 
@@ -151,13 +152,19 @@ export default function EditTenantAgenciesDialog({
           ) : agencies && agencies.length > 0 ? (
             <div className="max-h-96 overflow-y-auto space-y-3 border rounded-md p-4">
               {agencies.map((agency) => (
-                <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
+                <div
+                  key={agency.id}
+                  className="flex items-center space-x-2 space-x-reverse"
+                >
                   <Checkbox
                     id={agency.id}
                     checked={selectedAgencies.includes(agency.id)}
                     onCheckedChange={() => handleToggle(agency.id)}
                   />
-                  <Label htmlFor={agency.id} className="cursor-pointer font-normal flex-1">
+                  <Label
+                    htmlFor={agency.id}
+                    className="cursor-pointer font-normal flex-1"
+                  >
                     {agency.name}
                   </Label>
                 </div>

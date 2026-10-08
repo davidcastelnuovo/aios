@@ -1,6 +1,12 @@
 import { useEffect } from "react";
 import { useBroadcastDomains } from "@/hooks/useBroadcastDomains";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
 export interface ReportEmailSender {
@@ -27,7 +33,10 @@ export function ReportEmailSenderSelect({ value, onChange }: Props) {
   useEffect(() => {
     if (domains.length > 0 && !value) {
       const d = domains.find((x) => x.is_default) || domains[0];
-      onChange({ fromEmail: `${d.default_local}@${d.domain}`, fromName: d.from_name || "" });
+      onChange({
+        fromEmail: `${d.default_local}@${d.domain}`,
+        fromName: d.from_name || "",
+      });
     }
   }, [domains, value, onChange]);
 
@@ -39,7 +48,9 @@ export function ReportEmailSenderSelect({ value, onChange }: Props) {
       <Select
         value={value?.fromEmail || ""}
         onValueChange={(email) => {
-          const d = domains.find((x) => `${x.default_local}@${x.domain}` === email);
+          const d = domains.find(
+            (x) => `${x.default_local}@${x.domain}` === email,
+          );
           if (d) onChange({ fromEmail: email, fromName: d.from_name || "" });
         }}
       >

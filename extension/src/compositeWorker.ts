@@ -17,7 +17,7 @@ let ctx: OffscreenCanvasRenderingContext2D | null = null;
 function drawBubble(width: number, height: number) {
   if (!ctx || !latestCam) return;
   const d = Math.round(Math.min(width, height) * 0.22); // bubble diameter
-  const m = Math.round(d * 0.18);                        // margin from edges
+  const m = Math.round(d * 0.18); // margin from edges
   const x = corner.includes("right") ? width - d - m : m;
   const y = corner.includes("bottom") ? height - d - m : m;
   const cx = x + d / 2;
@@ -31,7 +31,13 @@ function drawBubble(width: number, height: number) {
   const cw = latestCam.displayWidth || 640;
   const ch = latestCam.displayHeight || 480;
   const s = Math.max(d / cw, d / ch);
-  ctx.drawImage(latestCam, cx - (cw * s) / 2, cy - (ch * s) / 2, cw * s, ch * s);
+  ctx.drawImage(
+    latestCam,
+    cx - (cw * s) / 2,
+    cy - (ch * s) / 2,
+    cw * s,
+    ch * s,
+  );
   ctx.restore();
 
   // thin clean border
@@ -54,37 +60,49 @@ self.onmessage = (e: MessageEvent) => {
   if (!data.screen || !data.cam || !data.out) return;
 
   // Keep only the freshest camera frame.
-  data.cam.pipeTo(new WritableStream<VideoFrame>({
-    write(frame) {
-      latestCam?.close();
-      latestCam = frame;
-    },
-    close() {
-      latestCam?.close();
-      latestCam = null;
-    },
-  })).catch(() => { /* camera ended */ });
+  data.cam
+    .pipeTo(
+      new WritableStream<VideoFrame>({
+        write(frame) {
+          latestCam?.close();
+          latestCam = frame;
+        },
+        close() {
+          latestCam?.close();
+          latestCam = null;
+        },
+      }),
+    )
+    .catch(() => {
+      /* camera ended */
+    });
 
   data.screen
-    .pipeThrough(new TransformStream<VideoFrame, VideoFrame>({
-      transform(frame, controller) {
-        const w = frame.displayWidth;
-        const h = frame.displayHeight;
-        if (!canvas || canvas.width !== w || canvas.height !== h) {
-          canvas = new OffscreenCanvas(w, h);
-          ctx = canvas.getContext("2d");
-        }
-        if (!ctx) {
-          controller.enqueue(frame);
-          return;
-        }
-        ctx.drawImage(frame, 0, 0, w, h);
-        drawBubble(w, h);
-        const out = new VideoFrame(canvas, { timestamp: frame.timestamp ?? undefined });
-        frame.close();
-        controller.enqueue(out);
-      },
-    }))
+    .pipeThrough(
+      new TransformStream<VideoFrame, VideoFrame>({
+        transform(frame, controller) {
+          const w = frame.displayWidth;
+          const h = frame.displayHeight;
+          if (!canvas || canvas.width !== w || canvas.height !== h) {
+            canvas = new OffscreenCanvas(w, h);
+            ctx = canvas.getContext("2d");
+          }
+          if (!ctx) {
+            controller.enqueue(frame);
+            return;
+          }
+          ctx.drawImage(frame, 0, 0, w, h);
+          drawBubble(w, h);
+          const out = new VideoFrame(canvas, {
+            timestamp: frame.timestamp ?? undefined,
+          });
+          frame.close();
+          controller.enqueue(out);
+        },
+      }),
+    )
     .pipeTo(data.out)
-    .catch(() => { /* recording stopped */ });
+    .catch(() => {
+      /* recording stopped */
+    });
 };

@@ -10,7 +10,9 @@ export function useAuthSessionSync() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       queryClient.setQueryData(["session"], session);
       queryClient.setQueryData(["session-ready"], true);
     });

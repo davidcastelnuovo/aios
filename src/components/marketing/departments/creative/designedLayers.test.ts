@@ -51,7 +51,9 @@ test("parseCreativeCopy never falls back to an AIDA project title", () => {
 });
 
 test("parseCreativeCopy supports inline labels", () => {
-  const parts = parseCreativeCopy("כותרת: רודוס\nהצעה: 99₪ ללילה\nCTA: הזמינו עכשיו");
+  const parts = parseCreativeCopy(
+    "כותרת: רודוס\nהצעה: 99₪ ללילה\nCTA: הזמינו עכשיו",
+  );
   assert.equal(parts.headline, "רודוס");
   assert.equal(parts.offer, "99₪ ללילה");
   assert.equal(parts.cta, "הזמינו עכשיו");
@@ -76,7 +78,10 @@ test("visual brief uses real offer copy, never the AIDA header", () => {
 
 test("extractCopyAngle reads the variation idea from em-dash or bullet labels", () => {
   assert.equal(extractCopyAngle(AIDA_DOC), "פומו תחרותי");
-  assert.equal(extractCopyAngle(undefined, "וריאציה 3 • מגולל לצ'אט"), "מגולל לצ'אט");
+  assert.equal(
+    extractCopyAngle(undefined, "וריאציה 3 • מגולל לצ'אט"),
+    "מגולל לצ'אט",
+  );
   assert.equal(extractCopyAngle("כותרת: רודוס", "פומו תחרותי"), "פומו תחרותי");
   assert.equal(
     extractCopyAngle(`וריאציה 2 — בעיית "אני לא יודע אם אני שם"`),
@@ -192,7 +197,9 @@ test("copy scene brief stages competitive FOMO, not an airplane wing", () => {
 test("strongestLine prefers a punchy sentence over a weak one-word headline", () => {
   assert.equal(strongestLine(AIDA_DOC), "רק 99 ש״ח ללילה, כולל טיסה");
   assert.equal(
-    strongestLine("כותרת:\nהמתחרים\nגוף:\nלקוחות כבר לא מחפשים רק בגוגל\nCTA:\nהשאירו פרטים"),
+    strongestLine(
+      "כותרת:\nהמתחרים\nגוף:\nלקוחות כבר לא מחפשים רק בגוגל\nCTA:\nהשאירו פרטים",
+    ),
     "לקוחות כבר לא מחפשים רק בגוגל",
   );
   assert.ok(punchScore("רק 99 ש״ח ללילה") > punchScore("המתחרים"));
@@ -207,12 +214,15 @@ test("wrapPosterLine splits a long lockup into two poster lines", () => {
 
 test("flush lockup is fat type without a full-width headline rectangle", () => {
   const layers = buildDesignedCopyLayers({
-    copyText: "כותרת:\nהמתחרים\nגוף:\nלקוחות כבר לא מחפשים רק בגוגל\nCTA:\nהשאירו פרטים",
+    copyText:
+      "כותרת:\nהמתחרים\nגוף:\nלקוחות כבר לא מחפשים רק בגוגל\nCTA:\nהשאירו פרטים",
     format: "1:1",
     styleId: "cinematic",
     compositionId: "flush",
   });
-  const poster = layers.find((layer) => layer.type === "text" && (layer.text ?? "").includes("לקוחות"));
+  const poster = layers.find(
+    (layer) => layer.type === "text" && (layer.text ?? "").includes("לקוחות"),
+  );
   assert.ok(poster);
   assert.equal(poster?.fontFamily, "Suez One");
   assert.ok((poster?.fontSize ?? 0) >= 32);
@@ -221,7 +231,15 @@ test("flush lockup is fat type without a full-width headline rectangle", () => {
   assert.equal(poster?.shadowStyle, "halo");
   const cta = layers.find((layer) => layer.text === "השאירו פרטים");
   assert.ok(cta);
-  assert.equal(layers.some((layer) => layer.type === "shape" && (layer.y ?? 0) >= 80 && (layer.width ?? 0) >= 50), false);
+  assert.equal(
+    layers.some(
+      (layer) =>
+        layer.type === "shape" &&
+        (layer.y ?? 0) >= 80 &&
+        (layer.width ?? 0) >= 50,
+    ),
+    false,
+  );
 });
 
 test("offer board is a lead-gen template with footer, icons, and brand CTA", () => {
@@ -240,9 +258,20 @@ CTA: השאירו פרטים`,
   assert.ok(layers.some((layer) => layer.role === "type_field"));
   assert.ok(layers.some((layer) => layer.role === "footer"));
   assert.ok(layers.some((layer) => layer.role === "icon" && layer.icon));
-  assert.ok(layers.some((layer) => layer.role === "cta_fill" && layer.fill === "#e11d48"));
-  assert.ok(layers.some((layer) => layer.role === "cta" && layer.text === "השאירו פרטים"));
-  assert.equal(shouldRebuildDesignedLayers(layers, "כותרת: הלקוח מחפש המלצה ב־AI"), false);
+  assert.ok(
+    layers.some(
+      (layer) => layer.role === "cta_fill" && layer.fill === "#e11d48",
+    ),
+  );
+  assert.ok(
+    layers.some(
+      (layer) => layer.role === "cta" && layer.text === "השאירו פרטים",
+    ),
+  );
+  assert.equal(
+    shouldRebuildDesignedLayers(layers, "כותרת: הלקוח מחפש המלצה ב־AI"),
+    false,
+  );
 });
 
 test("designed layers never paint AIDA labels or a bottom caption plate", () => {
@@ -258,7 +287,16 @@ test("designed layers never paint AIDA labels or a bottom caption plate", () => 
   assert.ok(!texts.includes("טסים"));
   assert.ok(texts.includes("להזמנה"));
   assert.ok(!texts.some((text) => /AIDA|וריאציה|כותרת:/.test(text ?? "")));
-  assert.ok(!layers.some((layer) => layer.type === "shape" && layer.y >= 58 && layer.height >= 18 && layer.height <= 36 && layer.width >= 70));
+  assert.ok(
+    !layers.some(
+      (layer) =>
+        layer.type === "shape" &&
+        layer.y >= 58 &&
+        layer.height >= 18 &&
+        layer.height <= 36 &&
+        layer.width >= 70,
+    ),
+  );
 });
 
 test("designed layers no longer overlay a logo watermark", () => {
@@ -269,41 +307,150 @@ test("designed layers no longer overlay a logo watermark", () => {
     logoUrl: "https://example.com/logo.png",
     compositionId: "flag",
   });
-  assert.equal(layers.some((layer) => layer.type === "image" || layer.role === "logo"), false);
+  assert.equal(
+    layers.some((layer) => layer.type === "image" || layer.role === "logo"),
+    false,
+  );
   assert.ok(layers.some((layer) => layer.text === "רודוס"));
 });
 
 test("ensureLogoLayer updates or removes the logo without touching copy", () => {
-  const withLogo = ensureLogoLayer([
-    { id: "1", type: "text", x: 8, y: 8, width: 60, height: 10, text: "רודוס" },
-  ], "https://example.com/a.png");
+  const withLogo = ensureLogoLayer(
+    [
+      {
+        id: "1",
+        type: "text",
+        x: 8,
+        y: 8,
+        width: 60,
+        height: 10,
+        text: "רודוס",
+      },
+    ],
+    "https://example.com/a.png",
+  );
   assert.equal(withLogo.filter((layer) => layer.type === "image").length, 1);
   const updated = ensureLogoLayer(withLogo, "https://example.com/b.png");
-  assert.equal(updated.find((layer) => layer.type === "image")?.src, "https://example.com/b.png");
+  assert.equal(
+    updated.find((layer) => layer.type === "image")?.src,
+    "https://example.com/b.png",
+  );
   assert.equal(updated.find((layer) => layer.text === "רודוס")?.text, "רודוס");
-  assert.equal(ensureLogoLayer(updated).some((layer) => layer.type === "image"), false);
+  assert.equal(
+    ensureLogoLayer(updated).some((layer) => layer.type === "image"),
+    false,
+  );
 });
 
 test("shouldRebuildDesignedLayers catches leftover AIDA overlays and weak auto type", () => {
-  assert.equal(shouldRebuildDesignedLayers([
-    { id: "1", type: "text", x: 8, y: 60, width: 84, height: 16, text: "וריאציה 1 — AIDA — פומו תחרותי" },
-  ]), true);
-  assert.equal(shouldRebuildDesignedLayers([
-    { id: "1", type: "shape", x: 4, y: 62, width: 92, height: 28, fill: "#ffffffcc" },
-  ]), true);
-  assert.equal(shouldRebuildDesignedLayers([
-    { id: "1", type: "text", x: 8, y: 30, width: 80, height: 14, text: "רודוס" },
-  ]), false);
-  assert.equal(shouldRebuildDesignedLayers([
-    { id: "1", type: "text", x: 6, y: 5, width: 80, height: 10, text: "טסים", fontFamily: "Rubik", fontSize: 28 },
-  ], AIDA_DOC), true);
-  assert.equal(shouldRebuildDesignedLayers([
-    { id: "1", type: "text", x: 4, y: 4, width: 90, height: 16, text: "טסים לרודוס", fontFamily: "Suez One", fontSize: 52 },
-  ], AIDA_DOC), false);
-  assert.equal(shouldRebuildDesignedLayers([
-    { id: "1", type: "shape", x: 0, y: 0, width: 100, height: 22, fill: "#f8fafccc" },
-    { id: "2", type: "text", x: 4, y: 4, width: 90, height: 16, text: "רק 99 ש״ח ללילה, כולל טיסה", fontFamily: "Suez One", fontSize: 52 },
-  ], AIDA_DOC), true);
+  assert.equal(
+    shouldRebuildDesignedLayers([
+      {
+        id: "1",
+        type: "text",
+        x: 8,
+        y: 60,
+        width: 84,
+        height: 16,
+        text: "וריאציה 1 — AIDA — פומו תחרותי",
+      },
+    ]),
+    true,
+  );
+  assert.equal(
+    shouldRebuildDesignedLayers([
+      {
+        id: "1",
+        type: "shape",
+        x: 4,
+        y: 62,
+        width: 92,
+        height: 28,
+        fill: "#ffffffcc",
+      },
+    ]),
+    true,
+  );
+  assert.equal(
+    shouldRebuildDesignedLayers([
+      {
+        id: "1",
+        type: "text",
+        x: 8,
+        y: 30,
+        width: 80,
+        height: 14,
+        text: "רודוס",
+      },
+    ]),
+    false,
+  );
+  assert.equal(
+    shouldRebuildDesignedLayers(
+      [
+        {
+          id: "1",
+          type: "text",
+          x: 6,
+          y: 5,
+          width: 80,
+          height: 10,
+          text: "טסים",
+          fontFamily: "Rubik",
+          fontSize: 28,
+        },
+      ],
+      AIDA_DOC,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldRebuildDesignedLayers(
+      [
+        {
+          id: "1",
+          type: "text",
+          x: 4,
+          y: 4,
+          width: 90,
+          height: 16,
+          text: "טסים לרודוס",
+          fontFamily: "Suez One",
+          fontSize: 52,
+        },
+      ],
+      AIDA_DOC,
+    ),
+    false,
+  );
+  assert.equal(
+    shouldRebuildDesignedLayers(
+      [
+        {
+          id: "1",
+          type: "shape",
+          x: 0,
+          y: 0,
+          width: 100,
+          height: 22,
+          fill: "#f8fafccc",
+        },
+        {
+          id: "2",
+          type: "text",
+          x: 4,
+          y: 4,
+          width: 90,
+          height: 16,
+          text: "רק 99 ש״ח ללילה, כולל טיסה",
+          fontFamily: "Suez One",
+          fontSize: 52,
+        },
+      ],
+      AIDA_DOC,
+    ),
+    true,
+  );
 });
 
 test("brand colors from the logo override the style palette", () => {
@@ -325,11 +472,16 @@ test("rail composition is a vertical field, not a top strip", () => {
     styleId: "bauhaus",
     compositionId: "rail",
   });
-  const field = layers.find((layer) => layer.type === "shape" && (layer.height ?? 0) >= 80);
+  const field = layers.find(
+    (layer) => layer.type === "shape" && (layer.height ?? 0) >= 80,
+  );
   assert.ok(field);
   assert.ok((field?.x ?? 0) >= 60);
   assert.ok(!layers.some((layer) => isLegacyHeadlineBand(layer)));
-  assert.equal(shouldRebuildDesignedLayers(layers, "כותרת:\nרודוס\nCTA:\nלהזמנה"), false);
+  assert.equal(
+    shouldRebuildDesignedLayers(layers, "כותרת:\nרודוס\nCTA:\nלהזמנה"),
+    false,
+  );
 });
 
 test("split field is architecture, not a leftover caption plate", () => {
@@ -339,10 +491,15 @@ test("split field is architecture, not a leftover caption plate", () => {
     styleId: "industrial",
     compositionId: "split",
   });
-  const field = layers.find((layer) => layer.type === "shape" && (layer.height ?? 0) >= 40);
+  const field = layers.find(
+    (layer) => layer.type === "shape" && (layer.height ?? 0) >= 40,
+  );
   assert.ok(field);
   assert.ok((field?.y ?? 0) >= 50);
-  assert.equal(shouldRebuildDesignedLayers(layers, "כותרת:\nרודוס\nCTA:\nלהזמנה"), false);
+  assert.equal(
+    shouldRebuildDesignedLayers(layers, "כותרת:\nרודוס\nCTA:\nלהזמנה"),
+    false,
+  );
 });
 
 test("slash field is rotated instead of a horizontal caption bar", () => {
@@ -352,14 +509,24 @@ test("slash field is rotated instead of a horizontal caption bar", () => {
     styleId: "kinetic",
     compositionId: "slash",
   });
-  const slash = layers.find((layer) => typeof layer.rotation === "number" && layer.rotation < 0);
+  const slash = layers.find(
+    (layer) => typeof layer.rotation === "number" && layer.rotation < 0,
+  );
   assert.ok(slash);
   assert.ok(!layers.some((layer) => isLegacyHeadlineBand(layer)));
 });
 
 test("hydrateVariationLayers does not crash when layers are missing", () => {
   const next = hydrateVariationLayers(
-    { id: "v1", name: "test", imageUrl: "https://example.com/x.png", format: "1:1", layers: undefined as never, comments: [], createdAt: "" },
+    {
+      id: "v1",
+      name: "test",
+      imageUrl: "https://example.com/x.png",
+      format: "1:1",
+      layers: undefined as never,
+      comments: [],
+      createdAt: "",
+    },
     "",
   );
   assert.ok(Array.isArray(next.layers));
@@ -372,7 +539,17 @@ test("hydrateVariationLayers skips live-text rebuild when live text is off", () 
       name: "test",
       imageUrl: "https://example.com/x.png",
       format: "1:1",
-      layers: [{ id: "t1", type: "text", x: 0, y: 0, width: 80, height: 20, text: "כותרת ישנה" }],
+      layers: [
+        {
+          id: "t1",
+          type: "text",
+          x: 0,
+          y: 0,
+          width: 80,
+          height: 20,
+          text: "כותרת ישנה",
+        },
+      ],
       comments: [],
       createdAt: "",
     },
@@ -383,8 +560,14 @@ test("hydrateVariationLayers skips live-text rebuild when live text is off", () 
     undefined,
     false,
   );
-  assert.equal(next.layers.some((layer) => layer.text === "כותרת ישנה"), true);
-  assert.equal(next.layers.some((layer) => (layer.text ?? "").includes("חדשה")), false);
+  assert.equal(
+    next.layers.some((layer) => layer.text === "כותרת ישנה"),
+    true,
+  );
+  assert.equal(
+    next.layers.some((layer) => (layer.text ?? "").includes("חדשה")),
+    false,
+  );
 });
 
 test("hydrateVariationLayers strips auto-composited logo watermarks", () => {
@@ -395,8 +578,25 @@ test("hydrateVariationLayers strips auto-composited logo watermarks", () => {
       imageUrl: "https://example.com/x.png",
       format: "1:1",
       layers: [
-        { id: "t1", type: "text", x: 0, y: 0, width: 80, height: 20, text: "כותרת" },
-        { id: "logo", type: "image", role: "logo", x: 74, y: 86, width: 20, height: 8, src: "https://example.com/logo.png" },
+        {
+          id: "t1",
+          type: "text",
+          x: 0,
+          y: 0,
+          width: 80,
+          height: 20,
+          text: "כותרת",
+        },
+        {
+          id: "logo",
+          type: "image",
+          role: "logo",
+          x: 74,
+          y: 86,
+          width: 20,
+          height: 8,
+          src: "https://example.com/logo.png",
+        },
       ],
       comments: [],
       createdAt: "",
@@ -408,6 +608,14 @@ test("hydrateVariationLayers strips auto-composited logo watermarks", () => {
     undefined,
     false,
   );
-  assert.equal(next.layers.some((layer) => layer.role === "logo" || layer.type === "image"), false);
-  assert.equal(next.layers.some((layer) => layer.text === "כותרת"), true);
+  assert.equal(
+    next.layers.some(
+      (layer) => layer.role === "logo" || layer.type === "image",
+    ),
+    false,
+  );
+  assert.equal(
+    next.layers.some((layer) => layer.text === "כותרת"),
+    true,
+  );
 });

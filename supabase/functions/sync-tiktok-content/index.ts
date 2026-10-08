@@ -1,12 +1,13 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GATEWAY_URL = 'https://open.tiktokapis.com/v2';
+const GATEWAY_URL = "https://open.tiktokapis.com/v2";
 
 interface VideoRecord {
   video_id: string;
@@ -25,24 +26,29 @@ interface VideoRecord {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const TIKTOK_ACCESS_TOKEN = Deno.env.get('TIKTOK_ACCESS_TOKEN');
-    const TIKTOK_API_KEY = Deno.env.get('TIKTOK_API_KEY');
-    if (!TIKTOK_ACCESS_TOKEN) throw new Error('TIKTOK_ACCESS_TOKEN not configured');
-    if (!TIKTOK_API_KEY) throw new Error('TIKTOK_API_KEY not configured');
+    const TIKTOK_ACCESS_TOKEN = Deno.env.get("TIKTOK_ACCESS_TOKEN");
+    const TIKTOK_API_KEY = Deno.env.get("TIKTOK_API_KEY");
+    if (!TIKTOK_ACCESS_TOKEN)
+      throw new Error("TIKTOK_ACCESS_TOKEN not configured");
+    if (!TIKTOK_API_KEY) throw new Error("TIKTOK_API_KEY not configured");
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      {
+        global: {
+          headers: { Authorization: req.headers.get("Authorization")! },
+        },
+      },
     );
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     const body = await req.json();
@@ -50,33 +56,46 @@ Deno.serve(async (req) => {
 
     let userId: string | null = null;
     if (!_internal_cron) {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
       if (authError || !user) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       userId = user.id;
     }
 
     if (!table_id) {
-      return new Response(JSON.stringify({ error: 'table_id required' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      return new Response(JSON.stringify({ error: "table_id required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const readClient = _internal_cron ? supabaseAdmin : supabase;
     const { data: table, error: tableError } = await readClient
-      .from('crm_tables').select('*').eq('id', table_id).maybeSingle();
+      .from("crm_tables")
+      .select("*")
+      .eq("id", table_id)
+      .maybeSingle();
     if (tableError || !table) {
-      return new Response(JSON.stringify({ error: 'Table not found' }), {
-        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      return new Response(JSON.stringify({ error: "Table not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (table.integration_type !== 'tiktok_content') {
-      return new Response(JSON.stringify({ error: 'Table is not a TikTok Content table' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    if (table.integration_type !== "tiktok_content") {
+      return new Response(
+        JSON.stringify({ error: "Table is not a TikTok Content table" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const settings = table.integration_settings || {};
@@ -85,43 +104,68 @@ Deno.serve(async (req) => {
 
     // Verify connection exists for this tenant
     const { data: integration } = await supabaseAdmin
-      .from('tenant_integrations')
-      .select('id, is_active, settings')
-      .eq('tenant_id', tableTenantId)
-      .eq('integration_type', 'tiktok')
-      .eq('is_active', true)
+      .from("tenant_integrations")
+      .select("id, is_active, settings")
+      .eq("tenant_id", tableTenantId)
+      .eq("integration_type", "tiktok")
+      .eq("is_active", true)
       .maybeSingle();
     if (!integration) {
-      return new Response(JSON.stringify({ error: 'TikTok not connected for this tenant' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return new Response(
+        JSON.stringify({ error: "TikTok not connected for this tenant" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Page through TikTok video/list/
-    const videoFields = ['id','create_time','cover_image_url','share_url','video_description','duration','title','embed_link','like_count','comment_count','share_count','view_count'];
+    const videoFields = [
+      "id",
+      "create_time",
+      "cover_image_url",
+      "share_url",
+      "video_description",
+      "duration",
+      "title",
+      "embed_link",
+      "like_count",
+      "comment_count",
+      "share_count",
+      "view_count",
+    ];
     const all: any[] = [];
     let cursor: number | undefined = undefined;
     let hasMore = true;
     let pages = 0;
     while (hasMore && all.length < maxVideos && pages < 10) {
-      const url = `${GATEWAY_URL}/video/list/?fields=${videoFields.join(',')}`;
+      const url = `${GATEWAY_URL}/video/list/?fields=${videoFields.join(",")}`;
       const pageBody: any = { max_count: Math.min(20, maxVideos - all.length) };
       if (cursor !== undefined) pageBody.cursor = cursor;
       const res = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${TIKTOK_ACCESS_TOKEN}`,
-          'X-Connection-Api-Key': TIKTOK_API_KEY,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${TIKTOK_ACCESS_TOKEN}`,
+          "X-Connection-Api-Key": TIKTOK_API_KEY,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(pageBody),
       });
       const text = await res.text();
       if (!res.ok) {
-        console.error('TikTok video/list failed', res.status, text);
-        return new Response(JSON.stringify({ error: 'TikTok API error', status: res.status, details: text }), {
-          status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        console.error("TikTok video/list failed", res.status, text);
+        return new Response(
+          JSON.stringify({
+            error: "TikTok API error",
+            status: res.status,
+            details: text,
+          }),
+          {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
       const json = JSON.parse(text);
       const videos = json?.data?.videos || [];
@@ -136,18 +180,19 @@ Deno.serve(async (req) => {
       const likes = Number(v.like_count) || 0;
       const comments = Number(v.comment_count) || 0;
       const shares = Number(v.share_count) || 0;
-      const engagement = views > 0 ? ((likes + comments + shares) / views) * 100 : 0;
+      const engagement =
+        views > 0 ? ((likes + comments + shares) / views) * 100 : 0;
       const createIso = v.create_time
-        ? new Date(Number(v.create_time) * 1000).toISOString().split('T')[0]
-        : '';
+        ? new Date(Number(v.create_time) * 1000).toISOString().split("T")[0]
+        : "";
       return {
-        video_id: String(v.id ?? ''),
-        title: v.title || v.video_description || '',
-        description: v.video_description || '',
+        video_id: String(v.id ?? ""),
+        title: v.title || v.video_description || "",
+        description: v.video_description || "",
         create_time: createIso,
-        cover_image_url: v.cover_image_url || '',
-        share_url: v.share_url || '',
-        embed_link: v.embed_link || '',
+        cover_image_url: v.cover_image_url || "",
+        share_url: v.share_url || "",
+        embed_link: v.embed_link || "",
         duration_sec: Number(v.duration) || 0,
         view_count: views,
         like_count: likes,
@@ -158,57 +203,127 @@ Deno.serve(async (req) => {
     });
 
     // Fields definition
-    const fieldKeys = ['create_time','title','view_count','like_count','comment_count','share_count','engagement_rate','duration_sec','cover_image_url','share_url','embed_link','video_id','description'];
-    const fieldNames = ['תאריך פרסום','כותרת','צפיות','לייקים','תגובות','שיתופים','שיעור מעורבות %','משך (שניות)','תמונה','קישור','הטמעה','מזהה סרטון','תיאור'];
-    const fieldTypes = ['date','text','number','number','number','number','number','number','text','text','text','text','text'];
+    const fieldKeys = [
+      "create_time",
+      "title",
+      "view_count",
+      "like_count",
+      "comment_count",
+      "share_count",
+      "engagement_rate",
+      "duration_sec",
+      "cover_image_url",
+      "share_url",
+      "embed_link",
+      "video_id",
+      "description",
+    ];
+    const fieldNames = [
+      "תאריך פרסום",
+      "כותרת",
+      "צפיות",
+      "לייקים",
+      "תגובות",
+      "שיתופים",
+      "שיעור מעורבות %",
+      "משך (שניות)",
+      "תמונה",
+      "קישור",
+      "הטמעה",
+      "מזהה סרטון",
+      "תיאור",
+    ];
+    const fieldTypes = [
+      "date",
+      "text",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "text",
+      "text",
+      "text",
+      "text",
+      "text",
+    ];
 
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabaseAdmin
-        .from('crm_fields')
-        .select('id')
-        .eq('table_id', table_id)
-        .eq('key', fieldKeys[i])
+        .from("crm_fields")
+        .select("id")
+        .eq("table_id", table_id)
+        .eq("key", fieldKeys[i])
         .maybeSingle();
       if (!existingField) {
-        const { error: fieldErr } = await supabaseAdmin.from('crm_fields').insert({
-          table_id, key: fieldKeys[i], name: fieldNames[i], type: fieldTypes[i], position: i,
-        });
-        if (fieldErr) console.error(`[sync-tiktok-content] field insert ${fieldKeys[i]}:`, fieldErr.message);
+        const { error: fieldErr } = await supabaseAdmin
+          .from("crm_fields")
+          .insert({
+            table_id,
+            key: fieldKeys[i],
+            name: fieldNames[i],
+            type: fieldTypes[i],
+            position: i,
+          });
+        if (fieldErr)
+          console.error(
+            `[sync-tiktok-content] field insert ${fieldKeys[i]}:`,
+            fieldErr.message,
+          );
       }
     }
 
     // Replace records
     const { error: delErr } = await supabaseAdmin
-      .from('crm_records').delete().eq('table_id', table_id).eq('tenant_id', tableTenantId);
-    if (delErr) console.error('[sync-tiktok-content] delete error:', delErr.message);
+      .from("crm_records")
+      .delete()
+      .eq("table_id", table_id)
+      .eq("tenant_id", tableTenantId);
+    if (delErr)
+      console.error("[sync-tiktok-content] delete error:", delErr.message);
 
     let inserted = 0;
     if (records.length > 0) {
       const rows = records.map((r) => ({
-        table_id, tenant_id: tableTenantId, created_by: userId, data: r as any,
+        table_id,
+        tenant_id: tableTenantId,
+        created_by: userId,
+        data: r as any,
       }));
       const { error: insErr, count } = await supabaseAdmin
-        .from('crm_records').insert(rows, { count: 'exact' });
-      if (insErr) console.error('[sync-tiktok-content] insert error:', insErr.message);
+        .from("crm_records")
+        .insert(rows, { count: "exact" });
+      if (insErr)
+        console.error("[sync-tiktok-content] insert error:", insErr.message);
       else inserted = count ?? rows.length;
     }
 
     await supabaseAdmin
-      .from('crm_tables')
-      .update({ integration_settings: { ...settings, last_sync_at: new Date().toISOString() } })
-      .eq('id', table_id);
+      .from("crm_tables")
+      .update({
+        integration_settings: {
+          ...settings,
+          last_sync_at: new Date().toISOString(),
+        },
+      })
+      .eq("id", table_id);
 
-    return new Response(JSON.stringify({
-      success: true,
-      records_synced: inserted,
-      last_sync_at: new Date().toISOString(),
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        records_synced: inserted,
+        last_sync_at: new Date().toISOString(),
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (error: any) {
-    console.error('sync-tiktok-content error:', error);
+    console.error("sync-tiktok-content error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

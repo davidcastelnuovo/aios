@@ -1,6 +1,9 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useUserPermissions, ModulePermission } from "@/hooks/useUserPermissions";
+import {
+  useUserPermissions,
+  ModulePermission,
+} from "@/hooks/useUserPermissions";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { resolvePermissionGateView } from "@/lib/permissionGate";
 import { permissionHandleForPathname } from "@/lib/moduleRoutePermissions";
@@ -14,7 +17,9 @@ interface ModulePermissionGateProps {
 }
 
 function PermissionGateSkeleton() {
-  return <CarmenLoadingScreen messages={["בודקת הרשאות…", "פותחת לך את המודול…"]} />;
+  return (
+    <CarmenLoadingScreen messages={["בודקת הרשאות…", "פותחת לך את המודול…"]} />
+  );
 }
 
 /**
@@ -63,11 +68,18 @@ export function ModulePermissionGate({
       return <>{children}</>;
     }
     return (
-      <div className="flex flex-col items-center justify-center gap-4 p-12 text-center" dir="rtl">
-        <p className="text-muted-foreground">לא הצלחנו לטעון את ההרשאות שלך. נסה שוב.</p>
+      <div
+        className="flex flex-col items-center justify-center gap-4 p-12 text-center"
+        dir="rtl"
+      >
+        <p className="text-muted-foreground">
+          לא הצלחנו לטעון את ההרשאות שלך. נסה שוב.
+        </p>
         <Button
           variant="outline"
-          onClick={() => queryClient.invalidateQueries({ queryKey: ["user-permissions"] })}
+          onClick={() =>
+            queryClient.invalidateQueries({ queryKey: ["user-permissions"] })
+          }
         >
           נסה שוב
         </Button>
@@ -83,12 +95,19 @@ export function ModulePermissionGate({
 }
 
 /** Persistent gate that reads the module permission from the tenant URL. */
-export function RoutedModulePermissionGate({ children }: { children: React.ReactNode }) {
+export function RoutedModulePermissionGate({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const { pathname } = useLocation();
   const handle = permissionHandleForPathname(pathname);
 
   return (
-    <ModulePermissionGate permission={handle?.permission} redirectTo={handle?.redirectTo}>
+    <ModulePermissionGate
+      permission={handle?.permission}
+      redirectTo={handle?.redirectTo}
+    >
       {children}
     </ModulePermissionGate>
   );

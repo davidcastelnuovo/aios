@@ -1,13 +1,23 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Plus, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { useTeamRoles, useUpdateTeamRoles, TeamRole } from "@/hooks/useTeamRoles";
+import {
+  useTeamRoles,
+  useUpdateTeamRoles,
+  TeamRole,
+} from "@/hooks/useTeamRoles";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   AlertDialog,
@@ -47,8 +57,12 @@ export function TeamRolesManager() {
     },
     onSuccess: () => {
       toast.success("תפקידי הצוות עודכנו בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["tenant-team-roles", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["tenant-org-type", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["tenant-team-roles", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["tenant-org-type", tenantId],
+      });
       setHasChanges(false);
     },
     onError: (error: Error) => {
@@ -63,13 +77,13 @@ export function TeamRolesManager() {
     }
 
     // בדיקה שהמפתח לא קיים כבר
-    if (customRoles.some(r => r.key === newRoleKey)) {
+    if (customRoles.some((r) => r.key === newRoleKey)) {
       toast.error("מפתח זה כבר קיים");
       return;
     }
 
     const newRole: TeamRole = {
-      key: newRoleKey.toLowerCase().replace(/\s+/g, '_'),
+      key: newRoleKey.toLowerCase().replace(/\s+/g, "_"),
       label: newRoleLabel,
     };
 
@@ -80,7 +94,7 @@ export function TeamRolesManager() {
   };
 
   const removeRole = (key: string) => {
-    setCustomRoles(customRoles.filter(r => r.key !== key));
+    setCustomRoles(customRoles.filter((r) => r.key !== key));
     setHasChanges(true);
   };
 
@@ -105,7 +119,8 @@ export function TeamRolesManager() {
     );
   }
 
-  const orgTypeLabel = orgType === 'organization' || orgType === 'root' ? 'סוכנות' : 'עסק כללי';
+  const orgTypeLabel =
+    orgType === "organization" || orgType === "root" ? "סוכנות" : "עסק כללי";
 
   return (
     <Card>
@@ -127,7 +142,9 @@ export function TeamRolesManager() {
       <CardContent className="space-y-6">
         {/* רשימת תפקידים קיימים */}
         <div>
-          <Label className="text-base font-semibold mb-3 block">תפקידים קיימים</Label>
+          <Label className="text-base font-semibold mb-3 block">
+            תפקידים קיימים
+          </Label>
           <div className="flex flex-wrap gap-2">
             {customRoles.map((role) => (
               <Badge
@@ -212,8 +229,8 @@ export function TeamRolesManager() {
               <AlertDialogHeader>
                 <AlertDialogTitle>איפוס לברירת מחדל?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  פעולה זו תחזיר את רשימת התפקידים לברירת המחדל של {orgTypeLabel}.
-                  כל התפקידים המותאמים אישית יימחקו.
+                  פעולה זו תחזיר את רשימת התפקידים לברירת המחדל של{" "}
+                  {orgTypeLabel}. כל התפקידים המותאמים אישית יימחקו.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

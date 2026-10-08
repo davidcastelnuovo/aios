@@ -8,11 +8,15 @@ import type {
 
 export const CLOUD_DIRECT_PROVIDERS: CloudDirectProvider[] = ["cursor", "grok"];
 
-export function isCloudDirect(provider: string): provider is CloudDirectProvider {
+export function isCloudDirect(
+  provider: string,
+): provider is CloudDirectProvider {
   return provider === "cursor" || provider === "grok";
 }
 
-export function isWorkspaceProvider(provider: string): provider is WorkspaceProvider {
+export function isWorkspaceProvider(
+  provider: string,
+): provider is WorkspaceProvider {
   return provider === "chatgpt" || provider === "codex";
 }
 
@@ -39,7 +43,9 @@ export function extractUuid(text: string): string | null {
   return m ? m[0].toLowerCase() : null;
 }
 
-export function capabilitiesForProvider(provider: ChannelProvider): AdapterCapabilities {
+export function capabilitiesForProvider(
+  provider: ChannelProvider,
+): AdapterCapabilities {
   switch (provider) {
     case "internal":
       return {
@@ -93,9 +99,19 @@ export function statusForKind(kind: ChannelProvider): ConversationStatus {
   return "waiting_external";
 }
 
-export function parliamentSeatsFromConfig(config: Record<string, unknown> | null | undefined): ChannelProvider[] {
-  const raw = Array.isArray(config?.seats) ? config!.seats : ["cursor", "grok", "codex"];
-  const allowed = new Set<ChannelProvider>(["cursor", "grok", "codex", "claude", "chatgpt"]);
+export function parliamentSeatsFromConfig(
+  config: Record<string, unknown> | null | undefined,
+): ChannelProvider[] {
+  const raw = Array.isArray(config?.seats)
+    ? config!.seats
+    : ["cursor", "grok", "codex"];
+  const allowed = new Set<ChannelProvider>([
+    "cursor",
+    "grok",
+    "codex",
+    "claude",
+    "chatgpt",
+  ]);
   const seats = raw
     .map((s) => String(s) as ChannelProvider)
     .filter((s) => allowed.has(s))
@@ -103,7 +119,9 @@ export function parliamentSeatsFromConfig(config: Record<string, unknown> | null
   return seats.length ? seats : ["cursor", "grok", "codex"];
 }
 
-export function parliamentRounds(config: Record<string, unknown> | null | undefined): number {
+export function parliamentRounds(
+  config: Record<string, unknown> | null | undefined,
+): number {
   const n = Number(config?.rounds ?? 1);
   if (!Number.isFinite(n)) return 1;
   return Math.min(2, Math.max(1, Math.floor(n)));
@@ -135,7 +153,10 @@ export function recordParliamentAnswer(
 ): ParliamentState {
   const next: ParliamentState = {
     ...state,
-    seats: { ...state.seats, [provider]: { ...(state.seats[provider] || { provider }) } },
+    seats: {
+      ...state.seats,
+      [provider]: { ...(state.seats[provider] || { provider }) },
+    },
   };
   const seat = next.seats[provider];
   if (round <= 1) seat.round1 = content;
@@ -152,7 +173,11 @@ export function markParliamentFailed(
     ...state,
     seats: {
       ...state.seats,
-      [provider]: { ...(state.seats[provider] || { provider }), failed: true, error },
+      [provider]: {
+        ...(state.seats[provider] || { provider }),
+        failed: true,
+        error,
+      },
     },
   };
 }
@@ -173,19 +198,26 @@ export function canSynthesize(state: ParliamentState): boolean {
   const living = livingSeats(state);
   if (!living.length) return false;
   if (state.max_rounds <= 1) return living.every((s) => !!s.round1 || s.failed);
-  return living.every((s) => (!!s.round2 || !!s.round1 || s.failed));
+  return living.every((s) => !!s.round2 || !!s.round1 || s.failed);
 }
 
-export function otherSeatAnswers(state: ParliamentState, provider: ChannelProvider): string {
+export function otherSeatAnswers(
+  state: ParliamentState,
+  provider: ChannelProvider,
+): string {
   return Object.values(state.seats)
     .filter((s) => s.provider !== provider && s.round1)
     .map((s) => `### ${s.provider}\n${s.round1}`)
     .join("\n\n");
 }
 
-export function buildReviewPrompt(state: ParliamentState, provider: ChannelProvider): string {
+export function buildReviewPrompt(
+  state: ParliamentState,
+  provider: ChannelProvider,
+): string {
   const own = state.seats[provider]?.round1 || "";
-  const others = otherSeatAnswers(state, provider) || "(no other answers arrived)";
+  const others =
+    otherSeatAnswers(state, provider) || "(no other answers arrived)";
   return (
     `PARLIAMENT ROUND 2 of ${state.max_rounds} — critique.\n` +
     `Topic:\n${state.topic}\n\n` +
@@ -226,17 +258,25 @@ export function acceptedMessageFor(
           ? `נשלח לצ'אט Cursor שכבר פתוח. מעקב: ${url}`
           : "נשלח לצ'אט Cursor שכבר פתוח. מחכה לתשובה בשיחה הזו.";
       }
-      return url ? `נשלח ל-Cursor Direct. מעקב: ${url}` : "נשלח ל-Cursor Direct. מחכה לתשובה בשיחה הזו.";
+      return url
+        ? `נשלח ל-Cursor Direct. מעקב: ${url}`
+        : "נשלח ל-Cursor Direct. מחכה לתשובה בשיחה הזו.";
     case "grok":
-      return url ? `נשלח ל-Grok Bot Direct. מעקב: ${url}` : "נשלח ל-Grok Bot Direct. מחכה לתשובה בשיחה הזו.";
+      return url
+        ? `נשלח ל-Grok Bot Direct. מעקב: ${url}`
+        : "נשלח ל-Grok Bot Direct. מחכה לתשובה בשיחה הזו.";
     case "codex":
       return url
         ? `נשלח ל-Codex (ChatGPT Workspace). מעקב: ${url}`
         : "נשלח ל-Codex Direct (ChatGPT Workspace). מחכה לתשובה בשיחה הזו.";
     case "claude":
-      return url ? `נשלח ל-Claude Direct. מעקב: ${url}` : "נשלח ל-Claude Direct. מחכה לתשובה בשיחה הזו.";
+      return url
+        ? `נשלח ל-Claude Direct. מעקב: ${url}`
+        : "נשלח ל-Claude Direct. מחכה לתשובה בשיחה הזו.";
     case "chatgpt":
-      return url ? `נשלח ל-ChatGPT Work Agent. מעקב: ${url}` : "נשלח ל-ChatGPT Work Agent. מחכה לתשובה בשיחה הזו.";
+      return url
+        ? `נשלח ל-ChatGPT Work Agent. מעקב: ${url}`
+        : "נשלח ל-ChatGPT Work Agent. מחכה לתשובה בשיחה הזו.";
     case "parliament":
       return "שואלים את הצוות ⚡ מחכים לתשובות…";
   }
@@ -248,7 +288,13 @@ export function speakerForOrigin(origin: ChannelProvider): string {
 }
 
 const CALLBACK_ORIGINS = new Set<ChannelProvider>([
-  "cursor", "grok", "codex", "claude", "chatgpt", "internal", "parliament",
+  "cursor",
+  "grok",
+  "codex",
+  "claude",
+  "chatgpt",
+  "internal",
+  "parliament",
 ]);
 
 /** Workspace agents often reply with origin chatgpt; the session provider is authoritative. */
@@ -256,11 +302,21 @@ export function resolveCallbackOrigin(
   stated: string | null | undefined,
   sessionProvider: string | null | undefined,
 ): ChannelProvider {
-  const session = sessionProvider && CALLBACK_ORIGINS.has(sessionProvider as ChannelProvider)
-    ? sessionProvider as ChannelProvider
-    : null;
-  const raw = stated && CALLBACK_ORIGINS.has(stated as ChannelProvider) ? stated as ChannelProvider : null;
-  if (session && raw && raw !== session && (raw === "chatgpt" || raw === "codex") && (session === "chatgpt" || session === "codex")) {
+  const session =
+    sessionProvider && CALLBACK_ORIGINS.has(sessionProvider as ChannelProvider)
+      ? (sessionProvider as ChannelProvider)
+      : null;
+  const raw =
+    stated && CALLBACK_ORIGINS.has(stated as ChannelProvider)
+      ? (stated as ChannelProvider)
+      : null;
+  if (
+    session &&
+    raw &&
+    raw !== session &&
+    (raw === "chatgpt" || raw === "codex") &&
+    (session === "chatgpt" || session === "codex")
+  ) {
     return session;
   }
   return raw || session || "internal";

@@ -23,10 +23,26 @@ const AVAILABLE_VARIABLES = [
   { key: "new_status", label: "סטטוס חדש", example: "בטיפול" },
   { key: "task_status", label: "סטטוס משימה", example: "פתוח" },
   { key: "agency_name", label: "שם סוכנות", example: "סוכנות מרקטינג" },
-  { key: "tasks_link", label: "קישור למשימות", example: "https://app.example.com/tasks" },
-  { key: "leads_link", label: "קישור ללידים", example: "https://app.example.com/leads" },
-  { key: "clients_link", label: "קישור ללקוחות", example: "https://app.example.com/clients" },
-  { key: "group_invite_link", label: "קישור לקבוצה", example: "https://chat.whatsapp.com/ABC123" },
+  {
+    key: "tasks_link",
+    label: "קישור למשימות",
+    example: "https://app.example.com/tasks",
+  },
+  {
+    key: "leads_link",
+    label: "קישור ללידים",
+    example: "https://app.example.com/leads",
+  },
+  {
+    key: "clients_link",
+    label: "קישור ללקוחות",
+    example: "https://app.example.com/clients",
+  },
+  {
+    key: "group_invite_link",
+    label: "קישור לקבוצה",
+    example: "https://chat.whatsapp.com/ABC123",
+  },
   { key: "group_name", label: "שם קבוצה", example: "קבוצת מכירות" },
 ];
 
@@ -37,11 +53,11 @@ interface MessageTemplateBuilderProps {
   placeholder?: string;
 }
 
-export function MessageTemplateBuilder({ 
-  value, 
-  onChange, 
+export function MessageTemplateBuilder({
+  value,
+  onChange,
   label = "תבנית הודעה",
-  placeholder = "שלום {{contact_name}}, תודה על פנייתך!" 
+  placeholder = "שלום {{contact_name}}, תודה על פנייתך!",
 }: MessageTemplateBuilderProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showPreview, setShowPreview] = useState(true);
@@ -55,7 +71,7 @@ export function MessageTemplateBuilder({
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const variableText = `{{${variableKey}}}`;
-    
+
     const newValue = value.slice(0, start) + variableText + value.slice(end);
     onChange(newValue);
 
@@ -120,7 +136,9 @@ export function MessageTemplateBuilder({
       <CardContent className="space-y-4">
         {/* Variable Buttons */}
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">לחץ להוספת משתנה במיקום הסמן:</p>
+          <p className="text-xs text-muted-foreground">
+            לחץ להוספת משתנה במיקום הסמן:
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {AVAILABLE_VARIABLES.map((variable) => (
               <Badge
@@ -150,7 +168,10 @@ export function MessageTemplateBuilder({
         {showPreview && value && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">תצוגה מקדימה:</p>
-            <div className="bg-muted/50 rounded-lg p-3 text-sm whitespace-pre-wrap border border-border/50" dir="auto">
+            <div
+              className="bg-muted/50 rounded-lg p-3 text-sm whitespace-pre-wrap border border-border/50"
+              dir="auto"
+            >
               {getPreviewText()}
             </div>
           </div>

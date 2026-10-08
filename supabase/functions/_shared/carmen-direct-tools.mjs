@@ -68,11 +68,15 @@ export function classifyDirectTool(name) {
 }
 
 /** Tools from Carmen's catalogue that a direct caller may see. */
-export function directToolPool(allTools, { allowedTools = [], disabledTools = [], isManager = false } = {}) {
-  return allTools.filter((t) =>
-    (allowedTools.length === 0 || allowedTools.includes(t.name)) &&
-    !disabledTools.includes(t.name) &&
-    (isManager || t.name !== "query_system_graph") &&
-    classifyDirectTool(t.name) !== "blocked"
+export function directToolPool(
+  allTools,
+  { allowedTools = [], disabledTools = [], isManager = false } = {},
+) {
+  return allTools.filter(
+    (t) =>
+      (allowedTools.length === 0 || allowedTools.includes(t.name)) &&
+      !disabledTools.includes(t.name) &&
+      (isManager || t.name !== "query_system_graph") &&
+      classifyDirectTool(t.name) !== "blocked",
   );
 }

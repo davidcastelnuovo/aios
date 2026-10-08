@@ -1,5 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
@@ -7,7 +13,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { toast } from "sonner";
-import { Users, Plus, Trash2, UserPlus, Calendar, Eye, Edit, CalendarCheck } from "lucide-react";
+import {
+  Users,
+  Plus,
+  Trash2,
+  UserPlus,
+  Calendar,
+  Eye,
+  Edit,
+  CalendarCheck,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -63,28 +78,31 @@ export function CalendarSharingSettings() {
 
       const { data, error } = await supabase
         .from("calendar_shares")
-        .select(`
+        .select(
+          `
           id,
           owner_user_id,
           shared_with_user_id,
           permission_level,
           created_at
-        `)
+        `,
+        )
         .eq("owner_user_id", userId);
 
       if (error) throw error;
 
       // Fetch profiles for shared users
-      const sharedUserIds = data.map(s => s.shared_with_user_id);
+      const sharedUserIds = data.map((s) => s.shared_with_user_id);
       if (sharedUserIds.length > 0) {
         const { data: profiles } = await supabase
           .from("profiles")
           .select("id, email, full_name")
           .in("id", sharedUserIds);
 
-        return data.map(share => ({
+        return data.map((share) => ({
           ...share,
-          shared_with_profile: profiles?.find(p => p.id === share.shared_with_user_id) || null
+          shared_with_profile:
+            profiles?.find((p) => p.id === share.shared_with_user_id) || null,
         }));
       }
 
@@ -101,28 +119,31 @@ export function CalendarSharingSettings() {
 
       const { data, error } = await supabase
         .from("calendar_shares")
-        .select(`
+        .select(
+          `
           id,
           owner_user_id,
           shared_with_user_id,
           permission_level,
           created_at
-        `)
+        `,
+        )
         .eq("shared_with_user_id", userId);
 
       if (error) throw error;
 
       // Fetch profiles for owner users
-      const ownerUserIds = data.map(s => s.owner_user_id);
+      const ownerUserIds = data.map((s) => s.owner_user_id);
       if (ownerUserIds.length > 0) {
         const { data: profiles } = await supabase
           .from("profiles")
           .select("id, email, full_name")
           .in("id", ownerUserIds);
 
-        return data.map(share => ({
+        return data.map((share) => ({
           ...share,
-          owner_profile: profiles?.find(p => p.id === share.owner_user_id) || null
+          owner_profile:
+            profiles?.find((p) => p.id === share.owner_user_id) || null,
         }));
       }
 
@@ -144,8 +165,8 @@ export function CalendarSharingSettings() {
         .eq("tenant_id", tenantId);
 
       if (tuError) throw tuError;
-      
-      const userIds = tuData?.map(tu => tu.user_id) || [];
+
+      const userIds = tuData?.map((tu) => tu.user_id) || [];
       if (userIds.length === 0) return [];
 
       // Then fetch profiles for those users
@@ -156,24 +177,32 @@ export function CalendarSharingSettings() {
 
       if (profilesError) throw profilesError;
 
-      return (profiles || []).map(p => ({
+      return (profiles || []).map((p) => ({
         user_id: p.id,
-        profiles: p
+        profiles: p,
       })) as TenantUser[];
     },
     enabled: !!tenantId,
   });
 
   // Filter out current user and already shared users
-  const availableUsers = tenantUsers?.filter(tu => {
-    if (tu.user_id === userId) return false;
-    if (myShares?.some(s => s.shared_with_user_id === tu.user_id)) return false;
-    return true;
-  }) || [];
+  const availableUsers =
+    tenantUsers?.filter((tu) => {
+      if (tu.user_id === userId) return false;
+      if (myShares?.some((s) => s.shared_with_user_id === tu.user_id))
+        return false;
+      return true;
+    }) || [];
 
   // Add share mutation
   const addShareMutation = useMutation({
-    mutationFn: async ({ sharedWithUserId, permission }: { sharedWithUserId: string; permission: string }) => {
+    mutationFn: async ({
+      sharedWithUserId,
+      permission,
+    }: {
+      sharedWithUserId: string;
+      permission: string;
+    }) => {
       const { data, error } = await supabase
         .from("calendar_shares")
         .insert({
@@ -189,7 +218,9 @@ export function CalendarSharingSettings() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-shares-owner", userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-shares-owner", userId],
+      });
       toast.success("היומן שותף בהצלחה");
       setShowAddDialog(false);
       setSelectedUserId("");
@@ -212,7 +243,9 @@ export function CalendarSharingSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-shares-owner", userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-shares-owner", userId],
+      });
       toast.success("השיתוף הוסר בהצלחה");
     },
     onError: (error: Error) => {
@@ -223,7 +256,13 @@ export function CalendarSharingSettings() {
 
   // Update share permission mutation
   const updateShareMutation = useMutation({
-    mutationFn: async ({ shareId, permission }: { shareId: string; permission: string }) => {
+    mutationFn: async ({
+      shareId,
+      permission,
+    }: {
+      shareId: string;
+      permission: string;
+    }) => {
       const { error } = await supabase
         .from("calendar_shares")
         .update({ permission_level: permission })
@@ -232,7 +271,9 @@ export function CalendarSharingSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-shares-owner", userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-shares-owner", userId],
+      });
       toast.success("ההרשאות עודכנו בהצלחה");
     },
     onError: (error: Error) => {
@@ -285,7 +326,10 @@ export function CalendarSharingSettings() {
       toast.error("יש לבחור משתמש");
       return;
     }
-    addShareMutation.mutate({ sharedWithUserId: selectedUserId, permission: permissionLevel });
+    addShareMutation.mutate({
+      sharedWithUserId: selectedUserId,
+      permission: permissionLevel,
+    });
   };
 
   if (sharesLoading) {
@@ -337,7 +381,10 @@ export function CalendarSharingSettings() {
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <Label>בחר משתמש</Label>
-                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                    <Select
+                      value={selectedUserId}
+                      onValueChange={setSelectedUserId}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="בחר משתמש..." />
                       </SelectTrigger>
@@ -348,9 +395,11 @@ export function CalendarSharingSettings() {
                               אין משתמשים זמינים לשיתוף
                             </div>
                           ) : (
-                            availableUsers.map(tu => (
+                            availableUsers.map((tu) => (
                               <SelectItem key={tu.user_id} value={tu.user_id}>
-                                {tu.profiles?.full_name || tu.profiles?.email || tu.user_id}
+                                {tu.profiles?.full_name ||
+                                  tu.profiles?.email ||
+                                  tu.user_id}
                               </SelectItem>
                             ))
                           )}
@@ -361,7 +410,10 @@ export function CalendarSharingSettings() {
 
                   <div className="space-y-2">
                     <Label>רמת הרשאות</Label>
-                    <Select value={permissionLevel} onValueChange={setPermissionLevel}>
+                    <Select
+                      value={permissionLevel}
+                      onValueChange={setPermissionLevel}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -388,8 +440,8 @@ export function CalendarSharingSettings() {
                     </Select>
                   </div>
 
-                  <Button 
-                    onClick={handleAddShare} 
+                  <Button
+                    onClick={handleAddShare}
                     disabled={!selectedUserId || addShareMutation.isPending}
                     className="w-full"
                   >
@@ -404,8 +456,8 @@ export function CalendarSharingSettings() {
           {myShares && myShares.length > 0 ? (
             <div className="space-y-2">
               {myShares.map((share: CalendarShare) => (
-                <div 
-                  key={share.id} 
+                <div
+                  key={share.id}
                   className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
                 >
                   <div className="flex items-center gap-3">
@@ -414,17 +466,27 @@ export function CalendarSharingSettings() {
                     </div>
                     <div>
                       <p className="font-medium text-sm">
-                        {share.shared_with_profile?.full_name || share.shared_with_profile?.email || "משתמש לא ידוע"}
+                        {share.shared_with_profile?.full_name ||
+                          share.shared_with_profile?.email ||
+                          "משתמש לא ידוע"}
                       </p>
-                      {share.shared_with_profile?.email && share.shared_with_profile.full_name && (
-                        <p className="text-xs text-muted-foreground">{share.shared_with_profile.email}</p>
-                      )}
+                      {share.shared_with_profile?.email &&
+                        share.shared_with_profile.full_name && (
+                          <p className="text-xs text-muted-foreground">
+                            {share.shared_with_profile.email}
+                          </p>
+                        )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Select
                       value={share.permission_level}
-                      onValueChange={(value) => updateShareMutation.mutate({ shareId: share.id, permission: value })}
+                      onValueChange={(value) =>
+                        updateShareMutation.mutate({
+                          shareId: share.id,
+                          permission: value,
+                        })
+                      }
                     >
                       <SelectTrigger className="w-40 h-8">
                         <SelectValue />
@@ -461,8 +523,8 @@ export function CalendarSharingSettings() {
             <h3 className="font-semibold text-sm">יומנים ששותפו איתי</h3>
             <div className="space-y-2">
               {sharedWithMe.map((share: any) => (
-                <div 
-                  key={share.id} 
+                <div
+                  key={share.id}
                   className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
                 >
                   <div className="flex items-center gap-3">
@@ -471,16 +533,23 @@ export function CalendarSharingSettings() {
                     </div>
                     <div>
                       <p className="font-medium text-sm">
-                        {share.owner_profile?.full_name || share.owner_profile?.email || "משתמש לא ידוע"}
+                        {share.owner_profile?.full_name ||
+                          share.owner_profile?.email ||
+                          "משתמש לא ידוע"}
                       </p>
-                      {share.owner_profile?.email && share.owner_profile.full_name && (
-                        <p className="text-xs text-muted-foreground">{share.owner_profile.email}</p>
-                      )}
+                      {share.owner_profile?.email &&
+                        share.owner_profile.full_name && (
+                          <p className="text-xs text-muted-foreground">
+                            {share.owner_profile.email}
+                          </p>
+                        )}
                     </div>
                   </div>
                   <Badge className={getPermissionColor(share.permission_level)}>
                     {getPermissionIcon(share.permission_level)}
-                    <span className="mr-1">{getPermissionLabel(share.permission_level)}</span>
+                    <span className="mr-1">
+                      {getPermissionLabel(share.permission_level)}
+                    </span>
                   </Badge>
                 </div>
               ))}

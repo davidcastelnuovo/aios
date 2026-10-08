@@ -25,7 +25,12 @@ const SOURCE_SPEC = {
 
 test("extractLeadFormId reads CTA lead form", () => {
   assert.equal(extractLeadFormId(SOURCE_SPEC), "999888");
-  assert.equal(extractLeadFormId({ video_data: { call_to_action: { value: { lead_gen_form_id: "1" } } } }), "1");
+  assert.equal(
+    extractLeadFormId({
+      video_data: { call_to_action: { value: { lead_gen_form_id: "1" } } },
+    }),
+    "1",
+  );
   assert.equal(extractLeadFormId({}), null);
 });
 
@@ -45,7 +50,11 @@ test("applyVariantToObjectStorySpec changes copy but keeps media + lead form", (
 
 test("applyVariantToAssetFeedSpec updates first body/title", () => {
   const feed = applyVariantToAssetFeedSpec(
-    { bodies: [{ text: "a" }], titles: [{ text: "t" }], images: [{ hash: "h" }] },
+    {
+      bodies: [{ text: "a" }],
+      titles: [{ text: "t" }],
+      images: [{ hash: "h" }],
+    },
     { primary_text: "body2", headline: "title2" },
   );
   assert.equal(feed.bodies[0].text, "body2");
@@ -64,16 +73,27 @@ test("normalizeAdCopyVariants validates count and primary_text", () => {
   });
   assert.equal(v.length, 2);
   assert.equal(v[1].primary_text, "two");
-  assert.throws(() => normalizeAdCopyVariants({ variants: [] }), /variants_required/);
   assert.throws(
-    () => normalizeAdCopyVariants({ count: 3, variants: [{ primary_text: "a" }] }),
+    () => normalizeAdCopyVariants({ variants: [] }),
+    /variants_required/,
+  );
+  assert.throws(
+    () =>
+      normalizeAdCopyVariants({ count: 3, variants: [{ primary_text: "a" }] }),
     /variants_count_mismatch/,
   );
 });
 
 test("summarizeSourceAd exposes adset/page/lead form for Carmen", () => {
   const summary = summarizeSourceAd(
-    { id: "ad1", name: "win", adset_id: "as1", campaign_id: "c1", account_id: "act_55", status: "PAUSED" },
+    {
+      id: "ad1",
+      name: "win",
+      adset_id: "as1",
+      campaign_id: "c1",
+      account_id: "act_55",
+      status: "PAUSED",
+    },
     { id: "cr1", object_story_spec: SOURCE_SPEC },
   );
   assert.equal(summary.adset_id, "as1");

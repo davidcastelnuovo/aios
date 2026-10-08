@@ -1,10 +1,16 @@
 // Carmen Self-Learning — analyzes a closed WhatsApp session and extracts insights
 // into carmen_memory_pointers + carmen_memory_episodes.
-import { svc, embed, upsertPointer, shortText } from "../_shared/carmen-memory.ts";
+import {
+  svc,
+  embed,
+  upsertPointer,
+  shortText,
+} from "../_shared/carmen-memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -22,9 +28,24 @@ type Insight = {
 };
 
 function normalizeTaskType(raw?: string | null): string {
-  const t = String(raw || "other").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
-  const allowed = new Set(["bugfix", "feature", "qa", "ops", "access", "campaign", "creative", "memory", "council", "other"]);
-  return allowed.has(t) ? t : (t || "other");
+  const t = String(raw || "other")
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+  const allowed = new Set([
+    "bugfix",
+    "feature",
+    "qa",
+    "ops",
+    "access",
+    "campaign",
+    "creative",
+    "memory",
+    "council",
+    "other",
+  ]);
+  return allowed.has(t) ? t : t || "other";
 }
 
 const SYSTEM_PROMPT = `אתה מנתח שיחות WhatsApp בין משתמש (איש צוות בסוכנות שיווק) לבין כרמן (סוכן AI).
@@ -117,14 +138,17 @@ async function analyze(history: any[]): Promise<Insight | null> {
   if (!OPENAI_API_KEY) return null;
   const trimmed = history.slice(-40);
   const transcript = trimmed
-    .map((m: any) => `[${m.role || m.direction || "?"}] ${shortText(m.content || m.message || m.text, 500)}`)
+    .map(
+      (m: any) =>
+        `[${m.role || m.direction || "?"}] ${shortText(m.content || m.message || m.text, 500)}`,
+    )
     .join("\n");
 
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${OPENAI_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
       model: MODEL,
@@ -161,15 +185,19 @@ async function analyze(history: any[]): Promise<Insight | null> {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   try {
     const { session_id, ai_conversation_id, force } = await req.json();
     if (!session_id && !ai_conversation_id) {
-      return new Response(JSON.stringify({ error: "session_id or ai_conversation_id required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "session_id or ai_conversation_id required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const supabase = svc();
@@ -200,10 +228,13 @@ Deno.serve(async (req) => {
         .eq("id", ai_conversation_id)
         .maybeSingle();
       if (cErr || !data) {
-        return new Response(JSON.stringify({ error: "conversation not found" }), {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "conversation not found" }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
       sourceTable = "ai_conversations";
       topicPrefix = "Command Center";
@@ -228,16 +259,24 @@ Deno.serve(async (req) => {
       .eq("session_ref", session.id)
       .maybeSingle();
     if (existing && !force) {
-      return new Response(JSON.stringify({ skipped: true, reason: "already_learned" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ skipped: true, reason: "already_learned" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const history = Array.isArray(session.conversation_history) ? session.conversation_history : [];
+    const history = Array.isArray(session.conversation_history)
+      ? session.conversation_history
+      : [];
     if (history.length < 2) {
-      return new Response(JSON.stringify({ skipped: true, reason: "too_short" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ skipped: true, reason: "too_short" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const insight = await analyze(history);
@@ -249,14 +288,21 @@ Deno.serve(async (req) => {
     }
 
     const tenant_id = session.tenant_id;
-    const ref_date = session.last_message_at || session.ended_at || session.created_at;
+    const ref_date =
+      session.last_message_at || session.ended_at || session.created_at;
 
     // 1. Episode
     const summaryFull = [
       insight.session_summary,
-      insight.what_worked.length ? `✓ ${insight.what_worked.map((w) => w.observation).join(" | ")}` : "",
-      insight.what_failed.length ? `✗ ${insight.what_failed.map((w) => w.observation).join(" | ")}` : "",
-    ].filter(Boolean).join("\n");
+      insight.what_worked.length
+        ? `✓ ${insight.what_worked.map((w) => w.observation).join(" | ")}`
+        : "",
+      insight.what_failed.length
+        ? `✗ ${insight.what_failed.map((w) => w.observation).join(" | ")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const emb = await embed(summaryFull);
     const tags: string[] = [];
@@ -266,7 +312,10 @@ Deno.serve(async (req) => {
     if (insight.style_preferences.length) tags.push("style");
 
     if (existing && force) {
-      await supabase.from("carmen_memory_episodes").delete().eq("id", existing.id);
+      await supabase
+        .from("carmen_memory_episodes")
+        .delete()
+        .eq("id", existing.id);
     }
 
     await supabase.from("carmen_memory_episodes").insert({
@@ -278,14 +327,22 @@ Deno.serve(async (req) => {
       summary_embedding: emb as any,
       source_table: sourceTable,
       source_ids: [session.id],
-      participants: { phone: session.phone, sender_name: session.sender_name, chat_id: session.chat_id },
+      participants: {
+        phone: session.phone,
+        sender_name: session.sender_name,
+        chat_id: session.chat_id,
+      },
       importance: Math.min(5, Math.max(1, Math.round(insight.quality_score))),
       retention_score: 1.0,
       ref_date,
     });
 
     // 2. Pointers — facts
-    let facts = 0, instructions = 0, style = 0, worked = 0, failed = 0;
+    let facts = 0,
+      instructions = 0,
+      style = 0,
+      worked = 0,
+      failed = 0;
     const taskType = normalizeTaskType(insight.task_type);
 
     for (const f of insight.facts) {
@@ -300,7 +357,11 @@ Deno.serve(async (req) => {
         summary: f.fact,
         ref_date,
         importance: 60,
-        metadata: { source: "carmen_learn", session_id: session.id, task_type: taskType },
+        metadata: {
+          source: "carmen_learn",
+          session_id: session.id,
+          task_type: taskType,
+        },
       });
       facts++;
     }
@@ -317,7 +378,12 @@ Deno.serve(async (req) => {
         summary: i.instruction,
         ref_date,
         importance: 90,
-        metadata: { source: "carmen_learn", session_id: session.id, sender: session.sender_name, task_type: taskType },
+        metadata: {
+          source: "carmen_learn",
+          session_id: session.id,
+          sender: session.sender_name,
+          task_type: taskType,
+        },
       });
       instructions++;
     }
@@ -350,7 +416,12 @@ Deno.serve(async (req) => {
         summary: [w.observation, w.example].filter(Boolean).join(" — "),
         ref_date,
         importance: 60,
-        metadata: { source: "carmen_learn", session_id: session.id, kind: "positive", task_type: taskType },
+        metadata: {
+          source: "carmen_learn",
+          session_id: session.id,
+          kind: "positive",
+          task_type: taskType,
+        },
       });
       worked++;
     }
@@ -364,21 +435,34 @@ Deno.serve(async (req) => {
         entity_type: "lesson",
         entity_id: `${session.id}-f${failed}`,
         title: shortText(f.observation, 80),
-        summary: [f.observation, f.reason && `סיבה: ${f.reason}`, f.example && `דוגמה: ${f.example}`]
-          .filter(Boolean).join(" — "),
+        summary: [
+          f.observation,
+          f.reason && `סיבה: ${f.reason}`,
+          f.example && `דוגמה: ${f.example}`,
+        ]
+          .filter(Boolean)
+          .join(" — "),
         ref_date,
         importance: 80,
-        metadata: { source: "carmen_learn", session_id: session.id, kind: "negative", task_type: taskType },
+        metadata: {
+          source: "carmen_learn",
+          session_id: session.id,
+          kind: "negative",
+          task_type: taskType,
+        },
       });
       failed++;
     }
 
-    return new Response(JSON.stringify({
-      ok: true,
-      session_id: session.id,
-      quality_score: insight.quality_score,
-      counts: { facts, instructions, style, worked, failed },
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        session_id: session.id,
+        quality_score: insight.quality_score,
+        counts: { facts, instructions, style, worked, failed },
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (e) {
     console.error("[carmen-learn-from-session]", e);
     return new Response(JSON.stringify({ error: String(e) }), {

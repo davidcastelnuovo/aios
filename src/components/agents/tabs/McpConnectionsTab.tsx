@@ -6,8 +6,22 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plug, Trash2, Plus, CheckCircle2, XCircle, Wrench, RefreshCw } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Plug,
+  Trash2,
+  Plus,
+  CheckCircle2,
+  XCircle,
+  Wrench,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { mcpPresetFunctionUrl } from "@/lib/mcpPresetUrl";
@@ -37,7 +51,13 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
   const connect = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke("mcp-connect", {
-        body: { tenant_id: tenantId, agent_id: agent.id, name, url, bearer_token: bearer || undefined },
+        body: {
+          tenant_id: tenantId,
+          agent_id: agent.id,
+          name,
+          url,
+          bearer_token: bearer || undefined,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -45,8 +65,13 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
     },
     onSuccess: (d) => {
       toast.success(`חובר! ${d?.tools?.length ?? 0} כלים זמינים`);
-      qc.invalidateQueries({ queryKey: ["mcp-connections", agent.id, tenantId] });
-      setOpen(false); setName(""); setUrl(""); setBearer("");
+      qc.invalidateQueries({
+        queryKey: ["mcp-connections", agent.id, tenantId],
+      });
+      setOpen(false);
+      setName("");
+      setUrl("");
+      setBearer("");
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -66,18 +91,28 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
       return data;
     },
     onSuccess: (d) => {
-      toast.success(`סונכרן מחדש — ${d?.state ?? "ready"}, ${(d?.tools ?? []).length} כלים`);
-      qc.invalidateQueries({ queryKey: ["mcp-connections", agent.id, tenantId] });
+      toast.success(
+        `סונכרן מחדש — ${d?.state ?? "ready"}, ${(d?.tools ?? []).length} כלים`,
+      );
+      qc.invalidateQueries({
+        queryKey: ["mcp-connections", agent.id, tenantId],
+      });
     },
     onError: (e: any) => toast.error(e.message),
   });
 
   const disconnect = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("agent_mcp_connections").delete().eq("id", id);
+      const { error } = await supabase
+        .from("agent_mcp_connections")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["mcp-connections", agent.id, tenantId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({
+        queryKey: ["mcp-connections", agent.id, tenantId],
+      }),
   });
 
   return (
@@ -89,10 +124,15 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm"><Plus className="h-4 w-4 me-1" />חיבור חדש</Button>
+            <Button size="sm">
+              <Plus className="h-4 w-4 me-1" />
+              חיבור חדש
+            </Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>חיבור MCP Server</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>חיבור MCP Server</DialogTitle>
+            </DialogHeader>
             <div className="space-y-3">
               <Button
                 type="button"
@@ -104,7 +144,8 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
                   setUrl(mcpPresetFunctionUrl("cursor-mcp"));
                 }}
               >
-                🖱️ הוסף את Cursor (כרמן תוכל להפנות אליך משימות מורכבות ותיקונים)
+                🖱️ הוסף את Cursor (כרמן תוכל להפנות אליך משימות מורכבות
+                ותיקונים)
               </Button>
               <Button
                 type="button"
@@ -140,28 +181,50 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
                   setUrl(mcpPresetFunctionUrl("grok-mcp"));
                 }}
               >
-                🪐 הוסף את Grok Bot (כרמן תוכל להפנות אליו משימות מורכבות ותיקונים)
+                🪐 הוסף את Grok Bot (כרמן תוכל להפנות אליו משימות מורכבות
+                ותיקונים)
               </Button>
               <p className="text-xs text-muted-foreground">
-                ממלא שם + URL אוטומטית. הזן את ה-Bearer המתאים (CURSOR_MCP_BEARER / CLAUDE_MCP_BEARER / MANUS_MCP_BEARER / GROK_MCP_BEARER) ולחץ התחבר.
+                ממלא שם + URL אוטומטית. הזן את ה-Bearer המתאים
+                (CURSOR_MCP_BEARER / CLAUDE_MCP_BEARER / MANUS_MCP_BEARER /
+                GROK_MCP_BEARER) ולחץ התחבר.
               </p>
               <div>
                 <Label>שם</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="לדוגמה: Notion" />
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="לדוגמה: Notion"
+                />
               </div>
               <div>
                 <Label>URL</Label>
-                <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mcp.example.com/" dir="ltr" />
+                <Input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://mcp.example.com/"
+                  dir="ltr"
+                />
               </div>
               <div>
                 <Label>Bearer Token (אופציונלי)</Label>
-                <Input type="password" value={bearer} onChange={(e) => setBearer(e.target.value)} dir="ltr" />
+                <Input
+                  type="password"
+                  value={bearer}
+                  onChange={(e) => setBearer(e.target.value)}
+                  dir="ltr"
+                />
               </div>
-              <Button onClick={() => connect.mutate()} disabled={!name || !url || connect.isPending} className="w-full">
+              <Button
+                onClick={() => connect.mutate()}
+                disabled={!name || !url || connect.isPending}
+                className="w-full"
+              >
                 {connect.isPending ? "מתחבר…" : "התחבר"}
               </Button>
               <p className="text-xs text-muted-foreground">
-                תמיכת OAuth מלאה בקרוב. כרגע: HTTP MCP servers עם או בלי Bearer token.
+                תמיכת OAuth מלאה בקרוב. כרגע: HTTP MCP servers עם או בלי Bearer
+                token.
               </p>
             </div>
           </DialogContent>
@@ -172,14 +235,32 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
         {(conns ?? []).map((c: any) => (
           <Card key={c.id} className="p-3">
             <div className="flex items-center gap-3">
-              {c.state === "ready" ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-destructive" />}
+              {c.state === "ready" ? (
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+              ) : (
+                <XCircle className="h-5 w-5 text-destructive" />
+              )}
               <div className="flex-1 min-w-0">
                 <div className="font-medium">{c.name}</div>
-                <div className="text-xs text-muted-foreground truncate" dir="ltr">{c.url}</div>
-                {c.last_error && <div className="text-xs text-destructive truncate">{c.last_error}</div>}
+                <div
+                  className="text-xs text-muted-foreground truncate"
+                  dir="ltr"
+                >
+                  {c.url}
+                </div>
+                {c.last_error && (
+                  <div className="text-xs text-destructive truncate">
+                    {c.last_error}
+                  </div>
+                )}
               </div>
-              <Badge variant={c.state === "ready" ? "default" : "destructive"}>{c.state}</Badge>
-              <Badge variant="outline"><Wrench className="h-3 w-3 me-1" />{(c.available_tools ?? []).length}</Badge>
+              <Badge variant={c.state === "ready" ? "default" : "destructive"}>
+                {c.state}
+              </Badge>
+              <Badge variant="outline">
+                <Wrench className="h-3 w-3 me-1" />
+                {(c.available_tools ?? []).length}
+              </Badge>
               {c.url?.includes(".supabase.co/functions/v1/") && (
                 <Button
                   variant="ghost"
@@ -188,23 +269,35 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
                   disabled={resync.isPending}
                   onClick={() => resync.mutate({ id: c.id, name: c.name })}
                 >
-                  <RefreshCw className={`h-4 w-4${resync.isPending ? " animate-spin" : ""}`} />
+                  <RefreshCw
+                    className={`h-4 w-4${resync.isPending ? " animate-spin" : ""}`}
+                  />
                 </Button>
               )}
-              <Button variant="ghost" size="icon" onClick={() => disconnect.mutate(c.id)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => disconnect.mutate(c.id)}
+              >
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
             </div>
             {c.state === "ready" && (c.available_tools ?? []).length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1 ps-8">
                 {(c.available_tools as any[]).slice(0, 12).map((t: any) => (
-                  <Badge key={t.name} variant="secondary" className="text-xs">{t.name}</Badge>
+                  <Badge key={t.name} variant="secondary" className="text-xs">
+                    {t.name}
+                  </Badge>
                 ))}
               </div>
             )}
           </Card>
         ))}
-        {!conns?.length && <p className="text-sm text-muted-foreground text-center py-6">אין חיבורי MCP. הוסף אחד למעלה.</p>}
+        {!conns?.length && (
+          <p className="text-sm text-muted-foreground text-center py-6">
+            אין חיבורי MCP. הוסף אחד למעלה.
+          </p>
+        )}
       </div>
     </div>
   );

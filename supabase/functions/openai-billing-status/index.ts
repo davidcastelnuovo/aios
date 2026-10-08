@@ -2,7 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import { requireAuth } from "../_shared/security.ts";
 import { fetchOpenAiBillingStatus } from "../_shared/openai-billing-fetch.ts";
-import { isSuperAdminRole, OPENAI_BILLING_REFUSAL_HE } from "../_shared/openai-billing.ts";
+import {
+  isSuperAdminRole,
+  OPENAI_BILLING_REFUSAL_HE,
+} from "../_shared/openai-billing.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -69,7 +72,10 @@ serve(async (req) => {
     return json(status);
   } catch (e: any) {
     console.error("[openai-billing-status]", e?.message ?? e);
-    return json({ ok: false, error: "billing fetch failed", admin_available: false }, 500);
+    return json(
+      { ok: false, error: "billing fetch failed", admin_available: false },
+      500,
+    );
   }
 });
 

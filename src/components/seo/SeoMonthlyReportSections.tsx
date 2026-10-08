@@ -129,18 +129,27 @@ function SourceTag({ metricKey }: { metricKey: string }) {
   );
 }
 
-export function buildSeoMonthlySlides(snapshot: SeoMonthlyShareSnapshot): Slide[] {
+export function buildSeoMonthlySlides(
+  snapshot: SeoMonthlyShareSnapshot,
+): Slide[] {
   const slides: Slide[] = [{ kind: "cover", title: "פתיחה" }];
   if (snapshot.metrics.length > 0 || snapshot.search) {
     slides.push({ kind: "metrics", title: "מדדים מרכזיים" });
   }
-  if (snapshot.keywords.length > 0) slides.push({ kind: "keywords", title: "ביטויים מרכזיים" });
+  if (snapshot.keywords.length > 0)
+    slides.push({ kind: "keywords", title: "ביטויים מרכזיים" });
   // Performance + forward plan (from real metrics). Cover carries סיכום כללי separately.
-  if (snapshot.search || snapshot.metrics.length > 0 || snapshot.keywords.length > 0) {
+  if (
+    snapshot.search ||
+    snapshot.metrics.length > 0 ||
+    snapshot.keywords.length > 0
+  ) {
     slides.push({ kind: "summary", title: "סיכום ומבט קדימה" });
   }
-  if (snapshot.work.onsite.length > 0) slides.push({ kind: "onsite", title: "עבודה באתר" });
-  if (snapshot.work.articles.length > 0) slides.push({ kind: "articles", title: "מאמרים" });
+  if (snapshot.work.onsite.length > 0)
+    slides.push({ kind: "onsite", title: "עבודה באתר" });
+  if (snapshot.work.articles.length > 0)
+    slides.push({ kind: "articles", title: "מאמרים" });
   if ((snapshot.recentLinks?.length || snapshot.work.links.length) > 0) {
     slides.push({ kind: "links", title: "קישורים" });
   }
@@ -148,14 +157,24 @@ export function buildSeoMonthlySlides(snapshot: SeoMonthlyShareSnapshot): Slide[
   return slides;
 }
 
-export function CoverSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function CoverSlide({
+  snapshot,
+}: {
+  snapshot: SeoMonthlyShareSnapshot;
+}) {
   const status = STATUS_LABELS[snapshot.status];
   const intro = snapshot.work.summary?.trim() || "";
   return (
     <div className="max-w-3xl space-y-6">
-      <p className="text-sm font-semibold tracking-[0.2em] text-[#0f766e]">דוח SEO חודשי</p>
-      <h1 className="text-4xl font-extrabold leading-[1.1] md:text-6xl">{snapshot.clientName}</h1>
-      <p className="text-xl text-slate-600 md:text-2xl">{snapshot.monthLabel}</p>
+      <p className="text-sm font-semibold tracking-[0.2em] text-[#0f766e]">
+        דוח SEO חודשי
+      </p>
+      <h1 className="text-4xl font-extrabold leading-[1.1] md:text-6xl">
+        {snapshot.clientName}
+      </h1>
+      <p className="text-xl text-slate-600 md:text-2xl">
+        {snapshot.monthLabel}
+      </p>
       {snapshot.domain && (
         <p className="font-mono text-sm text-[#0f766e]" dir="ltr">
           {snapshot.domain}
@@ -167,7 +186,9 @@ export function CoverSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) 
       </div>
       {intro && (
         <div className="max-w-2xl space-y-2">
-          <p className="text-xs font-semibold tracking-[0.16em] text-[#0f766e]">הקדמה</p>
+          <p className="text-xs font-semibold tracking-[0.16em] text-[#0f766e]">
+            הקדמה
+          </p>
           <p className="whitespace-pre-wrap text-base leading-relaxed text-slate-700 md:text-lg">
             {intro}
           </p>
@@ -191,7 +212,12 @@ function TrendPill({ value, suffix }: { value: number; suffix?: string }) {
             : "bg-rose-50 text-rose-700",
       )}
     >
-      {!flat && (up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />)}
+      {!flat &&
+        (up ? (
+          <ArrowUpRight className="h-3 w-3" />
+        ) : (
+          <ArrowDownRight className="h-3 w-3" />
+        ))}
       {up ? "+" : ""}
       {formatNum(value)}
       {suffix}
@@ -207,14 +233,23 @@ type HeadlineMetric = {
   base?: number;
 };
 
-export function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function MetricsSlide({
+  snapshot,
+}: {
+  snapshot: SeoMonthlyShareSnapshot;
+}) {
   const search = snapshot.search;
   const metricOf = (key: string) => snapshot.metrics.find((m) => m.key === key);
 
   const fromSnapshot = (key: string): HeadlineMetric | null => {
     const m = metricOf(key);
     if (!m) return null;
-    return { key, label: metricLabel(key, m.label), value: m.value, prev: m.prevValue };
+    return {
+      key,
+      label: metricLabel(key, m.label),
+      value: m.value,
+      prev: m.prevValue,
+    };
   };
 
   // GSC: clicks + impressions (measured). Rankings and traffic estimates: Ahrefs.
@@ -245,7 +280,9 @@ export function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }
   // Every metric appears once: headline cards first, the rest in the strip below.
   const headlineKeys = new Set(headline.map((m) => m.key));
   const secondary = snapshot.metrics.filter(
-    (m) => !headlineKeys.has(m.key) && !["gsc_clicks", "gsc_impressions"].includes(m.key),
+    (m) =>
+      !headlineKeys.has(m.key) &&
+      !["gsc_clicks", "gsc_impressions"].includes(m.key),
   );
 
   return (
@@ -254,7 +291,9 @@ export function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }
         <div>
           <h2 className="text-3xl font-bold md:text-4xl">הפרמטרים המרכזיים</h2>
           <p className="mt-2 text-slate-600">
-            {search ? "נתוני Google Search Console לחודש זה" : "תמונת מצב SEO לחודש זה"}
+            {search
+              ? "נתוני Google Search Console לחודש זה"
+              : "תמונת מצב SEO לחודש זה"}
           </p>
         </div>
         {search?.baseLabel && (
@@ -269,7 +308,10 @@ export function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }
           {headline.map((m) => {
             const pct = growthPct(m.value, m.base);
             return (
-              <div key={m.key} className="rounded-xl border border-slate-200 bg-white p-4">
+              <div
+                key={m.key}
+                className="rounded-xl border border-slate-200 bg-white p-4"
+              >
                 <p className="text-xs font-medium text-slate-500">{m.label}</p>
                 <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight">
                   {formatNum(m.value)}
@@ -279,13 +321,17 @@ export function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }
                   {m.prev != null && (
                     <div className="flex items-center gap-2">
                       <TrendPill value={m.value - m.prev} />
-                      <span className="text-[10px] text-slate-400">מול חודש קודם</span>
+                      <span className="text-[10px] text-slate-400">
+                        מול חודש קודם
+                      </span>
                     </div>
                   )}
                   {pct != null && (
                     <div className="flex items-center gap-2">
                       <TrendPill value={pct} suffix="%" />
-                      <span className="text-[10px] text-slate-400">מאז תחילת הקידום</span>
+                      <span className="text-[10px] text-slate-400">
+                        מאז תחילת הקידום
+                      </span>
                     </div>
                   )}
                 </div>
@@ -304,7 +350,9 @@ export function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }
           {search.base?.position != null && (
             <>
               {" · "}בתחילת הקידום:{" "}
-              <span className="tabular-nums text-slate-700">{search.base.position}</span>
+              <span className="tabular-nums text-slate-700">
+                {search.base.position}
+              </span>
             </>
           )}
         </p>
@@ -316,12 +364,16 @@ export function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }
             const delta = deltaLabel(m.value, m.prevValue);
             return (
               <div key={m.key}>
-                <p className="text-xs font-medium text-slate-500">{metricLabel(m.key, m.label)}</p>
+                <p className="text-xs font-medium text-slate-500">
+                  {metricLabel(m.key, m.label)}
+                </p>
                 <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight">
                   {formatNum(m.value)}
                 </p>
                 <SourceTag metricKey={m.key} />
-                {delta && <p className="mt-1 text-[11px] text-[#0f766e]">{delta}</p>}
+                {delta && (
+                  <p className="mt-1 text-[11px] text-[#0f766e]">{delta}</p>
+                )}
               </div>
             );
           })}
@@ -337,7 +389,10 @@ export function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }
           {search.prev != null && (
             <span className="text-slate-500">
               {" "}
-              ({deltaLabel(search.totals.keywords, search.prev.keywords) ?? "ללא שינוי"})
+              (
+              {deltaLabel(search.totals.keywords, search.prev.keywords) ??
+                "ללא שינוי"}
+              )
             </span>
           )}
         </p>
@@ -352,12 +407,21 @@ export function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }
   );
 }
 
-export function KeywordsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function KeywordsSlide({
+  snapshot,
+}: {
+  snapshot: SeoMonthlyShareSnapshot;
+}) {
   const rows = snapshot.keywords.slice(0, 20);
-  const withSearchData = rows.some((k) => k.impressions != null || k.clicks != null);
-  const comparedToBase = rows.some((k) => k.position != null && k.basePosition != null);
+  const withSearchData = rows.some(
+    (k) => k.impressions != null || k.clicks != null,
+  );
+  const comparedToBase = rows.some(
+    (k) => k.position != null && k.basePosition != null,
+  );
   const half = Math.ceil(rows.length / 2);
-  const columns = rows.length > 10 ? [rows.slice(0, half), rows.slice(half)] : [rows];
+  const columns =
+    rows.length > 10 ? [rows.slice(0, half), rows.slice(half)] : [rows];
   const grid = withSearchData
     ? "grid-cols-[5rem_1fr_4.2rem_3.4rem]"
     : "grid-cols-[5rem_1fr_5.6rem]";
@@ -372,7 +436,12 @@ export function KeywordsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot 
             : `${rows.length} הביטויים במיקומים הגבוהים ביותר ברשימת המעקב · מקור: Ahrefs`}
         </p>
       </div>
-      <div className={cn("grid gap-x-8 gap-y-1", columns.length > 1 && "md:grid-cols-2")}>
+      <div
+        className={cn(
+          "grid gap-x-8 gap-y-1",
+          columns.length > 1 && "md:grid-cols-2",
+        )}
+      >
         {columns.map((col, ci) => (
           <div key={ci} className="space-y-1">
             <div
@@ -383,7 +452,9 @@ export function KeywordsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot 
             >
               <span>מיקום בגוגל</span>
               <span>ביטוי חיפוש</span>
-              <span className="text-left">{withSearchData ? "חשיפות" : "נפח חיפוש"}</span>
+              <span className="text-left">
+                {withSearchData ? "חשיפות" : "נפח חיפוש"}
+              </span>
               {withSearchData && <span className="text-left">קליקים</span>}
             </div>
             {col.map((kw, i) => {
@@ -396,7 +467,10 @@ export function KeywordsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot 
               return (
                 <div
                   key={`${kw.keyword}-${ci}-${i}`}
-                  className={cn("grid items-center gap-2 border-b border-slate-200 py-1.5", grid)}
+                  className={cn(
+                    "grid items-center gap-2 border-b border-slate-200 py-1.5",
+                    grid,
+                  )}
                 >
                   <span className="font-mono text-xs font-semibold text-[#0f766e]">
                     {kw.position != null ? `#${kw.position}` : "—"}
@@ -439,39 +513,55 @@ export function KeywordsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot 
         ))}
       </div>
       <p className="rounded-lg bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500">
-        <span className="font-semibold text-slate-600">מיקום בגוגל</span> — המקום של האתר בתוצאות
-        החיפוש האורגניות לביטוי (‎#1 = ראשון בעמוד הראשון).{" "}
+        <span className="font-semibold text-slate-600">מיקום בגוגל</span> —
+        המקום של האתר בתוצאות החיפוש האורגניות לביטוי (‎#1 = ראשון בעמוד
+        הראשון).{" "}
         {withSearchData ? (
           <>
-            <span className="font-semibold text-slate-600">חשיפות</span> — כמה פעמים האתר הוצג
-            בתוצאות לביטוי הזה החודש,{" "}
-            <span className="font-semibold text-slate-600">קליקים</span> — כמה גולשים נכנסו בפועל
-            מהתוצאה (נתוני Google Search Console, ולא כלל הכניסות לאתר).
+            <span className="font-semibold text-slate-600">חשיפות</span> — כמה
+            פעמים האתר הוצג בתוצאות לביטוי הזה החודש,{" "}
+            <span className="font-semibold text-slate-600">קליקים</span> — כמה
+            גולשים נכנסו בפועל מהתוצאה (נתוני Google Search Console, ולא כלל
+            הכניסות לאתר).
           </>
         ) : (
           <>
-            <span className="font-semibold text-slate-600">נפח חיפוש</span> — כמה פעמים בממוצע
-            מחפשים את הביטוי בגוגל בחודש (הערכת Ahrefs לשוק כולו, לא תנועה שהגיעה לאתר).
+            <span className="font-semibold text-slate-600">נפח חיפוש</span> —
+            כמה פעמים בממוצע מחפשים את הביטוי בגוגל בחודש (הערכת Ahrefs לשוק
+            כולו, לא תנועה שהגיעה לאתר).
           </>
         )}{" "}
-        ↑/↓ מציין שינוי מיקום {comparedToBase ? "מאז תחילת הקידום" : "מול החודש הקודם"}.
+        ↑/↓ מציין שינוי מיקום{" "}
+        {comparedToBase ? "מאז תחילת הקידום" : "מול החודש הקודם"}.
       </p>
     </div>
   );
 }
 
-export function SummarySlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function SummarySlide({
+  snapshot,
+}: {
+  snapshot: SeoMonthlyShareSnapshot;
+}) {
   const narrative = buildSeoPerformanceSummary(snapshot);
   return (
     <div className="max-w-3xl space-y-6">
       <h2 className="text-3xl font-bold md:text-4xl">סיכום ומבט קדימה</h2>
-      <p className="text-xl leading-relaxed text-slate-700 md:text-2xl">{narrative}</p>
+      <p className="text-xl leading-relaxed text-slate-700 md:text-2xl">
+        {narrative}
+      </p>
     </div>
   );
 }
 
-export function OnsiteSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
-  const unique = dedupeBy(snapshot.work.onsite, (item) => dedupeKey(item.title));
+export function OnsiteSlide({
+  snapshot,
+}: {
+  snapshot: SeoMonthlyShareSnapshot;
+}) {
+  const unique = dedupeBy(snapshot.work.onsite, (item) =>
+    dedupeKey(item.title),
+  );
   const items = unique.slice(0, 10);
   return (
     <div className="space-y-6">
@@ -495,30 +585,45 @@ export function OnsiteSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot })
                 {item.title}
               </a>
             ) : (
-              <p className="mt-1 text-base font-medium leading-snug">{item.title}</p>
+              <p className="mt-1 text-base font-medium leading-snug">
+                {item.title}
+              </p>
             )}
           </div>
         ))}
       </div>
       {unique.length > items.length && (
-        <p className="text-xs text-slate-500">ועוד {unique.length - items.length} פעולות</p>
+        <p className="text-xs text-slate-500">
+          ועוד {unique.length - items.length} פעולות
+        </p>
       )}
     </div>
   );
 }
 
-export function ArticlesSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
-  const unique = dedupeBy(snapshot.work.articles, (item) => dedupeKey(item.title));
+export function ArticlesSlide({
+  snapshot,
+}: {
+  snapshot: SeoMonthlyShareSnapshot;
+}) {
+  const unique = dedupeBy(snapshot.work.articles, (item) =>
+    dedupeKey(item.title),
+  );
   const items = unique.slice(0, 8);
   return (
     <div className="space-y-5">
       <div>
         <h2 className="text-3xl font-bold md:text-4xl">מאמרים שכתבנו</h2>
-        <p className="mt-2 text-slate-600">{unique.length} מאמרים · לחיצה פותחת את המאמר</p>
+        <p className="mt-2 text-slate-600">
+          {unique.length} מאמרים · לחיצה פותחת את המאמר
+        </p>
       </div>
       <div className="space-y-2.5">
         {items.map((item, i) => (
-          <div key={item.id} className="flex items-start gap-3 border-b border-slate-200 pb-2.5">
+          <div
+            key={item.id}
+            className="flex items-start gap-3 border-b border-slate-200 pb-2.5"
+          >
             <span className="mt-1 font-mono text-xs text-[#0f766e]">
               {String(i + 1).padStart(2, "0")}
             </span>
@@ -536,21 +641,31 @@ export function ArticlesSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot 
                   <ExternalLink className="mt-1.5 h-3.5 w-3.5 shrink-0" />
                 </a>
               ) : (
-                <p className="text-lg font-semibold leading-snug">{item.title}</p>
+                <p className="text-lg font-semibold leading-snug">
+                  {item.title}
+                </p>
               )}
-              {item.topic && <p className="mt-0.5 text-sm text-slate-500">{item.topic}</p>}
+              {item.topic && (
+                <p className="mt-0.5 text-sm text-slate-500">{item.topic}</p>
+              )}
             </div>
           </div>
         ))}
       </div>
       {unique.length > items.length && (
-        <p className="text-xs text-slate-500">ועוד {unique.length - items.length} מאמרים</p>
+        <p className="text-xs text-slate-500">
+          ועוד {unique.length - items.length} מאמרים
+        </p>
       )}
     </div>
   );
 }
 
-export function LinksSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function LinksSlide({
+  snapshot,
+}: {
+  snapshot: SeoMonthlyShareSnapshot;
+}) {
   const fromRecent = snapshot.recentLinks?.length
     ? snapshot.recentLinks
     : snapshot.work.links.map((l) => ({
@@ -574,14 +689,19 @@ export function LinksSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) 
       <div>
         <h2 className="text-3xl font-bold md:text-4xl">קישורים חיצוניים</h2>
         <p className="mt-2 text-slate-600">
-          {unique.length} קישורים{spansMonths ? " בשלושת החודשים האחרונים" : " החודש"}
+          {unique.length} קישורים
+          {spansMonths ? " בשלושת החודשים האחרונים" : " החודש"}
         </p>
       </div>
-      <div className={cn("grid gap-x-8 gap-y-4", spansMonths && "md:grid-cols-3")}>
+      <div
+        className={cn("grid gap-x-8 gap-y-4", spansMonths && "md:grid-cols-3")}
+      >
         {groups.map(([monthLabel, links]) => (
           <div key={monthLabel} className="space-y-1.5">
             {spansMonths && (
-              <p className="text-[11px] font-semibold tracking-wide text-[#0f766e]">{monthLabel}</p>
+              <p className="text-[11px] font-semibold tracking-wide text-[#0f766e]">
+                {monthLabel}
+              </p>
             )}
             {links.slice(0, spansMonths ? 6 : 10).map((link) => (
               <div key={link.id} className="border-b border-slate-200 py-1.5">
@@ -600,7 +720,10 @@ export function LinksSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) 
                 >
                   {link.anchor?.trim() || hostOf(link.url)}
                 </a>
-                <p className="mt-0.5 truncate text-[11px] text-slate-500" dir="ltr">
+                <p
+                  className="mt-0.5 truncate text-[11px] text-slate-500"
+                  dir="ltr"
+                >
                   {hostOf(link.url)}
                 </p>
               </div>
@@ -617,7 +740,11 @@ export function LinksSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) 
   );
 }
 
-export function ClosingSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function ClosingSlide({
+  snapshot,
+}: {
+  snapshot: SeoMonthlyShareSnapshot;
+}) {
   // Closing slide is "what we did this month" — never inflate with prior-month links.
   const counts = [
     {
@@ -630,7 +757,8 @@ export function ClosingSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }
     },
     {
       label: "קישורים",
-      value: dedupeBy(snapshot.work.links, (i) => i.url.trim().toLowerCase()).length,
+      value: dedupeBy(snapshot.work.links, (i) => i.url.trim().toLowerCase())
+        .length,
     },
     { label: "ביטויים מוצגים", value: snapshot.keywords.length },
   ];
@@ -652,7 +780,9 @@ export function ClosingSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }
           </div>
         ))}
       </div>
-      <p className="text-sm font-semibold tracking-[0.18em] text-[#0f766e]">AIOS · דוח SEO</p>
+      <p className="text-sm font-semibold tracking-[0.18em] text-[#0f766e]">
+        AIOS · דוח SEO
+      </p>
     </div>
   );
 }

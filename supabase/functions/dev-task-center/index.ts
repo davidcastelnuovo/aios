@@ -46,7 +46,11 @@ serve(async (req) => {
     const userId = auth.kind === "user" ? auth.userId : null;
 
     if (action === "list") {
-      let q = supabase.from("dev_tasks").select("*").eq("tenant_id", tenantId).order("updated_at", { ascending: false });
+      let q = supabase
+        .from("dev_tasks")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("updated_at", { ascending: false });
       if (body.status) q = q.eq("status", body.status);
       if (body.priority) q = q.eq("priority", body.priority);
       const limit = Math.min(Number(body.limit) || 50, 100);
@@ -83,7 +87,11 @@ serve(async (req) => {
     if (action === "create") {
       const brief = body.brief as DevTaskBrief;
       if (!brief?.title?.trim()) throw new Error("brief.title required");
-      const duplicates = await findDuplicateDevTasks(supabase, tenantId, brief.title);
+      const duplicates = await findDuplicateDevTasks(
+        supabase,
+        tenantId,
+        brief.title,
+      );
       const task = await createDevTask(supabase, {
         tenantId,
         brief,
@@ -100,11 +108,25 @@ serve(async (req) => {
 
     if (action === "update") {
       const id = String(body.id || "");
-      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      const patch: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
       for (const key of [
-        "title", "problem", "expected_behavior", "current_behavior", "scope",
-        "affected_areas", "constraints", "acceptance_criteria", "base_branch",
-        "environment", "priority", "status", "assigned_agent", "pr_url", "owner_user_id",
+        "title",
+        "problem",
+        "expected_behavior",
+        "current_behavior",
+        "scope",
+        "affected_areas",
+        "constraints",
+        "acceptance_criteria",
+        "base_branch",
+        "environment",
+        "priority",
+        "status",
+        "assigned_agent",
+        "pr_url",
+        "owner_user_id",
       ]) {
         if (body[key] !== undefined) patch[key] = body[key];
       }
@@ -127,7 +149,12 @@ serve(async (req) => {
     }
 
     if (action === "approve") {
-      const task = await approveDevTask(supabase, tenantId, String(body.id), userId!);
+      const task = await approveDevTask(
+        supabase,
+        tenantId,
+        String(body.id),
+        userId!,
+      );
       return json({ task });
     }
 
@@ -161,7 +188,12 @@ serve(async (req) => {
         .select("*")
         .single();
       if (error) throw error;
-      await logDevTaskEvent(supabase, { devTaskId: id, tenantId, eventType: "cancelled", actorUserId: userId });
+      await logDevTaskEvent(supabase, {
+        devTaskId: id,
+        tenantId,
+        eventType: "cancelled",
+        actorUserId: userId,
+      });
       return json({ task: data });
     }
 
@@ -175,20 +207,31 @@ serve(async (req) => {
         .select("*")
         .single();
       if (error) throw error;
-      await logDevTaskEvent(supabase, { devTaskId: id, tenantId, eventType: "done", actorUserId: userId });
+      await logDevTaskEvent(supabase, {
+        devTaskId: id,
+        tenantId,
+        eventType: "done",
+        actorUserId: userId,
+      });
       return json({ task: data });
     }
 
-    return new Response(JSON.stringify({ error: `unknown action: ${action}` }), {
-      status: 400,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: `unknown action: ${action}` }),
+      {
+        status: 400,
+        headers: { ...cors, "Content-Type": "application/json" },
+      },
+    );
   } catch (e: unknown) {
     console.error("[dev-task-center]", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
-      status: 500,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: e instanceof Error ? e.message : String(e) }),
+      {
+        status: 500,
+        headers: { ...cors, "Content-Type": "application/json" },
+      },
+    );
   }
 });
 

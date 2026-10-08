@@ -1,4 +1,5 @@
 # Dependency Audit Report
+
 **Date:** 2026-01-20
 **Project:** after-lead
 **Total Dependencies:** 503 (194 production, 310 dev, 76 optional)
@@ -16,6 +17,7 @@ This audit identified **8 security vulnerabilities** (5 high, 3 moderate), **13 
 ### High Severity (5)
 
 #### 1.1 React Router - XSS via Open Redirects (CVSS 8.0)
+
 - **Package:** `react-router-dom` (currently 6.30.1)
 - **Vulnerability:** CVE-2024-XXXXX - XSS and external redirect vulnerabilities
 - **Impact:** Can allow attackers to redirect users to malicious sites or execute XSS attacks
@@ -23,6 +25,7 @@ This audit identified **8 security vulnerabilities** (5 high, 3 moderate), **13 
 - **Advisory:** [GHSA-2w69-qvjg-hvjx](https://github.com/advisories/GHSA-2w69-qvjg-hvjx)
 
 #### 1.2 xlsx - Prototype Pollution & ReDoS (CVSS 7.8 & 7.5)
+
 - **Package:** `xlsx` (currently 0.18.5)
 - **Vulnerabilities:**
   - Prototype Pollution (GHSA-4r6h-8v6p-xvw6)
@@ -32,6 +35,7 @@ This audit identified **8 security vulnerabilities** (5 high, 3 moderate), **13 
 - **Status:** ⚠️ **NO AUTOMATIC FIX AVAILABLE** - Manual update required
 
 #### 1.3 glob - Command Injection (CVSS 7.5)
+
 - **Package:** `glob` (indirect dependency)
 - **Vulnerability:** Command injection via CLI
 - **Impact:** Remote code execution
@@ -41,6 +45,7 @@ This audit identified **8 security vulnerabilities** (5 high, 3 moderate), **13 
 ### Moderate Severity (3)
 
 #### 1.4 Vite - Multiple Security Issues
+
 - **Package:** `vite` (currently 5.4.19)
 - **Vulnerabilities:**
   - Middleware file serving bypass
@@ -50,12 +55,14 @@ This audit identified **8 security vulnerabilities** (5 high, 3 moderate), **13 
 - **Fix:** Update to **6.1.7+** (currently at 5.4.19)
 
 #### 1.5 esbuild - Development Server SSRF (CVSS 5.3)
+
 - **Package:** `esbuild` (indirect via vite)
 - **Vulnerability:** Allows websites to send requests to dev server
 - **Impact:** Information disclosure during development
 - **Fix:** Update to **0.24.3+**
 
 #### 1.6 js-yaml - Prototype Pollution (CVSS 5.3)
+
 - **Package:** `js-yaml` (indirect dependency)
 - **Vulnerability:** Prototype pollution in merge operator
 - **Impact:** Object manipulation
@@ -67,29 +74,29 @@ This audit identified **8 security vulnerabilities** (5 high, 3 moderate), **13 
 
 ### Major Version Updates Available
 
-| Package | Current | Latest | Type | Breaking Changes? |
-|---------|---------|--------|------|-------------------|
-| `react` | 18.3.1 | 19.2.3 | Major | ✅ Yes |
-| `react-dom` | 18.3.1 | 19.2.3 | Major | ✅ Yes |
-| `react-router-dom` | 6.30.1 | 7.12.0 | Major | ✅ Yes (security fix) |
-| `recharts` | 2.15.4 | 3.6.0 | Major | ✅ Yes |
-| `zod` | 3.25.76 | 4.3.5 | Major | ✅ Yes |
-| `react-day-picker` | 8.10.1 | 9.13.0 | Major | ✅ Yes |
-| `tailwind-merge` | 2.6.0 | 3.4.0 | Major | ✅ Yes |
-| `date-fns` | 3.6.0 | 4.1.0 | Major | ✅ Yes |
-| `react-resizable-panels` | 2.1.9 | 4.4.1 | Major | ✅ Yes |
-| `sonner` | 1.7.4 | 2.0.7 | Major | ✅ Yes |
-| `vaul` | 0.9.9 | 1.1.2 | Major | ✅ Yes |
+| Package                  | Current | Latest | Type  | Breaking Changes?     |
+| ------------------------ | ------- | ------ | ----- | --------------------- |
+| `react`                  | 18.3.1  | 19.2.3 | Major | ✅ Yes                |
+| `react-dom`              | 18.3.1  | 19.2.3 | Major | ✅ Yes                |
+| `react-router-dom`       | 6.30.1  | 7.12.0 | Major | ✅ Yes (security fix) |
+| `recharts`               | 2.15.4  | 3.6.0  | Major | ✅ Yes                |
+| `zod`                    | 3.25.76 | 4.3.5  | Major | ✅ Yes                |
+| `react-day-picker`       | 8.10.1  | 9.13.0 | Major | ✅ Yes                |
+| `tailwind-merge`         | 2.6.0   | 3.4.0  | Major | ✅ Yes                |
+| `date-fns`               | 3.6.0   | 4.1.0  | Major | ✅ Yes                |
+| `react-resizable-panels` | 2.1.9   | 4.4.1  | Major | ✅ Yes                |
+| `sonner`                 | 1.7.4   | 2.0.7  | Major | ✅ Yes                |
+| `vaul`                   | 0.9.9   | 1.1.2  | Major | ✅ Yes                |
 
 ### Significant Minor/Patch Updates
 
-| Package | Current | Latest | Notes |
-|---------|---------|--------|-------|
-| `@hookform/resolvers` | 3.10.0 | 5.2.2 | Major jump (2 versions) |
-| `next-themes` | 0.3.0 | 0.4.6 | Minor update |
-| `lucide-react` | 0.462.0 | 0.562.0 | 100 versions behind |
-| `@supabase/supabase-js` | 2.75.0 | 2.91.0 | 16 versions behind |
-| `@tanstack/react-query` | 5.83.0 | 5.90.19 | 7 versions behind |
+| Package                 | Current | Latest  | Notes                   |
+| ----------------------- | ------- | ------- | ----------------------- |
+| `@hookform/resolvers`   | 3.10.0  | 5.2.2   | Major jump (2 versions) |
+| `next-themes`           | 0.3.0   | 0.4.6   | Minor update            |
+| `lucide-react`          | 0.462.0 | 0.562.0 | 100 versions behind     |
+| `@supabase/supabase-js` | 2.75.0  | 2.91.0  | 16 versions behind      |
+| `@tanstack/react-query` | 5.83.0  | 5.90.19 | 7 versions behind       |
 
 ---
 
@@ -100,6 +107,7 @@ This audit identified **8 security vulnerabilities** (5 high, 3 moderate), **13 
 These packages are not imported anywhere in the codebase:
 
 **Production Dependencies:**
+
 - `@emoji-mart/data` - 0 usages
 - `@emoji-mart/react` - 0 usages
 - `emoji-mart` - 0 usages
@@ -108,21 +116,26 @@ These packages are not imported anywhere in the codebase:
 **Estimated Savings:** ~400KB+ minified
 
 **Dev Dependencies:**
+
 - `@tailwindcss/typography` - 0 usages (unless used in tailwind config)
 
 ### 3.2 Duplicate/Redundant Dependencies
 
 #### Date Handling Libraries (HIGH PRIORITY)
+
 - **`moment`** (2.30.1) - Used in **1 file** only
 - **`date-fns`** (3.6.0) - Used in **27 files**
 
 **Recommendation:** Remove `moment` and refactor `src/components/InteractiveCalendar.tsx` to use `date-fns`. This will:
+
 - Reduce bundle size by ~70KB minified (~230KB uncompressed)
 - Standardize date handling across the codebase
 - `moment` is in maintenance mode and not recommended for new code
 
 #### Emoji Libraries
+
 Currently using three emoji-related packages but none are imported:
+
 - `@emoji-mart/data`
 - `@emoji-mart/react`
 - `emoji-mart`
@@ -132,6 +145,7 @@ Currently using three emoji-related packages but none are imported:
 ### 3.3 Over-Installation of Radix UI Components
 
 The project has **26 Radix UI packages** installed. While all appear to be used, consider:
+
 - Are all UI components actually rendered in the application?
 - Could some components be consolidated or removed?
 
@@ -192,6 +206,7 @@ Consider updating these in order of risk/benefit:
 ## 5. Implementation Plan
 
 ### Phase 1: Critical Security (Week 1)
+
 - [ ] Update `react-router-dom` to fix XSS vulnerabilities
 - [ ] Update `xlsx` to fix prototype pollution
 - [ ] Run `npm audit fix` and verify
@@ -199,6 +214,7 @@ Consider updating these in order of risk/benefit:
 - [ ] Run full test suite
 
 ### Phase 2: Clean Up Bloat (Week 2)
+
 - [ ] Remove unused emoji packages
 - [ ] Remove framer-motion if unused
 - [ ] Refactor `InteractiveCalendar.tsx` to use date-fns
@@ -206,6 +222,7 @@ Consider updating these in order of risk/benefit:
 - [ ] Run bundle analysis to verify size reduction
 
 ### Phase 3: Major Updates (Week 3-4)
+
 - [ ] Create feature branch for React 19 upgrade
 - [ ] Update React & React DOM to v19
 - [ ] Update @hookform/resolvers
@@ -213,6 +230,7 @@ Consider updating these in order of risk/benefit:
 - [ ] Full regression testing
 
 ### Phase 4: Maintenance (Ongoing)
+
 - [ ] Set up Dependabot or Renovate for automated updates
 - [ ] Establish monthly dependency review process
 - [ ] Document dependency update procedures
@@ -233,12 +251,12 @@ After each phase:
 
 ## 7. Estimated Impact
 
-| Metric | Current | After Cleanup | Improvement |
-|--------|---------|---------------|-------------|
-| Security Vulnerabilities | 8 | 0 | -100% |
-| Outdated Packages | 13 major | 4 major | -69% |
-| Unused Dependencies | 7 | 0 | -100% |
-| Bundle Size Reduction | - | ~500KB+ | ~15-20% |
+| Metric                   | Current  | After Cleanup | Improvement |
+| ------------------------ | -------- | ------------- | ----------- |
+| Security Vulnerabilities | 8        | 0             | -100%       |
+| Outdated Packages        | 13 major | 4 major       | -69%        |
+| Unused Dependencies      | 7        | 0             | -100%       |
+| Bundle Size Reduction    | -        | ~500KB+       | ~15-20%     |
 
 ---
 

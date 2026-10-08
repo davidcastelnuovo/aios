@@ -5,8 +5,8 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/install-pulse-delivery-crons.yml'
-      - 'supabase/ops/install_pulse_delivery_crons.sql'
+      - ".github/workflows/install-pulse-delivery-crons.yml"
+      - "supabase/ops/install_pulse_delivery_crons.sql"
 
 jobs:
   install:

@@ -53,9 +53,7 @@ export function parseSeoMonthlyWork(raw: unknown): SeoMonthlyWork {
   return {
     summary: typeof obj.summary === "string" ? obj.summary : "",
     onsite: Array.isArray(obj.onsite)
-      ? obj.onsite
-          .map(normalizeOnsite)
-          .filter((x): x is SeoOnsiteItem => !!x)
+      ? obj.onsite.map(normalizeOnsite).filter((x): x is SeoOnsiteItem => !!x)
       : [],
     articles: Array.isArray(obj.articles)
       ? obj.articles
@@ -63,9 +61,7 @@ export function parseSeoMonthlyWork(raw: unknown): SeoMonthlyWork {
           .filter((x): x is SeoArticleItem => !!x)
       : [],
     links: Array.isArray(obj.links)
-      ? obj.links
-          .map(normalizeLink)
-          .filter((x): x is SeoLinkItem => !!x)
+      ? obj.links.map(normalizeLink).filter((x): x is SeoLinkItem => !!x)
       : [],
   };
 }
@@ -88,7 +84,10 @@ function normalizeOnsite(row: unknown): SeoOnsiteItem | null {
   if (!title) return null;
   const kindRaw = asString(r.kind) || "other";
   const kind: SeoOnsiteKind =
-    kindRaw === "meta" || kindRaw === "headline" || kindRaw === "content" || kindRaw === "other"
+    kindRaw === "meta" ||
+    kindRaw === "headline" ||
+    kindRaw === "content" ||
+    kindRaw === "other"
       ? kindRaw
       : "other";
   return {
@@ -127,7 +126,9 @@ function normalizeLink(row: unknown): SeoLinkItem | null {
   };
 }
 
-export function createOnsiteItem(partial?: Partial<SeoOnsiteItem>): SeoOnsiteItem {
+export function createOnsiteItem(
+  partial?: Partial<SeoOnsiteItem>,
+): SeoOnsiteItem {
   return {
     id: newId(),
     kind: partial?.kind || "meta",
@@ -137,7 +138,9 @@ export function createOnsiteItem(partial?: Partial<SeoOnsiteItem>): SeoOnsiteIte
   };
 }
 
-export function createArticleItem(partial?: Partial<SeoArticleItem>): SeoArticleItem {
+export function createArticleItem(
+  partial?: Partial<SeoArticleItem>,
+): SeoArticleItem {
   return {
     id: newId(),
     title: partial?.title || "",

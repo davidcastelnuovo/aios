@@ -11,7 +11,8 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -35,7 +36,11 @@ type GeneratedArticle = {
 type ArticleImage = { url: string; prompt: string };
 
 const normalizeText = (value: string) =>
-  value.replace(/[\u0591-\u05C7]/g, "").replace(/\s+/g, " ").trim().toLocaleLowerCase("he");
+  value
+    .replace(/[\u0591-\u05C7]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("he");
 
 const countPhrase = (text: string, phrase: string) => {
   const normalizedText = normalizeText(text);
@@ -46,7 +51,8 @@ const countPhrase = (text: string, phrase: string) => {
 
 const parseGeneratedArticle = (value: string): GeneratedArticle => {
   const parsed = JSON.parse(value || "{}") as GeneratedArticle;
-  if (!parsed || typeof parsed !== "object") throw new Error("OpenAI returned invalid article JSON");
+  if (!parsed || typeof parsed !== "object")
+    throw new Error("OpenAI returned invalid article JSON");
   return parsed;
 };
 
@@ -59,18 +65,27 @@ async function requestArticleJson(
   const invoke = async () => {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         model: "gpt-4o-mini",
         response_format: { type: "json_object" },
         temperature,
         max_tokens: 8000,
-        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
       }),
     });
-    if (!response.ok) throw new Error(`OpenAI ${response.status}: ${await response.text()}`);
+    if (!response.ok)
+      throw new Error(`OpenAI ${response.status}: ${await response.text()}`);
     const payload = await response.json();
-    return parseGeneratedArticle(payload.choices?.[0]?.message?.content ?? "{}");
+    return parseGeneratedArticle(
+      payload.choices?.[0]?.message?.content ?? "{}",
+    );
   };
   try {
     return await invoke();
@@ -95,25 +110,48 @@ function hardenArticle(
     ? candidate.content.map((part) => String(part).trim()).filter(Boolean)
     : [];
   const faq = Array.isArray(candidate.faq)
-    ? candidate.faq.slice(0, 6).map((item) => ({
-      question: String((item as Record<string, unknown>)?.question ?? "").trim(),
-      answer: String((item as Record<string, unknown>)?.answer ?? "").trim(),
-    })).filter((item) => item.question && item.answer)
+    ? candidate.faq
+        .slice(0, 6)
+        .map((item) => ({
+          question: String(
+            (item as Record<string, unknown>)?.question ?? "",
+          ).trim(),
+          answer: String(
+            (item as Record<string, unknown>)?.answer ?? "",
+          ).trim(),
+        }))
+        .filter((item) => item.question && item.answer)
     : [];
-  const rawInfographic = (candidate.infographic ?? {}) as Record<string, unknown>;
+  const rawInfographic = (candidate.infographic ?? {}) as Record<
+    string,
+    unknown
+  >;
   let infographicItems = Array.isArray(rawInfographic.items)
-    ? rawInfographic.items.slice(0, 5).map((item) => ({
-      value: String((item as Record<string, unknown>)?.value ?? "").trim(),
-      label: String((item as Record<string, unknown>)?.label ?? "").trim(),
-      description: String((item as Record<string, unknown>)?.description ?? "").trim(),
-    })).filter((item) => item.label && item.description)
+    ? rawInfographic.items
+        .slice(0, 5)
+        .map((item) => ({
+          value: String((item as Record<string, unknown>)?.value ?? "").trim(),
+          label: String((item as Record<string, unknown>)?.label ?? "").trim(),
+          description: String(
+            (item as Record<string, unknown>)?.description ?? "",
+          ).trim(),
+        }))
+        .filter((item) => item.label && item.description)
     : [];
 
   if (!content.some((part) => part.startsWith("LIST: "))) {
-    content.splice(Math.min(4, content.length), 0, "LIST: בדקו את הצורך האמיתי | השוו בין אפשרויות | שאלו על תהליך העבודה | ודאו מה כלול במחיר | בקשו דוגמאות מהשטח");
+    content.splice(
+      Math.min(4, content.length),
+      0,
+      "LIST: בדקו את הצורך האמיתי | השוו בין אפשרויות | שאלו על תהליך העבודה | ודאו מה כלול במחיר | בקשו דוגמאות מהשטח",
+    );
   }
   if (!content.some((part) => part.startsWith("TIP: "))) {
-    content.splice(Math.min(6, content.length), 0, "TIP: לפני שמחליטים, כדאי לרשום את המטרה, התקציב והאילוצים — כך קל יותר להשוות הצעות ולשאול שאלות מדויקות.");
+    content.splice(
+      Math.min(6, content.length),
+      0,
+      "TIP: לפני שמחליטים, כדאי לרשום את המטרה, התקציב והאילוצים — כך קל יותר להשוות הצעות ולשאול שאלות מדויקות.",
+    );
   }
   for (let index = 0; index < content.length; index += 1) {
     content[index] = content[index]
@@ -136,17 +174,43 @@ function hardenArticle(
   }
   if (infographicItems.length < 3) {
     infographicItems = [
-      { value: "01", label: "הגדרת הצורך", description: "מבהירים מה רוצים להשיג ומה חשוב במיוחד." },
-      { value: "02", label: "בדיקת אפשרויות", description: "משווים גישות, תהליכים ומה כלול בפועל." },
-      { value: "03", label: "החלטה מושכלת", description: "בוחרים לפי התאמה, שקיפות ויכולת ליווי." },
+      {
+        value: "01",
+        label: "הגדרת הצורך",
+        description: "מבהירים מה רוצים להשיג ומה חשוב במיוחד.",
+      },
+      {
+        value: "02",
+        label: "בדיקת אפשרויות",
+        description: "משווים גישות, תהליכים ומה כלול בפועל.",
+      },
+      {
+        value: "03",
+        label: "החלטה מושכלת",
+        description: "בוחרים לפי התאמה, שקיפות ויכולת ליווי.",
+      },
       ...infographicItems,
     ].slice(0, 5);
   }
   while (faq.length < 4) {
     const n = faq.length + 1;
     faq.push({
-      question: n === 1 ? "מאיפה מתחילים?" : n === 2 ? "מה חשוב לבדוק לפני שמתקדמים?" : n === 3 ? "איך יודעים שהבחירה מתאימה?" : "מתי כדאי להתייעץ עם איש מקצוע?",
-      answer: n === 1 ? "מתחילים מהצורך האמיתי, מהאילוצים ומהתוצאה הרצויה — ורק אחר כך בוחרים פתרון." : n === 2 ? "בודקים תהליך עבודה, שקיפות, התאמה למצב שלכם ומה קורה אם משהו משתנה בדרך." : n === 3 ? "כשיש התאמה ברורה לצורך, תיאום ציפיות, והסבר מובן על השלבים הבאים." : "כשהנושא מורכב, יש סיכון גבוה, או שאין מספיק בהירות כדי להחליט לבד.",
+      question:
+        n === 1
+          ? "מאיפה מתחילים?"
+          : n === 2
+            ? "מה חשוב לבדוק לפני שמתקדמים?"
+            : n === 3
+              ? "איך יודעים שהבחירה מתאימה?"
+              : "מתי כדאי להתייעץ עם איש מקצוע?",
+      answer:
+        n === 1
+          ? "מתחילים מהצורך האמיתי, מהאילוצים ומהתוצאה הרצויה — ורק אחר כך בוחרים פתרון."
+          : n === 2
+            ? "בודקים תהליך עבודה, שקיפות, התאמה למצב שלכם ומה קורה אם משהו משתנה בדרך."
+            : n === 3
+              ? "כשיש התאמה ברורה לצורך, תיאום ציפיות, והסבר מובן על השלבים הבאים."
+              : "כשהנושא מורכב, יש סיכון גבוה, או שאין מספיק בהירות כדי להחליט לבד.",
     });
   }
 
@@ -161,7 +225,10 @@ function hardenArticle(
         const at = normalized.indexOf(normalizedKeyword);
         if (at < 0) break;
         // Approximate raw splice by regex fallback first.
-        const pattern = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        const pattern = new RegExp(
+          keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          "i",
+        );
         if (pattern.test(output)) {
           output = output.replace(pattern, "הנושא");
           continue;
@@ -175,10 +242,17 @@ function hardenArticle(
     }
     const bodyIndexes = content
       .map((part, index) => ({ part, index }))
-      .filter(({ part }) => !part.startsWith("## ") && !part.startsWith("LIST: ") && !part.startsWith("TIP: ") && part.length > 20);
+      .filter(
+        ({ part }) =>
+          !part.startsWith("## ") &&
+          !part.startsWith("LIST: ") &&
+          !part.startsWith("TIP: ") &&
+          part.length > 20,
+      );
     if (bodyIndexes.length) {
       const target = bodyIndexes[Math.min(1, bodyIndexes.length - 1)];
-      content[target.index] = `${stripKeyword(target.part).replace(/\.*\s*$/, "")}. כשבוחנים ${keyword}, חשוב להסתכל על התהליך ולא רק על השורה התחתונה.`;
+      content[target.index] =
+        `${stripKeyword(target.part).replace(/\.*\s*$/, "")}. כשבוחנים ${keyword}, חשוב להסתכל על התהליך ולא רק על השורה התחתונה.`;
     }
   }
 
@@ -189,7 +263,9 @@ function hardenArticle(
     content,
     faq,
     infographic: {
-      title: String(rawInfographic.title ?? "הדברים החשובים בקצרה").trim() || "הדברים החשובים בקצרה",
+      title:
+        String(rawInfographic.title ?? "הדברים החשובים בקצרה").trim() ||
+        "הדברים החשובים בקצרה",
       items: infographicItems,
     },
   };
@@ -206,7 +282,10 @@ async function generateArticleImage(
   if (!prompt) return null;
   const response = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       model: "gpt-image-1",
       prompt: `${prompt}. Editorial magazine photography, natural and credible, landscape composition, no text, no logos, no watermarks.`,
@@ -218,32 +297,56 @@ async function generateArticleImage(
     }),
   });
   if (!response.ok) {
-    console.error("article image generation failed", kind, response.status, await response.text());
+    console.error(
+      "article image generation failed",
+      kind,
+      response.status,
+      await response.text(),
+    );
     return null;
   }
   const payload = await response.json();
   const encoded = payload?.data?.[0]?.b64_json;
   if (!encoded) return null;
-  const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+  const bytes = Uint8Array.from(atob(encoded), (character) =>
+    character.charCodeAt(0),
+  );
   const path = publishingImageStoragePath(tenantId, articleId, kind);
-  const { error } = await admin.storage.from(ENTITY_ATTACHMENTS_BUCKET).upload(path, bytes, {
-    contentType: "image/webp",
-    cacheControl: "31536000",
-    upsert: true,
-  });
+  const { error } = await admin.storage
+    .from(ENTITY_ATTACHMENTS_BUCKET)
+    .upload(path, bytes, {
+      contentType: "image/webp",
+      cacheControl: "31536000",
+      upsert: true,
+    });
   if (error) {
     console.error("article image upload failed", kind, error.message);
     return null;
   }
-  return { url: publishingImageProxyUrl(Deno.env.get("SUPABASE_URL")!, articleId, kind), prompt };
+  return {
+    url: publishingImageProxyUrl(
+      Deno.env.get("SUPABASE_URL")!,
+      articleId,
+      kind,
+    ),
+    prompt,
+  };
 }
 
 /** Ask for fresh image directions from an already written article. */
 async function requestImagePrompts(
   apiKey: string,
-  article: { title: string | null; excerpt: string | null; content: unknown; category: string | null; primary_keyword: string },
+  article: {
+    title: string | null;
+    excerpt: string | null;
+    content: unknown;
+    category: string | null;
+    primary_keyword: string;
+  },
 ) {
-  const body = Array.isArray(article.content) ? article.content.slice(0, 14).join("\n") : "";
+  const body = Array.isArray(article.content)
+    ? article.content.slice(0, 14).join("\n")
+    : "";
   const generated = await requestArticleJson(
     apiKey,
     `את עורכת ויזואלית במגזין ישראלי. הפיקי הנחיות צילום למאמר קיים.
@@ -263,7 +366,8 @@ ${JSON.stringify({ title: article.title, excerpt: article.excerpt, category: art
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -276,14 +380,21 @@ serve(async (req) => {
 
     const body = await req.json();
     const articleIds = Array.isArray(body.article_ids)
-      ? [...new Set(body.article_ids.filter((id: unknown) => typeof id === "string"))].slice(0, 10)
+      ? [
+          ...new Set(
+            body.article_ids.filter((id: unknown) => typeof id === "string"),
+          ),
+        ].slice(0, 10)
       : [];
-    if (!articleIds.length) return respond({ error: "article_ids required" }, 400);
+    if (!articleIds.length)
+      return respond({ error: "article_ids required" }, 400);
     const imagesOnly = body.mode === "images";
 
     const { data: articles, error: articlesError } = await admin
       .from("publishing_articles")
-      .select("id,tenant_id,client_id,customer_name,primary_keyword,proposed_topic,target_url,category,site_id,status,title,excerpt,content")
+      .select(
+        "id,tenant_id,client_id,customer_name,primary_keyword,proposed_topic,target_url,category,site_id,status,title,excerpt,content",
+      )
       .in("id", articleIds);
     if (articlesError) throw articlesError;
     if (!articles?.length) return respond({ error: "Articles not found" }, 404);
@@ -329,21 +440,39 @@ serve(async (req) => {
     }
 
     if (imagesOnly) {
-      const imageResults: Array<{ id: string; ok: boolean; error?: string }> = [];
+      const imageResults: Array<{ id: string; ok: boolean; error?: string }> =
+        [];
       for (const article of articles) {
         try {
-          if (!article.title || !Array.isArray(article.content) || !article.content.length) {
+          if (
+            !article.title ||
+            !Array.isArray(article.content) ||
+            !article.content.length
+          ) {
             throw new Error("אין תוכן כתוב למאמר, לכן אין ממה להפיק תמונות");
           }
-          const { heroPrompt, inlinePrompt, imageAlt } = await requestImagePrompts(
-            settings.openai_api_key,
-            article,
-          );
+          const { heroPrompt, inlinePrompt, imageAlt } =
+            await requestImagePrompts(settings.openai_api_key, article);
           const [heroImage, inlineImage] = await Promise.all([
-            generateArticleImage(admin, settings.openai_api_key, tenantId, article.id, "hero", heroPrompt),
-            generateArticleImage(admin, settings.openai_api_key, tenantId, article.id, "inline", inlinePrompt),
+            generateArticleImage(
+              admin,
+              settings.openai_api_key,
+              tenantId,
+              article.id,
+              "hero",
+              heroPrompt,
+            ),
+            generateArticleImage(
+              admin,
+              settings.openai_api_key,
+              tenantId,
+              article.id,
+              "inline",
+              inlinePrompt,
+            ),
           ]);
-          if (!heroImage && !inlineImage) throw new Error("יצירת התמונות נכשלה");
+          if (!heroImage && !inlineImage)
+            throw new Error("יצירת התמונות נכשלה");
           const { error: imageUpdateError } = await admin
             .from("publishing_articles")
             .update({
@@ -357,8 +486,13 @@ serve(async (req) => {
           if (imageUpdateError) throw imageUpdateError;
           imageResults.push({ id: article.id, ok: true });
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error("regenerate-publishing-images item error", article.id, message);
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.error(
+            "regenerate-publishing-images item error",
+            article.id,
+            message,
+          );
           imageResults.push({ id: article.id, ok: false, error: message });
         }
       }
@@ -370,23 +504,37 @@ serve(async (req) => {
       });
     }
 
-    const clientIds = [...new Set(articles.map((article) => article.client_id).filter(Boolean))];
-    const siteIds = [...new Set(articles.map((article) => article.site_id).filter(Boolean))];
+    const clientIds = [
+      ...new Set(articles.map((article) => article.client_id).filter(Boolean)),
+    ];
+    const siteIds = [
+      ...new Set(articles.map((article) => article.site_id).filter(Boolean)),
+    ];
     const [{ data: clients }, { data: sites }] = await Promise.all([
       clientIds.length
-        ? admin.from("clients").select("id,name,website,business_description,industry").in("id", clientIds)
+        ? admin
+            .from("clients")
+            .select("id,name,website,business_description,industry")
+            .in("id", clientIds)
         : Promise.resolve({ data: [] }),
       siteIds.length
-        ? admin.from("publishing_sites").select("id,name,categories,base_url").in("id", siteIds)
+        ? admin
+            .from("publishing_sites")
+            .select("id,name,categories,base_url")
+            .in("id", siteIds)
         : Promise.resolve({ data: [] }),
     ]);
-    const clientById = new Map((clients ?? []).map((client) => [client.id, client]));
+    const clientById = new Map(
+      (clients ?? []).map((client) => [client.id, client]),
+    );
     const siteById = new Map((sites ?? []).map((site) => [site.id, site]));
 
     const results: Array<{ id: string; ok: boolean; error?: string }> = [];
     for (const article of articles) {
       try {
-        const client = article.client_id ? clientById.get(article.client_id) : null;
+        const client = article.client_id
+          ? clientById.get(article.client_id)
+          : null;
         const site = article.site_id ? siteById.get(article.site_id) : null;
         const system = `${skinBlock}
 
@@ -430,7 +578,12 @@ ${JSON.stringify(context)}
 החזירי בדיוק:
 {"title":"","excerpt":"","content":["פסקה, כותרת משנה, LIST או TIP"],"faq":[{"question":"","answer":""}],"infographic":{"title":"","items":[{"value":"01","label":"","description":""}]},"hero_image_prompt":"","inline_image_prompt":"","image_alt":""}`;
 
-        const draft = await requestArticleJson(settings.openai_api_key, system, user, 0.55);
+        const draft = await requestArticleJson(
+          settings.openai_api_key,
+          system,
+          user,
+          0.55,
+        );
         const editorSystem = `את עורכת ראשית במגזין ישראלי. ערכי את הטיוטה כך שתישמע טבעית, מקצועית וספציפית לנושא.
 שמרי רק טענות שאפשר לבסס מההקשר או מידע כללי יציב. מחקי קלישאות, פתיחות גנריות, חזרות, ניסוח מכירתי ומשפטים שמדברים על "המאמר".
 גווני באורך המשפטים ובמבנה הפסקאות, אך אל תכניסי שגיאות מכוונות ואל תנסי לרמות גלאים.
@@ -449,31 +602,63 @@ ${JSON.stringify(draft)}
           editorUser,
           0.35,
         );
-        const boilerplate = ["בעולם המודרני", "בעידן הדיגיטלי", "אין ספק ש", "במאמר זה", "לסיכום, ניתן לומר"];
+        const boilerplate = [
+          "בעולם המודרני",
+          "בעידן הדיגיטלי",
+          "אין ספק ש",
+          "במאמר זה",
+          "לסיכום, ניתן לומר",
+        ];
         const inspectArticle = (candidate: GeneratedArticle) => {
-          const hardened = hardenArticle(candidate, String(article.primary_keyword ?? "").trim());
+          const hardened = hardenArticle(
+            candidate,
+            String(article.primary_keyword ?? "").trim(),
+          );
           const title = String(hardened.title ?? "").trim();
           const excerpt = String(hardened.excerpt ?? "").trim();
           const content = Array.isArray(hardened.content)
-            ? hardened.content.map((part) => String(part).trim()).filter(Boolean)
+            ? hardened.content
+                .map((part) => String(part).trim())
+                .filter(Boolean)
             : [];
           const faq = Array.isArray(hardened.faq)
-            ? hardened.faq.slice(0, 6).map((item) => ({
-              question: String((item as Record<string, unknown>)?.question ?? "").trim(),
-              answer: String((item as Record<string, unknown>)?.answer ?? "").trim(),
-            })).filter((item) => item.question && item.answer)
+            ? hardened.faq
+                .slice(0, 6)
+                .map((item) => ({
+                  question: String(
+                    (item as Record<string, unknown>)?.question ?? "",
+                  ).trim(),
+                  answer: String(
+                    (item as Record<string, unknown>)?.answer ?? "",
+                  ).trim(),
+                }))
+                .filter((item) => item.question && item.answer)
             : [];
-          const rawInfographic = hardened.infographic as Record<string, unknown> | null;
+          const rawInfographic = hardened.infographic as Record<
+            string,
+            unknown
+          > | null;
           const infographicItems = Array.isArray(rawInfographic?.items)
-            ? rawInfographic.items.slice(0, 5).map((item) => ({
-              value: String((item as Record<string, unknown>)?.value ?? "").trim(),
-              label: String((item as Record<string, unknown>)?.label ?? "").trim(),
-              description: String((item as Record<string, unknown>)?.description ?? "").trim(),
-            })).filter((item) => item.label && item.description)
+            ? rawInfographic.items
+                .slice(0, 5)
+                .map((item) => ({
+                  value: String(
+                    (item as Record<string, unknown>)?.value ?? "",
+                  ).trim(),
+                  label: String(
+                    (item as Record<string, unknown>)?.label ?? "",
+                  ).trim(),
+                  description: String(
+                    (item as Record<string, unknown>)?.description ?? "",
+                  ).trim(),
+                }))
+                .filter((item) => item.label && item.description)
             : [];
           const contentBody = content.join(" ");
           const wordCount = wordCountOf(content);
-          const headingCount = content.filter((part) => part.startsWith("## ")).length;
+          const headingCount = content.filter((part) =>
+            part.startsWith("## "),
+          ).length;
           const keyword = String(article.primary_keyword ?? "").trim();
           const failures = [
             ...(!title ? ["title_missing"] : []),
@@ -481,12 +666,24 @@ ${JSON.stringify(draft)}
             ...(content.length < 10 ? [`content_parts:${content.length}`] : []),
             ...(wordCount < 500 ? [`word_count:${wordCount}`] : []),
             ...(headingCount < 4 ? [`heading_count:${headingCount}`] : []),
-            ...(!content.some((part) => part.startsWith("LIST: ")) ? ["list_missing"] : []),
-            ...(!content.some((part) => part.startsWith("TIP: ")) ? ["tip_missing"] : []),
+            ...(!content.some((part) => part.startsWith("LIST: "))
+              ? ["list_missing"]
+              : []),
+            ...(!content.some((part) => part.startsWith("TIP: "))
+              ? ["tip_missing"]
+              : []),
             ...(faq.length < 4 ? [`faq_count:${faq.length}`] : []),
-            ...(infographicItems.length < 3 ? [`infographic_items:${infographicItems.length}`] : []),
-            ...(new Set(content.map(normalizeText)).size !== content.length ? ["duplicate_content_parts"] : []),
-            ...(boilerplate.some((phrase) => normalizeText(contentBody).includes(normalizeText(phrase))) ? ["boilerplate"] : []),
+            ...(infographicItems.length < 3
+              ? [`infographic_items:${infographicItems.length}`]
+              : []),
+            ...(new Set(content.map(normalizeText)).size !== content.length
+              ? ["duplicate_content_parts"]
+              : []),
+            ...(boilerplate.some((phrase) =>
+              normalizeText(contentBody).includes(normalizeText(phrase)),
+            )
+              ? ["boilerplate"]
+              : []),
             ...(keyword && countPhrase(contentBody, keyword) !== 1
               ? [`keyword_count:${countPhrase(contentBody, keyword)}`]
               : []),
@@ -507,7 +704,10 @@ ${JSON.stringify(draft)}
         };
 
         let inspected = inspectArticle(generated);
-        if (inspected.failures.includes("boilerplate") || inspected.failures.some((f) => f.startsWith("word_count"))) {
+        if (
+          inspected.failures.includes("boilerplate") ||
+          inspected.failures.some((f) => f.startsWith("word_count"))
+        ) {
           generated = await requestArticleJson(
             settings.openai_api_key,
             editorSystem,
@@ -543,12 +743,24 @@ ${JSON.stringify(generated)}`,
         // Final deterministic pass after the last model response.
         inspected = inspectArticle(generated);
         if (inspected.failures.length) {
-          throw new Error(`כרמן לא החזירה מאמר מלא ותקין: ${inspected.failures.join(", ")}`);
+          throw new Error(
+            `כרמן לא החזירה מאמר מלא ותקין: ${inspected.failures.join(", ")}`,
+          );
         }
         const { title, excerpt, content, faq, infographic } = inspected;
-        const heroPrompt = String(inspected.hardened.hero_image_prompt ?? generated.hero_image_prompt ?? "").trim();
-        const inlinePrompt = String(inspected.hardened.inline_image_prompt ?? generated.inline_image_prompt ?? "").trim();
-        const imageAlt = String(inspected.hardened.image_alt ?? generated.image_alt ?? title).trim();
+        const heroPrompt = String(
+          inspected.hardened.hero_image_prompt ??
+            generated.hero_image_prompt ??
+            "",
+        ).trim();
+        const inlinePrompt = String(
+          inspected.hardened.inline_image_prompt ??
+            generated.inline_image_prompt ??
+            "",
+        ).trim();
+        const imageAlt = String(
+          inspected.hardened.image_alt ?? generated.image_alt ?? title,
+        ).trim();
 
         // Persist copy first so an image timeout cannot discard a finished article.
         const { error: contentUpdateError } = await admin
@@ -571,8 +783,22 @@ ${JSON.stringify(generated)}`,
         let inlineImage: ArticleImage | null = null;
         try {
           [heroImage, inlineImage] = await Promise.all([
-            generateArticleImage(admin, settings.openai_api_key, tenantId, article.id, "hero", heroPrompt),
-            generateArticleImage(admin, settings.openai_api_key, tenantId, article.id, "inline", inlinePrompt),
+            generateArticleImage(
+              admin,
+              settings.openai_api_key,
+              tenantId,
+              article.id,
+              "hero",
+              heroPrompt,
+            ),
+            generateArticleImage(
+              admin,
+              settings.openai_api_key,
+              tenantId,
+              article.id,
+              "inline",
+              inlinePrompt,
+            ),
           ]);
           if (heroImage || inlineImage) {
             await admin
@@ -586,13 +812,21 @@ ${JSON.stringify(generated)}`,
               .eq("tenant_id", tenantId);
           }
         } catch (imageError) {
-          console.error("generate-publishing-article images deferred", article.id, imageError);
+          console.error(
+            "generate-publishing-article images deferred",
+            article.id,
+            imageError,
+          );
         }
 
         results.push({ id: article.id, ok: true });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error("generate-publishing-article item error", article.id, message);
+        console.error(
+          "generate-publishing-article item error",
+          article.id,
+          message,
+        );
         results.push({ id: article.id, ok: false, error: message });
       }
     }
@@ -605,6 +839,9 @@ ${JSON.stringify(generated)}`,
     });
   } catch (error) {
     console.error("generate-publishing-articles error", error);
-    return respond({ error: error instanceof Error ? error.message : String(error) }, 500);
+    return respond(
+      { error: error instanceof Error ? error.message : String(error) },
+      500,
+    );
   }
 });

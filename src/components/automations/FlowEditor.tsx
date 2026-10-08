@@ -24,7 +24,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Save, History, TestTube, MessageSquare, ZoomIn, ZoomOut, ArrowRight, Zap } from "lucide-react";
+import {
+  Save,
+  History,
+  TestTube,
+  MessageSquare,
+  ZoomIn,
+  ZoomOut,
+  ArrowRight,
+  Zap,
+} from "lucide-react";
 import { FlowNodeRF, FlowNodeData } from "./FlowNode";
 import { AddStepMenu } from "./AddStepMenu";
 import { InsertableEdge } from "./InsertableEdge";
@@ -61,7 +70,11 @@ function normalizeStepConfiguration(config: unknown): Record<string, any> {
   return {};
 }
 
-function toRFNode(nd: FlowNodeData, onDelete: (id: string) => void, onSelect: (id: string) => void): Node {
+function toRFNode(
+  nd: FlowNodeData,
+  onDelete: (id: string) => void,
+  onSelect: (id: string) => void,
+): Node {
   return {
     id: nd.id,
     type: "flowNode",
@@ -87,13 +100,18 @@ export default function FlowEditor() {
   const [showManualTrigger, setShowManualTrigger] = useState(false);
   const [showTestWithLead, setShowTestWithLead] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [insertBetween, setInsertBetween] = useState<{ sourceId: string; targetId: string } | null>(null);
+  const [insertBetween, setInsertBetween] = useState<{
+    sourceId: string;
+    targetId: string;
+  } | null>(null);
 
   // Track whether we've initialized from DB to prevent re-init after save
   const initializedRef = useRef(false);
 
   // Internal node data store (source of truth for DB)
-  const [nodeDataMap, setNodeDataMap] = useState<Record<string, FlowNodeData>>({});
+  const [nodeDataMap, setNodeDataMap] = useState<Record<string, FlowNodeData>>(
+    {},
+  );
 
   // React Flow state
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
@@ -101,41 +119,57 @@ export default function FlowEditor() {
 
   // ── Callbacks ──────────────────────────────────────────────────────────────
 
-  const handleDeleteNode = useCallback((id: string) => {
-    let blocked = false;
-    setNodeDataMap((prev) => {
-      const target = prev[id];
-      if (target?.step_type === "trigger") {
-        const triggerCount = Object.values(prev).filter((n) => n.step_type === "trigger").length;
-        if (triggerCount <= 1) {
-          blocked = true;
-          toast({ title: "לא ניתן למחוק את הטריגר היחיד", description: "אוטומציה חייבת לפחות טריגר אחד", variant: "destructive" });
-          return prev;
+  const handleDeleteNode = useCallback(
+    (id: string) => {
+      let blocked = false;
+      setNodeDataMap((prev) => {
+        const target = prev[id];
+        if (target?.step_type === "trigger") {
+          const triggerCount = Object.values(prev).filter(
+            (n) => n.step_type === "trigger",
+          ).length;
+          if (triggerCount <= 1) {
+            blocked = true;
+            toast({
+              title: "לא ניתן למחוק את הטריגר היחיד",
+              description: "אוטומציה חייבת לפחות טריגר אחד",
+              variant: "destructive",
+            });
+            return prev;
+          }
         }
-      }
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    if (blocked) return;
-    setRfNodes((nds) => nds.filter((n) => n.id !== id));
-    setRfEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
-    setSelectedNodeId((cur) => (cur === id ? null : cur));
-  }, [setRfNodes, setRfEdges, toast]);
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      if (blocked) return;
+      setRfNodes((nds) => nds.filter((n) => n.id !== id));
+      setRfEdges((eds) =>
+        eds.filter((e) => e.source !== id && e.target !== id),
+      );
+      setSelectedNodeId((cur) => (cur === id ? null : cur));
+    },
+    [setRfNodes, setRfEdges, toast],
+  );
 
+  const handleDisconnectNode = useCallback(
+    (id: string) => {
+      // Remove the edge coming into this node and clear parent_step_id
+      setRfEdges((eds) => eds.filter((e) => e.target !== id));
+      setNodeDataMap((prev) => ({
+        ...prev,
+        [id]: { ...prev[id], parent_step_id: null, condition_branch: null },
+      }));
+    },
+    [setRfEdges],
+  );
 
-  const handleDisconnectNode = useCallback((id: string) => {
-    // Remove the edge coming into this node and clear parent_step_id
-    setRfEdges((eds) => eds.filter((e) => e.target !== id));
-    setNodeDataMap((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], parent_step_id: null, condition_branch: null },
-    }));
-  }, [setRfEdges]);
-
-  const handleInsertBetween = useCallback((sourceId: string, targetId: string) => {
-    setInsertBetween({ sourceId, targetId });
-  }, []);
+  const handleInsertBetween = useCallback(
+    (sourceId: string, targetId: string) => {
+      setInsertBetween({ sourceId, targetId });
+    },
+    [],
+  );
 
   const handleSelectNode = useCallback((id: string) => {
     setSelectedNodeId(id);
@@ -150,19 +184,33 @@ export default function FlowEditor() {
             ...(existing || {}),
             id: nd.id,
             type: "flowNode",
-            position: existing?.position ?? { x: nd.position_x, y: nd.position_y },
-            data: { nodeData: nd, onDelete: handleDeleteNode, onSelect: handleSelectNode, onDisconnect: handleDisconnectNode },
+            position: existing?.position ?? {
+              x: nd.position_x,
+              y: nd.position_y,
+            },
+            data: {
+              nodeData: nd,
+              onDelete: handleDeleteNode,
+              onSelect: handleSelectNode,
+              onDisconnect: handleDisconnectNode,
+            },
             draggable: true,
           } as Node;
-        })
+        }),
       );
     },
-    [setRfNodes, handleDeleteNode, handleSelectNode, handleDisconnectNode]
+    [setRfNodes, handleDeleteNode, handleSelectNode, handleDisconnectNode],
   );
 
   // ── Fetch automation ───────────────────────────────────────────────────────
 
-  const { data: automation, isLoading: automationLoading, isError: automationError, error: automationLoadError, isFetched: automationFetched } = useQuery({
+  const {
+    data: automation,
+    isLoading: automationLoading,
+    isError: automationError,
+    error: automationLoadError,
+    isFetched: automationFetched,
+  } = useQuery({
     queryKey: ["automation", automationId],
     queryFn: async () => {
       if (!automationId || !tenantId) return null;
@@ -182,9 +230,15 @@ export default function FlowEditor() {
   });
 
   // Read-only when viewing a shared mirror (automation belongs to a different tenant)
-  const isReadOnlyMirror = !!automation && !!tenantId && automation.tenant_id !== tenantId;
+  const isReadOnlyMirror =
+    !!automation && !!tenantId && automation.tenant_id !== tenantId;
 
-  const { data: steps, isLoading: stepsLoading, isError: stepsError, error: stepsLoadError } = useQuery({
+  const {
+    data: steps,
+    isLoading: stepsLoading,
+    isError: stepsError,
+    error: stepsLoadError,
+  } = useQuery({
     queryKey: ["automation-flow-steps", automationId],
     queryFn: async () => {
       if (!automationId || !tenantId) return [];
@@ -256,7 +310,8 @@ export default function FlowEditor() {
         } else if (parent.step_type === "switch" && s.condition_branch) {
           sourceHandle = `branch_${s.condition_branch}`;
         } else if (parent.step_type === "loop") {
-          sourceHandle = s.condition_branch === "done" ? "loop_done" : "loop_body";
+          sourceHandle =
+            s.condition_branch === "done" ? "loop_done" : "loop_body";
         } else if (parent.step_type === "error_branch") {
           sourceHandle = s.condition_branch === "error" ? "error" : "success";
         } else if (parent.step_type === "merge") {
@@ -312,14 +367,19 @@ export default function FlowEditor() {
       const { sourceId, targetId } = insertBetween;
       const sourceNode = nodeDataMap[sourceId];
       const targetNode = nodeDataMap[targetId];
-      if (!sourceNode || !targetNode) { setInsertBetween(null); return; }
+      if (!sourceNode || !targetNode) {
+        setInsertBetween(null);
+        return;
+      }
 
       const newId = crypto.randomUUID();
       const midX = (sourceNode.position_x + targetNode.position_x) / 2;
       const midY = (sourceNode.position_y + targetNode.position_y) / 2;
 
       // Find the edge to get sourceHandle info
-      const oldEdge = rfEdges.find((e) => e.source === sourceId && e.target === targetId);
+      const oldEdge = rfEdges.find(
+        (e) => e.source === sourceId && e.target === targetId,
+      );
       const sourceHandle = oldEdge?.sourceHandle || "output";
 
       const newNode: FlowNodeData = {
@@ -327,7 +387,8 @@ export default function FlowEditor() {
         step_type: stepType,
         action_type: undefined,
         label: undefined,
-        configuration: stepType === "switch" ? { switch_branches: ["ברירת מחדל"] } : {},
+        configuration:
+          stepType === "switch" ? { switch_branches: ["ברירת מחדל"] } : {},
         position_x: midX,
         position_y: midY,
         sort_order: sourceNode.sort_order + 1,
@@ -337,14 +398,24 @@ export default function FlowEditor() {
       };
 
       // Update target to point to new node
-      const updatedTarget = { ...targetNode, parent_step_id: newId, condition_branch: null };
-      const newDataMap = { ...nodeDataMap, [newId]: newNode, [targetId]: updatedTarget };
+      const updatedTarget = {
+        ...targetNode,
+        parent_step_id: newId,
+        condition_branch: null,
+      };
+      const newDataMap = {
+        ...nodeDataMap,
+        [newId]: newNode,
+        [targetId]: updatedTarget,
+      };
       setNodeDataMap(newDataMap);
       syncRFNodes(newDataMap);
 
       // Replace old edge with two new edges
       setRfEdges((eds) => {
-        const filtered = eds.filter((e) => !(e.source === sourceId && e.target === targetId));
+        const filtered = eds.filter(
+          (e) => !(e.source === sourceId && e.target === targetId),
+        );
         return [
           ...filtered,
           {
@@ -377,7 +448,14 @@ export default function FlowEditor() {
       setSelectedNodeId(newId);
       setInsertBetween(null);
     },
-    [insertBetween, nodeDataMap, rfEdges, syncRFNodes, setRfEdges, handleInsertBetween]
+    [
+      insertBetween,
+      nodeDataMap,
+      rfEdges,
+      syncRFNodes,
+      setRfEdges,
+      handleInsertBetween,
+    ],
   );
 
   // ── Add step ───────────────────────────────────────────────────────────────
@@ -396,8 +474,8 @@ export default function FlowEditor() {
           stepType === "switch"
             ? { switch_branches: ["ברירת מחדל"] }
             : stepType === "merge"
-            ? { input_count: 2 }
-            : {},
+              ? { input_count: 2 }
+              : {},
         position_x: lastNode ? lastNode.position_x : 400,
         position_y: lastNode ? lastNode.position_y + 160 : 240,
         sort_order: allNodes.length,
@@ -416,10 +494,10 @@ export default function FlowEditor() {
           lastNode.step_type === "condition"
             ? "true"
             : lastNode.step_type === "loop"
-            ? "loop_body"
-            : lastNode.step_type === "error_branch"
-            ? "success"
-            : "output";
+              ? "loop_body"
+              : lastNode.step_type === "error_branch"
+                ? "success"
+                : "output";
 
         setRfEdges((eds) => [
           ...eds,
@@ -440,12 +518,14 @@ export default function FlowEditor() {
 
       setSelectedNodeId(newId);
     },
-    [nodeDataMap, syncRFNodes, setRfEdges, handleInsertBetween]
+    [nodeDataMap, syncRFNodes, setRfEdges, handleInsertBetween],
   );
 
   // ── Add extra trigger (OR semantics — multiple entry points to the same flow) ──
   const addTrigger = useCallback(() => {
-    const triggers = Object.values(nodeDataMap).filter((n) => n.step_type === "trigger");
+    const triggers = Object.values(nodeDataMap).filter(
+      (n) => n.step_type === "trigger",
+    );
     const rightmost = triggers.sort((a, b) => b.position_x - a.position_x)[0];
     const baseX = rightmost ? rightmost.position_x : 400;
     const baseY = rightmost ? rightmost.position_y : 80;
@@ -468,7 +548,6 @@ export default function FlowEditor() {
     setSelectedNodeId(newId);
   }, [nodeDataMap, syncRFNodes]);
 
-
   // ── Update node data ───────────────────────────────────────────────────────
 
   const updateNode = useCallback(
@@ -479,7 +558,7 @@ export default function FlowEditor() {
         return updated;
       });
     },
-    [syncRFNodes]
+    [syncRFNodes],
   );
 
   // ── Handle new connections drawn by user ───────────────────────────────────
@@ -500,15 +579,16 @@ export default function FlowEditor() {
       // Update parent_step_id in nodeDataMap
       if (connection.target) {
         const branch =
-          connection.sourceHandle === "true" || connection.sourceHandle === "false"
+          connection.sourceHandle === "true" ||
+          connection.sourceHandle === "false"
             ? connection.sourceHandle
             : connection.sourceHandle?.startsWith("branch_")
-            ? connection.sourceHandle.replace("branch_", "")
-            : connection.sourceHandle === "loop_done"
-            ? "done"
-            : connection.sourceHandle === "error"
-            ? "error"
-            : null;
+              ? connection.sourceHandle.replace("branch_", "")
+              : connection.sourceHandle === "loop_done"
+                ? "done"
+                : connection.sourceHandle === "error"
+                  ? "error"
+                  : null;
 
         setNodeDataMap((prev) => ({
           ...prev,
@@ -520,7 +600,7 @@ export default function FlowEditor() {
         }));
       }
     },
-    [setRfEdges]
+    [setRfEdges],
   );
 
   // ── Save ───────────────────────────────────────────────────────────────────
@@ -528,7 +608,8 @@ export default function FlowEditor() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!automationId || !tenantId) throw new Error("Missing data");
-      if (isReadOnlyMirror) throw new Error("אוטומציה זו משותפת מארגון אחר וניתנת לצפייה בלבד");
+      if (isReadOnlyMirror)
+        throw new Error("אוטומציה זו משותפת מארגון אחר וניתנת לצפייה בלבד");
 
       const allNodes = Object.values(nodeDataMap);
       const triggerNode = allNodes.find((n) => n.step_type === "trigger");
@@ -592,26 +673,42 @@ export default function FlowEditor() {
           .from("automation_flow_steps" as any)
           .insert(stepsToInsert);
         if (error) {
-          console.error("Save steps error:", error, "Steps data:", JSON.stringify(stepsToInsert));
+          console.error(
+            "Save steps error:",
+            error,
+            "Steps data:",
+            JSON.stringify(stepsToInsert),
+          );
           throw error;
         }
       }
     },
     onSuccess: async () => {
       initializedRef.current = false;
-      await queryClient.invalidateQueries({ queryKey: ["automation-flow-steps", automationId] });
-      await queryClient.invalidateQueries({ queryKey: ["automation", automationId] });
-      await queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["automation-flow-steps", automationId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["automation", automationId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["automations", tenantId],
+      });
       toast({ title: "הפלוו נשמר בהצלחה!" });
     },
     onError: (err: any) => {
-      toast({ title: "שגיאה בשמירה", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה בשמירה",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 
   const toggleActiveMutation = useMutation({
     mutationFn: async (nextActive: boolean) => {
-      if (!automationId || !tenantId) throw new Error("Missing automation data");
+      if (!automationId || !tenantId)
+        throw new Error("Missing automation data");
       const { data, error } = await supabase
         .from("automations")
         .update({ active: nextActive } as any)
@@ -668,10 +765,18 @@ export default function FlowEditor() {
       (stepsLoadError as Error)?.message ||
       "שגיאה בטעינת האוטומציה";
     return (
-      <div className="flex flex-col items-center justify-center gap-4 h-[calc(100vh-4rem)] p-8 text-center" dir="rtl">
+      <div
+        className="flex flex-col items-center justify-center gap-4 h-[calc(100vh-4rem)] p-8 text-center"
+        dir="rtl"
+      >
         <p className="text-muted-foreground">לא הצלחנו לפתוח את עורך הפלוו.</p>
-        <p className="text-xs text-muted-foreground font-mono max-w-lg break-all">{message}</p>
-        <Button variant="outline" onClick={() => navigate(buildPath("/automations"))}>
+        <p className="text-xs text-muted-foreground font-mono max-w-lg break-all">
+          {message}
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => navigate(buildPath("/automations"))}
+        >
           חזרה לרשימת אוטומציות
         </Button>
       </div>
@@ -680,9 +785,17 @@ export default function FlowEditor() {
 
   if (automationFetched && !automationLoading && !automation) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 h-[calc(100vh-4rem)] p-8 text-center" dir="rtl">
-        <p className="text-muted-foreground">האוטומציה לא נמצאה או שאין לך גישה אליה.</p>
-        <Button variant="outline" onClick={() => navigate(buildPath("/automations"))}>
+      <div
+        className="flex flex-col items-center justify-center gap-4 h-[calc(100vh-4rem)] p-8 text-center"
+        dir="rtl"
+      >
+        <p className="text-muted-foreground">
+          האוטומציה לא נמצאה או שאין לך גישה אליה.
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => navigate(buildPath("/automations"))}
+        >
           חזרה לרשימת אוטומציות
         </Button>
       </div>
@@ -701,7 +814,8 @@ export default function FlowEditor() {
     <div className="flex flex-col h-[calc(100vh-4rem)]" dir="rtl">
       {isReadOnlyMirror && (
         <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-xs text-amber-700 dark:text-amber-400 text-center">
-          אוטומציה זו שותפה אליך מארגון אחר ומוצגת כצפייה בלבד. היא רצה פעם אחת בלבד מהארגון שבעליה.
+          אוטומציה זו שותפה אליך מארגון אחר ומוצגת כצפייה בלבד. היא רצה פעם אחת
+          בלבד מהארגון שבעליה.
         </div>
       )}
       {/* ── Top bar ── */}
@@ -727,53 +841,88 @@ export default function FlowEditor() {
           <Switch
             checked={automationActive}
             disabled={isReadOnlyMirror}
-            onCheckedChange={(v) => !isReadOnlyMirror && toggleActiveMutation.mutate(v)}
+            onCheckedChange={(v) =>
+              !isReadOnlyMirror && toggleActiveMutation.mutate(v)
+            }
           />
-          <Label className="text-xs">{automationActive ? "פעיל" : "מושהה"}</Label>
+          <Label className="text-xs">
+            {automationActive ? "פעיל" : "מושהה"}
+          </Label>
         </div>
 
         <div className="flex-1" />
 
         {!isReadOnlyMirror && (
-          <Button variant="outline" size="sm" onClick={addTrigger} title="הוסף טריגר נוסף (OR)">
-            <Zap className="h-4 w-4 ml-1 text-amber-500" />
-            + טריגר
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addTrigger}
+            title="הוסף טריגר נוסף (OR)"
+          >
+            <Zap className="h-4 w-4 ml-1 text-amber-500" />+ טריגר
           </Button>
         )}
         {!isReadOnlyMirror && <AddStepMenu onAdd={addStep} />}
         {!isReadOnlyMirror && insertBetween && (
-          <AddStepMenu onAdd={(stepType) => doInsertBetween(stepType)} label="הוסף באמצע" />
+          <AddStepMenu
+            onAdd={(stepType) => doInsertBetween(stepType)}
+            label="הוסף באמצע"
+          />
         )}
         {!isReadOnlyMirror && insertBetween && (
-          <Button variant="ghost" size="sm" onClick={() => setInsertBetween(null)} className="text-xs text-muted-foreground">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setInsertBetween(null)}
+            className="text-xs text-muted-foreground"
+          >
             ביטול
           </Button>
         )}
 
-        {!isReadOnlyMirror && allNodes.some((n) => n.step_type === "trigger" && n.action_type === "manual_command") && (
-          <Button variant="outline" size="sm" onClick={() => setShowManualTrigger(true)}>
-            <MessageSquare className="h-4 w-4 ml-1" />
-            הפעל ידנית
-          </Button>
-        )}
+        {!isReadOnlyMirror &&
+          allNodes.some(
+            (n) =>
+              n.step_type === "trigger" && n.action_type === "manual_command",
+          ) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowManualTrigger(true)}
+            >
+              <MessageSquare className="h-4 w-4 ml-1" />
+              הפעל ידנית
+            </Button>
+          )}
         {!isReadOnlyMirror && (
-          <Button variant="outline" size="sm" onClick={() => setShowTestWithLead(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowTestWithLead(true)}
+          >
             <TestTube className="h-4 w-4 ml-1" />
             בדוק עם ליד
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={() => setShowHistory(true)}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowHistory(true)}
+        >
           <History className="h-4 w-4 ml-1" />
           היסטוריה
         </Button>
         {!isReadOnlyMirror && (
-          <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          <Button
+            size="sm"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+          >
             <Save className="h-4 w-4 ml-1" />
             {saveMutation.isPending ? "שומר..." : "שמור"}
           </Button>
         )}
       </div>
-
 
       {/* ── Canvas ── */}
       <div className="flex-1 relative">

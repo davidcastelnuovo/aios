@@ -48,7 +48,9 @@ export function useAgentKnowledge(agentId: string | null) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("agent_knowledge_items" as any)
-        .select("id, agent_id, tenant_id, folder_id, title, content, kind, url, tags, created_at, updated_at")
+        .select(
+          "id, agent_id, tenant_id, folder_id, title, content, kind, url, tags, created_at, updated_at",
+        )
         .eq("agent_id", agentId!)
         .order("updated_at", { ascending: false });
       if (error) throw error;
@@ -68,48 +70,78 @@ export function useAgentKnowledgeMutations(agentId: string | null) {
   };
 
   const createFolder = useMutation({
-    mutationFn: async (input: { name: string; parent_folder_id?: string | null; icon?: string }) => {
+    mutationFn: async (input: {
+      name: string;
+      parent_folder_id?: string | null;
+      icon?: string;
+    }) => {
       if (!agentId || !tenantId) throw new Error("missing agent/tenant");
-      const { error } = await supabase.from("agent_knowledge_folders" as any).insert({
-        agent_id: agentId, tenant_id: tenantId, name: input.name,
-        parent_folder_id: input.parent_folder_id ?? null, icon: input.icon ?? null,
-      });
+      const { error } = await supabase
+        .from("agent_knowledge_folders" as any)
+        .insert({
+          agent_id: agentId,
+          tenant_id: tenantId,
+          name: input.name,
+          parent_folder_id: input.parent_folder_id ?? null,
+          icon: input.icon ?? null,
+        });
       if (error) throw error;
     },
-    onSuccess: () => { inv(); toast.success("תיקייה נוצרה"); },
+    onSuccess: () => {
+      inv();
+      toast.success("תיקייה נוצרה");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
   const deleteFolder = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("agent_knowledge_folders" as any).delete().eq("id", id);
+      const { error } = await supabase
+        .from("agent_knowledge_folders" as any)
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { inv(); toast.success("נמחק"); },
+    onSuccess: () => {
+      inv();
+      toast.success("נמחק");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
   const createItem = useMutation({
     mutationFn: async (input: Partial<KnowledgeItem>) => {
       if (!agentId || !tenantId) throw new Error("missing agent/tenant");
-      const { error } = await supabase.from("agent_knowledge_items" as any).insert({
-        agent_id: agentId, tenant_id: tenantId,
-        folder_id: input.folder_id ?? null,
-        title: input.title ?? "ללא כותרת",
-        content: input.content ?? null,
-        kind: input.kind ?? "note",
-        url: input.url ?? null,
-        tags: input.tags ?? [],
-      });
+      const { error } = await supabase
+        .from("agent_knowledge_items" as any)
+        .insert({
+          agent_id: agentId,
+          tenant_id: tenantId,
+          folder_id: input.folder_id ?? null,
+          title: input.title ?? "ללא כותרת",
+          content: input.content ?? null,
+          kind: input.kind ?? "note",
+          url: input.url ?? null,
+          tags: input.tags ?? [],
+        });
       if (error) throw error;
     },
-    onSuccess: () => { inv(); toast.success("נוסף"); },
+    onSuccess: () => {
+      inv();
+      toast.success("נוסף");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
   const updateItem = useMutation({
-    mutationFn: async ({ id, ...patch }: Partial<KnowledgeItem> & { id: string }) => {
-      const { error } = await supabase.from("agent_knowledge_items" as any).update(patch).eq("id", id);
+    mutationFn: async ({
+      id,
+      ...patch
+    }: Partial<KnowledgeItem> & { id: string }) => {
+      const { error } = await supabase
+        .from("agent_knowledge_items" as any)
+        .update(patch)
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => inv(),
@@ -118,10 +150,16 @@ export function useAgentKnowledgeMutations(agentId: string | null) {
 
   const deleteItem = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("agent_knowledge_items" as any).delete().eq("id", id);
+      const { error } = await supabase
+        .from("agent_knowledge_items" as any)
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { inv(); toast.success("נמחק"); },
+    onSuccess: () => {
+      inv();
+      toast.success("נמחק");
+    },
     onError: (e: any) => toast.error(e.message),
   });
 

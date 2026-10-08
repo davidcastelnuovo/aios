@@ -27,7 +27,13 @@ import { MetaWhatsAppWarming } from "@/components/whatsapp/MetaWhatsAppWarming";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,7 +72,12 @@ type FacebookLoginResponse = {
 };
 
 type FacebookSdk = {
-  init: (options: { appId: string; cookie: boolean; xfbml: boolean; version: string }) => void;
+  init: (options: {
+    appId: string;
+    cookie: boolean;
+    xfbml: boolean;
+    version: string;
+  }) => void;
   login: (
     callback: (response: FacebookLoginResponse) => void,
     options: Record<string, unknown>,
@@ -117,7 +128,12 @@ class MetaAuthError extends Error {
   code?: string;
   details?: unknown;
   guidance?: string;
-  constructor(message: string, code?: string, details?: unknown, guidance?: string) {
+  constructor(
+    message: string,
+    code?: string,
+    details?: unknown,
+    guidance?: string,
+  ) {
     super(message);
     this.code = code;
     this.details = details;
@@ -131,26 +147,47 @@ class MetaAuthError extends Error {
  * connection. Read the body so the operator sees the real failure.
  */
 async function invokeMetaAuth(body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", { body });
+  const { data, error } = await supabase.functions.invoke(
+    "meta-whatsapp-auth",
+    { body },
+  );
   if (!error) {
     if (data?.error) {
-      throw new MetaAuthError(String(data.error), data.code, data.discovery, data.guidance);
+      throw new MetaAuthError(
+        String(data.error),
+        data.code,
+        data.discovery,
+        data.guidance,
+      );
     }
     return data;
   }
 
   const response = (error as { context?: Response }).context;
   if (response?.status === 401) {
-    throw new MetaAuthError("ההתחברות למערכת פגה. רעננו את הדף, התחברו מחדש ונסו שוב.", "unauthorized");
+    throw new MetaAuthError(
+      "ההתחברות למערכת פגה. רעננו את הדף, התחברו מחדש ונסו שוב.",
+      "unauthorized",
+    );
   }
-  let payload: { error?: string; code?: string; discovery?: unknown; guidance?: string } | null = null;
+  let payload: {
+    error?: string;
+    code?: string;
+    discovery?: unknown;
+    guidance?: string;
+  } | null = null;
   try {
     payload = await response?.clone().json();
   } catch {
     payload = null;
   }
   if (payload?.error) {
-    throw new MetaAuthError(String(payload.error), payload.code, payload.discovery, payload.guidance);
+    throw new MetaAuthError(
+      String(payload.error),
+      payload.code,
+      payload.discovery,
+      payload.guidance,
+    );
   }
   throw error;
 }
@@ -201,10 +238,14 @@ export default function MetaWhatsAppSettings() {
   const [selectedPhones, setSelectedPhones] = useState<string[]>([]);
   const [discovery, setDiscovery] = useState<unknown>(null);
   const [discoveryLimited, setDiscoveryLimited] = useState(false);
-  const [sharingIntegration, setSharingIntegration] = useState<Integration | null>(null);
+  const [sharingIntegration, setSharingIntegration] =
+    useState<Integration | null>(null);
   const [cloudRegisterPin, setCloudRegisterPin] = useState("");
   const codeRef = useRef<string | null>(null);
-  const sessionRef = useRef<{ data: Record<string, unknown>; event: string } | null>(null);
+  const sessionRef = useRef<{
+    data: Record<string, unknown>;
+    event: string;
+  } | null>(null);
   const completingRef = useRef(false);
   const sessionTimerRef = useRef<number | null>(null);
   const tokenRef = useRef<string | null>(null);
@@ -214,7 +255,10 @@ export default function MetaWhatsAppSettings() {
     enabled: Boolean(tenantId),
     retry: false,
     queryFn: async () =>
-      (await invokeMetaAuth({ action: "config", tenant_id: tenantId })) as MetaConfig,
+      (await invokeMetaAuth({
+        action: "config",
+        tenant_id: tenantId,
+      })) as MetaConfig,
   });
 
   const { data: integrations = [], isLoading } = useQuery({
@@ -223,7 +267,9 @@ export default function MetaWhatsAppSettings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_integrations")
-        .select("id,user_id,display_name,is_active,connection_visibility,settings")
+        .select(
+          "id,user_id,display_name,is_active,connection_visibility,settings",
+        )
         .eq("tenant_id", tenantId!)
         .eq("integration_type", "meta_whatsapp")
         .order("created_at");
@@ -248,22 +294,37 @@ export default function MetaWhatsAppSettings() {
         access_token: tokenRef.current,
         session_info: sessionRef.current?.data ?? {},
         session_event: sessionRef.current?.event ?? "",
-        redirect_uris: [`${window.location.origin}/`, window.location.origin, window.location.href],
+        redirect_uris: [
+          `${window.location.origin}/`,
+          window.location.origin,
+          window.location.href,
+        ],
         pin,
       });
-      if (!data?.success) throw new MetaAuthError(data?.error || "החיבור לא הושלם", data?.code);
+      if (!data?.success)
+        throw new MetaAuthError(data?.error || "החיבור לא הושלם", data?.code);
       const count = data.connections?.length ?? 1;
-      toast.success(`${count === 1 ? "מספר WhatsApp חובר" : `${count} מספרי WhatsApp חוברו`} בהצלחה`);
+      toast.success(
+        `${count === 1 ? "מספר WhatsApp חובר" : `${count} מספרי WhatsApp חוברו`} בהצלחה`,
+      );
       if (data.warnings?.length) {
-        toast.warning("החיבור הושלם, אך סנכרון היסטוריה חלקי. ניתן לראות סטטוס בכרטיס החיבור.");
+        toast.warning(
+          "החיבור הושלם, אך סנכרון היסטוריה חלקי. ניתן לראות סטטוס בכרטיס החיבור.",
+        );
       }
-      await queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["meta-whatsapp-integrations", tenantId],
+      });
     } catch (error) {
       const code = error instanceof MetaAuthError ? error.code : undefined;
-      if (code === "code_exchange_failed" || code === "waba_not_granted") setShowManual(true);
-      toast.error(error instanceof Error ? error.message : "שגיאה בחיבור WhatsApp", {
-        duration: 12000,
-      });
+      if (code === "code_exchange_failed" || code === "waba_not_granted")
+        setShowManual(true);
+      toast.error(
+        error instanceof Error ? error.message : "שגיאה בחיבור WhatsApp",
+        {
+          duration: 12000,
+        },
+      );
     } finally {
       codeRef.current = null;
       tokenRef.current = null;
@@ -278,7 +339,8 @@ export default function MetaWhatsAppSettings() {
       if (!event.origin.endsWith("facebook.com")) return;
       let parsed: unknown;
       try {
-        parsed = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        parsed =
+          typeof event.data === "string" ? JSON.parse(event.data) : event.data;
       } catch {
         return;
       }
@@ -309,7 +371,11 @@ export default function MetaWhatsAppSettings() {
         codeRef.current = null;
         tokenRef.current = null;
         setConnecting(false);
-        toast.error(String(payload.data?.error_message || "Meta לא הצליחה להשלים את החיבור"));
+        toast.error(
+          String(
+            payload.data?.error_message || "Meta לא הצליחה להשלים את החיבור",
+          ),
+        );
         return;
       }
       if (String(payload.event ?? "").startsWith("FINISH")) {
@@ -321,9 +387,12 @@ export default function MetaWhatsAppSettings() {
     return () => window.removeEventListener("message", listener);
   });
 
-  useEffect(() => () => {
-    if (sessionTimerRef.current) window.clearTimeout(sessionTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (sessionTimerRef.current) window.clearTimeout(sessionTimerRef.current);
+    },
+    [],
+  );
 
   const launchSignup = async () => {
     if (!config) return;
@@ -345,7 +414,8 @@ export default function MetaWhatsAppSettings() {
       // from an empty one and can drop back to the plain Facebook login dialog.
       const extras: Record<string, unknown> = {
         setup: {},
-        featureType: mode === "coexistence" ? "whatsapp_business_app_onboarding" : "",
+        featureType:
+          mode === "coexistence" ? "whatsapp_business_app_onboarding" : "",
         sessionInfoVersion: "3",
       };
       const sdk = (window as FacebookWindow).FB;
@@ -355,11 +425,14 @@ export default function MetaWhatsAppSettings() {
           const auth = response?.authResponse;
           // Depending on the configuration, Embedded Signup returns either an
           // authorization code or a short-lived user token. Accept either one.
-          const returnedCode = auth?.code && !auth.code.startsWith("cb=") ? auth.code : null;
+          const returnedCode =
+            auth?.code && !auth.code.startsWith("cb=") ? auth.code : null;
           const returnedToken = auth?.accessToken ?? null;
           if (!returnedCode && !returnedToken) {
             setConnecting(false);
-            toast.error("Meta לא החזירה הרשאה. נסו שוב ואשרו את חשבון ה-WhatsApp בתהליך.");
+            toast.error(
+              "Meta לא החזירה הרשאה. נסו שוב ואשרו את חשבון ה-WhatsApp בתהליך.",
+            );
             return;
           }
           codeRef.current = returnedCode;
@@ -387,7 +460,9 @@ export default function MetaWhatsAppSettings() {
       );
     } catch (error) {
       setConnecting(false);
-      toast.error(error instanceof Error ? error.message : "לא ניתן לפתוח את Meta");
+      toast.error(
+        error instanceof Error ? error.message : "לא ניתן לפתוח את Meta",
+      );
     }
   };
 
@@ -401,7 +476,10 @@ export default function MetaWhatsAppSettings() {
         business_id: manualBusinessId.trim(),
       });
       if (!data?.success) {
-        throw new MetaAuthError(data?.error || "לא ניתן לקרוא את הנכסים מ-Meta", data?.code);
+        throw new MetaAuthError(
+          data?.error || "לא ניתן לקרוא את הנכסים מ-Meta",
+          data?.code,
+        );
       }
       setMetaAppId(String(data.app_id ?? ""));
       setDiscoveryLimited(Boolean(data.discovery_limited));
@@ -411,68 +489,91 @@ export default function MetaWhatsAppSettings() {
       setDiscovery(null);
       setAssets(accounts);
       setSelectedPhones([]);
-      const total = accounts.reduce((sum, account) => sum + account.phone_numbers.length, 0);
+      const total = accounts.reduce(
+        (sum, account) => sum + account.phone_numbers.length,
+        0,
+      );
       if (!total) toast.warning("לא נמצאו מספרי WhatsApp תחת האסימון הזה");
       else toast.success(`נמצאו ${total} מספרים`);
     },
     onError: (error: Error) => {
       setAssets(null);
       setDiscoveryLimited(false);
-      setDiscovery(error instanceof MetaAuthError ? error.details ?? null : null);
+      setDiscovery(
+        error instanceof MetaAuthError ? (error.details ?? null) : null,
+      );
       toast.error(error.message, { duration: 15000 });
     },
   });
 
   const selectedPhonesNeedPin = Boolean(
     assets &&
-      selectedPhones.some((value) => {
-        const [, phoneNumberId] = value.split("::");
-        const phone = assets
-          .flatMap((account) => account.phone_numbers)
-          .find((entry) => entry.id === phoneNumberId);
-        return phone ? needsCloudRegistration(phone) : false;
-      }),
+    selectedPhones.some((value) => {
+      const [, phoneNumberId] = value.split("::");
+      const phone = assets
+        .flatMap((account) => account.phone_numbers)
+        .find((entry) => entry.id === phoneNumberId);
+      return phone ? needsCloudRegistration(phone) : false;
+    }),
   );
 
   const connectManualMutation = useMutation({
     mutationFn: async () => {
-      const selections = selectedPhones.map((value) => {
-        const [wabaId, phoneNumberId] = value.split("::");
-        return { wabaId, phoneNumberId };
-      }).filter((selection) => selection.wabaId && selection.phoneNumberId);
+      const selections = selectedPhones
+        .map((value) => {
+          const [wabaId, phoneNumberId] = value.split("::");
+          return { wabaId, phoneNumberId };
+        })
+        .filter((selection) => selection.wabaId && selection.phoneNumberId);
       if (!selections.length) throw new Error("יש לבחור לפחות מספר אחד");
       if (selectedPhonesNeedPin && !/^\d{6}$/.test(manualPin)) {
         document.getElementById("meta-wa-manual-pin-top")?.focus();
-        throw new Error("המספר שבחרתם עדיין Pending — הזינו PIN בן 6 ספרות בראש החיבור הידני ואז לחצו חיבור");
+        throw new Error(
+          "המספר שבחרתם עדיין Pending — הזינו PIN בן 6 ספרות בראש החיבור הידני ואז לחצו חיבור",
+        );
       }
-      const selectedWabas = [...new Set(selections.map((selection) => selection.wabaId))];
+      const selectedWabas = [
+        ...new Set(selections.map((selection) => selection.wabaId)),
+      ];
       const data = await invokeMetaAuth({
         action: "connect_manual",
         tenant_id: tenantId,
         ...(manualToken.trim() ? { access_token: manualToken.trim() } : {}),
         ...(selectedWabas.length === 1 ? { waba_id: selectedWabas[0] } : {}),
         business_id: manualBusinessId.trim(),
-        phone_number_ids: selections.map((selection) => selection.phoneNumberId),
+        phone_number_ids: selections.map(
+          (selection) => selection.phoneNumberId,
+        ),
         pin: manualPin,
       });
-      if (!data?.success) throw new MetaAuthError(data?.error || "החיבור לא הושלם", data?.code);
+      if (!data?.success)
+        throw new MetaAuthError(data?.error || "החיבור לא הושלם", data?.code);
       return data;
     },
     onSuccess: async (data) => {
       const count = data.connections?.length ?? selectedPhones.length;
-      toast.success(`${count === 1 ? "מספר WhatsApp חובר" : `${count} מספרי WhatsApp חוברו`} בהצלחה`);
-      if (data.warnings?.length) toast.warning("החיבור הושלם, אך סנכרון היסטוריה חלקי.");
+      toast.success(
+        `${count === 1 ? "מספר WhatsApp חובר" : `${count} מספרי WhatsApp חוברו`} בהצלחה`,
+      );
+      if (data.warnings?.length)
+        toast.warning("החיבור הושלם, אך סנכרון היסטוריה חלקי.");
       setManualPin("");
       setSelectedPhones([]);
-      await queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-config", tenantId] });
-      await queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["meta-whatsapp-config", tenantId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["meta-whatsapp-integrations", tenantId],
+      });
     },
     onError: (error: Error) => {
       if (
         error instanceof MetaAuthError &&
         error.code === "pin_required_for_registration"
       ) {
-        document.getElementById("meta-wa-manual-pin-top")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        document
+          .getElementById("meta-wa-manual-pin-top")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
         document.getElementById("meta-wa-manual-pin-top")?.focus();
       }
       toast.error(error.message, { duration: 12000 });
@@ -481,7 +582,10 @@ export default function MetaWhatsAppSettings() {
 
   const diagnoseMutation = useMutation({
     mutationFn: async () =>
-      (await invokeMetaAuth({ action: "diagnose", tenant_id: tenantId })) as Record<string, unknown>,
+      (await invokeMetaAuth({
+        action: "diagnose",
+        tenant_id: tenantId,
+      })) as Record<string, unknown>,
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -492,17 +596,26 @@ export default function MetaWhatsAppSettings() {
         tenant_id: tenantId,
         integration_id: integrationId,
       });
-      if (!data?.success) throw new MetaAuthError(data?.error || "הניתוק נכשל", data?.code);
+      if (!data?.success)
+        throw new MetaAuthError(data?.error || "הניתוק נכשל", data?.code);
     },
     onSuccess: () => {
       toast.success("החיבור הוסר מ-AIOS");
-      queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["meta-whatsapp-integrations", tenantId],
+      });
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
   const registerCloudApiMutation = useMutation({
-    mutationFn: async ({ integrationId, pin }: { integrationId: string; pin: string }) => {
+    mutationFn: async ({
+      integrationId,
+      pin,
+    }: {
+      integrationId: string;
+      pin: string;
+    }) => {
       const data = await invokeMetaAuth({
         action: "register_cloud_api",
         tenant_id: tenantId,
@@ -510,19 +623,28 @@ export default function MetaWhatsAppSettings() {
         pin,
       });
       if (!data?.success) {
-        throw new MetaAuthError(data?.error || "הרישום נכשל", data?.code, undefined, data?.guidance);
+        throw new MetaAuthError(
+          data?.error || "הרישום נכשל",
+          data?.code,
+          undefined,
+          data?.guidance,
+        );
       }
       return data;
     },
     onSuccess: (data) => {
       toast.success(String(data?.message || "המספר רשום ל-Cloud API"));
       setCloudRegisterPin("");
-      queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["meta-whatsapp-integrations", tenantId],
+      });
     },
     onError: (error: Error) => {
       const authError = error as MetaAuthError;
       toast.error(
-        authError.guidance ? `${authError.message}\n${authError.guidance}` : authError.message,
+        authError.guidance
+          ? `${authError.message}\n${authError.guidance}`
+          : authError.message,
         { duration: 15000 },
       );
     },
@@ -535,7 +657,11 @@ export default function MetaWhatsAppSettings() {
 
   return (
     <div className="container mx-auto max-w-5xl p-6" dir="rtl">
-      <Button variant="ghost" onClick={() => navigate(buildPath("/integrations"))} className="mb-6">
+      <Button
+        variant="ghost"
+        onClick={() => navigate(buildPath("/integrations"))}
+        className="mb-6"
+      >
         <ArrowRight className="ml-2 h-4 w-4" />
         חזרה לאינטגרציות
       </Button>
@@ -548,11 +674,16 @@ export default function MetaWhatsAppSettings() {
             </div>
             <div>
               <h1 className="text-3xl font-bold">WhatsApp Business הרשמי</h1>
-              <p className="text-muted-foreground">חיבור ישיר ל־Meta WhatsApp Cloud API</p>
+              <p className="text-muted-foreground">
+                חיבור ישיר ל־Meta WhatsApp Cloud API
+              </p>
             </div>
           </div>
         </div>
-        <Badge variant="outline" className="gap-1.5 border-emerald-500/40 text-emerald-700">
+        <Badge
+          variant="outline"
+          className="gap-1.5 border-emerald-500/40 text-emerald-700"
+        >
           <ShieldCheck className="h-4 w-4" />
           API רשמי של Meta
         </Badge>
@@ -562,8 +693,9 @@ export default function MetaWhatsAppSettings() {
         <Alert variant="destructive" className="mb-6">
           <AlertTitle>האינטגרציה עדיין לא הוגדרה בשרת</AlertTitle>
           <AlertDescription>
-            יש להגדיר את הסודות <code>FACEBOOK_APP_ID</code>, <code>META_APP_SECRET</code>,{" "}
-            <code>META_WHATSAPP_CONFIG_ID</code> ו־<code>META_WHATSAPP_WEBHOOK_VERIFY_TOKEN</code>.
+            יש להגדיר את הסודות <code>FACEBOOK_APP_ID</code>,{" "}
+            <code>META_APP_SECRET</code>, <code>META_WHATSAPP_CONFIG_ID</code>{" "}
+            ו־<code>META_WHATSAPP_WEBHOOK_VERIFY_TOKEN</code>.
           </AlertDescription>
         </Alert>
       )}
@@ -572,19 +704,33 @@ export default function MetaWhatsAppSettings() {
         <Card>
           <CardHeader>
             <CardTitle>חיבור מספר WhatsApp</CardTitle>
-            <CardDescription>בחרו אם לחבר מספר חדש או מספר שכבר פעיל באפליקציית WhatsApp Business.</CardDescription>
+            <CardDescription>
+              בחרו אם לחבר מספר חדש או מספר שכבר פעיל באפליקציית WhatsApp
+              Business.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <RadioGroup value={mode} onValueChange={(value) => setMode(value as SignupMode)} className="grid gap-3">
+            <RadioGroup
+              value={mode}
+              onValueChange={(value) => setMode(value as SignupMode)}
+              className="grid gap-3"
+            >
               <Label
                 htmlFor="coexistence"
                 className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 has-[[data-state=checked]]:border-emerald-500"
               >
-                <RadioGroupItem id="coexistence" value="coexistence" className="mt-1" />
+                <RadioGroupItem
+                  id="coexistence"
+                  value="coexistence"
+                  className="mt-1"
+                />
                 <span>
-                  <span className="block font-semibold">מספר קיים ב־WhatsApp Business</span>
+                  <span className="block font-semibold">
+                    מספר קיים ב־WhatsApp Business
+                  </span>
                   <span className="text-sm font-normal text-muted-foreground">
-                    Coexistence: ממשיכים להשתמש באפליקציה בטלפון, ובמקביל מחברים את AIOS ל־Cloud API.
+                    Coexistence: ממשיכים להשתמש באפליקציה בטלפון, ובמקביל מחברים
+                    את AIOS ל־Cloud API.
                   </span>
                 </span>
               </Label>
@@ -592,11 +738,18 @@ export default function MetaWhatsAppSettings() {
                 htmlFor="new_number"
                 className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 has-[[data-state=checked]]:border-emerald-500"
               >
-                <RadioGroupItem id="new_number" value="new_number" className="mt-1" />
+                <RadioGroupItem
+                  id="new_number"
+                  value="new_number"
+                  className="mt-1"
+                />
                 <span className="w-full">
-                  <span className="block font-semibold">מספר חדש ל־Cloud API</span>
+                  <span className="block font-semibold">
+                    מספר חדש ל־Cloud API
+                  </span>
                   <span className="text-sm font-normal text-muted-foreground">
-                    מספר שאינו מחובר כרגע ל־WhatsApp רגיל. Meta תבצע אימות SMS או שיחה.
+                    מספר שאינו מחובר כרגע ל־WhatsApp רגיל. Meta תבצע אימות SMS
+                    או שיחה.
                   </span>
                 </span>
               </Label>
@@ -604,35 +757,52 @@ export default function MetaWhatsAppSettings() {
 
             <Alert className="border-amber-500/40">
               <KeyRound className="h-4 w-4" />
-              <AlertTitle>למספר בסטטוס Pending — השתמשו בחיבור הידני</AlertTitle>
+              <AlertTitle>
+                למספר בסטטוס Pending — השתמשו בחיבור הידני
+              </AlertTitle>
               <AlertDescription className="text-sm">
-                החיבור דרך Meta Embedded Signup לא משלים רישום Cloud API למספר שכבר נוסף ב־WhatsApp
-                Manager. גללו ל־<strong>חיבור ידני עם Access Token</strong>, הזינו PIN בן 6 ספרות,
-                סנכרנו, בחרו את המספר ולחצו חיבור.
+                החיבור דרך Meta Embedded Signup לא משלים רישום Cloud API למספר
+                שכבר נוסף ב־WhatsApp Manager. גללו ל־
+                <strong>חיבור ידני עם Access Token</strong>, הזינו PIN בן 6
+                ספרות, סנכרנו, בחרו את המספר ולחצו חיבור.
               </AlertDescription>
             </Alert>
 
             <div className="space-y-2">
               <Label htmlFor="meta-wa-pin">
                 PIN לאימות דו־שלבי (6 ספרות)
-                {mode === "coexistence" && <span className="text-muted-foreground"> — אופציונלי</span>}
+                {mode === "coexistence" && (
+                  <span className="text-muted-foreground"> — אופציונלי</span>
+                )}
               </Label>
               <Input
                 id="meta-wa-pin"
                 value={pin}
-                onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                onChange={(event) =>
+                  setPin(event.target.value.replace(/\D/g, "").slice(0, 6))
+                }
                 inputMode="numeric"
                 dir="ltr"
                 placeholder="123456"
                 className="max-w-48"
               />
               <p className="text-xs text-muted-foreground">
-                נדרש כאשר המספר נרשם ל־Cloud API. במסלול Coexistence Meta מדלגת על הרישום.
+                נדרש כאשר המספר נרשם ל־Cloud API. במסלול Coexistence Meta מדלגת
+                על הרישום.
               </p>
             </div>
 
-            <Button onClick={launchSignup} disabled={!config || connecting} size="lg" className="w-full bg-[#1877F2] hover:bg-[#166FE5]">
-              {connecting ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <ExternalLink className="ml-2 h-4 w-4" />}
+            <Button
+              onClick={launchSignup}
+              disabled={!config || connecting}
+              size="lg"
+              className="w-full bg-[#1877F2] hover:bg-[#166FE5]"
+            >
+              {connecting ? (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              ) : (
+                <ExternalLink className="ml-2 h-4 w-4" />
+              )}
               {connecting ? "משלים חיבור..." : "המשך לחיבור מאובטח ב־Meta"}
             </Button>
             <p className="text-xs text-muted-foreground">
@@ -642,8 +812,14 @@ export default function MetaWhatsAppSettings() {
                 className="underline"
                 onClick={() => {
                   setShowManual(true);
-                  document.getElementById("meta-manual-connect")?.scrollIntoView({ behavior: "smooth" });
-                  window.setTimeout(() => document.getElementById("meta-wa-manual-pin")?.focus(), 300);
+                  document
+                    .getElementById("meta-manual-connect")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                  window.setTimeout(
+                    () =>
+                      document.getElementById("meta-wa-manual-pin")?.focus(),
+                    300,
+                  );
                 }}
               >
                 עברו לחיבור הידני עם PIN
@@ -661,11 +837,21 @@ export default function MetaWhatsAppSettings() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>Meta מציגה את מסך ההרשאה הרשמי ובוחרת Business Portfolio, חשבון WABA ומספר.</p>
-            <p>AIOS נרשמת ל־webhooks ושומרת את החיבור תחת הארגון הנוכחי בלבד.</p>
-            <p>ב־Coexistence מתבקש מיד סנכרון אנשי קשר והיסטוריה, ועותקי הודעות מהטלפון נשמרים בצ׳אט.</p>
+            <p>
+              Meta מציגה את מסך ההרשאה הרשמי ובוחרת Business Portfolio, חשבון
+              WABA ומספר.
+            </p>
+            <p>
+              AIOS נרשמת ל־webhooks ושומרת את החיבור תחת הארגון הנוכחי בלבד.
+            </p>
+            <p>
+              ב־Coexistence מתבקש מיד סנכרון אנשי קשר והיסטוריה, ועותקי הודעות
+              מהטלפון נשמרים בצ׳אט.
+            </p>
             <Separator />
-            <p className="font-medium text-foreground">מגבלות Meta: אין קבוצות; מחוץ לחלון 24 שעות יש לשלוח תבנית מאושרת.</p>
+            <p className="font-medium text-foreground">
+              מגבלות Meta: אין קבוצות; מחוץ לחלון 24 שעות יש לשלוח תבנית מאושרת.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -679,11 +865,15 @@ export default function MetaWhatsAppSettings() {
                 חיבור ידני עם Access Token + PIN
               </CardTitle>
               <CardDescription>
-                המסלול הנכון למספר Pending: אסימון System User, PIN בן 6 ספרות, סנכרון, בחירת מספר
-                וחיבור. AIOS מריצה את הרישום ל־Cloud API.
+                המסלול הנכון למספר Pending: אסימון System User, PIN בן 6 ספרות,
+                סנכרון, בחירת מספר וחיבור. AIOS מריצה את הרישום ל־Cloud API.
               </CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setShowManual((value) => !value)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowManual((value) => !value)}
+            >
               {showManual ? "הסתרה" : "פתיחה"}
             </Button>
           </div>
@@ -700,16 +890,18 @@ export default function MetaWhatsAppSettings() {
               <AlertDescription className="text-sm">
                 {config?.has_saved_token ? (
                   <>
-                    אין צורך ליצור או להדביק אסימון נוסף. הקצו WABA או מספר ל־System User ב־Meta
-                    ולחצו על "סנכרון חשבונות ומספרים". הדבקת אסימון כאן תחליף את האסימון השמור.
+                    אין צורך ליצור או להדביק אסימון נוסף. הקצו WABA או מספר
+                    ל־System User ב־Meta ולחצו על "סנכרון חשבונות ומספרים".
+                    הדבקת אסימון כאן תחליף את האסימון השמור.
                   </>
                 ) : (
                   <>
-                    Meta Business Settings → Users → System users → יצירת משתמש מערכת → Add Assets ובחירת
-                    חשבון ה־WhatsApp → Generate new token עם ההרשאות{" "}
-                    <code>business_management</code>, <code>whatsapp_business_management</code> ו־
-                    <code>whatsapp_business_messaging</code>.
-                    האסימון נשמר ואינו נחשף בממשק.
+                    Meta Business Settings → Users → System users → יצירת משתמש
+                    מערכת → Add Assets ובחירת חשבון ה־WhatsApp → Generate new
+                    token עם ההרשאות <code>business_management</code>,{" "}
+                    <code>whatsapp_business_management</code> ו־
+                    <code>whatsapp_business_messaging</code>. האסימון נשמר ואינו
+                    נחשף בממשק.
                   </>
                 )}
               </AlertDescription>
@@ -722,14 +914,19 @@ export default function MetaWhatsAppSettings() {
               <Input
                 id="meta-wa-manual-pin-top"
                 value={manualPin}
-                onChange={(event) => setManualPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                onChange={(event) =>
+                  setManualPin(
+                    event.target.value.replace(/\D/g, "").slice(0, 6),
+                  )
+                }
                 inputMode="numeric"
                 dir="ltr"
                 placeholder="למשל 482193"
                 className="max-w-48 bg-background"
               />
               <p className="text-xs text-muted-foreground">
-                אתם בוחרים את הקוד ושומרים אותו. בלי PIN המספר ישאר Pending ולא יתחבר.
+                אתם בוחרים את הקוד ושומרים אותו. בלי PIN המספר ישאר Pending ולא
+                יתחבר.
               </p>
             </div>
 
@@ -746,7 +943,11 @@ export default function MetaWhatsAppSettings() {
                 }}
                 dir="ltr"
                 autoComplete="off"
-                placeholder={config?.has_saved_token ? "השאירו ריק כדי להשתמש באסימון השמור" : "EAAG..."}
+                placeholder={
+                  config?.has_saved_token
+                    ? "השאירו ריק כדי להשתמש באסימון השמור"
+                    : "EAAG..."
+                }
                 className="font-mono text-xs"
               />
             </div>
@@ -760,7 +961,9 @@ export default function MetaWhatsAppSettings() {
                 <Input
                   id="meta-wa-waba-id"
                   value={manualWabaId}
-                  onChange={(event) => setManualWabaId(event.target.value.replace(/\D/g, ""))}
+                  onChange={(event) =>
+                    setManualWabaId(event.target.value.replace(/\D/g, ""))
+                  }
                   dir="ltr"
                   inputMode="numeric"
                   placeholder="104938271625483"
@@ -775,7 +978,9 @@ export default function MetaWhatsAppSettings() {
                 <Input
                   id="meta-wa-business-id"
                   value={manualBusinessId}
-                  onChange={(event) => setManualBusinessId(event.target.value.replace(/\D/g, ""))}
+                  onChange={(event) =>
+                    setManualBusinessId(event.target.value.replace(/\D/g, ""))
+                  }
                   dir="ltr"
                   inputMode="numeric"
                   placeholder="1029384756102938"
@@ -784,27 +989,36 @@ export default function MetaWhatsAppSettings() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              מלאו את השדות האלה רק אם השליפה האוטומטית לא מוצאת את החשבון. את ה־WABA ID רואים
-              ב־App Dashboard → WhatsApp → API Setup, או ב־Business Settings → WhatsApp accounts.
+              מלאו את השדות האלה רק אם השליפה האוטומטית לא מוצאת את החשבון. את
+              ה־WABA ID רואים ב־App Dashboard → WhatsApp → API Setup, או
+              ב־Business Settings → WhatsApp accounts.
             </p>
 
             <Button
               variant="secondary"
               onClick={() => loadAssetsMutation.mutate()}
-              disabled={(!manualToken.trim() && !config?.has_saved_token) || loadAssetsMutation.isPending}
+              disabled={
+                (!manualToken.trim() && !config?.has_saved_token) ||
+                loadAssetsMutation.isPending
+              }
             >
-              {loadAssetsMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+              {loadAssetsMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
               3. סנכרון חשבונות ומספרים
             </Button>
 
             {discoveryLimited && (
               <Alert className="border-amber-500/40">
                 <ShieldCheck className="h-4 w-4" />
-                <AlertTitle>המספרים הקיימים מוצגים, אך גילוי חשבונות חדשים מוגבל</AlertTitle>
+                <AlertTitle>
+                  המספרים הקיימים מוצגים, אך גילוי חשבונות חדשים מוגבל
+                </AlertTitle>
                 <AlertDescription>
-                  האסימון השמור חסר <code>business_management</code>. צרו פעם אחת אסימון חדש לאותו
-                  System User עם שלוש ההרשאות, הדביקו אותו כאן ולחצו שוב על סנכרון. לאחר מכן כל WABA
-                  ומספר שיוקצו למשתמש יתגלו בלי ליצור אסימון נוסף.
+                  האסימון השמור חסר <code>business_management</code>. צרו פעם
+                  אחת אסימון חדש לאותו System User עם שלוש ההרשאות, הדביקו אותו
+                  כאן ולחצו שוב על סנכרון. לאחר מכן כל WABA ומספר שיוקצו למשתמש
+                  יתגלו בלי ליצור אסימון נוסף.
                 </AlertDescription>
               </Alert>
             )}
@@ -827,7 +1041,11 @@ export default function MetaWhatsAppSettings() {
               <div className="space-y-3">
                 {(() => {
                   const connectedIds = new Set(
-                    integrations.map((integration) => integration.settings?.phone_number_id).filter(Boolean),
+                    integrations
+                      .map(
+                        (integration) => integration.settings?.phone_number_id,
+                      )
+                      .filter(Boolean),
                   );
                   const available = assets.flatMap((account) =>
                     account.phone_numbers
@@ -835,7 +1053,9 @@ export default function MetaWhatsAppSettings() {
                       .map((phone) => `${account.waba_id}::${phone.id}`),
                   );
                   if (!available.length) return null;
-                  const allSelected = available.every((value) => selectedPhones.includes(value));
+                  const allSelected = available.every((value) =>
+                    selectedPhones.includes(value),
+                  );
                   return (
                     <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 p-3">
                       <span className="text-sm">
@@ -847,7 +1067,9 @@ export default function MetaWhatsAppSettings() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => setSelectedPhones(allSelected ? [] : available)}
+                        onClick={() =>
+                          setSelectedPhones(allSelected ? [] : available)
+                        }
                       >
                         {allSelected ? "נקה בחירה" : "בחר הכול"}
                       </Button>
@@ -855,18 +1077,27 @@ export default function MetaWhatsAppSettings() {
                   );
                 })()}
                 {assets.length === 0 && (
-                  <p className="text-sm text-muted-foreground">לא נמצאו חשבונות WhatsApp Business.</p>
+                  <p className="text-sm text-muted-foreground">
+                    לא נמצאו חשבונות WhatsApp Business.
+                  </p>
                 )}
                 {assets.map((account) => (
                   <div key={account.waba_id} className="rounded-lg border p-4">
                     <div className="mb-3">
-                      <div className="font-semibold">{account.name || "WhatsApp Business Account"}</div>
-                      <div className="font-mono text-xs text-muted-foreground" dir="ltr">
+                      <div className="font-semibold">
+                        {account.name || "WhatsApp Business Account"}
+                      </div>
+                      <div
+                        className="font-mono text-xs text-muted-foreground"
+                        dir="ltr"
+                      >
                         {account.waba_id}
                       </div>
                     </div>
                     {account.error && (
-                      <p className="text-sm text-destructive">{account.error}</p>
+                      <p className="text-sm text-destructive">
+                        {account.error}
+                      </p>
                     )}
                     {(() => {
                       const others = (account.subscribed_apps ?? []).filter(
@@ -876,31 +1107,41 @@ export default function MetaWhatsAppSettings() {
                       return (
                         <Alert className="mb-3 border-amber-500/40">
                           <ShieldCheck className="h-4 w-4" />
-                          <AlertTitle>אפליקציה נוספת כבר מחוברת לחשבון הזה</AlertTitle>
+                          <AlertTitle>
+                            אפליקציה נוספת כבר מחוברת לחשבון הזה
+                          </AlertTitle>
                           <AlertDescription className="text-sm">
-                            {`המספר כבר מחובר ל-Cloud API דרך: ${
-                              others.map((app) => app.name || app.id).join(", ")
-                            }. AIOS יתחבר כמאזין נוסף — המספר לא יירשם מחדש וה-PIN לא ישתנה, אבל הודעות נכנסות יגיעו גם ל-AIOS וגם לאפליקציה הקיימת. אם אינכם רוצים כפילות, הסירו את האפליקציה הישנה מה-WABA לאחר החיבור.`}
+                            {`המספר כבר מחובר ל-Cloud API דרך: ${others
+                              .map((app) => app.name || app.id)
+                              .join(
+                                ", ",
+                              )}. AIOS יתחבר כמאזין נוסף — המספר לא יירשם מחדש וה-PIN לא ישתנה, אבל הודעות נכנסות יגיעו גם ל-AIOS וגם לאפליקציה הקיימת. אם אינכם רוצים כפילות, הסירו את האפליקציה הישנה מה-WABA לאחר החיבור.`}
                           </AlertDescription>
                         </Alert>
                       );
                     })()}
                     {account.phone_numbers.length === 0 && !account.error && (
-                      <p className="text-sm text-muted-foreground">אין מספרים בחשבון הזה.</p>
+                      <p className="text-sm text-muted-foreground">
+                        אין מספרים בחשבון הזה.
+                      </p>
                     )}
                     <div className="grid gap-2">
                       {account.phone_numbers.map((phone) => {
                         const value = `${account.waba_id}::${phone.id}`;
                         const alreadyConnected = integrations.some(
-                          (integration) => integration.settings?.phone_number_id === phone.id,
+                          (integration) =>
+                            integration.settings?.phone_number_id === phone.id,
                         );
-                        const checked = alreadyConnected || selectedPhones.includes(value);
+                        const checked =
+                          alreadyConnected || selectedPhones.includes(value);
                         return (
                           <Label
                             key={phone.id}
                             htmlFor={`phone-${phone.id}`}
                             className={`flex items-center gap-3 rounded-md border p-3 ${
-                              alreadyConnected ? "cursor-default bg-muted/40" : "cursor-pointer"
+                              alreadyConnected
+                                ? "cursor-default bg-muted/40"
+                                : "cursor-pointer"
                             }`}
                           >
                             <Checkbox
@@ -923,11 +1164,16 @@ export default function MetaWhatsAppSettings() {
                                 {phone.verified_name || "ללא שם מאומת"}
                               </span>
                             </span>
-                            {alreadyConnected && <Badge variant="outline">כבר מחובר</Badge>}
-                            {phone.is_on_biz_app && <Badge variant="secondary">Coexistence</Badge>}
-                            {!alreadyConnected && needsCloudRegistration(phone) && (
-                              <Badge variant="destructive">דורש PIN</Badge>
+                            {alreadyConnected && (
+                              <Badge variant="outline">כבר מחובר</Badge>
                             )}
+                            {phone.is_on_biz_app && (
+                              <Badge variant="secondary">Coexistence</Badge>
+                            )}
+                            {!alreadyConnected &&
+                              needsCloudRegistration(phone) && (
+                                <Badge variant="destructive">דורש PIN</Badge>
+                              )}
                           </Label>
                         );
                       })}
@@ -940,8 +1186,8 @@ export default function MetaWhatsAppSettings() {
                     <KeyRound className="h-4 w-4" />
                     <AlertTitle>חסר PIN</AlertTitle>
                     <AlertDescription className="text-sm">
-                      המספר דורש רישום Cloud API. גללו לראש החיבור הידני והזינו PIN בן 6 ספרות
-                      בשלב 1, ואז לחצו חיבור.
+                      המספר דורש רישום Cloud API. גללו לראש החיבור הידני והזינו
+                      PIN בן 6 ספרות בשלב 1, ואז לחצו חיבור.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -951,7 +1197,8 @@ export default function MetaWhatsAppSettings() {
                     <CheckCircle2 className="h-4 w-4" />
                     <AlertTitle>PIN מוכן</AlertTitle>
                     <AlertDescription className="text-sm">
-                      הקוד שהזנתם בראש הכרטיס ישמש לרישום המספר. לחצו חיבור להשלמה.
+                      הקוד שהזנתם בראש הכרטיס ישמש לרישום המספר. לחצו חיבור
+                      להשלמה.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -964,7 +1211,9 @@ export default function MetaWhatsAppSettings() {
                     (selectedPhonesNeedPin && !/^\d{6}$/.test(manualPin))
                   }
                 >
-                  {connectManualMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                  {connectManualMutation.isPending && (
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  )}
                   {selectedPhonesNeedPin && !/^\d{6}$/.test(manualPin)
                     ? "הזינו PIN בשלב 1 למעלה"
                     : selectedPhones.length === 1
@@ -983,9 +1232,11 @@ export default function MetaWhatsAppSettings() {
                 onClick={() => diagnoseMutation.mutate()}
                 disabled={diagnoseMutation.isPending}
               >
-                {diagnoseMutation.isPending
-                  ? <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                  : <Stethoscope className="ml-2 h-4 w-4" />}
+                {diagnoseMutation.isPending ? (
+                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Stethoscope className="ml-2 h-4 w-4" />
+                )}
                 בדיקת תצורת Meta
               </Button>
               {diagnoseMutation.data && (
@@ -1004,10 +1255,17 @@ export default function MetaWhatsAppSettings() {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-lg">Webhook לאפליקציית Meta</CardTitle>
-          <CardDescription>כתובת אחת לכל הארגונים; AIOS מנתבת כל אירוע לפי Phone Number ID.</CardDescription>
+          <CardDescription>
+            כתובת אחת לכל הארגונים; AIOS מנתבת כל אירוע לפי Phone Number ID.
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex gap-2">
-          <Input value={webhookUrl} readOnly dir="ltr" className="font-mono text-xs" />
+          <Input
+            value={webhookUrl}
+            readOnly
+            dir="ltr"
+            className="font-mono text-xs"
+          />
           <Button variant="outline" size="icon" onClick={copyWebhook}>
             <Copy className="h-4 w-4" />
           </Button>
@@ -1020,7 +1278,9 @@ export default function MetaWhatsAppSettings() {
           <div className="py-10 text-center text-muted-foreground">טוען...</div>
         ) : integrations.length === 0 ? (
           <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">עדיין לא חובר מספר WhatsApp רשמי.</CardContent>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              עדיין לא חובר מספר WhatsApp רשמי.
+            </CardContent>
           </Card>
         ) : (
           integrations.map((integration) => {
@@ -1033,20 +1293,31 @@ export default function MetaWhatsAppSettings() {
                     <div className="flex items-center gap-3">
                       <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                       <div>
-                        <CardTitle className="text-lg">{settings.verified_name || integration.display_name}</CardTitle>
+                        <CardTitle className="text-lg">
+                          {settings.verified_name || integration.display_name}
+                        </CardTitle>
                         <CardDescription dir="ltr" className="text-right">
-                          {settings.display_phone_number || settings.phone_number_id}
+                          {settings.display_phone_number ||
+                            settings.phone_number_id}
                         </CardDescription>
                       </div>
-                      {settings.coexistence_enabled && <Badge variant="secondary">Coexistence</Badge>}
-                      <Badge variant="outline">{settings.quality_rating || "מחובר"}</Badge>
+                      {settings.coexistence_enabled && (
+                        <Badge variant="secondary">Coexistence</Badge>
+                      )}
+                      <Badge variant="outline">
+                        {settings.quality_rating || "מחובר"}
+                      </Badge>
                     </div>
                     {integration.user_id === userId && (
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => {
-                          if (confirm("להסיר את החיבור מ־AIOS? המספר לא יימחק מ־Meta.")) {
+                          if (
+                            confirm(
+                              "להסיר את החיבור מ־AIOS? המספר לא יימחק מ־Meta.",
+                            )
+                          ) {
                             disconnectMutation.mutate(integration.id);
                           }
                         }}
@@ -1059,24 +1330,34 @@ export default function MetaWhatsAppSettings() {
                 <CardContent className="space-y-4">
                   <div className="grid gap-3 text-sm md:grid-cols-2">
                     <div>
-                      <Label className="text-xs text-muted-foreground">WABA ID</Label>
-                      <div className="font-mono text-xs" dir="ltr">{settings.waba_id || "—"}</div>
+                      <Label className="text-xs text-muted-foreground">
+                        WABA ID
+                      </Label>
+                      <div className="font-mono text-xs" dir="ltr">
+                        {settings.waba_id || "—"}
+                      </div>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Phone Number ID</Label>
-                      <div className="font-mono text-xs" dir="ltr">{settings.phone_number_id || "—"}</div>
+                      <Label className="text-xs text-muted-foreground">
+                        Phone Number ID
+                      </Label>
+                      <div className="font-mono text-xs" dir="ltr">
+                        {settings.phone_number_id || "—"}
+                      </div>
                     </div>
                   </div>
-                  {settings.coexistence_enabled && typeof progress === "number" && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span>סנכרון היסטוריית WhatsApp</span>
-                        <span>{progress}%</span>
+                  {settings.coexistence_enabled &&
+                    typeof progress === "number" && (
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>סנכרון היסטוריית WhatsApp</span>
+                          <span>{progress}%</span>
+                        </div>
+                        <Progress value={progress} />
                       </div>
-                      <Progress value={progress} />
-                    </div>
-                  )}
-                  {String(settings.platform_type ?? "").toUpperCase() === "ON_PREMISE" && (
+                    )}
+                  {String(settings.platform_type ?? "").toUpperCase() ===
+                    "ON_PREMISE" && (
                     <Alert className="border-amber-500/40">
                       <AlertTitle>
                         {settings.coexistence_enabled
@@ -1087,39 +1368,49 @@ export default function MetaWhatsAppSettings() {
                         {settings.coexistence_enabled ? (
                           <>
                             <p>
-                              המספר פעיל ב-<strong>WhatsApp Business App</strong> (Coexistence). Meta{" "}
-                              <strong>לא מאפשרת</strong> רישום Cloud API עם PIN למספרי SMB — זו לא טעות
+                              המספר פעיל ב-
+                              <strong>WhatsApp Business App</strong>{" "}
+                              (Coexistence). Meta <strong>לא מאפשרת</strong>{" "}
+                              רישום Cloud API עם PIN למספרי SMB — זו לא טעות
                               בקוד שהזנתם.
                             </p>
                             <ol className="list-decimal list-inside space-y-1 text-xs">
                               <li>
-                                <strong>תבניות עכשיו:</strong> צרו ב-WhatsApp Manager → Message templates
-                                (לא דרך PIN).
+                                <strong>תבניות עכשיו:</strong> צרו ב-WhatsApp
+                                Manager → Message templates (לא דרך PIN).
                               </li>
                               <li>
-                                <strong>Coexistence מלא:</strong> למעלה בחרו &quot;מספר קיים ב-WhatsApp
-                                Business&quot; → Embedded Signup → סריקת QR בטלפון של אלי.
+                                <strong>Coexistence מלא:</strong> למעלה בחרו
+                                &quot;מספר קיים ב-WhatsApp Business&quot; →
+                                Embedded Signup → סריקת QR בטלפון של אלי.
                               </li>
                               <li>
-                                <strong>אופציה נוספת:</strong> הפעילו Inbox ב-Meta Business Suite — לפעמים
-                                זה מעדכן את platform_type ל-CLOUD_API.
+                                <strong>אופציה נוספת:</strong> הפעילו Inbox
+                                ב-Meta Business Suite — לפעמים זה מעדכן את
+                                platform_type ל-CLOUD_API.
                               </li>
                               <li>
-                                אם נשאר תקוע — פנייה לתמיכת Meta (מצב ON_PREMISE על מספר Coexistence).
+                                אם נשאר תקוע — פנייה לתמיכת Meta (מצב ON_PREMISE
+                                על מספר Coexistence).
                               </li>
                             </ol>
                           </>
                         ) : (
                           <>
                             <p>
-                              Meta מדווחת שהמספר במצב <strong>On-Premise</strong>. ה-PIN הוא מאימות
-                              דו-שלבי של <strong>WhatsApp Business</strong> (הגדרות → חשבון). אם אין —
-                              הפעילו שם קודם, או הזינו 6 ספרות חדשות שיישמרו כ-PIN.
+                              Meta מדווחת שהמספר במצב{" "}
+                              <strong>On-Premise</strong>. ה-PIN הוא מאימות
+                              דו-שלבי של <strong>WhatsApp Business</strong>{" "}
+                              (הגדרות → חשבון). אם אין — הפעילו שם קודם, או
+                              הזינו 6 ספרות חדשות שיישמרו כ-PIN.
                             </p>
                             {integration.user_id === userId && (
                               <div className="flex flex-wrap items-end justify-end gap-2 pt-1">
                                 <div className="space-y-1">
-                                  <Label htmlFor={`cloud-pin-${integration.id}`} className="text-xs">
+                                  <Label
+                                    htmlFor={`cloud-pin-${integration.id}`}
+                                    className="text-xs"
+                                  >
                                     PIN מאימות דו-שלבי
                                   </Label>
                                   <Input
@@ -1127,7 +1418,9 @@ export default function MetaWhatsAppSettings() {
                                     value={cloudRegisterPin}
                                     onChange={(event) =>
                                       setCloudRegisterPin(
-                                        event.target.value.replace(/\D/g, "").slice(0, 6),
+                                        event.target.value
+                                          .replace(/\D/g, "")
+                                          .slice(0, 6),
                                       )
                                     }
                                     inputMode="numeric"
@@ -1164,7 +1457,9 @@ export default function MetaWhatsAppSettings() {
                   {settings.history_sync_error && (
                     <Alert>
                       <Phone className="h-4 w-4" />
-                      <AlertDescription>{settings.history_sync_error}</AlertDescription>
+                      <AlertDescription>
+                        {settings.history_sync_error}
+                      </AlertDescription>
                     </Alert>
                   )}
                   <Separator />
@@ -1179,7 +1474,9 @@ export default function MetaWhatsAppSettings() {
                     integrationId={integration.id}
                     displayPhone={settings.display_phone_number}
                     qualityRating={settings.quality_rating}
-                    initialAutoReplyEnabled={settings.warm_auto_reply_enabled === true}
+                    initialAutoReplyEnabled={
+                      settings.warm_auto_reply_enabled === true
+                    }
                     initialThanksText={settings.warm_auto_reply_text}
                   />
                   <Separator />
@@ -1194,15 +1491,17 @@ export default function MetaWhatsAppSettings() {
                         שתף חיבור עם ארגון
                       </Button>
                       <p className="text-xs text-muted-foreground">
-                        השיתוף נותן לארגון הנבחר להשתמש בחיבור הזה באוטומציות. האסימון נשאר בארגון
-                        הבעלים ואינו מועתק או מוצג.
+                        השיתוף נותן לארגון הנבחר להשתמש בחיבור הזה באוטומציות.
+                        האסימון נשאר בארגון הבעלים ואינו מועתק או מוצג.
                       </p>
                       <Separator />
                     </>
                   )}
                   <IntegrationVisibilitySelector
                     integrationId={integration.id}
-                    integrationName={integration.display_name || "Meta WhatsApp"}
+                    integrationName={
+                      integration.display_name || "Meta WhatsApp"
+                    }
                     ownerId={integration.user_id}
                     tenantId={tenantId!}
                   />
@@ -1220,9 +1519,9 @@ export default function MetaWhatsAppSettings() {
           }}
           integrationId={sharingIntegration.id}
           integrationName={
-            sharingIntegration.settings?.verified_name
-            || sharingIntegration.display_name
-            || "Meta WhatsApp"
+            sharingIntegration.settings?.verified_name ||
+            sharingIntegration.display_name ||
+            "Meta WhatsApp"
           }
         />
       )}

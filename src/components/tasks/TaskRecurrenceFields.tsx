@@ -36,27 +36,31 @@ export function TaskRecurrenceFields({
   className,
   compact = false,
 }: TaskRecurrenceFieldsProps) {
-  const patch = (partial: Partial<TaskRecurrenceValue>) => onChange({ ...value, ...partial });
+  const patch = (partial: Partial<TaskRecurrenceValue>) =>
+    onChange({ ...value, ...partial });
 
   return (
     <div className={cn("space-y-2", className)}>
-      <div className={cn(compact ? "space-y-1.5" : "grid gap-3 sm:grid-cols-2")}>
+      <div
+        className={cn(compact ? "space-y-1.5" : "grid gap-3 sm:grid-cols-2")}
+      >
         <div className="space-y-1">
           {!compact && <Label className="text-xs">תדירות</Label>}
           <Select
             value={value.frequency ?? undefined}
             onValueChange={(next) =>
               patch({
-                frequency: next === "none" ? null : (next as RecurrenceFrequency),
+                frequency:
+                  next === "none" ? null : (next as RecurrenceFrequency),
                 weekday:
                   next === "weekly"
-                    ? value.weekday ?? new Date().getDay()
+                    ? (value.weekday ?? new Date().getDay())
                     : next === "none"
                       ? null
                       : value.weekday,
                 monthday:
                   next === "monthly"
-                    ? value.monthday ?? new Date().getDate()
+                    ? (value.monthday ?? new Date().getDate())
                     : next === "none"
                       ? null
                       : value.monthday,
@@ -67,12 +71,18 @@ export function TaskRecurrenceFields({
               <SelectValue placeholder="משימה חוזרת — בחרי תדירות" />
             </SelectTrigger>
             <SelectContent>
-              {(Object.keys(RECURRENCE_FREQUENCY_LABELS) as RecurrenceFrequency[]).map((key) => (
+              {(
+                Object.keys(
+                  RECURRENCE_FREQUENCY_LABELS,
+                ) as RecurrenceFrequency[]
+              ).map((key) => (
                 <SelectItem key={key} value={key}>
                   {RECURRENCE_FREQUENCY_LABELS[key]}
                 </SelectItem>
               ))}
-              {value.frequency && <SelectItem value="none">בטלי חזרה</SelectItem>}
+              {value.frequency && (
+                <SelectItem value="none">בטלי חזרה</SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -131,7 +141,8 @@ export function TaskRecurrenceFields({
       </div>
       {value.frequency && (
         <p className="text-[11px] text-muted-foreground">
-          בסימון בוצע יישמר המופע הנוכחי ותיפתח משימה חדשה לפי התדירות, היום והשעה שנבחרו.
+          בסימון בוצע יישמר המופע הנוכחי ותיפתח משימה חדשה לפי התדירות, היום
+          והשעה שנבחרו.
         </p>
       )}
     </div>

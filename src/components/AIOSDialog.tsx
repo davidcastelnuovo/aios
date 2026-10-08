@@ -6,9 +6,36 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Bot, Send, Plus, Loader2, Wrench, Menu, Sparkles, Zap, MessageSquare, Users, Target, Mic, MicOff, Square, PlayCircle, CheckCircle2, XCircle, Clock, Volume2, VolumeX } from "lucide-react";
+import {
+  Bot,
+  Send,
+  Plus,
+  Loader2,
+  Wrench,
+  Menu,
+  Sparkles,
+  Zap,
+  MessageSquare,
+  Users,
+  Target,
+  Mic,
+  MicOff,
+  Square,
+  PlayCircle,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -37,7 +64,7 @@ interface BackgroundTask {
 }
 
 interface Message {
-  role: 'user' | 'assistant' | 'tool_call';
+  role: "user" | "assistant" | "tool_call";
   content?: string;
   tool?: string;
   args?: any;
@@ -58,10 +85,16 @@ interface AIOSDialogProps {
   onWorkingChange?: (working: boolean) => void;
 }
 
-export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogProps) {
+export function AIOSDialog({
+  open,
+  onOpenChange,
+  onWorkingChange,
+}: AIOSDialogProps) {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const [input, setInput] = useState("");
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<
+    string | null
+  >(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
@@ -70,7 +103,9 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
-  const [micCaptureMode, setMicCaptureMode] = useState<MicCaptureMode>(() => loadMicCaptureMode());
+  const [micCaptureMode, setMicCaptureMode] = useState<MicCaptureMode>(() =>
+    loadMicCaptureMode(),
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -83,25 +118,28 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   const isMobile = useIsMobile();
   const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
 
-  const { data: conversations = [], isLoading: conversationsLoading } = useQuery({
-    queryKey: ['ai-conversations'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('ai_conversations')
-        .select('*')
-        .order('updated_at', { ascending: false });
+  const { data: conversations = [], isLoading: conversationsLoading } =
+    useQuery({
+      queryKey: ["ai-conversations"],
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from("ai_conversations")
+          .select("*")
+          .order("updated_at", { ascending: false });
 
-      if (error) throw error;
-      
-      return (data || []).map(conv => ({
-        id: conv.id,
-        title: conv.title || '',
-        created_at: conv.created_at,
-        messages: (Array.isArray(conv.messages) ? conv.messages : []) as unknown as Message[]
-      }));
-    },
-    enabled: !!userId && open,
-  });
+        if (error) throw error;
+
+        return (data || []).map((conv) => ({
+          id: conv.id,
+          title: conv.title || "",
+          created_at: conv.created_at,
+          messages: (Array.isArray(conv.messages)
+            ? conv.messages
+            : []) as unknown as Message[],
+        }));
+      },
+      enabled: !!userId && open,
+    });
 
   useEffect(() => {
     onWorkingChange?.(isStreaming);
@@ -114,12 +152,14 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     // Initial load of recent background tasks
     const loadTasks = async () => {
       const { data } = await supabase
-        .from('agent_tasks')
-        .select('id, title, status, run_count, result, created_at, completed_at')
-        .eq('tenant_id', tenantId)
-        .eq('task_mode', 'background')
-        .in('status', ['pending', 'running', 'completed', 'failed'])
-        .order('created_at', { ascending: false })
+        .from("agent_tasks")
+        .select(
+          "id, title, status, run_count, result, created_at, completed_at",
+        )
+        .eq("tenant_id", tenantId)
+        .eq("task_mode", "background")
+        .in("status", ["pending", "running", "completed", "failed"])
+        .order("created_at", { ascending: false })
         .limit(5);
       if (data) setBackgroundTasks(data as BackgroundTask[]);
     };
@@ -127,62 +167,92 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
 
     // Realtime subscription
     const channel = supabase
-      .channel('bg-tasks')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'agent_tasks',
-        filter: `tenant_id=eq.${tenantId}`,
-      }, (payload) => {
-        const task = payload.new as any;
-        if (task?.task_mode !== 'background') return;
+      .channel("bg-tasks")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "agent_tasks",
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        (payload) => {
+          const task = payload.new as any;
+          if (task?.task_mode !== "background") return;
 
-        setBackgroundTasks(prev => {
-          const idx = prev.findIndex(t => t.id === task.id);
-          const updated: BackgroundTask = {
-            id: task.id,
-            title: task.title,
-            status: task.status,
-            run_count: task.run_count,
-            result: task.result,
-            created_at: task.created_at,
-            completed_at: task.completed_at,
-          };
+          setBackgroundTasks((prev) => {
+            const idx = prev.findIndex((t) => t.id === task.id);
+            const updated: BackgroundTask = {
+              id: task.id,
+              title: task.title,
+              status: task.status,
+              run_count: task.run_count,
+              result: task.result,
+              created_at: task.created_at,
+              completed_at: task.completed_at,
+            };
 
-          // When a background task transitions to completed/failed, append its result to the chat
-          // so the user actually sees the answer instead of "working in the background…" forever.
-          const wasNotDone = idx < 0 || (prev[idx].status !== 'completed' && prev[idx].status !== 'failed');
-          const isDoneNow = task.status === 'completed' || task.status === 'failed';
-          if (wasNotDone && isDoneNow) {
-            const result = (task.result || {}) as any;
-            let output: string = typeof result.final_output === 'string' ? result.final_output : '';
-            if (!output && Array.isArray(result.conversation_history)) {
-              const lastA = [...result.conversation_history].reverse().find((m: any) => m?.role === 'assistant' && typeof m.content === 'string' && m.content.trim());
-              if (lastA) output = lastA.content;
+            // When a background task transitions to completed/failed, append its result to the chat
+            // so the user actually sees the answer instead of "working in the background…" forever.
+            const wasNotDone =
+              idx < 0 ||
+              (prev[idx].status !== "completed" &&
+                prev[idx].status !== "failed");
+            const isDoneNow =
+              task.status === "completed" || task.status === "failed";
+            if (wasNotDone && isDoneNow) {
+              const result = (task.result || {}) as any;
+              let output: string =
+                typeof result.final_output === "string"
+                  ? result.final_output
+                  : "";
+              if (!output && Array.isArray(result.conversation_history)) {
+                const lastA = [...result.conversation_history]
+                  .reverse()
+                  .find(
+                    (m: any) =>
+                      m?.role === "assistant" &&
+                      typeof m.content === "string" &&
+                      m.content.trim(),
+                  );
+                if (lastA) output = lastA.content;
+              }
+              const errorText =
+                typeof result.error === "string" ? result.error : "";
+              const header =
+                task.status === "completed"
+                  ? `✅ **משימת רקע הושלמה — ${task.title}**`
+                  : `⚠️ **משימת רקע נכשלה — ${task.title}**`;
+              const body =
+                output ||
+                errorText ||
+                (task.status === "completed"
+                  ? "_(המשימה הסתיימה אך לא החזירה תוצאה.)_"
+                  : "_(לא התקבלה הודעת שגיאה.)_");
+              setMessages((m) => [
+                ...m,
+                {
+                  role: "assistant",
+                  content: `${header}\n\n${body}`,
+                  timestamp: new Date().toISOString(),
+                },
+              ]);
             }
-            const errorText = typeof result.error === 'string' ? result.error : '';
-            const header = task.status === 'completed'
-              ? `✅ **משימת רקע הושלמה — ${task.title}**`
-              : `⚠️ **משימת רקע נכשלה — ${task.title}**`;
-            const body = output || errorText || (task.status === 'completed' ? '_(המשימה הסתיימה אך לא החזירה תוצאה.)_' : '_(לא התקבלה הודעת שגיאה.)_');
-            setMessages(m => [...m, {
-              role: 'assistant',
-              content: `${header}\n\n${body}`,
-              timestamp: new Date().toISOString(),
-            }]);
-          }
 
-          if (idx >= 0) {
-            const copy = [...prev];
-            copy[idx] = updated;
-            return copy;
-          }
-          return [updated, ...prev].slice(0, 5);
-        });
-      })
+            if (idx >= 0) {
+              const copy = [...prev];
+              copy[idx] = updated;
+              return copy;
+            }
+            return [updated, ...prev].slice(0, 5);
+          });
+        },
+      )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [open, tenantId]);
 
   const scrollToBottom = () => {
@@ -212,60 +282,61 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     if (!input.trim() || isStreaming) return;
 
     const userMessage: Message = {
-      role: 'user',
+      role: "user",
       content: input,
       timestamp: new Date().toISOString(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsStreaming(true);
     setStreamingMessage("");
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
-        throw new Error('Not authenticated');
+        throw new Error("Not authenticated");
       }
 
       // Build conversation_history from prior text/tool messages
       const conversationHistory = messages
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({ role: m.role, content: m.content || '' }));
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role, content: m.content || "" }));
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
             command_text: input,
             tenant_id: tenantId,
-            surface: 'internal_chat',
+            surface: "internal_chat",
             stream: true,
             conversation_history: conversationHistory,
           }),
-        }
+        },
       );
-
 
       if (!response.ok) {
         if (response.status === 429) {
-          throw new Error('חריגה ממגבלת הקצב. אנא נסה שוב מאוחר יותר.');
+          throw new Error("חריגה ממגבלת הקצב. אנא נסה שוב מאוחר יותר.");
         }
         if (response.status === 402) {
-          throw new Error('נדרש תשלום. אנא הוסף יתרה ל-workspace שלך.');
+          throw new Error("נדרש תשלום. אנא הוסף יתרה ל-workspace שלך.");
         }
-        throw new Error('שגיאה בתקשורת עם השרת');
+        throw new Error("שגיאה בתקשורת עם השרת");
       }
 
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
-      let assistantContent = '';
+      let buffer = "";
+      let assistantContent = "";
 
       let receivedDone = false;
 
@@ -274,51 +345,56 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (!line.trim() || line.startsWith(':')) continue;
-          if (!line.startsWith('data: ')) continue;
+          if (!line.trim() || line.startsWith(":")) continue;
+          if (!line.startsWith("data: ")) continue;
 
           const data = line.slice(6);
-          if (data === '[DONE]') continue;
+          if (data === "[DONE]") continue;
 
           try {
             const parsed = JSON.parse(data);
 
-            if (parsed.type === 'token') {
+            if (parsed.type === "token") {
               assistantContent += parsed.content;
-              setStreamingMessage(prev => prev + parsed.content);
-            } else if (parsed.type === 'status' && parsed.content) {
+              setStreamingMessage((prev) => prev + parsed.content);
+            } else if (parsed.type === "status" && parsed.content) {
               setStreamingMessage(parsed.content);
-            } else if (parsed.type === 'tool_call') {
+            } else if (parsed.type === "tool_call") {
               const toolMessage: Message = {
-                role: 'tool_call',
+                role: "tool_call",
                 tool: parsed.tool,
                 args: parsed.args,
                 timestamp: new Date().toISOString(),
               };
-              setMessages(prev => [...prev, toolMessage]);
-            } else if (parsed.type === 'conversation_id') {
+              setMessages((prev) => [...prev, toolMessage]);
+            } else if (parsed.type === "conversation_id") {
               setCurrentConversationId(parsed.id);
-            } else if (parsed.type === 'invalidate') {
+            } else if (parsed.type === "invalidate") {
               invalidateAIEntityQueries(queryClient, parsed.entity);
-            } else if (parsed.type === 'done') {
+            } else if (parsed.type === "done") {
               receivedDone = true;
               if (assistantContent) {
-                setMessages(prev => [...prev, {
-                  role: 'assistant',
-                  content: assistantContent,
-                  timestamp: new Date().toISOString(),
-                }]);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "assistant",
+                    content: assistantContent,
+                    timestamp: new Date().toISOString(),
+                  },
+                ]);
                 setStreamingMessage("");
               }
               setIsStreaming(false);
-              queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
+              queryClient.invalidateQueries({
+                queryKey: ["ai-conversations", tenantId],
+              });
             }
           } catch (e) {
-            console.error('Parse error:', e);
+            console.error("Parse error:", e);
           }
         }
       }
@@ -326,25 +402,36 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
       // Stream ended without 'done' signal — timeout or disconnect
       if (!receivedDone) {
         if (assistantContent) {
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: assistantContent + "\n\n⚠️ _החיבור נותק — ייתכן שהפעולה הופסקה באמצע._",
-            timestamp: new Date().toISOString(),
-          }]);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content:
+                assistantContent +
+                "\n\n⚠️ _החיבור נותק — ייתכן שהפעולה הופסקה באמצע._",
+              timestamp: new Date().toISOString(),
+            },
+          ]);
           setStreamingMessage("");
         } else {
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: "⚠️ הפעולה הופסקה — ייתכן שהמשימה ארוכה מדי. נסה לפרק אותה לחלקים קטנים יותר.",
-            timestamp: new Date().toISOString(),
-          }]);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content:
+                "⚠️ הפעולה הופסקה — ייתכן שהמשימה ארוכה מדי. נסה לפרק אותה לחלקים קטנים יותר.",
+              timestamp: new Date().toISOString(),
+            },
+          ]);
           setStreamingMessage("");
         }
         setIsStreaming(false);
-        queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
+        queryClient.invalidateQueries({
+          queryKey: ["ai-conversations", tenantId],
+        });
       }
     } catch (error: any) {
-      console.error('Error sending message:', error);
+      console.error("Error sending message:", error);
       toast({
         title: "שגיאה",
         description: error.message || "שגיאה בשליחת ההודעה",
@@ -355,7 +442,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
@@ -372,7 +459,9 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     try {
       logTranscribeOnlyEvent("record_start");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: "audio/webm",
+      });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -381,26 +470,34 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
       };
 
       mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
+        stream.getTracks().forEach((t) => t.stop());
         if (recordingTimerRef.current) {
           clearInterval(recordingTimerRef.current);
           recordingTimerRef.current = null;
         }
         setRecordingDuration(0);
 
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/webm",
+        });
         if (audioBlob.size < 1000) return; // too short
 
         setIsTranscribing(true);
         logTranscribeOnlyEvent("record_stop");
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) throw new Error('Not authenticated');
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!session) throw new Error("Not authenticated");
 
-          const text = await transcribeAudioBlob(audioBlob, session.access_token, {
-            inputMode: "transcribe_only",
-            filename: "voice.webm",
-          });
+          const text = await transcribeAudioBlob(
+            audioBlob,
+            session.access_token,
+            {
+              inputMode: "transcribe_only",
+              filename: "voice.webm",
+            },
+          );
 
           if (text) {
             logTranscribeOnlyEvent("transcribe_ok", { chars: text.length });
@@ -408,8 +505,10 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             sendMessageWithText(text);
           }
         } catch (err: any) {
-          logTranscribeOnlyEvent("transcribe_fail", { error: err?.message || String(err) });
-          console.error('Transcription error:', err);
+          logTranscribeOnlyEvent("transcribe_fail", {
+            error: err?.message || String(err),
+          });
+          console.error("Transcription error:", err);
           toast({
             title: "שגיאה בתמלול",
             description: "לא הצלחנו לתמלל את ההקלטה. נסה שוב.",
@@ -424,7 +523,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
       setIsRecording(true);
       setRecordingDuration(0);
       recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
+        setRecordingDuration((prev) => prev + 1);
       }, 1000);
     } catch (err) {
       toast({
@@ -436,65 +535,76 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   }, [micCaptureMode, toast]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state === "recording"
+    ) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
   }, []);
 
   // Carmen voice-OUT: play an assistant message as speech (toggle on/off).
-  const speakMessage = useCallback(async (idx: number, text: string) => {
-    // Clicking the speaker on the message that's already playing stops it.
-    if (speakAudioRef.current) {
-      speakAudioRef.current.pause();
-      speakAudioRef.current = null;
-      if (speakingIdx === idx) { setSpeakingIdx(null); return; }
-    }
-    if (!text?.trim()) return;
-
-    setSpeakingIdx(idx);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/carmen-speak`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ text }),
+  const speakMessage = useCallback(
+    async (idx: number, text: string) => {
+      // Clicking the speaker on the message that's already playing stops it.
+      if (speakAudioRef.current) {
+        speakAudioRef.current.pause();
+        speakAudioRef.current = null;
+        if (speakingIdx === idx) {
+          setSpeakingIdx(null);
+          return;
         }
-      );
-      if (!res.ok) throw new Error('TTS failed');
+      }
+      if (!text?.trim()) return;
 
-      const blob = await res.blob();
-      const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
-      speakAudioRef.current = audio;
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        if (speakAudioRef.current === audio) speakAudioRef.current = null;
-        setSpeakingIdx(prev => (prev === idx ? null : prev));
-      };
-      audio.onerror = () => {
-        URL.revokeObjectURL(audioUrl);
-        if (speakAudioRef.current === audio) speakAudioRef.current = null;
-        setSpeakingIdx(prev => (prev === idx ? null : prev));
-      };
-      await audio.play();
-    } catch (err: any) {
-      console.error('Speak error:', err);
-      setSpeakingIdx(null);
-      toast({
-        title: "שגיאה בהשמעה",
-        description: "לא הצלחנו להשמיע את התשובה. נסה שוב.",
-        variant: "destructive",
-      });
-    }
-  }, [speakingIdx, toast]);
+      setSpeakingIdx(idx);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) throw new Error("Not authenticated");
+
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/carmen-speak`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ text }),
+          },
+        );
+        if (!res.ok) throw new Error("TTS failed");
+
+        const blob = await res.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(audioUrl);
+        speakAudioRef.current = audio;
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          if (speakAudioRef.current === audio) speakAudioRef.current = null;
+          setSpeakingIdx((prev) => (prev === idx ? null : prev));
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          if (speakAudioRef.current === audio) speakAudioRef.current = null;
+          setSpeakingIdx((prev) => (prev === idx ? null : prev));
+        };
+        await audio.play();
+      } catch (err: any) {
+        console.error("Speak error:", err);
+        setSpeakingIdx(null);
+        toast({
+          title: "שגיאה בהשמעה",
+          description: "לא הצלחנו להשמיע את התשובה. נסה שוב.",
+          variant: "destructive",
+        });
+      }
+    },
+    [speakingIdx, toast],
+  );
 
   // Stop any playback when the dialog closes.
   useEffect(() => {
@@ -509,52 +619,55 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     if (!text.trim() || isStreaming) return;
 
     const userMessage: Message = {
-      role: 'user',
+      role: "user",
       content: text,
       timestamp: new Date().toISOString(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setIsStreaming(true);
     setStreamingMessage("");
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
 
       const followUpHistory = messages
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({ role: m.role, content: m.content || '' }));
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role, content: m.content || "" }));
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
             command_text: text,
             tenant_id: tenantId,
-            surface: 'internal_chat',
+            surface: "internal_chat",
             stream: true,
             conversation_history: followUpHistory,
           }),
-        }
+        },
       );
 
-
       if (!response.ok) {
-        if (response.status === 429) throw new Error('חריגה ממגבלת הקצב. אנא נסה שוב מאוחר יותר.');
-        if (response.status === 402) throw new Error('נדרש תשלום. אנא הוסף יתרה ל-workspace שלך.');
-        throw new Error('שגיאה בתקשורת עם השרת');
+        if (response.status === 429)
+          throw new Error("חריגה ממגבלת הקצב. אנא נסה שוב מאוחר יותר.");
+        if (response.status === 402)
+          throw new Error("נדרש תשלום. אנא הוסף יתרה ל-workspace שלך.");
+        throw new Error("שגיאה בתקשורת עם השרת");
       }
 
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
-      let assistantContent = '';
+      let buffer = "";
+      let assistantContent = "";
 
       let receivedDone = false;
 
@@ -563,57 +676,97 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (!line.trim() || line.startsWith(':')) continue;
-          if (!line.startsWith('data: ')) continue;
+          if (!line.trim() || line.startsWith(":")) continue;
+          if (!line.startsWith("data: ")) continue;
 
           const data = line.slice(6);
-          if (data === '[DONE]') continue;
+          if (data === "[DONE]") continue;
 
           try {
             const parsed = JSON.parse(data);
-            if (parsed.type === 'token') {
+            if (parsed.type === "token") {
               assistantContent += parsed.content;
-              setStreamingMessage(prev => prev + parsed.content);
-            } else if (parsed.type === 'status' && parsed.content) {
+              setStreamingMessage((prev) => prev + parsed.content);
+            } else if (parsed.type === "status" && parsed.content) {
               setStreamingMessage(parsed.content);
-            } else if (parsed.type === 'tool_call') {
-              setMessages(prev => [...prev, {
-                role: 'tool_call', tool: parsed.tool, args: parsed.args, timestamp: new Date().toISOString(),
-              }]);
-            } else if (parsed.type === 'conversation_id') {
+            } else if (parsed.type === "tool_call") {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "tool_call",
+                  tool: parsed.tool,
+                  args: parsed.args,
+                  timestamp: new Date().toISOString(),
+                },
+              ]);
+            } else if (parsed.type === "conversation_id") {
               setCurrentConversationId(parsed.id);
-            } else if (parsed.type === 'invalidate') {
+            } else if (parsed.type === "invalidate") {
               invalidateAIEntityQueries(queryClient, parsed.entity);
-            } else if (parsed.type === 'done') {
+            } else if (parsed.type === "done") {
               receivedDone = true;
               if (assistantContent) {
-                setMessages(prev => [...prev, { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() }]);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "assistant",
+                    content: assistantContent,
+                    timestamp: new Date().toISOString(),
+                  },
+                ]);
                 setStreamingMessage("");
               }
               setIsStreaming(false);
-              queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
+              queryClient.invalidateQueries({
+                queryKey: ["ai-conversations", tenantId],
+              });
             }
-          } catch (e) { console.error('Parse error:', e); }
+          } catch (e) {
+            console.error("Parse error:", e);
+          }
         }
       }
 
       if (!receivedDone) {
         if (assistantContent) {
-          setMessages(prev => [...prev, { role: 'assistant', content: assistantContent + "\n\n⚠️ _החיבור נותק — ייתכן שהפעולה הופסקה באמצע._", timestamp: new Date().toISOString() }]);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content:
+                assistantContent +
+                "\n\n⚠️ _החיבור נותק — ייתכן שהפעולה הופסקה באמצע._",
+              timestamp: new Date().toISOString(),
+            },
+          ]);
         } else {
-          setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ הפעולה הופסקה — ייתכן שהמשימה ארוכה מדי. נסה לפרק אותה לחלקים קטנים יותר.", timestamp: new Date().toISOString() }]);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content:
+                "⚠️ הפעולה הופסקה — ייתכן שהמשימה ארוכה מדי. נסה לפרק אותה לחלקים קטנים יותר.",
+              timestamp: new Date().toISOString(),
+            },
+          ]);
         }
         setStreamingMessage("");
         setIsStreaming(false);
-        queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
+        queryClient.invalidateQueries({
+          queryKey: ["ai-conversations", tenantId],
+        });
       }
     } catch (error: any) {
-      console.error('Error sending message:', error);
-      toast({ title: "שגיאה", description: error.message || "שגיאה בשליחת ההודעה", variant: "destructive" });
+      console.error("Error sending message:", error);
+      toast({
+        title: "שגיאה",
+        description: error.message || "שגיאה בשליחת ההודעה",
+        variant: "destructive",
+      });
       setIsStreaming(false);
     }
   };
@@ -621,7 +774,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
   const toolLabelMap: Record<string, string> = {
@@ -660,11 +813,11 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   };
 
   const hiddenToolCalls = new Set([
-    'save_memory',
-    'recall_memory',
-    'recall_recent_action',
-    'record_action_episode',
-    'kb_learn',
+    "save_memory",
+    "recall_memory",
+    "recall_recent_action",
+    "record_action_episode",
+    "kb_learn",
   ]);
 
   const SidebarContent = () => (
@@ -692,15 +845,15 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
                 onClick={() => loadConversation(conv)}
                 className={`w-full text-right p-2.5 rounded-md transition-colors text-xs ${
                   currentConversationId === conv.id
-                    ? 'bg-primary/10 text-primary'
-                    : 'hover:bg-muted'
+                    ? "bg-primary/10 text-primary"
+                    : "hover:bg-muted"
                 }`}
               >
                 <div className="font-medium truncate max-w-[160px]">
-                  {(conv.title || 'שיחה חדשה').split(' ').slice(0, 4).join(' ')}
+                  {(conv.title || "שיחה חדשה").split(" ").slice(0, 4).join(" ")}
                 </div>
                 <div className="text-[10px] text-muted-foreground mt-0.5">
-                  {new Date(conv.created_at).toLocaleDateString('he-IL')}
+                  {new Date(conv.created_at).toLocaleDateString("he-IL")}
                 </div>
               </button>
             ))}
@@ -712,9 +865,12 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl w-[95vw] h-[80vh] p-0 gap-0 overflow-hidden flex flex-col" dir="rtl">
+      <DialogContent
+        className="max-w-3xl w-[95vw] h-[80vh] p-0 gap-0 overflow-hidden flex flex-col"
+        dir="rtl"
+      >
         <DialogTitle className="sr-only">כרמן — עוזרת AI</DialogTitle>
-        
+
         {/* Header */}
         <div className="border-b border-border p-3 bg-card flex items-center gap-3 flex-shrink-0">
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -736,48 +892,72 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
           <div className="relative flex-shrink-0">
             {isStreaming && (
               <>
-                <span aria-hidden="true" className="absolute -inset-2 rounded-full bg-success/20 animate-pulse" />
-                <span aria-hidden="true" className="absolute -inset-1 rounded-full ring-2 ring-success/60 animate-carmen-glow" />
+                <span
+                  aria-hidden="true"
+                  className="absolute -inset-2 rounded-full bg-success/20 animate-pulse"
+                />
+                <span
+                  aria-hidden="true"
+                  className="absolute -inset-1 rounded-full ring-2 ring-success/60 animate-carmen-glow"
+                />
               </>
             )}
             <img
               src="https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp"
               alt="כרמן"
-              className={`relative z-10 h-9 w-9 rounded-full object-cover border-2 ${isStreaming ? 'border-success/70' : 'border-border'}`}
+              className={`relative z-10 h-9 w-9 rounded-full object-cover border-2 ${isStreaming ? "border-success/70" : "border-border"}`}
             />
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-bold">כרמן</h2>
-            <p className="text-[11px] text-muted-foreground">עוזרת AI חכמה — ניהול, אוטומציות, הודעות ועוד</p>
+            <p className="text-[11px] text-muted-foreground">
+              עוזרת AI חכמה — ניהול, אוטומציות, הודעות ועוד
+            </p>
           </div>
         </div>
 
         {/* Background Tasks Progress — hide internal self-tasks like Pulse Check */}
         {(() => {
           const isInternalTask = (t: BackgroundTask) => {
-            const title = (t.title || '').toLowerCase();
-            return title.includes('בדיקת דופק') || title.includes('pulse');
+            const title = (t.title || "").toLowerCase();
+            return title.includes("בדיקת דופק") || title.includes("pulse");
           };
-          const visibleActive = backgroundTasks.filter(t => (t.status === 'pending' || t.status === 'running') && !isInternalTask(t));
-          const visibleCompleted = backgroundTasks.filter(t => t.status === 'completed' && t.completed_at &&
-            (Date.now() - new Date(t.completed_at).getTime()) < 60000 && !isInternalTask(t));
+          const visibleActive = backgroundTasks.filter(
+            (t) =>
+              (t.status === "pending" || t.status === "running") &&
+              !isInternalTask(t),
+          );
+          const visibleCompleted = backgroundTasks.filter(
+            (t) =>
+              t.status === "completed" &&
+              t.completed_at &&
+              Date.now() - new Date(t.completed_at).getTime() < 60000 &&
+              !isInternalTask(t),
+          );
           return (
             <>
               {visibleActive.length > 0 && (
                 <div className="border-b border-border px-3 py-2 bg-muted/30 flex-shrink-0 space-y-1.5">
-                  {visibleActive.map(task => (
-                    <div key={task.id} className="flex items-center gap-2 text-xs">
-                      {task.status === 'pending' ? (
+                  {visibleActive.map((task) => (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      {task.status === "pending" ? (
                         <Clock className="h-3.5 w-3.5 text-muted-foreground animate-pulse" />
                       ) : (
                         <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
                       )}
-                      <span className="font-medium truncate flex-1">{task.title}</span>
+                      <span className="font-medium truncate flex-1">
+                        {task.title}
+                      </span>
                       {task.run_count && task.run_count > 1 && (
-                        <span className="text-muted-foreground">סבב {task.run_count}</span>
+                        <span className="text-muted-foreground">
+                          סבב {task.run_count}
+                        </span>
                       )}
                       <span className="text-muted-foreground">
-                        {task.status === 'pending' ? 'ממתין...' : 'רץ ברקע...'}
+                        {task.status === "pending" ? "ממתין..." : "רץ ברקע..."}
                       </span>
                     </div>
                   ))}
@@ -785,10 +965,15 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
               )}
               {visibleCompleted.length > 0 && (
                 <div className="border-b border-border px-3 py-2 bg-success/5 flex-shrink-0 space-y-1.5">
-                  {visibleCompleted.map(task => (
-                    <div key={task.id} className="flex items-center gap-2 text-xs">
+                  {visibleCompleted.map((task) => (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-2 text-xs"
+                    >
                       <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                      <span className="font-medium truncate flex-1">{task.title}</span>
+                      <span className="font-medium truncate flex-1">
+                        {task.title}
+                      </span>
                       <span className="text-success">הושלם ✓</span>
                     </div>
                   ))}
@@ -819,7 +1004,10 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
                     { icon: MessageSquare, label: "שליחת הודעות" },
                     { icon: Users, label: "משימות וצוותים" },
                   ].map(({ icon: Icon, label }) => (
-                    <Card key={label} className="p-2.5 flex items-center gap-2 border-dashed">
+                    <Card
+                      key={label}
+                      className="p-2.5 flex items-center gap-2 border-dashed"
+                    >
                       <Icon className="h-4 w-4 text-primary flex-shrink-0" />
                       <span className="text-xs">{label}</span>
                     </Card>
@@ -829,51 +1017,85 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             </div>
           ) : (
             <div className="space-y-3 max-w-2xl mx-auto">
-              {messages.filter((msg) => msg.role !== 'tool_call' || !hiddenToolCalls.has(msg.tool || '')).map((msg, idx) => (
-                <div key={idx}>
-                  {msg.role === 'user' ? (
-                    <div className="flex justify-end">
-                      <Card className="p-2.5 max-w-[80%] bg-primary text-primary-foreground border-0">
-                        <p dir="rtl" className="whitespace-pre-wrap text-sm text-right">{msg.content}</p>
-                      </Card>
-                    </div>
-                  ) : msg.role === 'tool_call' ? (
-                    <div className="flex justify-start">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1.5">
-                        <Wrench className="h-3 w-3 text-primary animate-pulse" />
-                        <span>{toolLabelMap[msg.tool || ''] || msg.tool}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex justify-start">
-                      <Card className="p-2.5 max-w-[85%] bg-card border group relative">
-                        <div dir="rtl" className="prose prose-sm dark:prose-invert max-w-none text-sm text-right [&>p]:mb-1 [&>ul]:my-1 [&>ol]:my-1 [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-muted [&_th]:font-semibold [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content || ''}</ReactMarkdown>
-                        </div>
-                        {(msg.content || '').trim() && micCaptureMode !== "transcribe_only" && (
-                          <button
-                            onClick={() => speakMessage(idx, msg.content || '')}
-                            className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
-                            title={speakingIdx === idx ? "עצור השמעה" : "השמע בקול"}
+              {messages
+                .filter(
+                  (msg) =>
+                    msg.role !== "tool_call" ||
+                    !hiddenToolCalls.has(msg.tool || ""),
+                )
+                .map((msg, idx) => (
+                  <div key={idx}>
+                    {msg.role === "user" ? (
+                      <div className="flex justify-end">
+                        <Card className="p-2.5 max-w-[80%] bg-primary text-primary-foreground border-0">
+                          <p
+                            dir="rtl"
+                            className="whitespace-pre-wrap text-sm text-right"
                           >
-                            {speakingIdx === idx ? (
-                              <><VolumeX className="h-3.5 w-3.5" /> עצור</>
-                            ) : (
-                              <><Volume2 className="h-3.5 w-3.5" /> השמע</>
+                            {msg.content}
+                          </p>
+                        </Card>
+                      </div>
+                    ) : msg.role === "tool_call" ? (
+                      <div className="flex justify-start">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1.5">
+                          <Wrench className="h-3 w-3 text-primary animate-pulse" />
+                          <span>
+                            {toolLabelMap[msg.tool || ""] || msg.tool}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-start">
+                        <Card className="p-2.5 max-w-[85%] bg-card border group relative">
+                          <div
+                            dir="rtl"
+                            className="prose prose-sm dark:prose-invert max-w-none text-sm text-right [&>p]:mb-1 [&>ul]:my-1 [&>ol]:my-1 [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-muted [&_th]:font-semibold [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1"
+                          >
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {msg.content || ""}
+                            </ReactMarkdown>
+                          </div>
+                          {(msg.content || "").trim() &&
+                            micCaptureMode !== "transcribe_only" && (
+                              <button
+                                onClick={() =>
+                                  speakMessage(idx, msg.content || "")
+                                }
+                                className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+                                title={
+                                  speakingIdx === idx
+                                    ? "עצור השמעה"
+                                    : "השמע בקול"
+                                }
+                              >
+                                {speakingIdx === idx ? (
+                                  <>
+                                    <VolumeX className="h-3.5 w-3.5" /> עצור
+                                  </>
+                                ) : (
+                                  <>
+                                    <Volume2 className="h-3.5 w-3.5" /> השמע
+                                  </>
+                                )}
+                              </button>
                             )}
-                          </button>
-                        )}
-                      </Card>
-                    </div>
-                  )}
-                </div>
-              ))}
+                        </Card>
+                      </div>
+                    )}
+                  </div>
+                ))}
 
               {streamingMessage && (
                 <div className="flex justify-start">
                   <Card className="p-2.5 max-w-[85%] bg-card border">
-                    <div dir="rtl" className="prose prose-sm dark:prose-invert max-w-none text-sm text-right [&>p]:mb-1 [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-muted [&_th]:font-semibold [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingMessage}</ReactMarkdown>
+                    <div
+                      dir="rtl"
+                      className="prose prose-sm dark:prose-invert max-w-none text-sm text-right [&>p]:mb-1 [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-muted [&_th]:font-semibold [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1"
+                    >
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {streamingMessage}
+                      </ReactMarkdown>
                     </div>
                     <Loader2 className="h-3 w-3 animate-spin inline-block mr-1 mt-1" />
                   </Card>
@@ -901,8 +1123,12 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
                   className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
                   disabled={isRecording || isTranscribing || isStreaming}
                 >
-                  {(Object.keys(MIC_CAPTURE_MODE_LABELS) as MicCaptureMode[]).map((mode) => (
-                    <option key={mode} value={mode}>{MIC_CAPTURE_MODE_LABELS[mode]}</option>
+                  {(
+                    Object.keys(MIC_CAPTURE_MODE_LABELS) as MicCaptureMode[]
+                  ).map((mode) => (
+                    <option key={mode} value={mode}>
+                      {MIC_CAPTURE_MODE_LABELS[mode]}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -911,61 +1137,71 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
               )}
             </div>
             <div className="flex gap-2">
-            {isRecording ? (
-              <div className="flex-1 flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-md px-4 py-2">
-                <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
-                <span className="text-sm font-medium text-destructive">מקליט... {formatDuration(recordingDuration)}</span>
-                <div className="flex-1" />
-                <Button
-                  onClick={stopRecording}
-                  size="icon"
-                  variant="destructive"
-                  className="h-[36px] w-[36px]"
-                >
-                  <Square className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : isTranscribing ? (
-              <div className="flex-1 flex items-center gap-3 bg-muted rounded-md px-4 py-2">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">ממלל את ההקלטה...</span>
-              </div>
-            ) : (
-              <>
-                <Textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyPress}
-                  placeholder="בקש ממני לבצע פעולה... (Enter לשליחה)"
-                  className="min-h-[44px] max-h-[120px] resize-none text-sm"
-                  disabled={isStreaming}
-                />
-                <div className="flex flex-col gap-1">
+              {isRecording ? (
+                <div className="flex-1 flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-md px-4 py-2">
+                  <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
+                  <span className="text-sm font-medium text-destructive">
+                    מקליט... {formatDuration(recordingDuration)}
+                  </span>
+                  <div className="flex-1" />
                   <Button
-                    onClick={sendMessage}
-                    disabled={!input.trim() || isStreaming}
+                    onClick={stopRecording}
                     size="icon"
-                    className="h-[44px] w-[44px] flex-shrink-0"
+                    variant="destructive"
+                    className="h-[36px] w-[36px]"
                   >
-                    {isStreaming ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
+                    <Square className="h-4 w-4" />
                   </Button>
                 </div>
-                <Button
-                  onClick={startRecording}
-                  disabled={isStreaming || micCaptureMode !== "transcribe_only"}
-                  size="icon"
-                  variant="outline"
-                  className="h-[44px] w-[44px] flex-shrink-0 hover:bg-primary/10 hover:text-primary hover:border-primary"
-                  title={micCaptureMode === "transcribe_only" ? "מיקרופון לתמלול בלבד" : "שיחה חיה — במרכז הבקרה"}
-                >
-                  <Mic className="h-4 w-4" />
-                </Button>
-              </>
-            )}
+              ) : isTranscribing ? (
+                <div className="flex-1 flex items-center gap-3 bg-muted rounded-md px-4 py-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span className="text-sm text-muted-foreground">
+                    ממלל את ההקלטה...
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <Textarea
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyPress}
+                    placeholder="בקש ממני לבצע פעולה... (Enter לשליחה)"
+                    className="min-h-[44px] max-h-[120px] resize-none text-sm"
+                    disabled={isStreaming}
+                  />
+                  <div className="flex flex-col gap-1">
+                    <Button
+                      onClick={sendMessage}
+                      disabled={!input.trim() || isStreaming}
+                      size="icon"
+                      className="h-[44px] w-[44px] flex-shrink-0"
+                    >
+                      {isStreaming ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <Button
+                    onClick={startRecording}
+                    disabled={
+                      isStreaming || micCaptureMode !== "transcribe_only"
+                    }
+                    size="icon"
+                    variant="outline"
+                    className="h-[44px] w-[44px] flex-shrink-0 hover:bg-primary/10 hover:text-primary hover:border-primary"
+                    title={
+                      micCaptureMode === "transcribe_only"
+                        ? "מיקרופון לתמלול בלבד"
+                        : "שיחה חיה — במרכז הבקרה"
+                    }
+                  >
+                    <Mic className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

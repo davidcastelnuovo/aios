@@ -35,17 +35,36 @@ export async function collectGoalResourceMetrics(
   iterationNumber: number,
   stuckScore: number,
 ): Promise<GoalResourceMetrics> {
-  const [{ data: actions }, { data: modelEvents }, { data: devTasks }, { data: planSteps }] = await Promise.all([
-    supabase.from("goal_actions").select("status, action_type").eq("iteration_id", iterationId),
-    supabase.from("goal_model_events").select("tokens_in, tokens_out, cost_usd").eq("iteration_id", iterationId),
-    supabase.from("dev_tasks").select("id, status").eq("goal_id", goalId).eq("tenant_id", tenantId),
-    supabase.from("goal_plan_steps").select("status").eq("goal_id", goalId).in("status", ["pending", "in_progress"]),
+  const [
+    { data: actions },
+    { data: modelEvents },
+    { data: devTasks },
+    { data: planSteps },
+  ] = await Promise.all([
+    supabase
+      .from("goal_actions")
+      .select("status, action_type")
+      .eq("iteration_id", iterationId),
+    supabase
+      .from("goal_model_events")
+      .select("tokens_in, tokens_out, cost_usd")
+      .eq("iteration_id", iterationId),
+    supabase
+      .from("dev_tasks")
+      .select("id, status")
+      .eq("goal_id", goalId)
+      .eq("tenant_id", tenantId),
+    supabase
+      .from("goal_plan_steps")
+      .select("status")
+      .eq("goal_id", goalId)
+      .in("status", ["pending", "in_progress"]),
   ]);
 
   const actionRows = actions || [];
   const modelRows = modelEvents || [];
-  const openDev = (devTasks || []).filter((d: { status: string }) =>
-    !["done", "cancelled"].includes(d.status),
+  const openDev = (devTasks || []).filter(
+    (d: { status: string }) => !["done", "cancelled"].includes(d.status),
   );
 
   return {
@@ -53,13 +72,26 @@ export async function collectGoalResourceMetrics(
     iteration_number: iterationNumber,
     iteration_id: iterationId,
     actions_this_iteration: actionRows.length,
-    failed_actions: actionRows.filter((a: { status: string }) => a.status === "failed").length,
+    failed_actions: actionRows.filter(
+      (a: { status: string }) => a.status === "failed",
+    ).length,
     model_calls: modelRows.length,
-    tokens_in: modelRows.reduce((s: number, r: { tokens_in?: number }) => s + (r.tokens_in || 0), 0),
-    tokens_out: modelRows.reduce((s: number, r: { tokens_out?: number }) => s + (r.tokens_out || 0), 0),
-    cost_usd: modelRows.reduce((s: number, r: { cost_usd?: number }) => s + Number(r.cost_usd || 0), 0),
+    tokens_in: modelRows.reduce(
+      (s: number, r: { tokens_in?: number }) => s + (r.tokens_in || 0),
+      0,
+    ),
+    tokens_out: modelRows.reduce(
+      (s: number, r: { tokens_out?: number }) => s + (r.tokens_out || 0),
+      0,
+    ),
+    cost_usd: modelRows.reduce(
+      (s: number, r: { cost_usd?: number }) => s + Number(r.cost_usd || 0),
+      0,
+    ),
     stuck_score: stuckScore,
-    cursor_dispatches: actionRows.filter((a: { action_type?: string }) => a.action_type === "cursor").length,
+    cursor_dispatches: actionRows.filter(
+      (a: { action_type?: string }) => a.action_type === "cursor",
+    ).length,
     dev_tasks_open: openDev.length,
     plan_steps_pending: (planSteps || []).length,
   };
@@ -95,7 +127,10 @@ Rules:
 Goal: ${goalTitle}
 Metrics: ${JSON.stringify(metrics, null, 2)}`;
 
-  const result = await modelRouterJSON<EfficiencyReviewResult>("FAST_REASON", prompt);
+  const result = await modelRouterJSON<EfficiencyReviewResult>(
+    "FAST_REASON",
+    prompt,
+  );
   if (!result.ok || !result.data) {
     return {
       efficient: true,
@@ -110,7 +145,8 @@ Metrics: ${JSON.stringify(metrics, null, 2)}`;
     score: Number(result.data.score) || 50,
     issues: result.data.issues || [],
     optimizations: result.data.optimizations || [],
-    send_to_cursor: !!result.data.send_to_cursor && !!result.data.cursor_instruction?.trim(),
+    send_to_cursor:
+      !!result.data.send_to_cursor && !!result.data.cursor_instruction?.trim(),
     cursor_instruction: result.data.cursor_instruction?.trim(),
   };
 }
@@ -142,12 +178,19 @@ export async function runPostIterationEfficiencyReview(
     args.stuckScore,
   );
 
-  const inflight = await getInFlightBrainRequest(supabase, args.goalId, "efficiency_review");
+  const inflight = await getInFlightBrainRequest(
+    supabase,
+    args.goalId,
+    "efficiency_review",
+  );
   if (inflight) {
     return { metrics, cursor_dispatched: false, awaiting_brain: true };
   }
 
-  const prompt = buildEfficiencyReviewBrainPrompt(metrics as unknown as Record<string, unknown>, args.goalTitle);
+  const prompt = buildEfficiencyReviewBrainPrompt(
+    metrics as unknown as Record<string, unknown>,
+    args.goalTitle,
+  );
   const queued = await queueBrainRequest(supabase, {
     tenantId: args.tenantId,
     goalId: args.goalId,
@@ -157,9 +200,15 @@ export async function runPostIterationEfficiencyReview(
   });
 
   if (queued.dispatched || queued.awaiting) {
-    await supabase.from("goal_loop_iterations").update({
-      context_snapshot: { resource_metrics: metrics, efficiency_review_pending: true },
-    }).eq("id", args.iterationId);
+    await supabase
+      .from("goal_loop_iterations")
+      .update({
+        context_snapshot: {
+          resource_metrics: metrics,
+          efficiency_review_pending: true,
+        },
+      })
+      .eq("id", args.iterationId);
     return { metrics, cursor_dispatched: false, awaiting_brain: true };
   }
 
@@ -168,9 +217,15 @@ export async function runPostIterationEfficiencyReview(
   }
 
   const review = await reviewIterationEfficiency(metrics, args.goalTitle);
-  await supabase.from("goal_loop_iterations").update({
-    context_snapshot: { resource_metrics: metrics, efficiency_review: review },
-  }).eq("id", args.iterationId);
+  await supabase
+    .from("goal_loop_iterations")
+    .update({
+      context_snapshot: {
+        resource_metrics: metrics,
+        efficiency_review: review,
+      },
+    })
+    .eq("id", args.iterationId);
 
   let cursorDispatched = false;
   if (review.send_to_cursor && review.cursor_instruction) {
@@ -197,7 +252,12 @@ export async function runPostIterationEfficiencyReview(
       goal_id: args.goalId,
       event_type: "efficiency_review",
       actor: "autonomous_goal_engine",
-      detail: { metrics, review, cursor_dispatched: cursorDispatched, via: "api_fallback" },
+      detail: {
+        metrics,
+        review,
+        cursor_dispatched: cursorDispatched,
+        via: "api_fallback",
+      },
     });
   }
 

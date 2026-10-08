@@ -55,8 +55,13 @@ ${source}${focusPrompt}
 כתוב סיכום מקצועי ומפורט. העדף שלמות ודיוק על פני קיצור, אך אל תחזור על אותו פרט בכמה סעיפים.`;
 }
 
-export function meetingSummaryIdempotencyKey(recordingId: string, manual = false): string {
-  return manual ? `meeting-summary:${recordingId}:manual` : `meeting-summary:${recordingId}`;
+export function meetingSummaryIdempotencyKey(
+  recordingId: string,
+  manual = false,
+): string {
+  return manual
+    ? `meeting-summary:${recordingId}:manual`
+    : `meeting-summary:${recordingId}`;
 }
 
 export function buildMeetingSummaryCursorTask(
@@ -76,7 +81,8 @@ ${buildSummaryUserPrompt(source, recordingInfo, focusPrompt)}
 שמור כל מספר, תאריך, שם, מחיר ויעד כפי שנאמרו. הבחן בין החלטה שהתקבלה, הצעה, ושאלה שעוד פתוחה.`;
 }
 
-export type MeetingSummaryTargetType = "client" | "lead" | "campaigner" | "agency";
+export type MeetingSummaryTargetType =
+  "client" | "lead" | "campaigner" | "agency";
 
 export interface MeetingSummaryJob {
   recording_id: string;
@@ -89,14 +95,22 @@ export interface MeetingSummaryJob {
   brief_source: string;
 }
 
-const SUMMARY_TARGET_TYPES = new Set<MeetingSummaryTargetType>(["client", "lead", "campaigner", "agency"]);
+const SUMMARY_TARGET_TYPES = new Set<MeetingSummaryTargetType>([
+  "client",
+  "lead",
+  "campaigner",
+  "agency",
+]);
 
-export function meetingSummaryJobFromMetadata(metadata: unknown): MeetingSummaryJob | null {
+export function meetingSummaryJobFromMetadata(
+  metadata: unknown,
+): MeetingSummaryJob | null {
   if (!metadata || typeof metadata !== "object") return null;
   const meta = metadata as Record<string, unknown>;
   if (meta.purpose !== "meeting_summary") return null;
   const targetType = String(meta.target_type || "");
-  if (!SUMMARY_TARGET_TYPES.has(targetType as MeetingSummaryTargetType)) return null;
+  if (!SUMMARY_TARGET_TYPES.has(targetType as MeetingSummaryTargetType))
+    return null;
   const recordingId = String(meta.recording_id || "").trim();
   const targetId = String(meta.target_id || "").trim();
   const tenantId = String(meta.tenant_id || "").trim();
@@ -110,11 +124,16 @@ export function meetingSummaryJobFromMetadata(metadata: unknown): MeetingSummary
     tenant_id: tenantId,
     created_by: meta.created_by ? String(meta.created_by) : null,
     client_id: meta.client_id ? String(meta.client_id) : null,
-    brief_source: meta.brief_source ? String(meta.brief_source) : "zoom_meeting",
+    brief_source: meta.brief_source
+      ? String(meta.brief_source)
+      : "zoom_meeting",
   };
 }
 
-export function buildExtractionSystemPrompt(chunkNumber: number, totalChunks: number): string {
+export function buildExtractionSystemPrompt(
+  chunkNumber: number,
+  totalChunks: number,
+): string {
   return `אתה מבצע שלב חילוץ עובדות מתוך חלק ${chunkNumber} מתוך ${totalChunks} של תמלול פגישה. אל תסכם באופן כללי ואל תדלג על פרטים אופרטיביים.
 
 חלץ בעברית, בנקודות מפורטות:
@@ -186,7 +205,7 @@ export async function prepareDetailedSummarySource(
         buildExtractionSystemPrompt(index + 1, chunks.length),
         `חלק ${index + 1} מתוך ${chunks.length}:\n\n${chunk}`,
         4_000,
-      )
+      ),
     ),
   );
 

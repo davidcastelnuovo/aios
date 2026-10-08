@@ -22,26 +22,36 @@ export function mergePrivatePhoneAllowlist(params) {
         ...prev,
         ...row,
         phone,
-        surfaces: row.surfaces?.length ? row.surfaces : prev?.surfaces || ["whatsapp_private"],
+        surfaces: row.surfaces?.length
+          ? row.surfaces
+          : prev?.surfaces || ["whatsapp_private"],
       });
     }
   };
 
   for (const p of params.automationPhones || []) {
-    upsert({ phone: p, surfaces: ["whatsapp_private"], source: "automation" }, 1);
+    upsert(
+      { phone: p, surfaces: ["whatsapp_private"], source: "automation" },
+      1,
+    );
   }
 
   for (const id of params.identities || []) {
-    const surfaces = Array.isArray(id.surfaces) ? id.surfaces : ["whatsapp_private", "whatsapp_group"];
+    const surfaces = Array.isArray(id.surfaces)
+      ? id.surfaces
+      : ["whatsapp_private", "whatsapp_group"];
     if (!surfaces.includes("whatsapp_private")) continue;
-    upsert({
-      phone: id.phone,
-      label: id.display_name || undefined,
-      status: id.status,
-      surfaces,
-      dev_escalation_tier: id.dev_escalation_tier || null,
-      source: "identity",
-    }, 2);
+    upsert(
+      {
+        phone: id.phone,
+        label: id.display_name || undefined,
+        status: id.status,
+        surfaces,
+        dev_escalation_tier: id.dev_escalation_tier || null,
+        source: "identity",
+      },
+      2,
+    );
   }
 
   for (const p of params.policyPhones || []) {

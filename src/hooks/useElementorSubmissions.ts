@@ -8,7 +8,14 @@ export interface ElementorSubmission {
   email: string | null;
   created_at: string;
   referer: string | null;
-  source: "google_ads" | "google" | "facebook" | "organic" | "direct" | "test" | "other";
+  source:
+    | "google_ads"
+    | "google"
+    | "facebook"
+    | "organic"
+    | "direct"
+    | "test"
+    | "other";
   gclid: string | null;
   gad_campaignid: string | null;
   fbclid: string | null;
@@ -58,13 +65,19 @@ export interface ElementorSubmissionsResponse {
  * Fetches and aggregates Elementor form submissions for a WordPress site.
  * Uses a 5-minute cache to avoid hitting WP repeatedly.
  */
-export function useElementorSubmissions(siteId: string | null | undefined, days?: number) {
+export function useElementorSubmissions(
+  siteId: string | null | undefined,
+  days?: number,
+) {
   return useQuery<ElementorSubmissionsResponse>({
     queryKey: ["elementor-submissions", siteId, days ?? "all"],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("fetch-elementor-submissions", {
-        body: { site_id: siteId, days },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "fetch-elementor-submissions",
+        {
+          body: { site_id: siteId, days },
+        },
+      );
       if (error) throw error;
       return data as ElementorSubmissionsResponse;
     },

@@ -33,9 +33,11 @@ export function applyVariantToObjectStorySpec(objectStorySpec, variant = {}) {
     throw new Error("source_creative_missing_object_story_spec");
   }
   const spec = deepClone(objectStorySpec);
-  const primary = variant.primary_text != null ? String(variant.primary_text) : null;
+  const primary =
+    variant.primary_text != null ? String(variant.primary_text) : null;
   const headline = variant.headline != null ? String(variant.headline) : null;
-  const description = variant.description != null ? String(variant.description) : null;
+  const description =
+    variant.description != null ? String(variant.description) : null;
 
   const patchStoryBlock = (block) => {
     if (!block || typeof block !== "object") return block;
@@ -56,9 +58,15 @@ export function applyVariantToObjectStorySpec(objectStorySpec, variant = {}) {
     }
   }
   if (spec.photo_data) spec.photo_data = patchStoryBlock(spec.photo_data);
-  if (spec.template_data) spec.template_data = patchStoryBlock(spec.template_data);
+  if (spec.template_data)
+    spec.template_data = patchStoryBlock(spec.template_data);
 
-  if (!spec.link_data && !spec.video_data && !spec.photo_data && !spec.template_data) {
+  if (
+    !spec.link_data &&
+    !spec.video_data &&
+    !spec.photo_data &&
+    !spec.template_data
+  ) {
     throw new Error("source_creative_unsupported_story_spec");
   }
   return spec;
@@ -72,7 +80,8 @@ export function applyVariantToAssetFeedSpec(assetFeedSpec, variant = {}) {
     throw new Error("source_creative_missing_asset_feed_spec");
   }
   const feed = deepClone(assetFeedSpec);
-  const primary = variant.primary_text != null ? String(variant.primary_text) : null;
+  const primary =
+    variant.primary_text != null ? String(variant.primary_text) : null;
   const headline = variant.headline != null ? String(variant.headline) : null;
 
   if (primary != null) {
@@ -105,7 +114,9 @@ export function normalizeAdCopyVariants(args = {}) {
       primary_text: text,
       headline: Array.isArray(args.headlines) ? args.headlines[i] : undefined,
       name: Array.isArray(args.names) ? args.names[i] : undefined,
-      description: Array.isArray(args.descriptions) ? args.descriptions[i] : undefined,
+      description: Array.isArray(args.descriptions)
+        ? args.descriptions[i]
+        : undefined,
     }));
   }
   if (!raw || !raw.length) {
@@ -123,7 +134,12 @@ export function normalizeAdCopyVariants(args = {}) {
     }
     return {
       primary_text: String(primary_text).trim(),
-      headline: v?.headline != null ? String(v.headline).trim() : (v?.title != null ? String(v.title).trim() : null),
+      headline:
+        v?.headline != null
+          ? String(v.headline).trim()
+          : v?.title != null
+            ? String(v.title).trim()
+            : null,
       description: v?.description != null ? String(v.description).trim() : null,
       name: v?.name != null ? String(v.name).trim() : null,
     };
@@ -135,20 +151,24 @@ export function normalizeAdCopyVariants(args = {}) {
 export function summarizeSourceAd(ad, creative) {
   const spec = creative?.object_story_spec || null;
   const feed = creative?.asset_feed_spec || null;
-  const linkData = spec?.link_data || spec?.video_data || spec?.photo_data || null;
+  const linkData =
+    spec?.link_data || spec?.video_data || spec?.photo_data || null;
   return {
     ad_id: ad?.id || null,
     ad_name: ad?.name || null,
     adset_id: ad?.adset_id || null,
     campaign_id: ad?.campaign_id || null,
-    account_id: ad?.account_id ? String(ad.account_id).replace(/^act_/, "") : null,
+    account_id: ad?.account_id
+      ? String(ad.account_id).replace(/^act_/, "")
+      : null,
     status: ad?.status || null,
     effective_status: ad?.effective_status || null,
     creative_id: creative?.id || ad?.creative?.id || null,
     page_id: extractPageId(spec),
     lead_form_id: extractLeadFormId(spec),
     current_primary_text: linkData?.message || feed?.bodies?.[0]?.text || null,
-    current_headline: linkData?.name || linkData?.title || feed?.titles?.[0]?.text || null,
+    current_headline:
+      linkData?.name || linkData?.title || feed?.titles?.[0]?.text || null,
     has_object_story_spec: !!spec,
     has_asset_feed_spec: !!feed,
     image_hash: linkData?.image_hash || null,

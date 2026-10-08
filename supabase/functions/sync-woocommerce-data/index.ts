@@ -4,7 +4,8 @@ import { extractWooOrderAttribution } from "../_shared/wooAttribution.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const PAGE_SIZE = 100;
@@ -20,9 +21,11 @@ async function wooFetch(
   consumerKey: string,
   consumerSecret: string,
   endpoint: string,
-  params: Record<string, string | number> = {}
+  params: Record<string, string | number> = {},
 ) {
-  const url = new URL(`${siteUrl.replace(/\/$/, "")}/wp-json/wc/v3/${endpoint}`);
+  const url = new URL(
+    `${siteUrl.replace(/\/$/, "")}/wp-json/wc/v3/${endpoint}`,
+  );
   url.searchParams.set("consumer_key", consumerKey);
   url.searchParams.set("consumer_secret", consumerSecret);
   for (const [k, v] of Object.entries(params)) {
@@ -48,7 +51,7 @@ async function fetchAllPages(
   secret: string,
   endpoint: string,
   extraParams: Record<string, string | number> = {},
-  maxPages = 200
+  maxPages = 200,
 ) {
   const results: any[] = [];
   let page = 1;
@@ -70,7 +73,7 @@ async function upsertChunks(
   supabase: any,
   table: string,
   rows: Record<string, unknown>[],
-  onConflict: string
+  onConflict: string,
 ) {
   for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
     const chunk = rows.slice(i, i + UPSERT_CHUNK);
@@ -130,11 +133,18 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { site_id, tenant_id: bodyTenantId, backfill_attribution_days } = body || {};
+    const {
+      site_id,
+      tenant_id: bodyTenantId,
+      backfill_attribution_days,
+    } = body || {};
     const manualSiteSync = !!site_id && !bodyTenantId;
-    const attributionBackfillDays = backfill_attribution_days != null
-      ? Number(backfill_attribution_days)
-      : (manualSiteSync ? ATTRIBUTION_BACKFILL_DAYS : 0);
+    const attributionBackfillDays =
+      backfill_attribution_days != null
+        ? Number(backfill_attribution_days)
+        : manualSiteSync
+          ? ATTRIBUTION_BACKFILL_DAYS
+          : 0;
 
     // Build query — either by site_id or by tenant_id (for cron)
     let sitesQuery = supabase
@@ -156,8 +166,12 @@ serve(async (req) => {
     if (sitesError) throw sitesError;
     if (!sites || sites.length === 0) {
       return new Response(
-        JSON.stringify({ message: "No WooCommerce sites found", sites_processed: 0, version: FUNCTION_VERSION }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          message: "No WooCommerce sites found",
+          sites_processed: 0,
+          version: FUNCTION_VERSION,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -166,11 +180,16 @@ serve(async (req) => {
     for (const site of sites) {
       const { id: siteId, tenant_id, site_url } = site;
       // Support both legacy (woo_consumer_*) and current (woocommerce_consumer_*) column names
-      const woo_consumer_key = site.woocommerce_consumer_key || site.woo_consumer_key;
-      const woo_consumer_secret = site.woocommerce_consumer_secret || site.woo_consumer_secret;
+      const woo_consumer_key =
+        site.woocommerce_consumer_key || site.woo_consumer_key;
+      const woo_consumer_secret =
+        site.woocommerce_consumer_secret || site.woo_consumer_secret;
 
       if (!woo_consumer_key || !woo_consumer_secret) {
-        summaries.push({ site_id: siteId, error: "Missing WooCommerce credentials" });
+        summaries.push({
+          site_id: siteId,
+          error: "Missing WooCommerce credentials",
+        });
         continue;
       }
 
@@ -186,7 +205,10 @@ serve(async (req) => {
         .select("id")
         .single();
       if (logErr) {
-        console.warn(`[woo-sync] sync_log insert failed for ${siteId}:`, logErr.message);
+        console.warn(
+          `[woo-sync] sync_log insert failed for ${siteId}:`,
+          logErr.message,
+        );
       }
 
       const logId = logEntry?.id;
@@ -198,21 +220,30 @@ serve(async (req) => {
         // ---- Determine incremental window ----
         // Use modified_after = last successful sync minus 1h overlap (safety),
         // fallback to last 30 days if no previous sync.
-        const lastSyncAt: string | null = site.woo_last_sync_at || site.last_woocommerce_sync_at || null;
+        const lastSyncAt: string | null =
+          site.woo_last_sync_at || site.last_woocommerce_sync_at || null;
         const fallbackDate = new Date();
         fallbackDate.setDate(fallbackDate.getDate() - 30);
         const sinceDate = lastSyncAt
           ? new Date(new Date(lastSyncAt).getTime() - 60 * 60 * 1000)
           : fallbackDate;
         const modifiedAfter = sinceDate.toISOString().split(".")[0];
-        console.log(`[woo-sync] v${FUNCTION_VERSION} site ${siteId} — incremental since ${modifiedAfter}`);
+        console.log(
+          `[woo-sync] v${FUNCTION_VERSION} site ${siteId} — incremental since ${modifiedAfter}`,
+        );
 
         // ---- Sync Orders (incremental by modified_after) ----
-        const orders = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "orders", {
-          modified_after: modifiedAfter,
-          orderby: "modified",
-          order: "asc",
-        });
+        const orders = await fetchAllPages(
+          site_url,
+          woo_consumer_key,
+          woo_consumer_secret,
+          "orders",
+          {
+            modified_after: modifiedAfter,
+            orderby: "modified",
+            order: "asc",
+          },
+        );
 
         let allOrders = [...orders];
 
@@ -276,14 +307,27 @@ serve(async (req) => {
           );
         }
 
-        const orderRows = allOrders.map((order: any) => mapOrderRow(tenant_id, siteId, order));
-        await upsertChunks(supabase, "woocommerce_orders", orderRows, "site_id,woo_order_id");
+        const orderRows = allOrders.map((order: any) =>
+          mapOrderRow(tenant_id, siteId, order),
+        );
+        await upsertChunks(
+          supabase,
+          "woocommerce_orders",
+          orderRows,
+          "site_id,woo_order_id",
+        );
         ordersCount = orderRows.length;
 
         // ---- Sync Products ----
-        const products = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "products", {
-          modified_after: modifiedAfter,
-        });
+        const products = await fetchAllPages(
+          site_url,
+          woo_consumer_key,
+          woo_consumer_secret,
+          "products",
+          {
+            modified_after: modifiedAfter,
+          },
+        );
         const productRows = products.map((product: any) => ({
           tenant_id,
           site_id: siteId,
@@ -304,7 +348,12 @@ serve(async (req) => {
           synced_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }));
-        await upsertChunks(supabase, "woocommerce_products", productRows, "site_id,woo_product_id");
+        await upsertChunks(
+          supabase,
+          "woocommerce_products",
+          productRows,
+          "site_id,woo_product_id",
+        );
         productsCount = productRows.length;
 
         // ---- Sync Customers (capped — full historical pull is too slow for the edge limit) ----
@@ -316,7 +365,7 @@ serve(async (req) => {
           woo_consumer_secret,
           "customers",
           { orderby: "registered_date", order: "desc" },
-          customerMaxPages
+          customerMaxPages,
         );
         const customerRows = customers.map((customer: any) => ({
           tenant_id,
@@ -335,7 +384,12 @@ serve(async (req) => {
           synced_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }));
-        await upsertChunks(supabase, "woocommerce_customers", customerRows, "site_id,woo_customer_id");
+        await upsertChunks(
+          supabase,
+          "woocommerce_customers",
+          customerRows,
+          "site_id,woo_customer_id",
+        );
         customersCount = customerRows.length;
 
         const syncedAt = new Date().toISOString();
@@ -398,13 +452,16 @@ serve(async (req) => {
         customers_synced: first.customers_synced ?? 0,
         summaries,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error: any) {
     console.error("sync-woocommerce-data error:", error);
     return new Response(
       JSON.stringify({ error: error.message, version: FUNCTION_VERSION }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

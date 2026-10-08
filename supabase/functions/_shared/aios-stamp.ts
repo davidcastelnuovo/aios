@@ -2,14 +2,14 @@
  * AIOS signature stamp / certificate graphics.
  * Renders Hebrew via SVG + resvg (HarfBuzz), not pdf-lib text drawing.
  */
-import { initWasm, Resvg } from 'npm:@resvg/resvg-wasm@2.6.2';
-import { signatureFieldTextLayout } from './signature-field-text.ts';
-export { signatureFieldTextLayout } from './signature-field-text.ts';
+import { initWasm, Resvg } from "npm:@resvg/resvg-wasm@2.6.2";
+import { signatureFieldTextLayout } from "./signature-field-text.ts";
+export { signatureFieldTextLayout } from "./signature-field-text.ts";
 
 const UI_FONT_URL =
-  'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf';
+  "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf";
 const UI_FONT_BOLD_URL =
-  'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-Bold.ttf';
+  "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-Bold.ttf";
 
 let wasmReady: Promise<void> | null = null;
 let fontRegular: Uint8Array | null = null;
@@ -18,7 +18,9 @@ let fontBold: Uint8Array | null = null;
 async function ensureGraphicsRuntime() {
   if (!wasmReady) {
     wasmReady = (async () => {
-      const wasmRes = await fetch('https://unpkg.com/@resvg/resvg-wasm@2.6.2/index_bg.wasm');
+      const wasmRes = await fetch(
+        "https://unpkg.com/@resvg/resvg-wasm@2.6.2/index_bg.wasm",
+      );
       if (!wasmRes.ok) throw new Error(`resvg_wasm_fetch_${wasmRes.status}`);
       await initWasm(wasmRes);
     })();
@@ -43,11 +45,11 @@ async function ensureGraphicsRuntime() {
 
 function escapeXml(s: string): string {
   return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
 // resvg does not apply SVG direction/unicode-bidi consistently to mixed text.
@@ -72,42 +74,54 @@ export async function renderSignatureFieldPng(
 }
 
 /** Israel-local date + time for stamp display. */
-export function formatStampDateTime(iso: string | null | undefined): { date: string; time: string; full: string } {
+export function formatStampDateTime(iso: string | null | undefined): {
+  date: string;
+  time: string;
+  full: string;
+} {
   const d = iso ? new Date(iso) : new Date();
   if (Number.isNaN(d.getTime())) {
-    return { date: '—', time: '—', full: '—' };
+    return { date: "—", time: "—", full: "—" };
   }
-  const fmt = new Intl.DateTimeFormat('he-IL', {
-    timeZone: 'Asia/Jerusalem',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
+  const fmt = new Intl.DateTimeFormat("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
     hour12: false,
   });
-  const parts = Object.fromEntries(fmt.formatToParts(d).map((p) => [p.type, p.value]));
+  const parts = Object.fromEntries(
+    fmt.formatToParts(d).map((p) => [p.type, p.value]),
+  );
   const date = `${parts.day}/${parts.month}/${parts.year}`;
   const time = `${parts.hour}:${parts.minute}`;
   return { date, time, full: `${date} ${time}` };
 }
 
-export function buildCertificateId(documentId: string, signedAt?: string | null): string {
-  const day = (signedAt ? new Date(signedAt) : new Date()).toISOString().slice(0, 10).replace(/-/g, '');
-  const short = documentId.replace(/-/g, '').slice(0, 8).toUpperCase();
+export function buildCertificateId(
+  documentId: string,
+  signedAt?: string | null,
+): string {
+  const day = (signedAt ? new Date(signedAt) : new Date())
+    .toISOString()
+    .slice(0, 10)
+    .replace(/-/g, "");
+  const short = documentId.replace(/-/g, "").slice(0, 8).toUpperCase();
   return `AIOS-SIG-${day}-${short}`;
 }
 
 function renderSvgToPng(svg: string, width: number): Uint8Array {
-  if (!fontRegular || !fontBold) throw new Error('fonts_not_loaded');
+  if (!fontRegular || !fontBold) throw new Error("fonts_not_loaded");
   const resvg = new Resvg(svg, {
-    fitTo: { mode: 'width', value: width },
+    fitTo: { mode: "width", value: width },
     font: {
       fontBuffers: [fontRegular, fontBold],
-      defaultFontFamily: 'DejaVu Sans',
+      defaultFontFamily: "DejaVu Sans",
       loadSystemFonts: false,
     },
-    background: 'rgba(0,0,0,0)',
+    background: "rgba(0,0,0,0)",
   });
   return resvg.render().asPng();
 }
@@ -120,7 +134,9 @@ export interface StampRenderInput {
 }
 
 /** Transparent ink-style circular stamp with correct Hebrew RTL. */
-export async function renderAiosStampPng(input: StampRenderInput): Promise<Uint8Array> {
+export async function renderAiosStampPng(
+  input: StampRenderInput,
+): Promise<Uint8Array> {
   await ensureGraphicsRuntime();
   const { date, time } = formatStampDateTime(input.signedAt);
   const cert = escapeXml(input.certificateId);
@@ -202,14 +218,16 @@ export async function renderAiosStampPng(input: StampRenderInput): Promise<Uint8
 }
 
 /** Certificate details card with Hebrew RTL (transparent-friendly white panel). */
-export async function renderCertificateCardPng(input: StampRenderInput & {
-  signerEmail?: string;
-}): Promise<Uint8Array> {
+export async function renderCertificateCardPng(
+  input: StampRenderInput & {
+    signerEmail?: string;
+  },
+): Promise<Uint8Array> {
   await ensureGraphicsRuntime();
   const { full } = formatStampDateTime(input.signedAt);
-  const title = input.documentTitle || 'מסמך';
-  const name = input.signerName || '—';
-  const email = escapeXml(input.signerEmail || '');
+  const title = input.documentTitle || "מסמך";
+  const name = input.signerName || "—";
+  const email = escapeXml(input.signerEmail || "");
   const cert = escapeXml(input.certificateId);
   const w = 900;
   const h = 320;
@@ -232,7 +250,7 @@ export async function renderCertificateCardPng(input: StampRenderInput & {
   <text class="he" x="${w - 36}" y="152" text-anchor="end" font-size="20">${rtlText(`חותם: ${name}`)}</text>
   <text class="muted" x="36" y="152" text-anchor="start" font-size="16">${email}</text>
   <text class="he" x="${w - 36}" y="186" text-anchor="end" font-size="18">${rtlText(`תאריך ושעת חתימה: ${full}`)}</text>
-  <text class="he" x="${w - 36}" y="222" text-anchor="end" font-size="18">${rtlText('מפרט אישור (Specification):')}</text>
+  <text class="he" x="${w - 36}" y="222" text-anchor="end" font-size="18">${rtlText("מפרט אישור (Specification):")}</text>
   <text class="brand" x="${w - 36}" y="256" text-anchor="end" font-size="18">${cert}</text>
   <text class="muted" x="36" y="256" text-anchor="start" font-size="14">aios.co.il</text>
 </svg>`;
@@ -246,15 +264,19 @@ export interface BusinessStampInput {
 }
 
 /** Gray rubber-style business stamp drawn under the client's handwritten signature. */
-export async function renderBusinessStampPng(input: BusinessStampInput): Promise<Uint8Array | null> {
-  const businessName = (input.businessName || '').trim();
+export async function renderBusinessStampPng(
+  input: BusinessStampInput,
+): Promise<Uint8Array | null> {
+  const businessName = (input.businessName || "").trim();
   if (!businessName) return null;
   await ensureGraphicsRuntime();
 
-  const companyId = (input.companyId || '').trim();
+  const companyId = (input.companyId || "").trim();
   const idLine = companyId
-    ? (companyId.match(/^[0-9]+$/) ? `ח.פ / ת.ז ${companyId}` : companyId)
-    : '';
+    ? companyId.match(/^[0-9]+$/)
+      ? `ח.פ / ת.ז ${companyId}`
+      : companyId
+    : "";
 
   const w = 720;
   const h = 280;
@@ -272,7 +294,7 @@ export async function renderBusinessStampPng(input: BusinessStampInput): Promise
   </defs>
   <g opacity="0.85" transform="rotate(-2 ${w / 2} ${h / 2})">
     <text class="he" x="${w / 2}" y="${idLine ? 118 : 150}" text-anchor="middle" font-size="42" font-weight="700">${rtlText(businessName)}</text>
-    ${idLine ? `<text class="he" x="${w / 2}" y="178" text-anchor="middle" font-size="28">${rtlText(idLine)}</text>` : ''}
+    ${idLine ? `<text class="he" x="${w / 2}" y="178" text-anchor="middle" font-size="28">${rtlText(idLine)}</text>` : ""}
   </g>
 </svg>`;
 

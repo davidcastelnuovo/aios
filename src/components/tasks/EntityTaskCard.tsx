@@ -1,10 +1,22 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, CheckCheck, CheckCircle2, Circle, Pencil, UserRound, Building2, Megaphone } from "lucide-react";
+import {
+  Calendar,
+  CheckCheck,
+  CheckCircle2,
+  Circle,
+  Pencil,
+  UserRound,
+  Building2,
+  Megaphone,
+} from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { describeTaskAssignment, type TaskAssignmentSource } from "@/lib/taskAssignment";
+import {
+  describeTaskAssignment,
+  type TaskAssignmentSource,
+} from "@/lib/taskAssignment";
 import { cn } from "@/lib/utils";
 
 type EntityTask = TaskAssignmentSource & {
@@ -60,13 +72,28 @@ export function EntityTaskCard({
           <h4 className="font-semibold text-sm flex-1">{task.title}</h4>
           <div className="flex items-center gap-1 shrink-0">
             {isCompleted ? (
-              <Badge variant="outline" className={cn("bg-green-100 text-green-700 border-green-300", compact && "text-xs")}>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "bg-green-100 text-green-700 border-green-300",
+                  compact && "text-xs",
+                )}
+              >
                 <CheckCheck className="h-3 w-3 mr-1" />
                 הושלמה
               </Badge>
             ) : (
-              <Badge variant="outline" className={cn(compact ? "bg-blue-100 text-blue-700 border-blue-300 text-xs" : undefined)}>
-                {compact ? priorityBadge(task.priority) : `דחיפות: ${priorityBadge(task.priority)}`}
+              <Badge
+                variant="outline"
+                className={cn(
+                  compact
+                    ? "bg-blue-100 text-blue-700 border-blue-300 text-xs"
+                    : undefined,
+                )}
+              >
+                {compact
+                  ? priorityBadge(task.priority)
+                  : `דחיפות: ${priorityBadge(task.priority)}`}
               </Badge>
             )}
             <Button
@@ -112,7 +139,9 @@ export function EntityTaskCard({
         )}
 
         {!compact && task.notes && (
-          <p className="text-xs text-muted-foreground line-clamp-2">{task.notes}</p>
+          <p className="text-xs text-muted-foreground line-clamp-2">
+            {task.notes}
+          </p>
         )}
 
         <Button
@@ -127,12 +156,16 @@ export function EntityTaskCard({
         >
           {isCompleted ? (
             <>
-              <Circle className={cn(compact ? "h-3 w-3 mr-1" : "h-4 w-4 mr-2")} />
+              <Circle
+                className={cn(compact ? "h-3 w-3 mr-1" : "h-4 w-4 mr-2")}
+              />
               פתח שוב
             </>
           ) : (
             <>
-              <CheckCircle2 className={cn(compact ? "h-3 w-3 mr-1" : "h-4 w-4 mr-2")} />
+              <CheckCircle2
+                className={cn(compact ? "h-3 w-3 mr-1" : "h-4 w-4 mr-2")}
+              />
               {compact ? "סיים" : "סיים משימה"}
             </>
           )}

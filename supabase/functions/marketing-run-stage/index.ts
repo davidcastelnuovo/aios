@@ -12,12 +12,12 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const TEXT_MODEL = 'gpt-4o-mini';
-const IMAGE_MODEL = 'gpt-image-1';
+const TEXT_MODEL = "gpt-4o-mini";
+const IMAGE_MODEL = "gpt-image-1";
 
 // GPT-4o-mini pricing (USD per 1M tokens)
 const COST_IN_PER_M = 0.15;
-const COST_OUT_PER_M = 0.60;
+const COST_OUT_PER_M = 0.6;
 // gpt-image-1 medium ~1024px (approximate blended cost for marketing creatives)
 const GPT_IMAGE1_COST_PER_IMAGE = 0.042;
 
@@ -35,7 +35,8 @@ const imageSizeForFormat = (format: unknown): string => {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   let runId: string | null = null;
   const supaUrl = Deno.env.get("SUPABASE_URL")!;
@@ -54,21 +55,21 @@ serve(async (req) => {
     // Get OpenAI API key from tenant_integrations (same as run-ai-agent)
     const getOpenAIKey = async (tenantId: string): Promise<string> => {
       const { data } = await admin
-        .from('tenant_integrations')
-        .select('settings, shared_from_integration_id')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'llm')
-        .eq('is_active', true)
-        .order('updated_at', { ascending: false })
+        .from("tenant_integrations")
+        .select("settings, shared_from_integration_id")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "llm")
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       let settings = (data?.settings || {}) as Record<string, string>;
       // If shared, load from source
       if (data?.shared_from_integration_id && !settings.openai_api_key) {
         const { data: src } = await admin
-          .from('tenant_integrations')
-          .select('settings')
-          .eq('id', data.shared_from_integration_id)
+          .from("tenant_integrations")
+          .select("settings")
+          .eq("id", data.shared_from_integration_id)
           .maybeSingle();
         if (src?.settings) settings = src.settings as Record<string, string>;
       }
@@ -76,15 +77,20 @@ serve(async (req) => {
       if (key) return key;
       const fallback = await resolveOpenAIKey();
       if (fallback) return fallback;
-      throw new Error('OpenAI API key חסר — הגדר אותו בהגדרות האינטגרציות או כ־OPENAI_API_KEY');
+      throw new Error(
+        "OpenAI API key חסר — הגדר אותו בהגדרות האינטגרציות או כ־OPENAI_API_KEY",
+      );
     };
 
     const { item_id, stage_id } = await req.json();
     if (!item_id || !stage_id) {
-      return new Response(JSON.stringify({ error: "item_id and stage_id required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "item_id and stage_id required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const userId = auth.userId;
@@ -111,7 +117,9 @@ serve(async (req) => {
       item.pipeline_id = stage.pipeline_id;
     }
     if (stage.pipeline_id !== item.pipeline_id) {
-      throw new Error("השלב לא שייך לפייפליין של הפריט — נסה/י לשמור את הפרויקט מחדש או לשייך לקוח");
+      throw new Error(
+        "השלב לא שייך לפייפליין של הפריט — נסה/י לשמור את הפרויקט מחדש או לשייך לקוח",
+      );
     }
     if (stage.tenant_id && stage.tenant_id !== item.tenant_id) {
       throw new Error("Stage and work item tenant mismatch");
@@ -141,7 +149,9 @@ serve(async (req) => {
     if (stage.agent_id) {
       const { data: a } = await admin
         .from("ai_agents")
-        .select("id, name, system_prompt, personality, soul, talent, writing_style, response_length, language")
+        .select(
+          "id, name, system_prompt, personality, soul, talent, writing_style, response_length, language",
+        )
         .eq("id", stage.agent_id)
         .maybeSingle();
       agent = a;
@@ -169,7 +179,8 @@ serve(async (req) => {
       })
       .select("id")
       .single();
-    if (runErr || !runRow) throw new Error("Failed to create run: " + runErr?.message);
+    if (runErr || !runRow)
+      throw new Error("Failed to create run: " + runErr?.message);
     runId = runRow.id;
 
     // Get OpenAI API key from tenant_integrations
@@ -188,7 +199,10 @@ serve(async (req) => {
       measurement: "analyst",
     };
     const skinSlug: string =
-      cfg.skin ?? cfg.skin_slug ?? defaultSkinByStage[stageType] ?? "campaigner";
+      cfg.skin ??
+      cfg.skin_slug ??
+      defaultSkinByStage[stageType] ??
+      "campaigner";
     const skinBlock = await buildSkillsBlockBySlug([skinSlug], item.tenant_id);
 
     // Build messages from Carmen Core + the pinned existing Skin + stage context.
@@ -196,7 +210,8 @@ serve(async (req) => {
     if (agent?.system_prompt) systemParts.push(agent.system_prompt);
     if (skinBlock) systemParts.push(skinBlock);
     if (agent?.personality) systemParts.push(`אישיות: ${agent.personality}`);
-    if (agent?.writing_style) systemParts.push(`סגנון כתיבה: ${agent.writing_style}`);
+    if (agent?.writing_style)
+      systemParts.push(`סגנון כתיבה: ${agent.writing_style}`);
     if (instructions) systemParts.push(instructions);
     if (client) {
       systemParts.push(
@@ -206,27 +221,39 @@ serve(async (req) => {
     const systemPrompt = systemParts.join("\n\n");
 
     const userParts: string[] = [];
-    const approvedConcepts = formatApprovedConceptsFromPayload((item.payload ?? {}) as Record<string, unknown>);
+    const approvedConcepts = formatApprovedConceptsFromPayload(
+      (item.payload ?? {}) as Record<string, unknown>,
+    );
     if (stageType === "creative" && approvedConcepts) {
-      userParts.push(`MUST FOLLOW THIS APPROVED VISUAL CONCEPT — photograph this scene. Copy is type only, never a new situation invented from the headline:\n${approvedConcepts}`);
+      userParts.push(
+        `MUST FOLLOW THIS APPROVED VISUAL CONCEPT — photograph this scene. Copy is type only, never a new situation invented from the headline:\n${approvedConcepts}`,
+      );
     }
     userParts.push(`כותרת הפריט: ${item.title ?? "—"}`);
     const sourceBrief =
-      item.payload?.brief_text ?? item.payload?.brief ?? item.payload?.source_summary ?? "";
+      item.payload?.brief_text ??
+      item.payload?.brief ??
+      item.payload?.source_summary ??
+      "";
     if (sourceBrief) userParts.push(`בריף מקור / סיכום פגישה:\n${sourceBrief}`);
     if (stageType !== "creative" && approvedConcepts) {
       userParts.push(`קונספטים מאושרים ממחלקת הקופי:\n${approvedConcepts}`);
     }
     if (item.payload?.notes) userParts.push(`הערות: ${item.payload.notes}`);
-    const storyboardFrame = item.payload?.storyboard_frame as Record<string, unknown> | undefined;
-    if (stageType === "creative" && storyboardFrame && typeof storyboardFrame === "object") {
+    const storyboardFrame = item.payload?.storyboard_frame as
+      Record<string, unknown> | undefined;
+    if (
+      stageType === "creative" &&
+      storyboardFrame &&
+      typeof storyboardFrame === "object"
+    ) {
       userParts.push(
         `\nStoryboard frame #${storyboardFrame.order ?? "?"}\n` +
-        `Title: ${storyboardFrame.title ?? ""}\n` +
-        `Shot type: ${storyboardFrame.shot ?? ""}\n` +
-        `Visual description: ${storyboardFrame.visualPrompt ?? ""}\n` +
-        `On-screen text: ${storyboardFrame.overlayText ?? ""}\n` +
-        `Voiceover: ${storyboardFrame.voiceover ?? ""}`,
+          `Title: ${storyboardFrame.title ?? ""}\n` +
+          `Shot type: ${storyboardFrame.shot ?? ""}\n` +
+          `Visual description: ${storyboardFrame.visualPrompt ?? ""}\n` +
+          `On-screen text: ${storyboardFrame.overlayText ?? ""}\n` +
+          `Voiceover: ${storyboardFrame.voiceover ?? ""}`,
       );
     }
     if ((prevAssets ?? []).length > 0) {
@@ -241,11 +268,15 @@ serve(async (req) => {
     }
 
     if (stageType === "strategy") {
-      userParts.push("\nהפק בריף שיווקי מובנה: קהל יעד, כאבים, הצעת ערך, מסרים מרכזיים, טון, KPIs.");
+      userParts.push(
+        "\nהפק בריף שיווקי מובנה: קהל יעד, כאבים, הצעת ערך, מסרים מרכזיים, טון, KPIs.",
+      );
     } else if (stageType === "copy") {
       userParts.push("\nכתוב את הקופי המלא לפריט. קצר וממוקד.");
     } else if (stageType === "creative") {
-      userParts.push("\nצור תמונה ויזואלית מקצועית לפריט הזה. אם יש קונספטים מאושרים — צלם את סצנת הקונספט (רעיון גדול, הוק, שפה ויזואלית). הקופי הוא טקסט על התמונה, לא סצנה חדשה.");
+      userParts.push(
+        "\nצור תמונה ויזואלית מקצועית לפריט הזה. אם יש קונספטים מאושרים — צלם את סצנת הקונספט (רעיון גדול, הוק, שפה ויזואלית). הקופי הוא טקסט על התמונה, לא סצנה חדשה.",
+      );
     } else if (stageType === "measurement") {
       userParts.push("\nהפק סיכום ביצועים והמלצות פעולה לשיפור.");
     }
@@ -262,21 +293,34 @@ serve(async (req) => {
     if (stageType === "creative") {
       const imageSize = imageSizeForFormat(item.payload?.format);
       // First, generate a detailed image prompt using text model
-      const promptRes = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
+      const promptRes = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: TEXT_MODEL,
+            messages: [
+              {
+                role: "system",
+                content:
+                  systemPrompt ||
+                  "You are a creative director. Generate concise photorealistic image prompts in English.",
+              },
+              {
+                role: "user",
+                content:
+                  userPrompt +
+                  "\n\nGenerate a concise gpt-image-1 prompt (max 200 words) in English for this marketing creative. Photograph the approved concept (big idea, visual language, first-second hook). Copy/headline is TYPE only — do not restage the slogan as a new scene. Focus on visual elements, style, composition, and lighting. NEVER request on-image text, letters, digits, captions, or logos — Hebrew type is composited later and the image API garbles it. Do not make a generic text-on-background ad.",
+              },
+            ],
+            max_tokens: 300,
+          }),
         },
-        body: JSON.stringify({
-          model: TEXT_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt || "You are a creative director. Generate concise photorealistic image prompts in English." },
-            { role: "user", content: userPrompt + "\n\nGenerate a concise gpt-image-1 prompt (max 200 words) in English for this marketing creative. Photograph the approved concept (big idea, visual language, first-second hook). Copy/headline is TYPE only — do not restage the slogan as a new scene. Focus on visual elements, style, composition, and lighting. NEVER request on-image text, letters, digits, captions, or logos — Hebrew type is composited later and the image API garbles it. Do not make a generic text-on-background ad." },
-          ],
-          max_tokens: 300,
-        }),
-      });
+      );
       let imagePrompt = item.title ?? "Professional marketing creative";
       if (promptRes.ok) {
         const promptData = await promptRes.json();
@@ -285,21 +329,24 @@ serve(async (req) => {
         tokensOut += promptData.usage?.completion_tokens ?? 0;
       }
 
-      const aiRes = await fetch("https://api.openai.com/v1/images/generations", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
+      const aiRes = await fetch(
+        "https://api.openai.com/v1/images/generations",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: IMAGE_MODEL,
+            prompt: `${imagePrompt}. Professional marketing creative, high quality, polished composition. ZERO letters, digits, captions, logos, or watermarks on the image — Hebrew type is composited later.`,
+            n: 1,
+            size: imageSize,
+            quality: "medium",
+            output_format: "png",
+          }),
         },
-        body: JSON.stringify({
-          model: IMAGE_MODEL,
-          prompt: `${imagePrompt}. Professional marketing creative, high quality, polished composition. ZERO letters, digits, captions, logos, or watermarks on the image — Hebrew type is composited later.`,
-          n: 1,
-          size: imageSize,
-          quality: "medium",
-          output_format: "png",
-        }),
-      });
+      );
       if (!aiRes.ok) {
         const t = await aiRes.text();
         throw new Error(`Image generation ${aiRes.status}: ${t}`);
@@ -314,10 +361,16 @@ serve(async (req) => {
         .from("entity-attachments")
         .upload(filePath, bytes, { contentType: "image/png", upsert: false });
       if (upErr) throw new Error("Upload failed: " + upErr.message);
-      const { data: pub } = admin.storage.from("entity-attachments").getPublicUrl(filePath);
+      const { data: pub } = admin.storage
+        .from("entity-attachments")
+        .getPublicUrl(filePath);
       assetUrl = pub.publicUrl;
       assetType = "image";
-      outputJson = { image_url: assetUrl, image_model: IMAGE_MODEL, image_size: imageSize };
+      outputJson = {
+        image_url: assetUrl,
+        image_model: IMAGE_MODEL,
+        image_size: imageSize,
+      };
       tokensIn = 0;
       tokensOut = 0;
     } else {
@@ -331,7 +384,10 @@ serve(async (req) => {
         body: JSON.stringify({
           model: TEXT_MODEL,
           messages: [
-            { role: "system", content: systemPrompt || "You are a marketing assistant." },
+            {
+              role: "system",
+              content: systemPrompt || "You are a marketing assistant.",
+            },
             { role: "user", content: userPrompt },
           ],
         }),
@@ -348,7 +404,12 @@ serve(async (req) => {
       assetContent = data.choices?.[0]?.message?.content ?? "";
       tokensIn = data.usage?.prompt_tokens ?? 0;
       tokensOut = data.usage?.completion_tokens ?? 0;
-      assetType = stageType === "strategy" ? "brief" : stageType === "measurement" ? "data" : "copy";
+      assetType =
+        stageType === "strategy"
+          ? "brief"
+          : stageType === "measurement"
+            ? "data"
+            : "copy";
       outputJson = { text: assetContent };
     }
 
@@ -374,15 +435,20 @@ serve(async (req) => {
     if (assetType === "copy") newPayload.copy_text = assetContent;
     if (assetType === "image") newPayload.image_url = assetUrl;
     newPayload.last_skin_slug = skinSlug;
-    await admin.from("marketing_work_items").update({ payload: newPayload }).eq("id", item_id);
+    await admin
+      .from("marketing_work_items")
+      .update({ payload: newPayload })
+      .eq("id", item_id);
 
-    const cost = stageType === "creative"
-      ? GPT_IMAGE1_COST_PER_IMAGE
-      : (tokensIn * COST_IN_PER_M + tokensOut * COST_OUT_PER_M) / 1_000_000;
+    const cost =
+      stageType === "creative"
+        ? GPT_IMAGE1_COST_PER_IMAGE
+        : (tokensIn * COST_IN_PER_M + tokensOut * COST_OUT_PER_M) / 1_000_000;
 
     // Decide: auto-advance or wait for approval
     const approvalMode = stage.approval_mode ?? "manual";
-    const finalStatus = approvalMode === "auto" ? "completed" : "awaiting_approval";
+    const finalStatus =
+      approvalMode === "auto" ? "completed" : "awaiting_approval";
 
     await admin
       .from("marketing_runs")
@@ -497,7 +563,9 @@ serve(async (req) => {
               Authorization: `Bearer ${supaService}`,
             },
             body: JSON.stringify({ item_id, stage_id: nextStageId }),
-          }).catch(() => {/* ignore */});
+          }).catch(() => {
+            /* ignore */
+          });
         }
       } else if (currentIdx === stages.length - 1) {
         // Last stage — mark work item as completed

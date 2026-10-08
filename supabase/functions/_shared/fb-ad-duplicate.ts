@@ -7,4 +7,4 @@ export {
   applyVariantToAssetFeedSpec,
   normalizeAdCopyVariants,
   summarizeSourceAd,
-} from './fb-ad-duplicate.mjs';
+} from "./fb-ad-duplicate.mjs";

@@ -56,7 +56,9 @@ export function ManualTriggerDialog({
   });
 
   // Find agent step and its agent_id
-  const agentStep = flowSteps?.find((s: any) => s.step_type === "agent" || s.action_type === "agent");
+  const agentStep = flowSteps?.find(
+    (s: any) => s.step_type === "agent" || s.action_type === "agent",
+  );
   const agentId = agentStep?.configuration?.agent_id;
 
   // Auto scroll to bottom
@@ -88,34 +90,44 @@ export function ManualTriggerDialog({
     setIsRunning(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       const userName = user?.email || "משתמש";
 
       // Always call trigger-automation which handles full flow execution
-      const { data, error } = await supabase.functions.invoke("trigger-automation", {
-        body: {
-          automationId,
-          command_text: currentCommand,
-          user_name: userName,
+      const { data, error } = await supabase.functions.invoke(
+        "trigger-automation",
+        {
+          body: {
+            automationId,
+            command_text: currentCommand,
+            user_name: userName,
+          },
         },
-      });
+      );
 
       if (error) throw error;
 
       // Extract agent output from flow results
       const result = data?.results?.[0];
       const flowResponse = result?.response || result;
-      
+
       if (flowResponse?.flow && flowResponse?.agent_output) {
         // Flow with agent - show agent output
-        const stepsInfo = flowResponse.steps
-          ?.filter((s: any) => s.action_type !== 'agent')
-          ?.map((s: any) => s.success ? `✅ ${s.action_type}` : `❌ ${s.action_type}: ${s.error}`)
-          ?.join('\n') || '';
-        
+        const stepsInfo =
+          flowResponse.steps
+            ?.filter((s: any) => s.action_type !== "agent")
+            ?.map((s: any) =>
+              s.success
+                ? `✅ ${s.action_type}`
+                : `❌ ${s.action_type}: ${s.error}`,
+            )
+            ?.join("\n") || "";
+
         const agentContent = flowResponse.agent_output;
-        const fullContent = stepsInfo 
-          ? `${agentContent}\n\n---\n${stepsInfo}` 
+        const fullContent = stepsInfo
+          ? `${agentContent}\n\n---\n${stepsInfo}`
           : agentContent;
 
         setMessages((prev) => [
@@ -128,10 +140,15 @@ export function ManualTriggerDialog({
         ]);
       } else if (flowResponse?.flow) {
         // Flow without agent
-        const stepsInfo = flowResponse.steps
-          ?.map((s: any) => s.success ? `✅ ${s.action_type}` : `❌ ${s.action_type}: ${s.error}`)
-          ?.join('\n') || 'הפלוו הופעל בהצלחה';
-        
+        const stepsInfo =
+          flowResponse.steps
+            ?.map((s: any) =>
+              s.success
+                ? `✅ ${s.action_type}`
+                : `❌ ${s.action_type}: ${s.error}`,
+            )
+            ?.join("\n") || "הפלוו הופעל בהצלחה";
+
         setMessages((prev) => [
           ...prev,
           {
@@ -172,7 +189,10 @@ export function ManualTriggerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col" dir="rtl">
+      <DialogContent
+        className="sm:max-w-lg max-h-[80vh] flex flex-col"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle>הפעלה ידנית - {automationName}</DialogTitle>
           <DialogDescription>
@@ -260,9 +280,7 @@ export function ManualTriggerDialog({
             )}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Ctrl+Enter לשליחה מהירה
-        </p>
+        <p className="text-xs text-muted-foreground">Ctrl+Enter לשליחה מהירה</p>
       </DialogContent>
     </Dialog>
   );

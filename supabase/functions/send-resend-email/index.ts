@@ -2,29 +2,58 @@
 // Body: { to, subject, html?, text?, fromEmail?, fromName?, replyTo?,
 //         headers?, tags?, attachments?: [{filename, content (base64), contentType}] }
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Content-Type': 'application/json',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Content-Type": "application/json",
 };
 
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
-const DEFAULT_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') ?? 'noreply@aios.co.il';
-const DEFAULT_FROM_NAME = Deno.env.get('RESEND_FROM_NAME') ?? 'AfterLead';
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
+const DEFAULT_FROM_EMAIL =
+  Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@aios.co.il";
+const DEFAULT_FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "AfterLead";
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   try {
-    if (!req.headers.get('Authorization')) {
-      return new Response(JSON.stringify({ error: 'missing_authorization' }), { status: 401, headers: corsHeaders });
+    if (!req.headers.get("Authorization")) {
+      return new Response(JSON.stringify({ error: "missing_authorization" }), {
+        status: 401,
+        headers: corsHeaders,
+      });
     }
     if (!RESEND_API_KEY) {
-      return new Response(JSON.stringify({ error: 'resend_not_configured', details: 'RESEND_API_KEY secret is missing' }), { status: 400, headers: corsHeaders });
+      return new Response(
+        JSON.stringify({
+          error: "resend_not_configured",
+          details: "RESEND_API_KEY secret is missing",
+        }),
+        { status: 400, headers: corsHeaders },
+      );
     }
 
-    const { to, subject, html, text, fromEmail, fromName, replyTo, headers, tags, attachments } = await req.json();
+    const {
+      to,
+      subject,
+      html,
+      text,
+      fromEmail,
+      fromName,
+      replyTo,
+      headers,
+      tags,
+      attachments,
+    } = await req.json();
     if (!to || !subject || (!html && !text)) {
-      return new Response(JSON.stringify({ error: 'missing_fields', details: 'to, subject and html|text are required' }), { status: 400, headers: corsHeaders });
+      return new Response(
+        JSON.stringify({
+          error: "missing_fields",
+          details: "to, subject and html|text are required",
+        }),
+        { status: 400, headers: corsHeaders },
+      );
     }
 
     const from = `${fromName || DEFAULT_FROM_NAME} <${fromEmail || DEFAULT_FROM_EMAIL}>`;
@@ -32,7 +61,7 @@ Deno.serve(async (req) => {
     if (html) payload.html = html;
     if (text) payload.text = text;
     if (replyTo) payload.reply_to = replyTo;
-    if (headers && typeof headers === 'object') payload.headers = headers;
+    if (headers && typeof headers === "object") payload.headers = headers;
     if (Array.isArray(tags)) payload.tags = tags;
     if (Array.isArray(attachments) && attachments.length > 0) {
       // Resend expects: [{ filename, content (base64 string), content_type, content_id? }]
@@ -41,26 +70,40 @@ Deno.serve(async (req) => {
         const att: any = {
           filename: a.filename,
           content: a.content,
-          content_type: a.contentType || a.content_type || 'application/octet-stream',
+          content_type:
+            a.contentType || a.content_type || "application/octet-stream",
         };
-        if (a.content_id || a.contentId) att.content_id = a.content_id || a.contentId;
+        if (a.content_id || a.contentId)
+          att.content_id = a.content_id || a.contentId;
         return att;
       });
     }
 
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(payload),
     });
     const json = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: 'resend_error', details: json }), { status: 502, headers: corsHeaders });
+      return new Response(
+        JSON.stringify({ error: "resend_error", details: json }),
+        { status: 502, headers: corsHeaders },
+      );
     }
-    return new Response(JSON.stringify({ success: true, id: json?.id }), { status: 200, headers: corsHeaders });
+    return new Response(JSON.stringify({ success: true, id: json?.id }), {
+      status: 200,
+      headers: corsHeaders,
+    });
   } catch (e: any) {
-    console.error('[send-resend-email]', e);
-    return new Response(JSON.stringify({ error: String(e?.message || e) }), { status: 500, headers: corsHeaders });
+    console.error("[send-resend-email]", e);
+    return new Response(JSON.stringify({ error: String(e?.message || e) }), {
+      status: 500,
+      headers: corsHeaders,
+    });
   }
 });

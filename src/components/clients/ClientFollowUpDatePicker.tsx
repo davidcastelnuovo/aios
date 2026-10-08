@@ -9,7 +9,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { CalendarClock, X } from "lucide-react";
 import { format, differenceInCalendarDays, startOfDay } from "date-fns";
 import { he } from "date-fns/locale";
@@ -50,7 +54,7 @@ export function ClientFollowUpDatePicker({
   const { tenantId } = useCurrentTenant();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    currentDate ? new Date(currentDate) : undefined
+    currentDate ? new Date(currentDate) : undefined,
   );
 
   const { isOverdue, isToday, daysLate } = getOverdueInfo(currentDate);
@@ -121,7 +125,8 @@ export function ClientFollowUpDatePicker({
               "justify-start text-right font-normal",
               !currentDate && "text-muted-foreground",
               isToday && "border-primary bg-primary/10",
-              isOverdue && "border-destructive bg-destructive/10 text-destructive"
+              isOverdue &&
+                "border-destructive bg-destructive/10 text-destructive",
             )}
           >
             <CalendarClock className="ml-2 h-4 w-4" />
@@ -145,7 +150,12 @@ export function ClientFollowUpDatePicker({
           />
           {currentDate && (
             <div className="p-2 border-t">
-              <Button variant="ghost" size="sm" className="w-full" onClick={handleClear}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={handleClear}
+              >
                 <X className="h-4 w-4 ml-2" />
                 נקה תאריך
               </Button>
@@ -165,7 +175,7 @@ export function ClientFollowUpDatePicker({
           className={cn(
             "h-8 w-8 relative shrink-0",
             isToday && "text-green-600 bg-green-100",
-            isOverdue && "text-destructive bg-destructive/10"
+            isOverdue && "text-destructive bg-destructive/10",
           )}
           onClick={(e) => {
             e.stopPropagation();
@@ -186,7 +196,8 @@ export function ClientFollowUpDatePicker({
             className={cn(
               "text-sm font-medium whitespace-nowrap",
               isToday && "text-green-600 bg-green-100 px-2 py-0.5 rounded-md",
-              isOverdue && "text-destructive bg-destructive/10 px-2 py-0.5 rounded-md"
+              isOverdue &&
+                "text-destructive bg-destructive/10 px-2 py-0.5 rounded-md",
             )}
           >
             {isOverdue
@@ -216,7 +227,9 @@ export function ClientFollowUpDatePicker({
               <p
                 className={cn(
                   "text-sm text-center mt-3",
-                  isOverdue ? "text-destructive font-medium" : "text-muted-foreground"
+                  isOverdue
+                    ? "text-destructive font-medium"
+                    : "text-muted-foreground",
                 )}
               >
                 {isOverdue
@@ -233,7 +246,10 @@ export function ClientFollowUpDatePicker({
                 נקה
               </Button>
             )}
-            <Button onClick={handleSave} disabled={updateFollowUpDate.isPending}>
+            <Button
+              onClick={handleSave}
+              disabled={updateFollowUpDate.isPending}
+            >
               {updateFollowUpDate.isPending ? "שומר..." : "שמור"}
             </Button>
           </DialogFooter>

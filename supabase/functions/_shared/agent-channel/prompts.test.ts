@@ -52,7 +52,9 @@ test("Codex workspace input carries attachments and forbids forwarding", () => {
     sessionId: "s",
     tenantId: "t",
     environment: "production",
-    attachments: [{ type: "image", name: "a.png", url: "https://x/a.png" } as any],
+    attachments: [
+      { type: "image", name: "a.png", url: "https://x/a.png" } as any,
+    ],
   });
   assert.match(input, /no text — see attached files/);
   assert.match(input, /a\.png → https:\/\/x\/a\.png/);

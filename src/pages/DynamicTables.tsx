@@ -2,10 +2,46 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X, Check, ChevronsUpDown, TrendingUp, AlertTriangle, ShoppingCart, LayoutDashboard, Music2 } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Plus,
+  Table2,
+  FileSpreadsheet,
+  Pencil,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  Facebook,
+  Building2,
+  User,
+  X,
+  Check,
+  ChevronsUpDown,
+  TrendingUp,
+  AlertTriangle,
+  ShoppingCart,
+  LayoutDashboard,
+  Music2,
+} from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -93,13 +129,25 @@ export default function DynamicTables() {
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
-  const { isCampaigner, isSeo, isOwner, isTeamManager, isSuperAdmin, campaignerId } = useUserRole();
+  const {
+    isCampaigner,
+    isSeo,
+    isOwner,
+    isTeamManager,
+    isSuperAdmin,
+    campaignerId,
+  } = useUserRole();
   const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
   const isRestrictedCampaignerViewer =
-    isCampaigner && !isSeoOnlyViewer && !isTeamManager && !isOwner && !isSuperAdmin;
+    isCampaigner &&
+    !isSeoOnlyViewer &&
+    !isTeamManager &&
+    !isOwner &&
+    !isSuperAdmin;
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showFacebookDialog, setShowFacebookDialog] = useState(false);
-  const [showFacebookEcommerceDialog, setShowFacebookEcommerceDialog] = useState(false);
+  const [showFacebookEcommerceDialog, setShowFacebookEcommerceDialog] =
+    useState(false);
   const [showGoogleAdsDialog, setShowGoogleAdsDialog] = useState(false);
   const [showGADialog, setShowGADialog] = useState(false);
   const [showGSCDialog, setShowGSCDialog] = useState(false);
@@ -109,69 +157,80 @@ export default function DynamicTables() {
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [editViaConnectionDialog, setEditViaConnectionDialog] = useState(false);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
-  const [editingDashboard, setEditingDashboard] = useState<{ id: string; name: string } | null>(null);
+  const [editingDashboard, setEditingDashboard] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [editDashboardName, setEditDashboardName] = useState("");
   const [editName, setEditName] = useState("");
   const [editAgencyId, setEditAgencyId] = useState<string>("");
   const [editClientId, setEditClientId] = useState<string>("");
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    return sessionStorage.getItem('dynamicTables.selectedCategory');
-  });
-  const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(
+    () => {
+      if (typeof window === "undefined") return null;
+      return sessionStorage.getItem("dynamicTables.selectedCategory");
+    },
+  );
+  const [showCreateDashboardDialog, setShowCreateDashboardDialog] =
+    useState(false);
   const [mainTab, setMainTab] = useState<string>("tables");
   const [editAdAccountId, setEditAdAccountId] = useState<string>("");
   const [editMaskyooNumber, setEditMaskyooNumber] = useState<string>("");
   const [clientSearch, setClientSearch] = useState<string>("");
   const [dashboardSearch, setDashboardSearch] = useState<string>("");
-  const [reportStatusFilter, setReportStatusFilter] = useState<"active" | "inactive" | "all">("active");
+  const [reportStatusFilter, setReportStatusFilter] = useState<
+    "active" | "inactive" | "all"
+  >("active");
 
   // For campaigners: fetch their assigned client IDs
   const { data: assignedClientIds } = useQuery({
-    queryKey: ['campaigner-client-ids', campaignerId],
+    queryKey: ["campaigner-client-ids", campaignerId],
     queryFn: async () => {
       if (!campaignerId) return [];
       const { data, error } = await supabase
-        .from('client_team')
-        .select('client_id')
-        .eq('campaigner_id', campaignerId);
+        .from("client_team")
+        .select("client_id")
+        .eq("campaigner_id", campaignerId);
       if (error) throw error;
-      return data?.map(ct => ct.client_id) || [];
+      return data?.map((ct) => ct.client_id) || [];
     },
     enabled: !!campaignerId && isRestrictedCampaignerViewer,
   });
 
-  const canManageTables = isOwner || isTeamManager || isSuperAdmin || isCampaigner;
+  const canManageTables =
+    isOwner || isTeamManager || isSuperAdmin || isCampaigner;
 
   // Fetch agencies and clients for displaying names
   const { data: agencies = [] } = useQuery({
-    queryKey: ['agencies', tenantId],
+    queryKey: ["agencies", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       // Owned agencies
       const { data: owned, error: ownedErr } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', tenantId);
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tenantId);
       if (ownedErr) throw ownedErr;
 
       // Shared agencies (cross-tenant via agency_tenant_access)
       const { data: sharedAccess, error: sharedErr } = await supabase
-        .from('agency_tenant_access')
-        .select('agency_id, agencies(id, name)')
-        .eq('accessing_tenant_id', tenantId);
+        .from("agency_tenant_access")
+        .select("agency_id, agencies(id, name)")
+        .eq("accessing_tenant_id", tenantId);
       if (sharedErr) throw sharedErr;
 
       const shared = (sharedAccess || [])
-        .map((row: any) => Array.isArray(row.agencies) ? row.agencies[0] : row.agencies)
+        .map((row: any) =>
+          Array.isArray(row.agencies) ? row.agencies[0] : row.agencies,
+        )
         .filter(Boolean)
         .map((a: any) => ({ id: a.id, name: a.name }));
 
       const merged = [...(owned || []), ...shared].filter(
-        (a, i, arr) => arr.findIndex(x => x.id === a.id) === i
+        (a, i, arr) => arr.findIndex((x) => x.id === a.id) === i,
       );
-      return merged.sort((a, b) => a.name.localeCompare(b.name, 'he'));
+      return merged.sort((a, b) => a.name.localeCompare(b.name, "he"));
     },
     enabled: !!tenantId,
   });
@@ -179,22 +238,26 @@ export default function DynamicTables() {
   // Clients across owned + shared agencies (so editing Google Ads tables can assign clients
   // belonging to cross-tenant shared agencies like DMM-MC).
   const { data: clients = [] } = useQuery({
-    queryKey: ['clients-all-with-shared', tenantId, agencies.map(a => a.id).join(',')],
+    queryKey: [
+      "clients-all-with-shared",
+      tenantId,
+      agencies.map((a) => a.id).join(","),
+    ],
     queryFn: async () => {
       if (!tenantId) return [];
-      const agencyIds = agencies.map(a => a.id);
+      const agencyIds = agencies.map((a) => a.id);
       if (agencyIds.length === 0) {
         const { data, error } = await supabase
-          .from('clients')
-          .select('id, name, agency_id, website, is_seo_client, services')
-          .eq('tenant_id', tenantId);
+          .from("clients")
+          .select("id, name, agency_id, website, is_seo_client, services")
+          .eq("tenant_id", tenantId);
         if (error) throw error;
         return data || [];
       }
       const { data, error } = await supabase
-        .from('clients')
-        .select('id, name, agency_id, website, is_seo_client, services')
-        .in('agency_id', agencyIds);
+        .from("clients")
+        .select("id, name, agency_id, website, is_seo_client, services")
+        .in("agency_id", agencyIds);
       if (error) throw error;
       return data || [];
     },
@@ -202,18 +265,24 @@ export default function DynamicTables() {
   });
 
   // Fetch ad accounts for edit dialog (Facebook tables)
-  const isEditingFacebook = editingTable?.integration_type === 'facebook_insights' || editingTable?.integration_type === 'facebook_ecommerce';
-  
+  const isEditingFacebook =
+    editingTable?.integration_type === "facebook_insights" ||
+    editingTable?.integration_type === "facebook_ecommerce";
+
   const { data: editAdAccountsData } = useQuery({
-    queryKey: ['facebook-ad-accounts-edit'],
+    queryKey: ["facebook-ad-accounts-edit"],
     queryFn: async () => {
-      const response = await supabase.functions.invoke('get-facebook-ad-accounts', { method: 'GET' });
+      const response = await supabase.functions.invoke(
+        "get-facebook-ad-accounts",
+        { method: "GET" },
+      );
       if (response.error) throw response.error;
       return response.data;
     },
     enabled: !!editingTable && isEditingFacebook,
   });
-  const editAdAccounts: { id: string; name: string; currency: string }[] = editAdAccountsData?.ad_accounts || [];
+  const editAdAccounts: { id: string; name: string; currency: string }[] =
+    editAdAccountsData?.ad_accounts || [];
 
   const seoClientIds = useMemo(
     () => clients.filter((c) => isSeoTaggedClient(c)).map((c) => c.id),
@@ -236,24 +305,35 @@ export default function DynamicTables() {
       filtered = filtered.filter((c) => isSeoTaggedClient(c));
     }
     return filtered;
-  }, [clients, editAgencyId, isRestrictedCampaignerViewer, isSeoOnlyViewer, assignedClientIds]);
+  }, [
+    clients,
+    editAgencyId,
+    isRestrictedCampaignerViewer,
+    isSeoOnlyViewer,
+    assignedClientIds,
+  ]);
 
   const { data: tables, isLoading } = useQuery({
-    queryKey: ['crm-tables', tenantId],
+    queryKey: ["crm-tables", tenantId],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
 
       // Pass the UI's tenant explicitly — the function otherwise falls back to
       // the global user_active_tenant row, which another device may have
       // pointed at a different tenant.
-      const response = await supabase.functions.invoke(`crm-tables?tenant_id=${tenantId}`, {
-        method: 'GET',
-      });
+      const response = await supabase.functions.invoke(
+        `crm-tables?tenant_id=${tenantId}`,
+        {
+          method: "GET",
+        },
+      );
 
       if (response.error) throw response.error;
       // Ensure we always return an array
-      return Array.isArray(response.data) ? response.data as CrmTable[] : [];
+      return Array.isArray(response.data) ? (response.data as CrmTable[]) : [];
     },
     enabled: !!tenantId,
     refetchOnMount: refetchOnMountIfEmpty,
@@ -261,7 +341,7 @@ export default function DynamicTables() {
 
   // Fetch dashboards across own tenant + shared agencies (e.g. DMM-MC under DMM).
   const { data: dashboards = [], isLoading: dashboardsLoading } = useQuery({
-    queryKey: ['crm-dashboards', tenantId],
+    queryKey: ["crm-dashboards", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       return fetchAccessibleDashboards(tenantId);
@@ -272,43 +352,45 @@ export default function DynamicTables() {
   // Filter tables by selected agency and role
   const filteredTables = useMemo(() => {
     if (!tables) return [];
-    
+
     let result = tables;
 
     // Campaigners: assigned clients only. SEO: all SEO-tagged clients.
     if (isRestrictedCampaignerViewer && assignedClientIds) {
-      result = result.filter((table) =>
-        table.client_id && assignedClientIds.includes(table.client_id),
+      result = result.filter(
+        (table) =>
+          table.client_id && assignedClientIds.includes(table.client_id),
       );
     } else if (isSeoOnlyViewer) {
       result = result.filter(
         (table) => table.client_id && seoClientIds.includes(table.client_id),
       );
     }
-    
+
     // Filter by selected agency
-    if (selectedAgency && selectedAgency !== 'all') {
-      result = result.filter(table => 
-        table.agency_id === null || table.agency_id === selectedAgency
+    if (selectedAgency && selectedAgency !== "all") {
+      result = result.filter(
+        (table) =>
+          table.agency_id === null || table.agency_id === selectedAgency,
       );
     }
 
     // Keep inactive campaign reports out of the default view. They remain
     // available through the filter so pausing a client never hides or deletes
     // historical report data.
-    if (reportStatusFilter === 'active') {
-      result = result.filter(table => table.campaign_active ?? true);
-    } else if (reportStatusFilter === 'inactive') {
-      result = result.filter(table => !(table.campaign_active ?? true));
+    if (reportStatusFilter === "active") {
+      result = result.filter((table) => table.campaign_active ?? true);
+    } else if (reportStatusFilter === "inactive") {
+      result = result.filter((table) => !(table.campaign_active ?? true));
     }
-    
+
     // Filter by table name OR client name search
     if (clientSearch.trim()) {
       const search = clientSearch.trim().toLowerCase();
-      result = result.filter(table => {
+      result = result.filter((table) => {
         if (table.name?.toLowerCase().includes(search)) return true;
         if (table.client_id) {
-          const client = clients.find(c => c.id === table.client_id);
+          const client = clients.find((c) => c.id === table.client_id);
           if (client?.name?.toLowerCase().includes(search)) return true;
         }
         return false;
@@ -316,130 +398,171 @@ export default function DynamicTables() {
     }
 
     return result;
-  }, [tables, selectedAgency, isRestrictedCampaignerViewer, isSeoOnlyViewer, assignedClientIds, seoClientIds, clientSearch, clients, reportStatusFilter]);
+  }, [
+    tables,
+    selectedAgency,
+    isRestrictedCampaignerViewer,
+    isSeoOnlyViewer,
+    assignedClientIds,
+    seoClientIds,
+    clientSearch,
+    clients,
+    reportStatusFilter,
+  ]);
 
   // Delete dashboard mutation
   const deleteDashboardMutation = useMutation({
     mutationFn: async (dashboardId: string) => {
       const { error } = await supabase
-        .from('crm_dashboards')
+        .from("crm_dashboards")
         .delete()
-        .eq('id', dashboardId);
+        .eq("id", dashboardId);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-dashboards', tenantId] });
-      toast.success('הדשבורד נמחק בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ["crm-dashboards", tenantId] });
+      toast.success("הדשבורד נמחק בהצלחה");
     },
     onError: (error: any) => {
-      toast.error('שגיאה במחיקת הדשבורד: ' + error.message);
+      toast.error("שגיאה במחיקת הדשבורד: " + error.message);
     },
   });
 
   // Rename dashboard mutation
   const renameDashboardMutation = useMutation({
-    mutationFn: async ({ dashboardId, name }: { dashboardId: string; name: string }) => {
+    mutationFn: async ({
+      dashboardId,
+      name,
+    }: {
+      dashboardId: string;
+      name: string;
+    }) => {
       const { error } = await supabase
-        .from('crm_dashboards')
+        .from("crm_dashboards")
         .update({ name })
-        .eq('id', dashboardId);
+        .eq("id", dashboardId);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-dashboards', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["crm-dashboards", tenantId] });
       setEditingDashboard(null);
       setEditDashboardName("");
-      toast.success('שם הדשבורד עודכן');
+      toast.success("שם הדשבורד עודכן");
     },
     onError: (error: any) => {
-      toast.error('שגיאה בעדכון שם הדשבורד: ' + error.message);
+      toast.error("שגיאה בעדכון שם הדשבורד: " + error.message);
     },
   });
 
   const deleteTableMutation = useMutation({
     mutationFn: async (tableId: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-tables`,
         {
-          method: 'DELETE',
+          method: "DELETE",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({ table_id: tableId }),
-        }
+        },
       );
-      
+
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to delete table');
+        throw new Error(error.error || "Failed to delete table");
       }
-      
+
       return await response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
       setDeletingTable(null);
-      toast.success('הדוח נמחק בהצלחה');
+      toast.success("הדוח נמחק בהצלחה");
     },
     onError: (error: any) => {
-      toast.error('שגיאה במחיקת הדוח: ' + error.message);
+      toast.error("שגיאה במחיקת הדוח: " + error.message);
     },
   });
 
   const updateTableMutation = useMutation({
-    mutationFn: async ({ tableId, name, agency_id, client_id, integration_settings, syncDomain }: { tableId: string; name: string; agency_id: string | null; client_id: string | null; integration_settings?: any; syncDomain?: { clientId: string; domain: string } }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      
+    mutationFn: async ({
+      tableId,
+      name,
+      agency_id,
+      client_id,
+      integration_settings,
+      syncDomain,
+    }: {
+      tableId: string;
+      name: string;
+      agency_id: string | null;
+      client_id: string | null;
+      integration_settings?: any;
+      syncDomain?: { clientId: string; domain: string };
+    }) => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
       const body: any = { table_id: tableId, name, agency_id, client_id };
-      if (integration_settings !== undefined) body.integration_settings = integration_settings;
+      if (integration_settings !== undefined)
+        body.integration_settings = integration_settings;
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-tables`,
         {
-          method: 'PATCH',
+          method: "PATCH",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify(body),
-        }
+        },
       );
-      
+
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to update table');
+        throw new Error(error.error || "Failed to update table");
       }
 
       // Sync domain to client's website field if empty
       if (syncDomain) {
-        const client = clients.find(c => c.id === syncDomain.clientId);
+        const client = clients.find((c) => c.id === syncDomain.clientId);
         if (client && !client.website) {
-          const websiteUrl = syncDomain.domain.startsWith('http') ? syncDomain.domain : `https://${syncDomain.domain}`;
+          const websiteUrl = syncDomain.domain.startsWith("http")
+            ? syncDomain.domain
+            : `https://${syncDomain.domain}`;
           await supabase
-            .from('clients')
+            .from("clients")
             .update({ website: websiteUrl })
-            .eq('id', syncDomain.clientId);
+            .eq("id", syncDomain.clientId);
         }
       }
-      
+
       return await response.json();
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['clients', tenantId] });
-      invalidateClientCrmTablesQueries(queryClient, tenantId, variables.client_id);
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+      invalidateClientCrmTablesQueries(
+        queryClient,
+        tenantId,
+        variables.client_id,
+      );
       setEditingTable(null);
-      toast.success('הדוח עודכן בהצלחה');
+      toast.success("הדוח עודכן בהצלחה");
     },
     onError: (error: any) => {
-      toast.error('שגיאה בעדכון הדוח: ' + error.message);
+      toast.error("שגיאה בעדכון הדוח: " + error.message);
     },
   });
 
@@ -448,9 +571,9 @@ export default function DynamicTables() {
     setEditingTable(table);
     // GA / GSC / Ahrefs: full connection picker (all org emails) via EditTableDialog.
     if (
-      table.integration_type === 'google_analytics'
-      || table.integration_type === 'google_search_console'
-      || table.integration_type === 'ahrefs'
+      table.integration_type === "google_analytics" ||
+      table.integration_type === "google_search_console" ||
+      table.integration_type === "ahrefs"
     ) {
       setEditViaConnectionDialog(true);
       return;
@@ -470,7 +593,9 @@ export default function DynamicTables() {
 
   const handleSaveEdit = () => {
     if (!editingTable || !editName.trim()) return;
-    const isFacebook = editingTable.integration_type === 'facebook_insights' || editingTable.integration_type === 'facebook_ecommerce';
+    const isFacebook =
+      editingTable.integration_type === "facebook_insights" ||
+      editingTable.integration_type === "facebook_ecommerce";
 
     const trimmedMaskyoo = editMaskyooNumber.trim();
     const prevMaskyoo = editingTable.integration_settings?.maskyoo_number || "";
@@ -481,7 +606,10 @@ export default function DynamicTables() {
       updatedSettings = {
         ...editingTable.integration_settings,
         ad_account_id: editAdAccountId,
-        ad_account_name: editAdAccounts.find(a => a.id === editAdAccountId)?.name || editingTable.integration_settings?.ad_account_name || '',
+        ad_account_name:
+          editAdAccounts.find((a) => a.id === editAdAccountId)?.name ||
+          editingTable.integration_settings?.ad_account_name ||
+          "",
       };
     }
     if (maskyooChanged) {
@@ -492,12 +620,15 @@ export default function DynamicTables() {
     }
 
     // If it's an Ahrefs/SEO table and client changed, sync domain
-    const isAhrefs = editingTable.integration_type === 'ahrefs';
+    const isAhrefs = editingTable.integration_type === "ahrefs";
     const domain = editingTable.integration_settings?.targetDomain;
-    const syncDomain = isAhrefs && editClientId && domain ? { clientId: editClientId, domain } : undefined;
+    const syncDomain =
+      isAhrefs && editClientId && domain
+        ? { clientId: editClientId, domain }
+        : undefined;
 
-    updateTableMutation.mutate({ 
-      tableId: editingTable.id, 
+    updateTableMutation.mutate({
+      tableId: editingTable.id,
       name: editName,
       agency_id: editAgencyId || null,
       client_id: editClientId || null,
@@ -508,28 +639,28 @@ export default function DynamicTables() {
 
   const getAgencyName = (agencyId: string | null) => {
     if (!agencyId) return null;
-    const agency = agencies.find(a => a.id === agencyId);
+    const agency = agencies.find((a) => a.id === agencyId);
     return agency?.name || null;
   };
 
   const getClientName = (clientId: string | null) => {
     if (!clientId) return null;
-    const client = clients.find(c => c.id === clientId);
+    const client = clients.find((c) => c.id === clientId);
     return client?.name || null;
   };
 
   const groupedTables = useMemo(() => {
     if (!filteredTables) return {};
-    
+
     const groups: Record<string, CrmTable[]> = {};
-    filteredTables.forEach(table => {
-      const category = table.category || 'ללא קבוצה';
+    filteredTables.forEach((table) => {
+      const category = table.category || "ללא קבוצה";
       if (!groups[category]) {
         groups[category] = [];
       }
       groups[category].push(table);
     });
-    
+
     return groups;
   }, [filteredTables]);
 
@@ -543,63 +674,85 @@ export default function DynamicTables() {
     if (categories.length === 0) return;
     if (selectedCategory && !categories.includes(selectedCategory)) {
       setSelectedCategory(null);
-      try { sessionStorage.removeItem('dynamicTables.selectedCategory'); } catch {}
+      try {
+        sessionStorage.removeItem("dynamicTables.selectedCategory");
+      } catch {}
     }
   }, [categories, selectedCategory]);
 
   // Soft branded color scheme per category
-  const getCategoryStyle = (category: string): { gradient: string; iconBg: string; iconColor: string; border: string; icon: any } => {
+  const getCategoryStyle = (
+    category: string,
+  ): {
+    gradient: string;
+    iconBg: string;
+    iconColor: string;
+    border: string;
+    icon: any;
+  } => {
     const c = category.toLowerCase();
-    if (c.includes('facebook') && c.includes('ecom')) {
+    if (c.includes("facebook") && c.includes("ecom")) {
       return {
-        gradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30',
-        iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
-        iconColor: 'text-emerald-600 dark:text-emerald-400',
-        border: 'border-emerald-200/60 dark:border-emerald-800/60 hover:border-emerald-400/80',
+        gradient:
+          "from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30",
+        iconBg: "bg-emerald-100 dark:bg-emerald-900/40",
+        iconColor: "text-emerald-600 dark:text-emerald-400",
+        border:
+          "border-emerald-200/60 dark:border-emerald-800/60 hover:border-emerald-400/80",
         icon: ShoppingCart,
       };
     }
-    if (c.includes('facebook')) {
+    if (c.includes("facebook")) {
       return {
-        gradient: 'from-blue-50 to-sky-50 dark:from-blue-950/30 dark:to-sky-950/30',
-        iconBg: 'bg-blue-100 dark:bg-blue-900/40',
-        iconColor: 'text-blue-600 dark:text-blue-400',
-        border: 'border-blue-200/60 dark:border-blue-800/60 hover:border-blue-400/80',
+        gradient:
+          "from-blue-50 to-sky-50 dark:from-blue-950/30 dark:to-sky-950/30",
+        iconBg: "bg-blue-100 dark:bg-blue-900/40",
+        iconColor: "text-blue-600 dark:text-blue-400",
+        border:
+          "border-blue-200/60 dark:border-blue-800/60 hover:border-blue-400/80",
         icon: Facebook,
       };
     }
-    if (c.includes('google ads') || c === 'google_ads') {
+    if (c.includes("google ads") || c === "google_ads") {
       return {
-        gradient: 'from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30',
-        iconBg: 'bg-orange-100 dark:bg-orange-900/40',
-        iconColor: 'text-orange-600 dark:text-orange-400',
-        border: 'border-orange-200/60 dark:border-orange-800/60 hover:border-orange-400/80',
+        gradient:
+          "from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30",
+        iconBg: "bg-orange-100 dark:bg-orange-900/40",
+        iconColor: "text-orange-600 dark:text-orange-400",
+        border:
+          "border-orange-200/60 dark:border-orange-800/60 hover:border-orange-400/80",
         icon: TrendingUp,
       };
     }
-    if (c.includes('analytics')) {
+    if (c.includes("analytics")) {
       return {
-        gradient: 'from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30',
-        iconBg: 'bg-amber-100 dark:bg-amber-900/40',
-        iconColor: 'text-amber-600 dark:text-amber-400',
-        border: 'border-amber-200/60 dark:border-amber-800/60 hover:border-amber-400/80',
+        gradient:
+          "from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30",
+        iconBg: "bg-amber-100 dark:bg-amber-900/40",
+        iconColor: "text-amber-600 dark:text-amber-400",
+        border:
+          "border-amber-200/60 dark:border-amber-800/60 hover:border-amber-400/80",
         icon: TrendingUp,
       };
     }
-    if (c.includes('seo') || c.includes('search console')) {
+    if (c.includes("seo") || c.includes("search console")) {
       return {
-        gradient: 'from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30',
-        iconBg: 'bg-violet-100 dark:bg-violet-900/40',
-        iconColor: 'text-violet-600 dark:text-violet-400',
-        border: 'border-violet-200/60 dark:border-violet-800/60 hover:border-violet-400/80',
+        gradient:
+          "from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30",
+        iconBg: "bg-violet-100 dark:bg-violet-900/40",
+        iconColor: "text-violet-600 dark:text-violet-400",
+        border:
+          "border-violet-200/60 dark:border-violet-800/60 hover:border-violet-400/80",
         icon: TrendingUp,
       };
     }
     return {
-      gradient: 'from-slate-50 to-gray-50 dark:from-slate-950/30 dark:to-gray-950/30',
-      iconBg: 'bg-slate-100 dark:bg-slate-900/40',
-      iconColor: 'text-slate-600 dark:text-slate-400',
-      border: 'border-slate-200/60 dark:border-slate-800/60 hover:border-slate-400/80',
+      gradient:
+        "from-slate-50 to-gray-50 dark:from-slate-950/30 dark:to-gray-950/30",
+      iconBg: "bg-slate-100 dark:bg-slate-900/40",
+      iconColor: "text-slate-600 dark:text-slate-400",
+      border:
+        "border-slate-200/60 dark:border-slate-800/60 hover:border-slate-400/80",
       icon: FileSpreadsheet,
     };
   };
@@ -614,7 +767,6 @@ export default function DynamicTables() {
           </p>
         </div>
       </div>
-
 
       {/* Main Tabs: Tables / Dashboards */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-6">
@@ -631,7 +783,7 @@ export default function DynamicTables() {
           </TabsList>
 
           {/* Action buttons based on tab - only for managers */}
-          {canManageTables && mainTab === 'tables' ? (
+          {canManageTables && mainTab === "tables" ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button>
@@ -648,20 +800,28 @@ export default function DynamicTables() {
                   <Facebook className="ml-2 h-4 w-4" />
                   דוח Facebook Insights (לידים)
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowFacebookEcommerceDialog(true)}>
+                <DropdownMenuItem
+                  onClick={() => setShowFacebookEcommerceDialog(true)}
+                >
                   <ShoppingCart className="ml-2 h-4 w-4" />
                   דוח Facebook Ecommerce (מכירות)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowGoogleAdsDialog(true)}>
                   <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
+                    <path
+                      d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
+                      fill="#4285F4"
+                    />
                   </svg>
                   דוח Google Ads
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowGADialog(true)}>
                   <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <path d="M22.84 2.998L12.842 20.998 2.84 2.998h20z" fill="#F9AB00"/>
-                    <path d="M12.84 20.998l-5-9h10l-5 9z" fill="#E37400"/>
+                    <path
+                      d="M22.84 2.998L12.842 20.998 2.84 2.998h20z"
+                      fill="#F9AB00"
+                    />
+                    <path d="M12.84 20.998l-5-9h10l-5 9z" fill="#E37400" />
                   </svg>
                   דוח Google Analytics
                 </DropdownMenuItem>
@@ -675,7 +835,7 @@ export default function DynamicTables() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : canManageTables && mainTab === 'dashboards' ? (
+          ) : canManageTables && mainTab === "dashboards" ? (
             <Button onClick={() => setShowCreateDashboardDialog(true)}>
               <Plus className="ml-2 h-4 w-4" />
               דשבורד חדש
@@ -695,7 +855,9 @@ export default function DynamicTables() {
             />
             <Select
               value={reportStatusFilter}
-              onValueChange={(value: "active" | "inactive" | "all") => setReportStatusFilter(value)}
+              onValueChange={(value: "active" | "inactive" | "all") =>
+                setReportStatusFilter(value)
+              }
             >
               <SelectTrigger className="w-[190px]">
                 <SelectValue />
@@ -708,7 +870,10 @@ export default function DynamicTables() {
             </Select>
           </div>
           {isLoading ? (
-            <CarmenLoadingScreen variant="card" messages={["כרמן אוספת את הדוחות…", "בודקת שיוך ללקוחות…"]} />
+            <CarmenLoadingScreen
+              variant="card"
+              messages={["כרמן אוספת את הדוחות…", "בודקת שיוך ללקוחות…"]}
+            />
           ) : !filteredTables || filteredTables.length === 0 ? (
             <Card className="p-12 text-center">
               <Table2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -722,253 +887,387 @@ export default function DynamicTables() {
               </Button>
             </Card>
           ) : (
-        <div className="space-y-6">
-          {!selectedCategory ? (
-            /* Category picker cards */
-            <div>
-              <p className="text-sm text-muted-foreground mb-4">בחר קטגוריית דוחות</p>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {Object.entries(groupedTables).map(([category, categoryTables]) => {
-                  const style = getCategoryStyle(category);
-                  const Icon = style.icon;
-                  return (
-                    <Card
-                      key={category}
-                      onClick={() => {
-                        setSelectedCategory(category);
-                        try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
-                      }}
-                      className={cn(
-                        "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
-                        "bg-gradient-to-br border-2",
-                        style.gradient,
-                        style.border
-                      )}
-                    >
-                      <CardHeader>
-                        <div className="flex items-center justify-between">
-                          <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", style.iconBg)}>
-                            <Icon className={cn("h-6 w-6", style.iconColor)} />
-                          </div>
-                          <Badge variant="secondary" className="text-base font-semibold">
-                            {categoryTables.length}
-                          </Badge>
-                        </div>
-                        <CardTitle className="mt-3 text-xl capitalize">{category}</CardTitle>
-                        <CardDescription>
-                          {categoryTables.length === 1 ? 'דוח אחד' : `${categoryTables.length} דוחות`}
-                        </CardDescription>
-                      </CardHeader>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Header with back button + current category */}
-              <div className="flex items-center justify-between gap-3 flex-wrap border-b pb-3">
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedCategory(null);
-                      try { sessionStorage.removeItem('dynamicTables.selectedCategory'); } catch {}
-                    }}
-                    className="gap-1"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                    חזרה לקטגוריות
-                  </Button>
-                  {(() => {
-                    const style = getCategoryStyle(selectedCategory);
-                    const Icon = style.icon;
-                    return (
-                      <div className="flex items-center gap-2">
-                        <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center", style.iconBg)}>
-                          <Icon className={cn("h-4 w-4", style.iconColor)} />
-                        </div>
-                        <h2 className="text-lg font-semibold capitalize">{selectedCategory}</h2>
-                        <Badge variant="secondary">{groupedTables[selectedCategory]?.length || 0}</Badge>
-                      </div>
-                    );
-                  })()}
-                  <CategorySyncControl
-                    category={selectedCategory}
-                    tables={groupedTables[selectedCategory] || []}
-                  />
+            <div className="space-y-6">
+              {!selectedCategory ? (
+                /* Category picker cards */
+                <div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    בחר קטגוריית דוחות
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {Object.entries(groupedTables).map(
+                      ([category, categoryTables]) => {
+                        const style = getCategoryStyle(category);
+                        const Icon = style.icon;
+                        return (
+                          <Card
+                            key={category}
+                            onClick={() => {
+                              setSelectedCategory(category);
+                              try {
+                                sessionStorage.setItem(
+                                  "dynamicTables.selectedCategory",
+                                  category,
+                                );
+                              } catch {}
+                            }}
+                            className={cn(
+                              "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
+                              "bg-gradient-to-br border-2",
+                              style.gradient,
+                              style.border,
+                            )}
+                          >
+                            <CardHeader>
+                              <div className="flex items-center justify-between">
+                                <div
+                                  className={cn(
+                                    "h-12 w-12 rounded-xl flex items-center justify-center",
+                                    style.iconBg,
+                                  )}
+                                >
+                                  <Icon
+                                    className={cn("h-6 w-6", style.iconColor)}
+                                  />
+                                </div>
+                                <Badge
+                                  variant="secondary"
+                                  className="text-base font-semibold"
+                                >
+                                  {categoryTables.length}
+                                </Badge>
+                              </div>
+                              <CardTitle className="mt-3 text-xl capitalize">
+                                {category}
+                              </CardTitle>
+                              <CardDescription>
+                                {categoryTables.length === 1
+                                  ? "דוח אחד"
+                                  : `${categoryTables.length} דוחות`}
+                              </CardDescription>
+                            </CardHeader>
+                          </Card>
+                        );
+                      },
+                    )}
+                  </div>
                 </div>
-                {/* Quick switcher */}
-                <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(groupedTables).map(([category, categoryTables]) => {
-                    const style = getCategoryStyle(category);
-                    const isActive = selectedCategory === category;
-                    return (
+              ) : (
+                <>
+                  {/* Header with back button + current category */}
+                  <div className="flex items-center justify-between gap-3 flex-wrap border-b pb-3">
+                    <div className="flex items-center gap-3">
                       <Button
-                        key={category}
-                        variant={isActive ? "default" : "outline"}
+                        variant="ghost"
                         size="sm"
                         onClick={() => {
-                          setSelectedCategory(category);
-                          try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
+                          setSelectedCategory(null);
+                          try {
+                            sessionStorage.removeItem(
+                              "dynamicTables.selectedCategory",
+                            );
+                          } catch {}
                         }}
-                        className={cn("gap-1.5 h-8 text-xs", !isActive && style.border)}
+                        className="gap-1"
                       >
-                        <span className="capitalize">{category}</span>
-                        <span className="opacity-70">({categoryTables.length})</span>
+                        <ChevronRight className="h-4 w-4" />
+                        חזרה לקטגוריות
                       </Button>
-                    );
-                  })}
-                </div>
-              </div>
+                      {(() => {
+                        const style = getCategoryStyle(selectedCategory);
+                        const Icon = style.icon;
+                        return (
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={cn(
+                                "h-8 w-8 rounded-lg flex items-center justify-center",
+                                style.iconBg,
+                              )}
+                            >
+                              <Icon
+                                className={cn("h-4 w-4", style.iconColor)}
+                              />
+                            </div>
+                            <h2 className="text-lg font-semibold capitalize">
+                              {selectedCategory}
+                            </h2>
+                            <Badge variant="secondary">
+                              {groupedTables[selectedCategory]?.length || 0}
+                            </Badge>
+                          </div>
+                        );
+                      })()}
+                      <CategorySyncControl
+                        category={selectedCategory}
+                        tables={groupedTables[selectedCategory] || []}
+                      />
+                    </div>
+                    {/* Quick switcher */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(groupedTables).map(
+                        ([category, categoryTables]) => {
+                          const style = getCategoryStyle(category);
+                          const isActive = selectedCategory === category;
+                          return (
+                            <Button
+                              key={category}
+                              variant={isActive ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => {
+                                setSelectedCategory(category);
+                                try {
+                                  sessionStorage.setItem(
+                                    "dynamicTables.selectedCategory",
+                                    category,
+                                  );
+                                } catch {}
+                              }}
+                              className={cn(
+                                "gap-1.5 h-8 text-xs",
+                                !isActive && style.border,
+                              )}
+                            >
+                              <span className="capitalize">{category}</span>
+                              <span className="opacity-70">
+                                ({categoryTables.length})
+                              </span>
+                            </Button>
+                          );
+                        },
+                      )}
+                    </div>
+                  </div>
 
-              {/* Tables Grid */}
-              {groupedTables[selectedCategory] && (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {groupedTables[selectedCategory].map((table) => {
-                    const style = getCategoryStyle(selectedCategory);
-                    return (
-                <Card
-                  key={table.id}
-                  className={cn(
-                    "cursor-pointer hover:shadow-lg transition-all hover:-translate-y-0.5 relative bg-gradient-to-br border",
-                    style.gradient,
-                    style.border
+                  {/* Tables Grid */}
+                  {groupedTables[selectedCategory] && (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {groupedTables[selectedCategory].map((table) => {
+                        const style = getCategoryStyle(selectedCategory);
+                        return (
+                          <Card
+                            key={table.id}
+                            className={cn(
+                              "cursor-pointer hover:shadow-lg transition-all hover:-translate-y-0.5 relative bg-gradient-to-br border",
+                              style.gradient,
+                              style.border,
+                            )}
+                            onClick={() =>
+                              navigate(buildPath(`/table/${table.slug}`))
+                            }
+                          >
+                            <CardHeader dir="rtl" className="text-right">
+                              <div className="flex items-start justify-between gap-2">
+                                <CardTitle className="flex items-center gap-2 min-w-0 flex-1">
+                                  {table.integration_type ===
+                                  "facebook_insights" ? (
+                                    <Facebook className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                                  ) : table.integration_type ===
+                                    "facebook_ecommerce" ? (
+                                    <ShoppingCart className="h-5 w-5 text-green-600 flex-shrink-0" />
+                                  ) : table.integration_type ===
+                                    "google_ads" ? (
+                                    <svg
+                                      className="h-5 w-5 flex-shrink-0"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                    >
+                                      <path
+                                        d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
+                                        fill="#4285F4"
+                                      />
+                                    </svg>
+                                  ) : table.integration_type ===
+                                    "tiktok_content" ? (
+                                    <Music2 className="h-5 w-5 text-fuchsia-500 flex-shrink-0" />
+                                  ) : (
+                                    <FileSpreadsheet className="h-5 w-5 flex-shrink-0" />
+                                  )}
+                                  <span className="truncate">{table.name}</span>
+                                </CardTitle>
+                                {canManageTables && (
+                                  <div className="flex gap-1 flex-shrink-0">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => handleEdit(table, e)}
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => handleDelete(table, e)}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Agency & Client Badges */}
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {(table.integration_type ===
+                                  "facebook_insights" ||
+                                  table.integration_type ===
+                                    "facebook_ecommerce" ||
+                                  table.integration_type === "google_ads") && (
+                                  <Badge
+                                    variant={
+                                      (table.campaign_active ?? true)
+                                        ? "default"
+                                        : "destructive"
+                                    }
+                                    className={`text-xs ${canManageTables ? "cursor-pointer" : ""}`}
+                                    title={
+                                      canManageTables
+                                        ? "לחיצה מחליפה מצב — כרמן מדווחת רק על קמפיינים פעילים"
+                                        : undefined
+                                    }
+                                    onClick={
+                                      canManageTables
+                                        ? async (e) => {
+                                            e.stopPropagation();
+                                            const next = !(
+                                              table.campaign_active ?? true
+                                            );
+                                            const { error } = await (
+                                              supabase as any
+                                            )
+                                              .from("crm_tables")
+                                              .update({ campaign_active: next })
+                                              .eq("id", table.id);
+                                            if (error) {
+                                              toast.error(
+                                                "עדכון סטטוס הקמפיין נכשל",
+                                              );
+                                              return;
+                                            }
+                                            toast.success(
+                                              next
+                                                ? "הקמפיין סומן כפעיל"
+                                                : "הקמפיין סומן כלא פעיל — כרמן תפסיק לדווח עליו",
+                                            );
+                                            queryClient.invalidateQueries({
+                                              queryKey: [
+                                                "crm-tables",
+                                                tenantId,
+                                              ],
+                                            });
+                                          }
+                                        : undefined
+                                    }
+                                  >
+                                    {(table.campaign_active ?? true)
+                                      ? "🟢 קמפיין פעיל"
+                                      : "⭕ קמפיין לא פעיל"}
+                                  </Badge>
+                                )}
+                                {table.agency_id && (
+                                  <Badge variant="outline" className="text-xs">
+                                    <Building2 className="h-3 w-3 ml-1" />
+                                    {getAgencyName(table.agency_id)}
+                                  </Badge>
+                                )}
+                                {table.client_id && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    <User className="h-3 w-3 ml-1" />
+                                    {getClientName(table.client_id)}
+                                  </Badge>
+                                )}
+                              </div>
+                              {/* Show connection status for integration tables, or description for others */}
+                              {table.integration_type === "facebook_insights" ||
+                              table.integration_type === "facebook_ecommerce" ||
+                              table.integration_type === "google_ads" ? (
+                                table.integration_settings?.ad_account_id ||
+                                table.integration_settings?.customer_id ||
+                                table.integration_settings?.make_scenario_id ? (
+                                  <CardDescription className="text-green-600">
+                                    ✓ מחובר לחשבון מודעות
+                                  </CardDescription>
+                                ) : (
+                                  <CardDescription className="text-amber-600">
+                                    ממתין לחיבור חשבון מודעות
+                                  </CardDescription>
+                                )
+                              ) : table.description ? (
+                                <CardDescription>
+                                  {table.description}
+                                </CardDescription>
+                              ) : null}
+                              {/* Table Card Alerts */}
+                              {table.integration_type ===
+                                "facebook_insights" && (
+                                <TableCardAlerts tableId={table.id} />
+                              )}
+                            </CardHeader>
+                            <CardContent dir="rtl" className="text-right">
+                              <p className="text-sm text-muted-foreground">
+                                {table.integration_type ===
+                                "facebook_insights" ? (
+                                  <>
+                                    <span className="text-blue-600">
+                                      Facebook Insights (לידים)
+                                    </span>
+                                    {table.integration_settings
+                                      ?.last_sync_at && (
+                                      <span className="mr-2">
+                                        • עודכן{" "}
+                                        {new Date(
+                                          table.integration_settings
+                                            .last_sync_at,
+                                        ).toLocaleDateString("he-IL")}
+                                      </span>
+                                    )}
+                                  </>
+                                ) : table.integration_type ===
+                                  "facebook_ecommerce" ? (
+                                  <>
+                                    <span className="text-green-600">
+                                      Facebook Ecommerce (מכירות)
+                                    </span>
+                                    {table.integration_settings
+                                      ?.last_sync_at && (
+                                      <span className="mr-2">
+                                        • עודכן{" "}
+                                        {new Date(
+                                          table.integration_settings
+                                            .last_sync_at,
+                                        ).toLocaleDateString("he-IL")}
+                                      </span>
+                                    )}
+                                  </>
+                                ) : table.integration_type === "google_ads" ? (
+                                  <>
+                                    <span className="text-green-600">
+                                      Google Ads
+                                    </span>
+                                    {table.integration_settings
+                                      ?.last_sync_at && (
+                                      <span className="mr-2">
+                                        • עודכן{" "}
+                                        {new Date(
+                                          table.integration_settings
+                                            .last_sync_at,
+                                        ).toLocaleDateString("he-IL")}
+                                      </span>
+                                    )}
+                                  </>
+                                ) : (
+                                  "לחץ לצפייה וניהול"
+                                )}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
                   )}
-                  onClick={() => navigate(buildPath(`/table/${table.slug}`))}
-                >
-                  <CardHeader dir="rtl" className="text-right">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="flex items-center gap-2 min-w-0 flex-1">
-                        {table.integration_type === 'facebook_insights' ? (
-                          <Facebook className="h-5 w-5 text-blue-600 flex-shrink-0" />
-                        ) : table.integration_type === 'facebook_ecommerce' ? (
-                          <ShoppingCart className="h-5 w-5 text-green-600 flex-shrink-0" />
-                        ) : table.integration_type === 'google_ads' ? (
-                          <svg className="h-5 w-5 flex-shrink-0" viewBox="0 0 24 24" fill="none">
-                            <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
-                          </svg>
-                        ) : table.integration_type === 'tiktok_content' ? (
-                          <Music2 className="h-5 w-5 text-fuchsia-500 flex-shrink-0" />
-                        ) : (
-                          <FileSpreadsheet className="h-5 w-5 flex-shrink-0" />
-                        )}
-                        <span className="truncate">{table.name}</span>
-                      </CardTitle>
-                      {canManageTables && (
-                        <div className="flex gap-1 flex-shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => handleEdit(table, e)}
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => handleDelete(table, e)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                    {/* Agency & Client Badges */}
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {(table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce' || table.integration_type === 'google_ads') && (
-                        <Badge
-                          variant={(table.campaign_active ?? true) ? "default" : "destructive"}
-                          className={`text-xs ${canManageTables ? "cursor-pointer" : ""}`}
-                          title={canManageTables ? "לחיצה מחליפה מצב — כרמן מדווחת רק על קמפיינים פעילים" : undefined}
-                          onClick={canManageTables ? async (e) => {
-                            e.stopPropagation();
-                            const next = !(table.campaign_active ?? true);
-                            const { error } = await (supabase as any).from('crm_tables')
-                              .update({ campaign_active: next }).eq('id', table.id);
-                            if (error) { toast.error('עדכון סטטוס הקמפיין נכשל'); return; }
-                            toast.success(next ? 'הקמפיין סומן כפעיל' : 'הקמפיין סומן כלא פעיל — כרמן תפסיק לדווח עליו');
-                            queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-                          } : undefined}
-                        >
-                          {(table.campaign_active ?? true) ? "🟢 קמפיין פעיל" : "⭕ קמפיין לא פעיל"}
-                        </Badge>
-                      )}
-                      {table.agency_id && (
-                        <Badge variant="outline" className="text-xs">
-                          <Building2 className="h-3 w-3 ml-1" />
-                          {getAgencyName(table.agency_id)}
-                        </Badge>
-                      )}
-                      {table.client_id && (
-                        <Badge variant="secondary" className="text-xs">
-                          <User className="h-3 w-3 ml-1" />
-                          {getClientName(table.client_id)}
-                        </Badge>
-                      )}
-                    </div>
-                    {/* Show connection status for integration tables, or description for others */}
-                    {(table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce' || table.integration_type === 'google_ads') ? (
-                      table.integration_settings?.ad_account_id || table.integration_settings?.customer_id || table.integration_settings?.make_scenario_id ? (
-                        <CardDescription className="text-green-600">
-                          ✓ מחובר לחשבון מודעות
-                        </CardDescription>
-                      ) : (
-                        <CardDescription className="text-amber-600">
-                          ממתין לחיבור חשבון מודעות
-                        </CardDescription>
-                      )
-                    ) : table.description ? (
-                      <CardDescription>{table.description}</CardDescription>
-                    ) : null}
-                    {/* Table Card Alerts */}
-                    {table.integration_type === 'facebook_insights' && (
-                      <TableCardAlerts tableId={table.id} />
-                    )}
-                  </CardHeader>
-                  <CardContent dir="rtl" className="text-right">
-                    <p className="text-sm text-muted-foreground">
-                      {table.integration_type === 'facebook_insights' ? (
-                        <>
-                          <span className="text-blue-600">Facebook Insights (לידים)</span>
-                          {table.integration_settings?.last_sync_at && (
-                            <span className="mr-2">
-                              • עודכן {new Date(table.integration_settings.last_sync_at).toLocaleDateString('he-IL')}
-                            </span>
-                          )}
-                        </>
-                      ) : table.integration_type === 'facebook_ecommerce' ? (
-                        <>
-                          <span className="text-green-600">Facebook Ecommerce (מכירות)</span>
-                          {table.integration_settings?.last_sync_at && (
-                            <span className="mr-2">
-                              • עודכן {new Date(table.integration_settings.last_sync_at).toLocaleDateString('he-IL')}
-                            </span>
-                          )}
-                        </>
-                      ) : table.integration_type === 'google_ads' ? (
-                        <>
-                          <span className="text-green-600">Google Ads</span>
-                          {table.integration_settings?.last_sync_at && (
-                            <span className="mr-2">
-                              • עודכן {new Date(table.integration_settings.last_sync_at).toLocaleDateString('he-IL')}
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        'לחץ לצפייה וניהול'
-                      )}
-                    </p>
-                  </CardContent>
-                </Card>
-                    );
-                  })}
-                </div>
+                </>
               )}
-            </>
-          )}
-        </div>
+            </div>
           )}
         </TabsContent>
 
@@ -984,7 +1283,10 @@ export default function DynamicTables() {
             />
           </div>
           {dashboardsLoading ? (
-            <CarmenLoadingScreen variant="card" messages={["כרמן אוספת את הדשבורדים…"]} />
+            <CarmenLoadingScreen
+              variant="card"
+              messages={["כרמן אוספת את הדשבורדים…"]}
+            />
           ) : dashboards.length === 0 ? (
             <Card className="p-12 text-center">
               <LayoutDashboard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -1007,8 +1309,11 @@ export default function DynamicTables() {
                   // its own agency_id, or (when unset) its client's agency. When a
                   // specific agency is selected, show ONLY dashboards of that agency
                   // — previously null-agency dashboards leaked into every agency.
-                  if (selectedAgency && selectedAgency !== 'all') {
-                    const effectiveAgencyId = dashboard.agency_id || dashboard.clients?.agency_id || null;
+                  if (selectedAgency && selectedAgency !== "all") {
+                    const effectiveAgencyId =
+                      dashboard.agency_id ||
+                      dashboard.clients?.agency_id ||
+                      null;
                     if (effectiveAgencyId !== selectedAgency) {
                       return false;
                     }
@@ -1016,100 +1321,130 @@ export default function DynamicTables() {
                   // Search by dashboard name, client name, or agency name
                   if (dashboardSearch.trim()) {
                     const search = dashboardSearch.trim().toLowerCase();
-                    const nameMatch = dashboard.name?.toLowerCase().includes(search);
-                    const clientMatch = dashboard.clients?.name?.toLowerCase().includes(search);
-                    const agencyMatch = dashboard.agencies?.name?.toLowerCase().includes(search);
-                    if (!nameMatch && !clientMatch && !agencyMatch) return false;
+                    const nameMatch = dashboard.name
+                      ?.toLowerCase()
+                      .includes(search);
+                    const clientMatch = dashboard.clients?.name
+                      ?.toLowerCase()
+                      .includes(search);
+                    const agencyMatch = dashboard.agencies?.name
+                      ?.toLowerCase()
+                      .includes(search);
+                    if (!nameMatch && !clientMatch && !agencyMatch)
+                      return false;
                   }
                   // Campaigners can only see dashboards linked to their assigned clients
                   if (isRestrictedCampaignerViewer && assignedClientIds) {
-                    return dashboard.client_id && assignedClientIds.includes(dashboard.client_id);
+                    return (
+                      dashboard.client_id &&
+                      assignedClientIds.includes(dashboard.client_id)
+                    );
                   }
                   if (isSeoOnlyViewer) {
-                    return dashboard.client_id && seoClientIds.includes(dashboard.client_id);
+                    return (
+                      dashboard.client_id &&
+                      seoClientIds.includes(dashboard.client_id)
+                    );
                   }
                   return true;
                 })
                 .map((dashboard: any) => (
-                <Card
-                  key={dashboard.id}
-                  className="cursor-pointer hover:shadow-lg transition-shadow"
-                  onClick={() => navigate(buildPath(`/dashboard/${dashboard.id}`))}
-                >
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="flex items-center gap-2">
-                        <LayoutDashboard className="h-5 w-5" />
-                        {dashboard.name}
-                      </CardTitle>
-                      {canManageTables && (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingDashboard({ id: dashboard.id, name: dashboard.name });
-                              setEditDashboardName(dashboard.name);
-                            }}
-                            title="ערוך שם דשבורד"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (confirm('האם אתה בטוח שברצונך למחוק את הדשבורד?')) {
-                                deleteDashboardMutation.mutate(dashboard.id);
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {/* Dashboard Type Badge */}
-                      <Badge 
-                        variant={dashboard.dashboard_type === 'agency' ? 'default' : 'secondary'} 
-                        className="text-xs"
-                      >
-                        {dashboard.dashboard_type === 'agency' ? (
-                          <>
-                            <Building2 className="h-3 w-3 ml-1" />
-                            דשבורד סוכנות
-                          </>
-                        ) : (
-                          <>
-                            <User className="h-3 w-3 ml-1" />
-                            דשבורד לקוח
-                          </>
+                  <Card
+                    key={dashboard.id}
+                    className="cursor-pointer hover:shadow-lg transition-shadow"
+                    onClick={() =>
+                      navigate(buildPath(`/dashboard/${dashboard.id}`))
+                    }
+                  >
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                          <LayoutDashboard className="h-5 w-5" />
+                          {dashboard.name}
+                        </CardTitle>
+                        {canManageTables && (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingDashboard({
+                                  id: dashboard.id,
+                                  name: dashboard.name,
+                                });
+                                setEditDashboardName(dashboard.name);
+                              }}
+                              title="ערוך שם דשבורד"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (
+                                  confirm(
+                                    "האם אתה בטוח שברצונך למחוק את הדשבורד?",
+                                  )
+                                ) {
+                                  deleteDashboardMutation.mutate(dashboard.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         )}
-                      </Badge>
-                      {dashboard.clients?.name && dashboard.dashboard_type !== 'agency' && (
-                        <Badge variant="outline" className="text-xs">
-                          <User className="h-3 w-3 ml-1" />
-                          {dashboard.clients.name}
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {/* Dashboard Type Badge */}
+                        <Badge
+                          variant={
+                            dashboard.dashboard_type === "agency"
+                              ? "default"
+                              : "secondary"
+                          }
+                          className="text-xs"
+                        >
+                          {dashboard.dashboard_type === "agency" ? (
+                            <>
+                              <Building2 className="h-3 w-3 ml-1" />
+                              דשבורד סוכנות
+                            </>
+                          ) : (
+                            <>
+                              <User className="h-3 w-3 ml-1" />
+                              דשבורד לקוח
+                            </>
+                          )}
                         </Badge>
-                      )}
-                      {dashboard.agencies?.name && (
-                        <Badge variant="outline" className="text-xs">
-                          <Building2 className="h-3 w-3 ml-1" />
-                          {dashboard.agencies.name}
-                        </Badge>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      נוצר {new Date(dashboard.created_at).toLocaleDateString('he-IL')}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
+                        {dashboard.clients?.name &&
+                          dashboard.dashboard_type !== "agency" && (
+                            <Badge variant="outline" className="text-xs">
+                              <User className="h-3 w-3 ml-1" />
+                              {dashboard.clients.name}
+                            </Badge>
+                          )}
+                        {dashboard.agencies?.name && (
+                          <Badge variant="outline" className="text-xs">
+                            <Building2 className="h-3 w-3 ml-1" />
+                            {dashboard.agencies.name}
+                          </Badge>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        נוצר{" "}
+                        {new Date(dashboard.created_at).toLocaleDateString(
+                          "he-IL",
+                        )}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
             </div>
           )}
         </TabsContent>
@@ -1146,7 +1481,15 @@ export default function DynamicTables() {
       />
 
       {/* Edit Dashboard Name Dialog */}
-      <Dialog open={!!editingDashboard} onOpenChange={(open) => { if (!open) { setEditingDashboard(null); setEditDashboardName(""); } }}>
+      <Dialog
+        open={!!editingDashboard}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingDashboard(null);
+            setEditDashboardName("");
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>עריכת שם דשבורד</DialogTitle>
@@ -1162,24 +1505,42 @@ export default function DynamicTables() {
                 placeholder="שם הדשבורד"
                 autoFocus
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && editDashboardName.trim() && editingDashboard) {
-                    renameDashboardMutation.mutate({ dashboardId: editingDashboard.id, name: editDashboardName.trim() });
+                  if (
+                    e.key === "Enter" &&
+                    editDashboardName.trim() &&
+                    editingDashboard
+                  ) {
+                    renameDashboardMutation.mutate({
+                      dashboardId: editingDashboard.id,
+                      name: editDashboardName.trim(),
+                    });
                   }
                 }}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditingDashboard(null); setEditDashboardName(""); }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditingDashboard(null);
+                setEditDashboardName("");
+              }}
+            >
               ביטול
             </Button>
             <Button
               onClick={() => {
                 if (editingDashboard && editDashboardName.trim()) {
-                  renameDashboardMutation.mutate({ dashboardId: editingDashboard.id, name: editDashboardName.trim() });
+                  renameDashboardMutation.mutate({
+                    dashboardId: editingDashboard.id,
+                    name: editDashboardName.trim(),
+                  });
                 }
               }}
-              disabled={!editDashboardName.trim() || renameDashboardMutation.isPending}
+              disabled={
+                !editDashboardName.trim() || renameDashboardMutation.isPending
+              }
             >
               שמור
             </Button>
@@ -1197,15 +1558,18 @@ export default function DynamicTables() {
           }
         }}
         table={editingTable}
-        tenantId={tenantId || ''}
+        tenantId={tenantId || ""}
         onSaved={() => {
-          queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+          queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
           setEditViaConnectionDialog(false);
           setEditingTable(null);
         }}
       />
 
-      <Dialog open={!!editingTable && !editViaConnectionDialog} onOpenChange={(open) => !open && setEditingTable(null)}>
+      <Dialog
+        open={!!editingTable && !editViaConnectionDialog}
+        onOpenChange={(open) => !open && setEditingTable(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>עריכת דוח</DialogTitle>
@@ -1224,26 +1588,33 @@ export default function DynamicTables() {
             <div className="space-y-2">
               <Label>שיוך לסוכנות (אופציונלי)</Label>
               <div className="flex gap-2">
-              <Select value={editAgencyId || "__none__"} onValueChange={(val) => {
-                  const newVal = val === "__none__" ? "" : val;
-                  setEditAgencyId(newVal);
-                  if (newVal !== editAgencyId) setEditClientId("");
-                }}>
+                <Select
+                  value={editAgencyId || "__none__"}
+                  onValueChange={(val) => {
+                    const newVal = val === "__none__" ? "" : val;
+                    setEditAgencyId(newVal);
+                    if (newVal !== editAgencyId) setEditClientId("");
+                  }}
+                >
                   <SelectTrigger className="flex-1">
                     <SelectValue placeholder="ללא שיוך - כל הסוכנויות" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">ללא שיוך - כל הסוכנויות</SelectItem>
-                    {agencies.filter(a => a.id).map((agency) => (
-                      <SelectItem key={agency.id} value={agency.id}>
-                        {agency.name}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="__none__">
+                      ללא שיוך - כל הסוכנויות
+                    </SelectItem>
+                    {agencies
+                      .filter((a) => a.id)
+                      .map((agency) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
                 {editAgencyId && (
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="icon"
                     onClick={() => {
                       setEditAgencyId("");
@@ -1259,7 +1630,10 @@ export default function DynamicTables() {
               <div className="space-y-2">
                 <Label>שיוך ללקוח (אופציונלי)</Label>
                 <div className="flex gap-2">
-                  <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                  <Popover
+                    open={clientPopoverOpen}
+                    onOpenChange={setClientPopoverOpen}
+                  >
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
@@ -1268,14 +1642,19 @@ export default function DynamicTables() {
                         className="flex-1 justify-between"
                       >
                         {editClientId
-                          ? editFilteredClients.find((c) => c.id === editClientId)?.name
+                          ? editFilteredClients.find(
+                              (c) => c.id === editClientId,
+                            )?.name
                           : "ללא שיוך - כל הלקוחות"}
                         <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[300px] p-0" align="start">
                       <Command>
-                        <CommandInput placeholder="חפש לקוח..." className="h-9" />
+                        <CommandInput
+                          placeholder="חפש לקוח..."
+                          className="h-9"
+                        />
                         <CommandList>
                           <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
                           <CommandGroup>
@@ -1289,37 +1668,41 @@ export default function DynamicTables() {
                               <Check
                                 className={cn(
                                   "ml-2 h-4 w-4",
-                                  !editClientId ? "opacity-100" : "opacity-0"
+                                  !editClientId ? "opacity-100" : "opacity-0",
                                 )}
                               />
                               ללא שיוך - כל הלקוחות
                             </CommandItem>
-                            {editFilteredClients.filter(c => c.id).map((client) => (
-                              <CommandItem
-                                key={client.id}
-                                value={client.name}
-                                onSelect={() => {
-                                  setEditClientId(client.id);
-                                  setClientPopoverOpen(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "ml-2 h-4 w-4",
-                                    editClientId === client.id ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                {client.name}
-                              </CommandItem>
-                            ))}
+                            {editFilteredClients
+                              .filter((c) => c.id)
+                              .map((client) => (
+                                <CommandItem
+                                  key={client.id}
+                                  value={client.name}
+                                  onSelect={() => {
+                                    setEditClientId(client.id);
+                                    setClientPopoverOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "ml-2 h-4 w-4",
+                                      editClientId === client.id
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                  {client.name}
+                                </CommandItem>
+                              ))}
                           </CommandGroup>
                         </CommandList>
                       </Command>
                     </PopoverContent>
                   </Popover>
                   {editClientId && (
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="icon"
                       onClick={() => setEditClientId("")}
                     >
@@ -1334,7 +1717,12 @@ export default function DynamicTables() {
             {isEditingFacebook && (
               <div className="space-y-2">
                 <Label>חשבון מודעות Facebook</Label>
-                <Select value={editAdAccountId || "__none__"} onValueChange={(val) => setEditAdAccountId(val === "__none__" ? "" : val)}>
+                <Select
+                  value={editAdAccountId || "__none__"}
+                  onValueChange={(val) =>
+                    setEditAdAccountId(val === "__none__" ? "" : val)
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="בחר חשבון מודעות..." />
                   </SelectTrigger>
@@ -1349,12 +1737,15 @@ export default function DynamicTables() {
                 </Select>
                 {editingTable?.integration_settings?.ad_account_id && (
                   <p className="text-xs text-muted-foreground">
-                    חשבון נוכחי: {editingTable.integration_settings.ad_account_name || editingTable.integration_settings.ad_account_id}
+                    חשבון נוכחי:{" "}
+                    {editingTable.integration_settings.ad_account_name ||
+                      editingTable.integration_settings.ad_account_id}
                   </p>
                 )}
                 {!editingTable?.integration_settings?.ad_account_id && (
                   <p className="text-xs text-orange-500">
-                    ⚠️ הדוח לא מחובר לחשבון מודעות — בחר חשבון כדי להתחיל לקבל נתונים
+                    ⚠️ הדוח לא מחובר לחשבון מודעות — בחר חשבון כדי להתחיל לקבל
+                    נתונים
                   </p>
                 )}
               </div>
@@ -1362,16 +1753,16 @@ export default function DynamicTables() {
 
             {/* Maskyoo phone number — show incoming-call KPI inside the report.
                 For Google Ads = paid line. For Ahrefs/GA/GSC = organic line. */}
-            {(editingTable?.integration_type === 'ahrefs'
-              || editingTable?.integration_type === 'google_analytics'
-              || editingTable?.integration_type === 'google_search_console'
-              || editingTable?.integration_type === 'google_ads') && (
+            {(editingTable?.integration_type === "ahrefs" ||
+              editingTable?.integration_type === "google_analytics" ||
+              editingTable?.integration_type === "google_search_console" ||
+              editingTable?.integration_type === "google_ads") && (
               <div className="space-y-2">
                 <Label>
-                  {editingTable?.integration_type === 'google_ads'
-                    ? 'מספר מסקיו ממומן (Google Ads)'
-                    : 'מספר מסקיו אורגני (SEO)'}
-                  {' '}(אופציונלי)
+                  {editingTable?.integration_type === "google_ads"
+                    ? "מספר מסקיו ממומן (Google Ads)"
+                    : "מספר מסקיו אורגני (SEO)"}{" "}
+                  (אופציונלי)
                 </Label>
                 <Input
                   value={editMaskyooNumber}
@@ -1380,7 +1771,9 @@ export default function DynamicTables() {
                   dir="ltr"
                 />
                 <p className="text-xs text-muted-foreground">
-                  הדשבורד של הלקוח יציג כרטיס KPI עם השיחות לשני הקווים (אורגני + ממומן) ב-30 הימים האחרונים, על בסיס המספרים שהוגדרו בדוחות השונים של אותו לקוח.
+                  הדשבורד של הלקוח יציג כרטיס KPI עם השיחות לשני הקווים (אורגני
+                  + ממומן) ב-30 הימים האחרונים, על בסיס המספרים שהוגדרו בדוחות
+                  השונים של אותו לקוח.
                 </p>
               </div>
             )}
@@ -1389,29 +1782,35 @@ export default function DynamicTables() {
             <Button variant="outline" onClick={() => setEditingTable(null)}>
               ביטול
             </Button>
-            <Button 
+            <Button
               onClick={handleSaveEdit}
               disabled={updateTableMutation.isPending || !editName.trim()}
             >
-              {updateTableMutation.isPending ? 'שומר...' : 'שמור'}
+              {updateTableMutation.isPending ? "שומר..." : "שמור"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!deletingTable} onOpenChange={(open) => !open && setDeletingTable(null)}>
+      <AlertDialog
+        open={!!deletingTable}
+        onOpenChange={(open) => !open && setDeletingTable(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>האם למחוק את הדוח?</AlertDialogTitle>
             <AlertDialogDescription>
-              פעולה זו תמחק את הדוח "{deletingTable?.name}" וכל הנתונים שבו. לא ניתן לשחזר את הנתונים לאחר המחיקה.
+              פעולה זו תמחק את הדוח "{deletingTable?.name}" וכל הנתונים שבו. לא
+              ניתן לשחזר את הנתונים לאחר המחיקה.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>ביטול</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deletingTable && deleteTableMutation.mutate(deletingTable.id)}
+              onClick={() =>
+                deletingTable && deleteTableMutation.mutate(deletingTable.id)
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               מחק
@@ -1420,8 +1819,8 @@ export default function DynamicTables() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AhrefsTableDialog 
-        open={showAhrefsDialog} 
+      <AhrefsTableDialog
+        open={showAhrefsDialog}
         onOpenChange={setShowAhrefsDialog}
         assignedClientIds={dialogClientScopeIds}
       />

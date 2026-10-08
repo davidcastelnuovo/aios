@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +32,12 @@ interface ShareTableDialogProps {
   clientId?: string | null;
 }
 
-export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: ShareTableDialogProps) {
+export function ShareTableDialog({
+  tableId,
+  tableName,
+  tenantId,
+  clientId,
+}: ShareTableDialogProps) {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
@@ -68,8 +79,18 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
   const supportsTabs = tableRow?.integration_type === "ahrefs";
 
   const toggleTabMutation = useMutation({
-    mutationFn: async ({ key, visible }: { key: SharedReportTabKey; visible: boolean }) => {
-      const nextSettings = withSharedReportTab(tableRow?.integration_settings, key, visible);
+    mutationFn: async ({
+      key,
+      visible,
+    }: {
+      key: SharedReportTabKey;
+      visible: boolean;
+    }) => {
+      const nextSettings = withSharedReportTab(
+        tableRow?.integration_settings,
+        key,
+        visible,
+      );
       const { error } = await supabase
         .from("crm_tables")
         .update({ integration_settings: nextSettings as never })
@@ -77,7 +98,9 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["share-table-settings", tableId] });
+      queryClient.invalidateQueries({
+        queryKey: ["share-table-settings", tableId],
+      });
       queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
       toast.success("הטאבים בקישור השיתוף עודכנו");
     },
@@ -102,7 +125,9 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
 
   const createShareMutation = useMutation({
     mutationFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
       const readableToken = buildDefaultShareToken({
@@ -140,10 +165,20 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
   });
 
   const toggleActiveMutation = useMutation({
-    mutationFn: async ({ shareId, isActive }: { shareId: string; isActive: boolean }) => {
+    mutationFn: async ({
+      shareId,
+      isActive,
+    }: {
+      shareId: string;
+      isActive: boolean;
+    }) => {
       const { error } = await supabase
         .from("table_shares" as any)
-        .update({ is_active: isActive, allowed_emails: [], updated_at: new Date().toISOString() } as any)
+        .update({
+          is_active: isActive,
+          allowed_emails: [],
+          updated_at: new Date().toISOString(),
+        } as any)
         .eq("id", shareId);
       if (error) throw error;
     },
@@ -154,10 +189,19 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
   });
 
   const updateSlugMutation = useMutation({
-    mutationFn: async ({ shareId, slug }: { shareId: string; slug: string }) => {
+    mutationFn: async ({
+      shareId,
+      slug,
+    }: {
+      shareId: string;
+      slug: string;
+    }) => {
       const { error } = await supabase
         .from("table_shares" as any)
-        .update({ share_token: slug, updated_at: new Date().toISOString() } as any)
+        .update({
+          share_token: slug,
+          updated_at: new Date().toISOString(),
+        } as any)
         .eq("id", shareId);
       if (error) throw error;
     },
@@ -212,7 +256,9 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
   const saveSlug = (shareId: string) => {
     const trimmed = editingValue.trim();
     if (!SLUG_REGEX.test(trimmed)) {
-      toast.error("סלאג חייב להיות 3-64 תווים: אותיות באנגלית, מספרים, מקפים או קווים תחתונים");
+      toast.error(
+        "סלאג חייב להיות 3-64 תווים: אותיות באנגלית, מספרים, מקפים או קווים תחתונים",
+      );
       return;
     }
     updateSlugMutation.mutate({ shareId, slug: trimmed });
@@ -226,7 +272,10 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
           שתף טבלה
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" dir="rtl">
+      <DialogContent
+        className="max-w-lg max-h-[85vh] overflow-y-auto"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5" />
@@ -235,7 +284,10 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
         </DialogHeader>
 
         <div className="space-y-4">
-          <Button onClick={() => createShareMutation.mutate()} disabled={createShareMutation.isPending}>
+          <Button
+            onClick={() => createShareMutation.mutate()}
+            disabled={createShareMutation.isPending}
+          >
             <Plus className="ml-2 h-4 w-4" />
             צור קישור שיתוף חדש
           </Button>
@@ -243,19 +295,27 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
           {supportsTabs && (
             <div className="space-y-3 rounded-lg border p-4">
               <div>
-                <Label className="text-sm font-semibold">מה הלקוח רואה בקישור</Label>
+                <Label className="text-sm font-semibold">
+                  מה הלקוח רואה בקישור
+                </Label>
                 <p className="text-xs text-muted-foreground">
-                  כבה טאב שאין בו מדידה — הוא ייעלם מכל קישורי השיתוף של הדוח הזה.
+                  כבה טאב שאין בו מדידה — הוא ייעלם מכל קישורי השיתוף של הדוח
+                  הזה.
                 </p>
               </div>
               {SHARED_REPORT_TAB_KEYS.map((key) => {
                 const isLast = isLastVisibleSharedReportTab(tabVisibility, key);
                 return (
-                  <div key={key} className="flex items-center justify-between gap-3">
+                  <div
+                    key={key}
+                    className="flex items-center justify-between gap-3"
+                  >
                     <div className="min-w-0">
                       <p className="text-sm">{SHARED_REPORT_TAB_LABELS[key]}</p>
                       <p className="text-xs text-muted-foreground">
-                        {isLast ? "חייב להישאר טאב אחד גלוי" : SHARED_REPORT_TAB_HINTS[key]}
+                        {isLast
+                          ? "חייב להישאר טאב אחד גלוי"
+                          : SHARED_REPORT_TAB_HINTS[key]}
                       </p>
                     </div>
                     <Switch
@@ -280,7 +340,9 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
           {shares.map((share: any) => (
             <div key={share.id} className="border rounded-lg p-4 space-y-3">
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">סלאג (מזהה הקישור)</Label>
+                <Label className="text-xs text-muted-foreground">
+                  סלאג (מזהה הקישור)
+                </Label>
                 {editingId === share.id ? (
                   <div className="flex items-center gap-2">
                     <Input
@@ -308,7 +370,10 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 px-2 py-1.5 bg-muted rounded text-xs font-mono text-left truncate" dir="ltr">
+                    <code
+                      className="flex-1 px-2 py-1.5 bg-muted rounded text-xs font-mono text-left truncate"
+                      dir="ltr"
+                    >
                       {share.share_token}
                     </code>
                     <Button
@@ -320,13 +385,21 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
                     </Button>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground text-left" dir="ltr">
+                <p
+                  className="text-xs text-muted-foreground text-left"
+                  dir="ltr"
+                >
                   {getShareUrl(share.share_token)}
                 </p>
               </div>
 
               <div className="flex items-center gap-2 justify-end">
-                <Button variant="default" size="sm" onClick={() => copyLink(share.share_token)} className="shrink-0">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => copyLink(share.share_token)}
+                  className="shrink-0"
+                >
                   <Copy className="ml-1 h-4 w-4" />
                   העתק קישור
                 </Button>
@@ -337,12 +410,17 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
                 <Switch
                   checked={share.is_active}
                   onCheckedChange={(checked) =>
-                    toggleActiveMutation.mutate({ shareId: share.id, isActive: checked })
+                    toggleActiveMutation.mutate({
+                      shareId: share.id,
+                      isActive: checked,
+                    })
                   }
                 />
               </div>
 
-              <p className="text-xs text-muted-foreground">כל מי שיש לו את הקישור יכול לצפות בטבלה.</p>
+              <p className="text-xs text-muted-foreground">
+                כל מי שיש לו את הקישור יכול לצפות בטבלה.
+              </p>
 
               <div className="flex justify-end">
                 <Button

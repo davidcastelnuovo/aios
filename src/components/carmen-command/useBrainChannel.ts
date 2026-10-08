@@ -32,17 +32,26 @@ export type ChannelSendResult = {
 const FN = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/agent-channel-send`;
 
 async function authHeader(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session) throw new Error("לא מחוברת");
-  return { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` };
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${session.access_token}`,
+  };
 }
 
 export function useBrainChannel(tenantId: string | null) {
   const [routes, setRoutes] = useState<BrainRoute[]>(FALLBACK_BRAIN_ROUTES);
-  const [selected, setSelected] = useState<BrainRoute>(() => initialSelectedRoute());
+  const [selected, setSelected] = useState<BrainRoute>(() =>
+    initialSelectedRoute(),
+  );
   const [status, setStatus] = useState<ConversationChannelStatus>("idle");
   const [externalUrl, setExternalUrl] = useState<string | null>(null);
-  const [channelHealth, setChannelHealth] = useState<ChannelHealth | null>(null);
+  const [channelHealth, setChannelHealth] = useState<ChannelHealth | null>(
+    null,
+  );
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
@@ -58,145 +67,198 @@ export function useBrainChannel(tenantId: string | null) {
         });
         if (!res.ok) throw new Error(String(res.status));
         const json = await res.json();
-        const list = Array.isArray(json.routes) && json.routes.length ? json.routes as BrainRoute[] : FALLBACK_BRAIN_ROUTES;
+        const list =
+          Array.isArray(json.routes) && json.routes.length
+            ? (json.routes as BrainRoute[])
+            : FALLBACK_BRAIN_ROUTES;
         setRoutes(list);
-        setSelected((prev) => list.find((r) => r.slug === prev.slug) || pickDefaultRoute(list));
+        setSelected(
+          (prev) =>
+            list.find((r) => r.slug === prev.slug) || pickDefaultRoute(list),
+        );
       } catch {
-        setSelected((prev) => pickDefaultRoute(FALLBACK_BRAIN_ROUTES, prev.slug));
+        setSelected((prev) =>
+          pickDefaultRoute(FALLBACK_BRAIN_ROUTES, prev.slug),
+        );
       }
       try {
         const headers = await authHeader();
         const res = await fetch(FN, {
           method: "POST",
           headers,
-          body: JSON.stringify({ action: "channel_health", tenant_id: tenantId }),
+          body: JSON.stringify({
+            action: "channel_health",
+            tenant_id: tenantId,
+          }),
         });
         if (!res.ok) return;
         const json = await res.json();
-        if (json && typeof json.ok === "boolean") setChannelHealth(json as ChannelHealth);
-      } catch { /* health is advisory */ }
+        if (json && typeof json.ok === "boolean")
+          setChannelHealth(json as ChannelHealth);
+      } catch {
+        /* health is advisory */
+      }
     })();
   }, [tenantId]);
 
-  const selectRoute = useCallback(async (route: BrainRoute, conversationId?: string | null) => {
-    selectedRef.current = route;
-    setSelected(route);
-    setStatus("idle");
-    if (tenantId) localStorage.setItem(storageKeyForRoute(tenantId), route.slug);
-    if (!tenantId) return;
-    try {
+  const selectRoute = useCallback(
+    async (route: BrainRoute, conversationId?: string | null) => {
+      selectedRef.current = route;
+      setSelected(route);
+      setStatus("idle");
+      if (tenantId)
+        localStorage.setItem(storageKeyForRoute(tenantId), route.slug);
+      if (!tenantId) return;
+      try {
+        const headers = await authHeader();
+        await fetch(FN, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            action: "select_route",
+            tenant_id: tenantId,
+            brain_route_id: route.id,
+            brain_slug: route.slug,
+            conversation_id: conversationId || undefined,
+          }),
+        });
+      } catch {
+        /* selection is local-first */
+      }
+    },
+    [tenantId],
+  );
+
+  const send = useCallback(
+    async (args: {
+      content: string;
+      conversationId: string | null;
+      inputMode: string;
+      history: Array<{ role: string; content: string }>;
+      idempotencyKey: string;
+      route?: BrainRoute;
+      contextMetadata?: SystemFixContextMetadata | null;
+      attachments?: Array<{
+        name: string;
+        url: string;
+        type: "image" | "file";
+        size?: number;
+        path?: string;
+      }>;
+    }): Promise<ChannelSendResult> => {
+      if (!tenantId) throw new Error("missing tenant");
+      const route = args.route || selectedRef.current;
       const headers = await authHeader();
-      await fetch(FN, {
+      const res = await fetch(FN, {
         method: "POST",
         headers,
         body: JSON.stringify({
-          action: "select_route",
+          action: "send",
           tenant_id: tenantId,
+          content: args.content,
+          conversation_id: args.conversationId,
           brain_route_id: route.id,
           brain_slug: route.slug,
-          conversation_id: conversationId || undefined,
+          input_mode: args.inputMode,
+          conversation_history: args.history,
+          idempotency_key: args.idempotencyKey,
+          context_metadata: args.contextMetadata ?? undefined,
+          attachments: args.attachments?.length ? args.attachments : undefined,
         }),
       });
-    } catch { /* selection is local-first */ }
-  }, [tenantId]);
-
-  const send = useCallback(async (args: {
-    content: string;
-    conversationId: string | null;
-    inputMode: string;
-    history: Array<{ role: string; content: string }>;
-    idempotencyKey: string;
-    route?: BrainRoute;
-    contextMetadata?: SystemFixContextMetadata | null;
-    attachments?: Array<{ name: string; url: string; type: "image" | "file"; size?: number; path?: string }>;
-  }): Promise<ChannelSendResult> => {
-    if (!tenantId) throw new Error("missing tenant");
-    const route = args.route || selectedRef.current;
-    const headers = await authHeader();
-    const res = await fetch(FN, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        action: "send",
-        tenant_id: tenantId,
-        content: args.content,
-        conversation_id: args.conversationId,
-        brain_route_id: route.id,
-        brain_slug: route.slug,
-        input_mode: args.inputMode,
-        conversation_history: args.history,
-        idempotency_key: args.idempotencyKey,
-        context_metadata: args.contextMetadata ?? undefined,
-        attachments: args.attachments?.length ? args.attachments : undefined,
-      }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (sendPathForRoute(route) === "internal_stream" && (res.status === 404 || res.status === 500)) {
-        return {
-          ok: true,
-          kind: "internal",
-          conversation_id: args.conversationId || "",
-          status: "streaming",
-          stream: true,
-          accepted_message: "",
-        };
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (
+          sendPathForRoute(route) === "internal_stream" &&
+          (res.status === 404 || res.status === 500)
+        ) {
+          return {
+            ok: true,
+            kind: "internal",
+            conversation_id: args.conversationId || "",
+            status: "streaming",
+            stream: true,
+            accepted_message: "",
+          };
+        }
+        throw new Error(json.error || "שגיאה בשליחה לערוץ");
       }
-      throw new Error(json.error || "שגיאה בשליחה לערוץ");
-    }
-    const result = json as ChannelSendResult;
-    setStatus(result.status);
-    setExternalUrl(result.external_url || null);
-    return result;
-  }, [tenantId]);
+      const result = json as ChannelSendResult;
+      setStatus(result.status);
+      setExternalUrl(result.external_url || null);
+      return result;
+    },
+    [tenantId],
+  );
 
-  const persistAssistant = useCallback(async (conversationId: string, content: string, idempotencyKey: string) => {
-    if (!tenantId || !conversationId || !content) return;
-    try {
+  const persistAssistant = useCallback(
+    async (conversationId: string, content: string, idempotencyKey: string) => {
+      if (!tenantId || !conversationId || !content) return;
+      try {
+        const headers = await authHeader();
+        await fetch(FN, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            action: "persist_assistant",
+            tenant_id: tenantId,
+            conversation_id: conversationId,
+            content,
+            idempotency_key: idempotencyKey,
+          }),
+        });
+        setStatus("idle");
+      } catch {
+        /* best-effort */
+      }
+    },
+    [tenantId],
+  );
+
+  const cancelParliament = useCallback(
+    async (conversationId: string | null) => {
+      if (!tenantId || !conversationId) return;
       const headers = await authHeader();
       await fetch(FN, {
         method: "POST",
         headers,
         body: JSON.stringify({
-          action: "persist_assistant",
+          action: "cancel_parliament",
           tenant_id: tenantId,
           conversation_id: conversationId,
-          content,
-          idempotency_key: idempotencyKey,
         }),
       });
       setStatus("idle");
-    } catch { /* best-effort */ }
-  }, [tenantId]);
+    },
+    [tenantId],
+  );
 
-  const cancelParliament = useCallback(async (conversationId: string | null) => {
-    if (!tenantId || !conversationId) return;
-    const headers = await authHeader();
-    await fetch(FN, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ action: "cancel_parliament", tenant_id: tenantId, conversation_id: conversationId }),
-    });
-    setStatus("idle");
-  }, [tenantId]);
-
-  const parliamentAction = useCallback(async (
-    action: "parliament_continue" | "parliament_synthesize" | "parliament_clarify",
-    conversationId: string | null,
-    extra?: Record<string, string>,
-  ) => {
-    if (!tenantId || !conversationId) return;
-    const headers = await authHeader();
-    const res = await fetch(FN, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ action, tenant_id: tenantId, conversation_id: conversationId, ...(extra || {}) }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.error || "פעולת פרלמנט נכשלה");
-    if (json.status) setStatus(json.status);
-    return json;
-  }, [tenantId]);
+  const parliamentAction = useCallback(
+    async (
+      action:
+        "parliament_continue" | "parliament_synthesize" | "parliament_clarify",
+      conversationId: string | null,
+      extra?: Record<string, string>,
+    ) => {
+      if (!tenantId || !conversationId) return;
+      const headers = await authHeader();
+      const res = await fetch(FN, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          action,
+          tenant_id: tenantId,
+          conversation_id: conversationId,
+          ...(extra || {}),
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "פעולת פרלמנט נכשלה");
+      if (json.status) setStatus(json.status);
+      return json;
+    },
+    [tenantId],
+  );
 
   return {
     routes,
@@ -206,7 +268,8 @@ export function useBrainChannel(tenantId: string | null) {
     setStatus,
     externalUrl,
     setExternalUrl,
-    locked: isInputLocked(status) && sendPathForRoute(selected) !== "internal_stream",
+    locked:
+      isInputLocked(status) && sendPathForRoute(selected) !== "internal_stream",
     send,
     persistAssistant,
     cancelParliament,

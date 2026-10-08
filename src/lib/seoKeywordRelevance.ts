@@ -4,16 +4,85 @@
  */
 
 const HE_STOP = new Set([
-  "של", "את", "על", "עם", "זה", "זו", "זאת", "או", "גם", "אם", "כי", "יש",
-  "אין", "הוא", "היא", "הם", "הן", "אני", "אנחנו", "אתה", "אתם", "כל", "מה",
-  "מי", "איך", "למה", "איפה", "כמה", "עוד", "רק", "לא", "כן", "בין", "אחר",
-  "אחרי", "לפני", "תוך", "בלי", "עד", "אל", "מן", "ליד", "כמו", "יותר", "פחות",
+  "של",
+  "את",
+  "על",
+  "עם",
+  "זה",
+  "זו",
+  "זאת",
+  "או",
+  "גם",
+  "אם",
+  "כי",
+  "יש",
+  "אין",
+  "הוא",
+  "היא",
+  "הם",
+  "הן",
+  "אני",
+  "אנחנו",
+  "אתה",
+  "אתם",
+  "כל",
+  "מה",
+  "מי",
+  "איך",
+  "למה",
+  "איפה",
+  "כמה",
+  "עוד",
+  "רק",
+  "לא",
+  "כן",
+  "בין",
+  "אחר",
+  "אחרי",
+  "לפני",
+  "תוך",
+  "בלי",
+  "עד",
+  "אל",
+  "מן",
+  "ליד",
+  "כמו",
+  "יותר",
+  "פחות",
 ]);
 
 const EN_STOP = new Set([
-  "the", "a", "an", "of", "in", "on", "for", "to", "and", "or", "at", "by",
-  "from", "with", "as", "is", "are", "was", "be", "this", "that", "it", "its",
-  "near", "near", "how", "what", "where", "when", "who", "why",
+  "the",
+  "a",
+  "an",
+  "of",
+  "in",
+  "on",
+  "for",
+  "to",
+  "and",
+  "or",
+  "at",
+  "by",
+  "from",
+  "with",
+  "as",
+  "is",
+  "are",
+  "was",
+  "be",
+  "this",
+  "that",
+  "it",
+  "its",
+  "near",
+  "near",
+  "how",
+  "what",
+  "where",
+  "when",
+  "who",
+  "why",
 ]);
 
 export function tokenizeKeyword(raw: string): string[] {
@@ -37,7 +106,8 @@ export function tokenizeKeyword(raw: string): string[] {
       // Light prefix strip for Hebrew prepositions attached to nouns (ב/ל/מ/ו/ה/כ/ש)
       if (part.length >= 4 && /^[בלמוהכש]/.test(part)) {
         const stripped = part.slice(1);
-        if (stripped.length >= 2 && !HE_STOP.has(stripped)) tokens.push(stripped);
+        if (stripped.length >= 2 && !HE_STOP.has(stripped))
+          tokens.push(stripped);
       }
     } else if (isEn) {
       if (part.length < 3) continue;
@@ -82,9 +152,12 @@ export function notifySeoKeywordRelevanceChanged(
 ) {
   if (!persistKey || typeof window === "undefined") return;
   window.dispatchEvent(
-    new CustomEvent<SeoKeywordRelevanceChangedDetail>(SEO_KEYWORD_RELEVANCE_EVENT, {
-      detail: { persistKey, kind },
-    }),
+    new CustomEvent<SeoKeywordRelevanceChangedDetail>(
+      SEO_KEYWORD_RELEVANCE_EVENT,
+      {
+        detail: { persistKey, kind },
+      },
+    ),
   );
 }
 
@@ -97,7 +170,10 @@ export function loadSeoForceList(
     const raw = localStorage.getItem(seoForceListStorageKey(persistKey, kind));
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed)
-      ? parsed.map(String).map((x) => x.trim()).filter(Boolean)
+      ? parsed
+          .map(String)
+          .map((x) => x.trim())
+          .filter(Boolean)
       : [];
   } catch {
     return [];
@@ -129,15 +205,23 @@ export function loadSeoForceIrrelevant(persistKey?: string): string[] {
   return loadSeoForceList(persistKey, "irrelevant");
 }
 
-export function saveSeoForceRelevant(persistKey: string | undefined, values: string[]) {
+export function saveSeoForceRelevant(
+  persistKey: string | undefined,
+  values: string[],
+) {
   saveSeoForceList(persistKey, "relevant", values);
 }
 
-export function saveSeoForceIrrelevant(persistKey: string | undefined, values: string[]) {
+export function saveSeoForceIrrelevant(
+  persistKey: string | undefined,
+  values: string[],
+) {
   saveSeoForceList(persistKey, "irrelevant", values);
 }
 
-export function buildTrackedTokenIndex(trackedKeywords: Array<{ keyword?: string } | string>): {
+export function buildTrackedTokenIndex(
+  trackedKeywords: Array<{ keyword?: string } | string>,
+): {
   phrases: Set<string>;
   tokens: Set<string>;
 } {

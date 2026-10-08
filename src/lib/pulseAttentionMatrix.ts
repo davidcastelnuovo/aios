@@ -1,4 +1,7 @@
-import type { PulseCampaignGoal, PulseCampaignGoalRow } from "@/lib/pulseCampaignGoals";
+import type {
+  PulseCampaignGoal,
+  PulseCampaignGoalRow,
+} from "@/lib/pulseCampaignGoals";
 import {
   buildPlatformTargetPatch as buildPatch,
   buildPulseAttentionRows as buildRows,

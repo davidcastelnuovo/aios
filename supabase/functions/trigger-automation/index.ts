@@ -1,55 +1,70 @@
 // redeploy trigger: Carmen sessions keyed by chat JID only; never speaker-phone fallback (2026-08-27b)
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
-import { sendCarmenReplyViaActionStep } from '../_shared/carmen.ts'
-import { buildWaNotifyFromOrigin, requireOriginChatId } from '../_shared/carmen-session-identity.ts'
-import { formatClientFollowUpMessage } from '../_shared/client-follow-up-message.ts'
-import { dropUnresolvedTemplateLines, sanitizeTemplateParameter } from '../_shared/meta-whatsapp.ts'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { sendCarmenReplyViaActionStep } from "../_shared/carmen.ts";
+import {
+  buildWaNotifyFromOrigin,
+  requireOriginChatId,
+} from "../_shared/carmen-session-identity.ts";
+import { formatClientFollowUpMessage } from "../_shared/client-follow-up-message.ts";
+import {
+  dropUnresolvedTemplateLines,
+  sanitizeTemplateParameter,
+} from "../_shared/meta-whatsapp.ts";
 import {
   deliverPendingLeadAlertFailureNotifications,
   isLeadAlertSendWhatsappFailure,
   queueLeadAlertFailureNotification,
-} from '../_shared/lead-alert-failure-notify.ts'
-import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
+} from "../_shared/lead-alert-failure-notify.ts";
+import { withManyChatDestinationLock } from "../_shared/manychat-destination-lock.ts";
 import {
   claimTaskNotificationDelivery,
   taskUpdateEventKey,
   releaseTaskNotificationDelivery,
   taskNotificationRecipientKey,
-} from '../_shared/task-notification-dedupe.ts'
+} from "../_shared/task-notification-dedupe.ts";
 import {
   formatTaskNotificationMessage,
   resolveTaskNotificationLinkTenantId,
   resolveTaskNotificationSenderTenantIds,
-} from '../_shared/task-notification-message.ts'
-import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
-import { claimFacebookLeadAutomationRun, claimFacebookLeadWhatsAppSend, claimIdenticalWhatsAppSend, releaseFacebookLeadAutomationRun, releaseFacebookLeadWhatsAppSend } from '../_shared/facebook-lead-dedup.ts'
+} from "../_shared/task-notification-message.ts";
+import { resolveTenantHomeAgencyId } from "../_shared/resolve-tenant-agency.ts";
+import {
+  claimFacebookLeadAutomationRun,
+  claimFacebookLeadWhatsAppSend,
+  claimIdenticalWhatsAppSend,
+  releaseFacebookLeadAutomationRun,
+  releaseFacebookLeadWhatsAppSend,
+} from "../_shared/facebook-lead-dedup.ts";
 import {
   cloneSignatureFromTemplate,
   resolveTenantOwnerId,
   sendSignatureDocumentEmails,
-} from '../_shared/signature-automation.ts'
+} from "../_shared/signature-automation.ts";
 // clearer error when ManyChat wa_id ghost on deleted contact — 2026-08-09
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
 
 // Custom field name for phone number in ManyChat (must be created manually in ManyChat)
-const PHONE_CUSTOM_FIELD_NAME = 'phone_number';
+const PHONE_CUSTOM_FIELD_NAME = "phone_number";
 
 // ManyChat sometimes returns a single object and sometimes an array.
 // Prefer subscribers with whatsapp_phone (not deleted).
 // NOTE: Some parts of this file define a more advanced extractSubscriberId inside a function scope;
 // this global helper is used by other functions in this file.
 function extractSubscriberId(result: any): string | null {
-  if (!result || result.status !== 'success' || !result.data) return null;
+  if (!result || result.status !== "success" || !result.data) return null;
   const subscribers = Array.isArray(result.data) ? result.data : [result.data];
 
-  const withWA = subscribers.find((s: any) => s?.status !== 'deleted' && s?.whatsapp_phone && s?.id);
+  const withWA = subscribers.find(
+    (s: any) => s?.status !== "deleted" && s?.whatsapp_phone && s?.id,
+  );
   if (withWA?.id) return String(withWA.id);
 
-  const active = subscribers.find((s: any) => s?.status !== 'deleted' && s?.id);
+  const active = subscribers.find((s: any) => s?.status !== "deleted" && s?.id);
   if (active?.id) return String(active.id);
 
   const anyWithId = subscribers.find((s: any) => s?.id);
@@ -59,13 +74,17 @@ function extractSubscriberId(result: any): string | null {
 }
 
 // Get Custom Field ID from ManyChat API (with caching)
-async function getPhoneNumberFieldIdMC(apiKey: string, supabase: any, tenantId: string): Promise<number | null> {
+async function getPhoneNumberFieldIdMC(
+  apiKey: string,
+  supabase: any,
+  tenantId: string,
+): Promise<number | null> {
   // First, try to get cached field_id from tenant_integrations.settings
   const { data: integration } = await supabase
-    .from('tenant_integrations')
-    .select('settings')
-    .eq('tenant_id', tenantId)
-    .eq('integration_type', 'manychat')
+    .from("tenant_integrations")
+    .select("settings")
+    .eq("tenant_id", tenantId)
+    .eq("integration_type", "manychat")
     .single();
 
   const settings = integration?.settings || {};
@@ -75,21 +94,25 @@ async function getPhoneNumberFieldIdMC(apiKey: string, supabase: any, tenantId: 
 
   // If not cached, fetch from ManyChat API
   try {
-    const res = await fetch('https://api.manychat.com/fb/page/getCustomFields', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+    const res = await fetch(
+      "https://api.manychat.com/fb/page/getCustomFields",
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
       },
-    });
+    );
 
     if (res.ok) {
       const data = await res.json();
 
-      if (data?.status === 'success' && Array.isArray(data?.data)) {
-        const phoneField = data.data.find((field: any) => 
-          field.name === PHONE_CUSTOM_FIELD_NAME || 
-          field.name?.toLowerCase() === 'phone_number'
+      if (data?.status === "success" && Array.isArray(data?.data)) {
+        const phoneField = data.data.find(
+          (field: any) =>
+            field.name === PHONE_CUSTOM_FIELD_NAME ||
+            field.name?.toLowerCase() === "phone_number",
         );
 
         if (phoneField?.id) {
@@ -97,10 +120,12 @@ async function getPhoneNumberFieldIdMC(apiKey: string, supabase: any, tenantId: 
 
           // Cache the field_id in tenant_integrations.settings
           await supabase
-            .from('tenant_integrations')
-            .update({ settings: { ...settings, phone_number_field_id: fieldId } })
-            .eq('tenant_id', tenantId)
-            .eq('integration_type', 'manychat');
+            .from("tenant_integrations")
+            .update({
+              settings: { ...settings, phone_number_field_id: fieldId },
+            })
+            .eq("tenant_id", tenantId)
+            .eq("integration_type", "manychat");
 
           return fieldId;
         } else {
@@ -108,40 +133,50 @@ async function getPhoneNumberFieldIdMC(apiKey: string, supabase: any, tenantId: 
       }
     }
   } catch (e) {
-    console.error('Error fetching custom fields:', e);
+    console.error("Error fetching custom fields:", e);
   }
 
   return null;
 }
 
 // Find subscriber by Custom Field using field_id (NOT field_name!)
-async function findSubscriberByCustomFieldMC(apiKey: string, fieldId: number, phoneCandidates: string[]): Promise<string | null> {
+async function findSubscriberByCustomFieldMC(
+  apiKey: string,
+  fieldId: number,
+  phoneCandidates: string[],
+): Promise<string | null> {
   for (const candidate of phoneCandidates) {
     try {
       // IMPORTANT: Use field_id (numeric) not field_name
       const url = `https://api.manychat.com/fb/subscriber/findByCustomField?field_id=${fieldId}&field_value=${encodeURIComponent(candidate)}`;
       const res = await fetch(url, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
       });
 
       if (res.ok) {
         const data = await res.json();
-        if (data?.status === 'success' && data?.data) {
+        if (data?.status === "success" && data?.data) {
           // Handle both array and object responses from ManyChat API
-          const subscribers = Array.isArray(data.data) ? data.data : [data.data];
+          const subscribers = Array.isArray(data.data)
+            ? data.data
+            : [data.data];
 
           // Prefer ACTIVE subscriber with whatsapp_phone (not deleted)
-          const activeWithWA = subscribers.find((s: any) => s?.status !== 'deleted' && s?.whatsapp_phone && s?.id);
+          const activeWithWA = subscribers.find(
+            (s: any) => s?.status !== "deleted" && s?.whatsapp_phone && s?.id,
+          );
           if (activeWithWA?.id) {
             return String(activeWithWA.id);
           }
 
           // Second priority: ACTIVE subscriber (no WA phone but not deleted)
-          const activeSubscriber = subscribers.find((s: any) => s?.status !== 'deleted' && s?.id);
+          const activeSubscriber = subscribers.find(
+            (s: any) => s?.status !== "deleted" && s?.id,
+          );
           if (activeSubscriber?.id) {
             return String(activeSubscriber.id);
           }
@@ -155,26 +190,29 @@ async function findSubscriberByCustomFieldMC(apiKey: string, fieldId: number, ph
           }
         }
       }
-      
+
       // If rate limited, wait
       if (res.status === 429) {
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 2000));
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
   return null;
 }
 
 // Set phone_number custom field for a subscriber
-async function setPhoneCustomFieldMC(apiKey: string, subscriberId: string, phoneValue: string): Promise<boolean> {
+async function setPhoneCustomFieldMC(
+  apiKey: string,
+  subscriberId: string,
+  phoneValue: string,
+): Promise<boolean> {
   try {
-    const url = 'https://api.manychat.com/fb/subscriber/setCustomFieldByName';
+    const url = "https://api.manychat.com/fb/subscriber/setCustomFieldByName";
     const res = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         subscriber_id: subscriberId,
@@ -184,43 +222,57 @@ async function setPhoneCustomFieldMC(apiKey: string, subscriberId: string, phone
     });
 
     const data = await res.json();
-    return data?.status === 'success';
+    return data?.status === "success";
   } catch (e) {
     return false;
   }
 }
 
 function manyChatPhoneLast9(value: string): string {
-  return String(value ?? '').replace(/\D/g, '').slice(-9)
+  return String(value ?? "")
+    .replace(/\D/g, "")
+    .slice(-9);
 }
 
 function manyChatPhoneCandidates(phone: string): string[] {
-  const cleanPhone = phone.replace(/\D/g, '')
-  const last9Digits = cleanPhone.slice(-9)
-  return [...new Set([
-    `+972${last9Digits}`,
-    `972${last9Digits}`,
-    `0${last9Digits}`,
-    cleanPhone,
-    last9Digits,
-  ])].filter(Boolean)
+  const cleanPhone = phone.replace(/\D/g, "");
+  const last9Digits = cleanPhone.slice(-9);
+  return [
+    ...new Set([
+      `+972${last9Digits}`,
+      `972${last9Digits}`,
+      `0${last9Digits}`,
+      cleanPhone,
+      last9Digits,
+    ]),
+  ].filter(Boolean);
 }
 
-function extractManyChatWaIdFromCreateError(createResult: unknown): string | null {
-  const errStr = JSON.stringify(createResult ?? {})
-  const match = errStr.match(/WhatsApp ID already exists:\s*(\+?\d+)/i)
-  return match?.[1]?.replace(/\D/g, '') || null
+function extractManyChatWaIdFromCreateError(
+  createResult: unknown,
+): string | null {
+  const errStr = JSON.stringify(createResult ?? {});
+  const match = errStr.match(/WhatsApp ID already exists:\s*(\+?\d+)/i);
+  return match?.[1]?.replace(/\D/g, "") || null;
 }
 
-function pickManyChatSubscriberByWhatsAppPhone(subscribers: unknown, targetLast9: string): string | null {
-  const rows = Array.isArray(subscribers) ? subscribers : subscribers ? [subscribers] : []
-  const withWA = rows.find((subscriber: any) =>
-    subscriber?.status !== 'deleted'
-    && subscriber?.whatsapp_phone
-    && manyChatPhoneLast9(String(subscriber.whatsapp_phone)) === targetLast9
-    && subscriber?.id,
-  )
-  return withWA?.id ? String(withWA.id) : null
+function pickManyChatSubscriberByWhatsAppPhone(
+  subscribers: unknown,
+  targetLast9: string,
+): string | null {
+  const rows = Array.isArray(subscribers)
+    ? subscribers
+    : subscribers
+      ? [subscribers]
+      : [];
+  const withWA = rows.find(
+    (subscriber: any) =>
+      subscriber?.status !== "deleted" &&
+      subscriber?.whatsapp_phone &&
+      manyChatPhoneLast9(String(subscriber.whatsapp_phone)) === targetLast9 &&
+      subscriber?.id,
+  );
+  return withWA?.id ? String(withWA.id) : null;
 }
 
 async function findSubscriberByWhatsAppPhoneMC(
@@ -228,32 +280,41 @@ async function findSubscriberByWhatsAppPhoneMC(
   fieldId: number | null,
   targetPhone: string,
 ): Promise<string | null> {
-  const targetLast9 = manyChatPhoneLast9(targetPhone)
-  if (!targetLast9) return null
-  const candidates = manyChatPhoneCandidates(targetPhone)
+  const targetLast9 = manyChatPhoneLast9(targetPhone);
+  if (!targetLast9) return null;
+  const candidates = manyChatPhoneCandidates(targetPhone);
 
   if (fieldId) {
-    const foundByField = await findSubscriberByCustomFieldMC(apiKey, fieldId, candidates)
-    if (foundByField) return foundByField
+    const foundByField = await findSubscriberByCustomFieldMC(
+      apiKey,
+      fieldId,
+      candidates,
+    );
+    if (foundByField) return foundByField;
 
     // ManyChat WA contacts often keep phone_number as literal "{{phone}}" with no system phone.
-    for (const placeholder of ['{{phone}}', '{{client_phone}}']) {
+    for (const placeholder of ["{{phone}}", "{{client_phone}}"]) {
       try {
-        const url = `https://api.manychat.com/fb/subscriber/findByCustomField?field_id=${fieldId}&field_value=${encodeURIComponent(placeholder)}`
+        const url = `https://api.manychat.com/fb/subscriber/findByCustomField?field_id=${fieldId}&field_value=${encodeURIComponent(placeholder)}`;
         const res = await fetch(url, {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
           },
-        })
-        if (!res.ok) continue
-        const data = await res.json()
-        if (data?.status !== 'success' || !data?.data) continue
-        const match = pickManyChatSubscriberByWhatsAppPhone(data.data, targetLast9)
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data?.status !== "success" || !data?.data) continue;
+        const match = pickManyChatSubscriberByWhatsAppPhone(
+          data.data,
+          targetLast9,
+        );
         if (match) {
-          console.warn(`[send_whatsapp] recovered subscriber ${match} via phone_number="${placeholder}"`)
-          return match
+          console.warn(
+            `[send_whatsapp] recovered subscriber ${match} via phone_number="${placeholder}"`,
+          );
+          return match;
         }
       } catch {
         // try next placeholder
@@ -263,24 +324,27 @@ async function findSubscriberByWhatsAppPhoneMC(
 
   for (const phoneFormat of candidates) {
     try {
-      const searchUrl = `https://api.manychat.com/fb/subscriber/findBySystemField?phone=${encodeURIComponent(phoneFormat)}`
+      const searchUrl = `https://api.manychat.com/fb/subscriber/findBySystemField?phone=${encodeURIComponent(phoneFormat)}`;
       const res = await fetch(searchUrl, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-      })
-      if (!res.ok) continue
-      const data = await res.json()
-      const match = pickManyChatSubscriberByWhatsAppPhone(data?.data, targetLast9)
-      if (match) return match
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const match = pickManyChatSubscriberByWhatsAppPhone(
+        data?.data,
+        targetLast9,
+      );
+      if (match) return match;
     } catch {
       // try next format
     }
   }
 
-  return null
+  return null;
 }
 
 async function ensureManyChatPhoneCustomFieldMC(
@@ -288,9 +352,9 @@ async function ensureManyChatPhoneCustomFieldMC(
   subscriberId: string,
   targetPhone: string,
 ): Promise<void> {
-  const last9 = manyChatPhoneLast9(targetPhone)
-  if (!last9) return
-  await setPhoneCustomFieldMC(apiKey, subscriberId, `+972${last9}`)
+  const last9 = manyChatPhoneLast9(targetPhone);
+  if (!last9) return;
+  await setPhoneCustomFieldMC(apiKey, subscriberId, `+972${last9}`);
 }
 
 async function readManyChatSubscriberFields(
@@ -302,22 +366,25 @@ async function readManyChatSubscriberFields(
     const infoRes = await fetch(
       `${baseUrl}/subscriber/getInfo?subscriber_id=${encodeURIComponent(String(subscriberId))}`,
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
       },
-    )
-    if (!infoRes.ok) return {}
-    const info = await infoRes.json()
-    const rows = info?.data?.custom_fields
-    if (!Array.isArray(rows)) return {}
+    );
+    if (!infoRes.ok) return {};
+    const info = await infoRes.json();
+    const rows = info?.data?.custom_fields;
+    if (!Array.isArray(rows)) return {};
     return Object.fromEntries(
-      rows.map((row: { name?: string; value?: unknown }) => [String(row.name ?? ''), String(row.value ?? '')]),
-    )
+      rows.map((row: { name?: string; value?: unknown }) => [
+        String(row.name ?? ""),
+        String(row.value ?? ""),
+      ]),
+    );
   } catch {
-    return {}
+    return {};
   }
 }
 
@@ -325,134 +392,185 @@ async function writeManyChatCustomFields(
   baseUrl: string,
   apiKey: string,
   subscriberId: number,
-  updates: Array<{ field_id?: number; field_name?: string; field_value: string }>,
+  updates: Array<{
+    field_id?: number;
+    field_name?: string;
+    field_value: string;
+  }>,
 ): Promise<boolean> {
   const batchFields = updates
     .filter((fieldUpdate) => Number.isFinite(fieldUpdate.field_id))
     .map((fieldUpdate) => ({
       field_id: fieldUpdate.field_id,
       field_value: fieldUpdate.field_value,
-    }))
+    }));
 
   if (batchFields.length > 0) {
     try {
-      const batchResponse = await fetch(`${baseUrl}/subscriber/setCustomFields`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+      const batchResponse = await fetch(
+        `${baseUrl}/subscriber/setCustomFields`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            subscriber_id: subscriberId,
+            fields: batchFields,
+          }),
         },
-        body: JSON.stringify({
-          subscriber_id: subscriberId,
-          fields: batchFields,
-        }),
-      })
+      );
       if (!batchResponse.ok) {
-        console.error('setCustomFields batch failed:', await batchResponse.text())
+        console.error(
+          "setCustomFields batch failed:",
+          await batchResponse.text(),
+        );
       }
     } catch (batchErr) {
-      console.error('setCustomFields batch error:', batchErr)
+      console.error("setCustomFields batch error:", batchErr);
     }
   }
 
   // Always follow batch with per-field writes. ManyChat can ACK batch while the
   // Flow/template layer still serves stale values on existing subscribers.
   for (const fieldUpdate of updates) {
-    const useByName = Boolean(fieldUpdate.field_name)
-    const endpoint = useByName ? 'subscriber/setCustomFieldByName' : 'subscriber/setCustomField'
+    const useByName = Boolean(fieldUpdate.field_name);
+    const endpoint = useByName
+      ? "subscriber/setCustomFieldByName"
+      : "subscriber/setCustomField";
     const body = useByName
       ? {
-        subscriber_id: subscriberId,
-        field_name: fieldUpdate.field_name,
-        field_value: fieldUpdate.field_value,
-      }
+          subscriber_id: subscriberId,
+          field_name: fieldUpdate.field_name,
+          field_value: fieldUpdate.field_value,
+        }
       : {
-        subscriber_id: subscriberId,
-        field_id: fieldUpdate.field_id,
-        field_value: fieldUpdate.field_value,
-      }
+          subscriber_id: subscriberId,
+          field_id: fieldUpdate.field_id,
+          field_value: fieldUpdate.field_value,
+        };
     try {
       const fieldResponse = await fetch(`${baseUrl}/${endpoint}`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
-      })
+      });
       if (!fieldResponse.ok) {
         console.error(
           `Failed to set custom field ${fieldUpdate.field_id || fieldUpdate.field_name}:`,
           await fieldResponse.text(),
-        )
+        );
       }
     } catch (fieldErr) {
-      console.error(`setCustomField error ${fieldUpdate.field_id || fieldUpdate.field_name}:`, fieldErr)
+      console.error(
+        `setCustomField error ${fieldUpdate.field_id || fieldUpdate.field_name}:`,
+        fieldErr,
+      );
     }
   }
-  return true
+  return true;
 }
 
 function leadAlertFieldMismatches(
   actual: Record<string, string>,
   expected: Record<string, string>,
 ): string[] {
-  const mismatches: string[] = []
+  const mismatches: string[] = [];
   for (const [name, value] of Object.entries(expected)) {
     if (actual[name] !== value) {
-      mismatches.push(`${name}: expected "${value}" got "${actual[name] ?? ''}"`)
+      mismatches.push(
+        `${name}: expected "${value}" got "${actual[name] ?? ""}"`,
+      );
     }
   }
-  return mismatches
+  return mismatches;
 }
 
 async function syncManyChatLeadAlertFields(
   baseUrl: string,
   apiKey: string,
   subscriberId: number,
-  updates: Array<{ field_id?: number; field_name?: string; field_value: string }>,
-): Promise<{ ok: boolean; mismatches: string[]; fields: Record<string, string> }> {
+  updates: Array<{
+    field_id?: number;
+    field_name?: string;
+    field_value: string;
+  }>,
+): Promise<{
+  ok: boolean;
+  mismatches: string[];
+  fields: Record<string, string>;
+}> {
   const expected = Object.fromEntries(
     updates
       .filter((fieldUpdate) => fieldUpdate.field_name)
-      .map((fieldUpdate) => [String(fieldUpdate.field_name), fieldUpdate.field_value]),
-  )
+      .map((fieldUpdate) => [
+        String(fieldUpdate.field_name),
+        fieldUpdate.field_value,
+      ]),
+  );
 
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+  const sleep = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms));
   const fieldsMatchExpected = (fields: Record<string, string>) =>
-    !leadAlertFieldMismatches(fields, expected).length
+    !leadAlertFieldMismatches(fields, expected).length;
 
   // Clear stale values first so repeat sends to the same subscriber cannot reuse
   // the previous lead's data inside ManyChat's Flow/template cache.
   const clearUpdates = updates
     .filter((fieldUpdate) => fieldUpdate.field_name)
-    .map((fieldUpdate) => ({ ...fieldUpdate, field_value: '-' }))
+    .map((fieldUpdate) => ({ ...fieldUpdate, field_value: "-" }));
   if (clearUpdates.length) {
-    await writeManyChatCustomFields(baseUrl, apiKey, subscriberId, clearUpdates)
-    await sleep(500)
+    await writeManyChatCustomFields(
+      baseUrl,
+      apiKey,
+      subscriberId,
+      clearUpdates,
+    );
+    await sleep(500);
   }
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    await writeManyChatCustomFields(baseUrl, apiKey, subscriberId, updates)
-    await sleep(attempt === 0 ? 800 : attempt === 1 ? 1200 : 1500)
-    const fields = await readManyChatSubscriberFields(baseUrl, apiKey, subscriberId)
-    const mismatches = leadAlertFieldMismatches(fields, expected)
+    await writeManyChatCustomFields(baseUrl, apiKey, subscriberId, updates);
+    await sleep(attempt === 0 ? 800 : attempt === 1 ? 1200 : 1500);
+    const fields = await readManyChatSubscriberFields(
+      baseUrl,
+      apiKey,
+      subscriberId,
+    );
+    const mismatches = leadAlertFieldMismatches(fields, expected);
     if (mismatches.length) {
-      console.warn(`[send_whatsapp] field verify attempt ${attempt + 1} failed:`, mismatches.join('; '))
-      continue
+      console.warn(
+        `[send_whatsapp] field verify attempt ${attempt + 1} failed:`,
+        mismatches.join("; "),
+      );
+      continue;
     }
     // Two stable reads — getInfo can be fresh while sendFlow still snapshots old values.
-    await sleep(1000)
-    const fieldsAgain = await readManyChatSubscriberFields(baseUrl, apiKey, subscriberId)
+    await sleep(1000);
+    const fieldsAgain = await readManyChatSubscriberFields(
+      baseUrl,
+      apiKey,
+      subscriberId,
+    );
     if (fieldsMatchExpected(fieldsAgain)) {
-      return { ok: true, mismatches: [], fields: fieldsAgain }
+      return { ok: true, mismatches: [], fields: fieldsAgain };
     }
-    console.warn('[send_whatsapp] field verify unstable between reads; retrying write')
+    console.warn(
+      "[send_whatsapp] field verify unstable between reads; retrying write",
+    );
   }
 
-  const fields = await readManyChatSubscriberFields(baseUrl, apiKey, subscriberId)
-  const mismatches = leadAlertFieldMismatches(fields, expected)
-  return { ok: false, mismatches, fields }
+  const fields = await readManyChatSubscriberFields(
+    baseUrl,
+    apiKey,
+    subscriberId,
+  );
+  const mismatches = leadAlertFieldMismatches(fields, expected);
+  return { ok: false, mismatches, fields };
 }
 
 async function removeManyChatTag(
@@ -463,22 +581,23 @@ async function removeManyChatTag(
 ): Promise<void> {
   try {
     await fetch(`${baseUrl}/subscriber/removeTag`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         subscriber_id: subscriberId,
         tag_id: tagId,
       }),
-    })
+    });
   } catch (removeErr) {
-    console.warn('[send_whatsapp] removeTag failed (continuing):', removeErr)
+    console.warn("[send_whatsapp] removeTag failed (continuing):", removeErr);
   }
 }
 
-const manyChatSleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const manyChatSleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 async function readManyChatSubscriberTagIds(
   baseUrl: string,
@@ -489,22 +608,22 @@ async function readManyChatSubscriberTagIds(
     const infoRes = await fetch(
       `${baseUrl}/subscriber/getInfo?subscriber_id=${encodeURIComponent(String(subscriberId))}`,
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
       },
-    )
-    if (!infoRes.ok) return []
-    const info = await infoRes.json()
-    const tags = info?.data?.tags
-    if (!Array.isArray(tags)) return []
+    );
+    if (!infoRes.ok) return [];
+    const info = await infoRes.json();
+    const tags = info?.data?.tags;
+    if (!Array.isArray(tags)) return [];
     return tags
       .map((tag: { id?: unknown }) => Number(tag?.id))
-      .filter((id: number) => Number.isFinite(id))
+      .filter((id: number) => Number.isFinite(id));
   } catch {
-    return []
+    return [];
   }
 }
 
@@ -515,21 +634,25 @@ async function waitForManyChatTagRemoved(
   tagId: number,
   opts?: { maxAttempts?: number; intervalMs?: number },
 ): Promise<{ removed: boolean; attempts: number }> {
-  const maxAttempts = opts?.maxAttempts ?? 12
-  const intervalMs = opts?.intervalMs ?? 750
+  const maxAttempts = opts?.maxAttempts ?? 12;
+  const intervalMs = opts?.intervalMs ?? 750;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const tagIds = await readManyChatSubscriberTagIds(baseUrl, apiKey, subscriberId)
+    const tagIds = await readManyChatSubscriberTagIds(
+      baseUrl,
+      apiKey,
+      subscriberId,
+    );
     if (!tagIds.includes(tagId)) {
-      return { removed: true, attempts: attempt + 1 }
+      return { removed: true, attempts: attempt + 1 };
     }
     if (attempt === 0 || attempt % 3 === 0) {
-      await removeManyChatTag(baseUrl, apiKey, subscriberId, tagId)
+      await removeManyChatTag(baseUrl, apiKey, subscriberId, tagId);
     }
-    await manyChatSleep(intervalMs)
+    await manyChatSleep(intervalMs);
   }
 
-  return { removed: false, attempts: maxAttempts }
+  return { removed: false, attempts: maxAttempts };
 }
 
 async function retriggerManyChatTag(
@@ -537,191 +660,248 @@ async function retriggerManyChatTag(
   apiKey: string,
   subscriberId: number,
   tagId: number,
-): Promise<{ tag_result: unknown; tag_wait: { removed: boolean; attempts: number } }> {
-  await removeManyChatTag(baseUrl, apiKey, subscriberId, tagId)
-  const tagWait = await waitForManyChatTagRemoved(baseUrl, apiKey, subscriberId, tagId)
+): Promise<{
+  tag_result: unknown;
+  tag_wait: { removed: boolean; attempts: number };
+}> {
+  await removeManyChatTag(baseUrl, apiKey, subscriberId, tagId);
+  const tagWait = await waitForManyChatTagRemoved(
+    baseUrl,
+    apiKey,
+    subscriberId,
+    tagId,
+  );
   if (!tagWait.removed) {
     console.warn(
       `[send_whatsapp] tag ${tagId} still on subscriber ${subscriberId} after wait; addTag anyway`,
-    )
+    );
   }
 
   const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       subscriber_id: subscriberId,
       tag_id: tagId,
     }),
-  })
-  const tagResult = await tagResponse.json().catch(() => ({}))
-  if (!tagResponse.ok || tagResult?.status !== 'success') {
-    throw new Error(`שגיאה בהוספת טאג ב-ManyChat: ${JSON.stringify(tagResult)}`)
+  });
+  const tagResult = await tagResponse.json().catch(() => ({}));
+  if (!tagResponse.ok || tagResult?.status !== "success") {
+    throw new Error(
+      `שגיאה בהוספת טאג ב-ManyChat: ${JSON.stringify(tagResult)}`,
+    );
   }
 
-  return { tag_result: tagResult, tag_wait: tagWait }
+  return { tag_result: tagResult, tag_wait: tagWait };
 }
 
 interface AutomationPayload {
-  trigger_type?: string
-  data?: any
-  tenant_id?: string
+  trigger_type?: string;
+  data?: any;
+  tenant_id?: string;
   // Support direct automation execution by ID
-  automationId?: string
-  payload?: any
+  automationId?: string;
+  payload?: any;
   // Source separation: 'crm' = only CRM automations, 'flow' = only the specific flow
-  source?: 'crm' | 'flow'
+  source?: "crm" | "flow";
 }
 
 const TASK_NOTIFICATION_TYPES = new Set([
-  'task_assigned',
-  'task_high_priority_reminder',
-  'task_high_priority_reminder_sent',
-  'task_completed',
-  'task_self_reminder',
-  'task_overdue',
-  'task_overdue_sent',
-  'task_collaborator_added',
-  'task_update_added',
-])
+  "task_assigned",
+  "task_high_priority_reminder",
+  "task_high_priority_reminder_sent",
+  "task_completed",
+  "task_self_reminder",
+  "task_overdue",
+  "task_overdue_sent",
+  "task_collaborator_added",
+  "task_update_added",
+]);
 
 const CLIENT_FOLLOW_UP_NOTIFICATION_TYPES = new Set([
-  'client_follow_up_reminder',
-  'client_follow_up_reminder_manager',
-])
+  "client_follow_up_reminder",
+  "client_follow_up_reminder_manager",
+]);
 
 async function resolveCarmenSenderForTenant(
   supabase: any,
   tenantId: string,
-): Promise<{ carmenStep: any | null; integration: any | null; reason?: string }> {
+): Promise<{
+  carmenStep: any | null;
+  integration: any | null;
+  reason?: string;
+}> {
   const { data: triggerSteps, error: triggerStepsError } = await supabase
-    .from('automation_flow_steps')
-    .select('automation_id, configuration, created_at')
-    .eq('tenant_id', tenantId)
-    .eq('step_type', 'trigger')
-    .eq('action_type', 'carmen_whatsapp_session')
-    .order('created_at', { ascending: true })
-  if (triggerStepsError) throw triggerStepsError
+    .from("automation_flow_steps")
+    .select("automation_id, configuration, created_at")
+    .eq("tenant_id", tenantId)
+    .eq("step_type", "trigger")
+    .eq("action_type", "carmen_whatsapp_session")
+    .order("created_at", { ascending: true });
+  if (triggerStepsError) throw triggerStepsError;
 
-  const automationIds = [...new Set((triggerSteps || []).map((step: any) => step.automation_id))]
+  const automationIds = [
+    ...new Set((triggerSteps || []).map((step: any) => step.automation_id)),
+  ];
   if (!automationIds.length) {
-    return { carmenStep: null, integration: null, reason: 'no Carmen flow' }
+    return { carmenStep: null, integration: null, reason: "no Carmen flow" };
   }
 
   const { data: activeAutomations, error: automationsError } = await supabase
-    .from('automations')
-    .select('id, name')
-    .in('id', automationIds)
-    .eq('active', true)
-  if (automationsError) throw automationsError
+    .from("automations")
+    .select("id, name")
+    .in("id", automationIds)
+    .eq("active", true);
+  if (automationsError) throw automationsError;
 
-  const activeIds = new Set((activeAutomations || []).map((automation: any) => automation.id))
+  const activeIds = new Set(
+    (activeAutomations || []).map((automation: any) => automation.id),
+  );
   const rankedSteps = (triggerSteps || [])
     .filter((step: any) => activeIds.has(step.automation_id))
     .sort((a: any, b: any) => {
-      const aAll = (a.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
-      const bAll = (b.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
-      return aAll - bAll
-    })
-  const carmenStep = rankedSteps[0]
+      const aAll =
+        (a.configuration?.carmen_scope_mode || "all") === "all" ? 0 : 1;
+      const bAll =
+        (b.configuration?.carmen_scope_mode || "all") === "all" ? 0 : 1;
+      return aAll - bAll;
+    });
+  const carmenStep = rankedSteps[0];
   if (!carmenStep) {
-    return { carmenStep: null, integration: null, reason: 'tenant Carmen flow is inactive' }
+    return {
+      carmenStep: null,
+      integration: null,
+      reason: "tenant Carmen flow is inactive",
+    };
   }
 
   const { data: actionStep, error: actionStepError } = await supabase
-    .from('automation_flow_steps')
-    .select('configuration')
-    .eq('automation_id', carmenStep.automation_id)
-    .eq('step_type', 'action')
-    .in('action_type', ['send_manus_message', 'send_greenapi_message', 'send_green_api_message'])
-    .order('created_at', { ascending: true })
+    .from("automation_flow_steps")
+    .select("configuration")
+    .eq("automation_id", carmenStep.automation_id)
+    .eq("step_type", "action")
+    .in("action_type", [
+      "send_manus_message",
+      "send_greenapi_message",
+      "send_green_api_message",
+    ])
+    .order("created_at", { ascending: true })
     .limit(1)
-    .maybeSingle()
-  if (actionStepError) throw actionStepError
+    .maybeSingle();
+  if (actionStepError) throw actionStepError;
 
-  const integrationId = actionStep?.configuration?.green_api_integration_id
-    || actionStep?.configuration?.integration_id
-    || carmenStep.configuration?.carmen_integration_id
-    || null
+  const integrationId =
+    actionStep?.configuration?.green_api_integration_id ||
+    actionStep?.configuration?.integration_id ||
+    carmenStep.configuration?.carmen_integration_id ||
+    null;
 
   let integrationQuery = supabase
-    .from('tenant_integrations')
-    .select('id, user_id')
-    .eq('tenant_id', tenantId)
-    .eq('is_active', true)
+    .from("tenant_integrations")
+    .select("id, user_id")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true);
   integrationQuery = integrationId
-    ? integrationQuery.eq('id', integrationId)
-    : integrationQuery.in('integration_type', ['green_api', 'greenapi', 'manus_wa', 'manuswa']).order('created_at', { ascending: false }).limit(1)
-  const { data: integrations, error: integrationError } = await integrationQuery
-  if (integrationError) throw integrationError
+    ? integrationQuery.eq("id", integrationId)
+    : integrationQuery
+        .in("integration_type", [
+          "green_api",
+          "greenapi",
+          "manus_wa",
+          "manuswa",
+        ])
+        .order("created_at", { ascending: false })
+        .limit(1);
+  const { data: integrations, error: integrationError } =
+    await integrationQuery;
+  if (integrationError) throw integrationError;
 
-  const integration = integrations?.[0]
+  const integration = integrations?.[0];
   if (!integration?.user_id) {
-    return { carmenStep, integration: null, reason: 'Carmen integration missing' }
+    return {
+      carmenStep,
+      integration: null,
+      reason: "Carmen integration missing",
+    };
   }
 
-  return { carmenStep, integration }
+  return { carmenStep, integration };
 }
 
-async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: any) {
-  const taskId = String(requestBody?.data?.task_id || '').trim()
-  if (!taskId) return { handled: false }
-  const notificationType = String(requestBody?.trigger_type || '')
-  if (!TASK_NOTIFICATION_TYPES.has(notificationType)) return { handled: false }
+async function sendTaskNotificationFromTenantCarmen(
+  supabase: any,
+  requestBody: any,
+) {
+  const taskId = String(requestBody?.data?.task_id || "").trim();
+  if (!taskId) return { handled: false };
+  const notificationType = String(requestBody?.trigger_type || "");
+  if (!TASK_NOTIFICATION_TYPES.has(notificationType)) return { handled: false };
 
   const { data: task, error: taskError } = await supabase
-    .from('tasks')
-    .select('id, title, notes, due_date, due_time, client_id, campaigner_id, sales_person_id, tenant_id, created_by, priority, status')
-    .eq('id', taskId)
-    .maybeSingle()
-  if (taskError) throw taskError
-  if (!task) return { handled: true, sent: false, reason: 'task not found' }
+    .from("tasks")
+    .select(
+      "id, title, notes, due_date, due_time, client_id, campaigner_id, sales_person_id, tenant_id, created_by, priority, status",
+    )
+    .eq("id", taskId)
+    .maybeSingle();
+  if (taskError) throw taskError;
+  if (!task) return { handled: true, sent: false, reason: "task not found" };
 
-  const overrideCampaignerId = String(requestBody?.data?.notify_campaigner_id || '').trim()
-  if (notificationType === 'task_update_added' && !overrideCampaignerId) {
-    const authorUserId = String(requestBody?.data?.user_id || '').trim()
-    let authorCampaignerId: string | null = null
-    let updaterName = String(requestBody?.data?.updater_name || '').trim()
+  const overrideCampaignerId = String(
+    requestBody?.data?.notify_campaigner_id || "",
+  ).trim();
+  if (notificationType === "task_update_added" && !overrideCampaignerId) {
+    const authorUserId = String(requestBody?.data?.user_id || "").trim();
+    let authorCampaignerId: string | null = null;
+    let updaterName = String(requestBody?.data?.updater_name || "").trim();
     if (authorUserId) {
       const { data: authorProfile, error: authorError } = await supabase
-        .from('profiles')
-        .select('campaigner_id, full_name')
-        .eq('id', authorUserId)
-        .maybeSingle()
-      if (authorError) throw authorError
-      authorCampaignerId = authorProfile?.campaigner_id || null
-      updaterName = updaterName || String(authorProfile?.full_name || '').trim()
+        .from("profiles")
+        .select("campaigner_id, full_name")
+        .eq("id", authorUserId)
+        .maybeSingle();
+      if (authorError) throw authorError;
+      authorCampaignerId = authorProfile?.campaigner_id || null;
+      updaterName =
+        updaterName || String(authorProfile?.full_name || "").trim();
     }
-    const recipientIds = new Set<string>()
+    const recipientIds = new Set<string>();
     if (task.campaigner_id && task.campaigner_id !== authorCampaignerId) {
-      recipientIds.add(task.campaigner_id)
+      recipientIds.add(task.campaigner_id);
     }
     const { data: collabs, error: collabError } = await supabase
-      .from('task_collaborators')
-      .select('campaigner_id')
-      .eq('task_id', task.id)
-    if (collabError) throw collabError
+      .from("task_collaborators")
+      .select("campaigner_id")
+      .eq("task_id", task.id);
+    if (collabError) throw collabError;
     for (const row of collabs || []) {
       if (row.campaigner_id && row.campaigner_id !== authorCampaignerId) {
-        recipientIds.add(row.campaigner_id)
+        recipientIds.add(row.campaigner_id);
       }
     }
     if (recipientIds.size === 0) {
-      return { handled: true, sent: false, reason: 'no peer recipients for task update', task_id: task.id }
+      return {
+        handled: true,
+        sent: false,
+        reason: "no peer recipients for task update",
+        task_id: task.id,
+      };
     }
-    const results = []
+    const results = [];
     for (const recipientId of recipientIds) {
-      results.push(await sendTaskNotificationFromTenantCarmen(supabase, {
-        ...requestBody,
-        data: {
-          ...(requestBody?.data || {}),
-          notify_campaigner_id: recipientId,
-          updater_name: updaterName,
-        },
-      }))
+      results.push(
+        await sendTaskNotificationFromTenantCarmen(supabase, {
+          ...requestBody,
+          data: {
+            ...(requestBody?.data || {}),
+            notify_campaigner_id: recipientId,
+            updater_name: updaterName,
+          },
+        }),
+      );
     }
     return {
       handled: true,
@@ -729,176 +909,227 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
       task_id: task.id,
       notification_type: notificationType,
       recipients: results,
-    }
+    };
   }
 
   // The client is the source of truth for the Carmen identity. A task can be
   // created while an owner is viewing another tenant, or for a cross-tenant
   // agency, so tasks.tenant_id is not reliable enough for outbound routing.
-  let client: any = null
+  let client: any = null;
   if (task.client_id) {
     const { data, error: clientError } = await supabase
-      .from('clients')
-      .select('id, name, tenant_id')
-      .eq('id', task.client_id)
-      .maybeSingle()
-    if (clientError) throw clientError
-    client = data
+      .from("clients")
+      .select("id, name, tenant_id")
+      .eq("id", task.client_id)
+      .maybeSingle();
+    if (clientError) throw clientError;
+    client = data;
   }
-  const notificationTenantId = client?.tenant_id || task.tenant_id
-  if (!notificationTenantId) return { handled: true, sent: false, reason: 'task tenant is missing' }
+  const notificationTenantId = client?.tenant_id || task.tenant_id;
+  if (!notificationTenantId)
+    return { handled: true, sent: false, reason: "task tenant is missing" };
 
-  let campaignerId = overrideCampaignerId || task.campaigner_id
+  let campaignerId = overrideCampaignerId || task.campaigner_id;
   if (!campaignerId && !task.sales_person_id && client?.id) {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Date().toISOString().slice(0, 10);
     const { data: team } = await supabase
-      .from('client_team')
-      .select('campaigner_id, role_on_account, start_date, end_date, created_at')
-      .eq('client_id', client.id)
+      .from("client_team")
+      .select(
+        "campaigner_id, role_on_account, start_date, end_date, created_at",
+      )
+      .eq("client_id", client.id)
       .or(`start_date.is.null,start_date.lte.${today}`)
       .or(`end_date.is.null,end_date.gte.${today}`)
-      .order('created_at', { ascending: true })
+      .order("created_at", { ascending: true });
     const preferred = (team || []).find((row: any) =>
-      /campaign|ppc|קמפיינ/i.test(String(row.role_on_account || '')))
-    campaignerId = preferred?.campaigner_id || team?.[0]?.campaigner_id || null
+      /campaign|ppc|קמפיינ/i.test(String(row.role_on_account || "")),
+    );
+    campaignerId = preferred?.campaigner_id || team?.[0]?.campaigner_id || null;
   }
 
-  let campaigner: any = null
+  let campaigner: any = null;
   if (campaignerId) {
     const { data, error: campaignerError } = await supabase
-      .from('campaigners')
-      .select('id, full_name, phone, active, tenant_id')
-      .eq('id', campaignerId)
-      .maybeSingle()
-    if (campaignerError) throw campaignerError
-    campaigner = data
+      .from("campaigners")
+      .select("id, full_name, phone, active, tenant_id")
+      .eq("id", campaignerId)
+      .maybeSingle();
+    if (campaignerError) throw campaignerError;
+    campaigner = data;
   }
 
-  let salesPerson: any = null
+  let salesPerson: any = null;
   if (!campaigner && task.sales_person_id) {
     const { data, error: salesPersonError } = await supabase
-      .from('sales_people')
-      .select('id, full_name, phone, active, tenant_id')
-      .eq('id', task.sales_person_id)
-      .maybeSingle()
-    if (salesPersonError) throw salesPersonError
-    salesPerson = data
+      .from("sales_people")
+      .select("id, full_name, phone, active, tenant_id")
+      .eq("id", task.sales_person_id)
+      .maybeSingle();
+    if (salesPersonError) throw salesPersonError;
+    salesPerson = data;
   }
 
-  let creatorProfile: any = null
-  let creatorName = ''
-  let creatorPhone = ''
-  let creatorHomeTenantId: string | null = null
+  let creatorProfile: any = null;
+  let creatorName = "";
+  let creatorPhone = "";
+  let creatorHomeTenantId: string | null = null;
   if (task.created_by) {
     const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, full_name, phone, campaigner_id, sales_person_id')
-      .eq('id', task.created_by)
-      .maybeSingle()
-    if (profileError) throw profileError
-    creatorProfile = profile
-    creatorName = String(profile?.full_name || '').trim()
-    creatorPhone = String(profile?.phone || '').trim()
+      .from("profiles")
+      .select("id, full_name, phone, campaigner_id, sales_person_id")
+      .eq("id", task.created_by)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    creatorProfile = profile;
+    creatorName = String(profile?.full_name || "").trim();
+    creatorPhone = String(profile?.phone || "").trim();
     if (profile?.campaigner_id) {
-      const { data: creatorCampaigner, error: creatorCampaignerError } = await supabase
-        .from('campaigners')
-        .select('full_name, phone, tenant_id')
-        .eq('id', profile.campaigner_id)
-        .maybeSingle()
-      if (creatorCampaignerError) throw creatorCampaignerError
-      creatorName = creatorName || String(creatorCampaigner?.full_name || '').trim()
-      creatorPhone = creatorPhone || String(creatorCampaigner?.phone || '').trim()
-      creatorHomeTenantId = creatorCampaigner?.tenant_id || null
+      const { data: creatorCampaigner, error: creatorCampaignerError } =
+        await supabase
+          .from("campaigners")
+          .select("full_name, phone, tenant_id")
+          .eq("id", profile.campaigner_id)
+          .maybeSingle();
+      if (creatorCampaignerError) throw creatorCampaignerError;
+      creatorName =
+        creatorName || String(creatorCampaigner?.full_name || "").trim();
+      creatorPhone =
+        creatorPhone || String(creatorCampaigner?.phone || "").trim();
+      creatorHomeTenantId = creatorCampaigner?.tenant_id || null;
     }
-    if (profile?.sales_person_id && (!creatorName || !creatorPhone || !creatorHomeTenantId)) {
-      const { data: creatorSalesPerson, error: creatorSalesPersonError } = await supabase
-        .from('sales_people')
-        .select('full_name, phone, tenant_id')
-        .eq('id', profile.sales_person_id)
-        .maybeSingle()
-      if (creatorSalesPersonError) throw creatorSalesPersonError
-      creatorName = creatorName || String(creatorSalesPerson?.full_name || '').trim()
-      creatorPhone = creatorPhone || String(creatorSalesPerson?.phone || '').trim()
-      creatorHomeTenantId = creatorHomeTenantId || creatorSalesPerson?.tenant_id || null
+    if (
+      profile?.sales_person_id &&
+      (!creatorName || !creatorPhone || !creatorHomeTenantId)
+    ) {
+      const { data: creatorSalesPerson, error: creatorSalesPersonError } =
+        await supabase
+          .from("sales_people")
+          .select("full_name, phone, tenant_id")
+          .eq("id", profile.sales_person_id)
+          .maybeSingle();
+      if (creatorSalesPersonError) throw creatorSalesPersonError;
+      creatorName =
+        creatorName || String(creatorSalesPerson?.full_name || "").trim();
+      creatorPhone =
+        creatorPhone || String(creatorSalesPerson?.phone || "").trim();
+      creatorHomeTenantId =
+        creatorHomeTenantId || creatorSalesPerson?.tenant_id || null;
     }
   }
 
-  if (notificationType === 'task_collaborator_added') {
+  if (notificationType === "task_collaborator_added") {
     if (!overrideCampaignerId) {
-      return { handled: true, sent: false, reason: 'notify_campaigner_id missing', task_id: task.id }
+      return {
+        handled: true,
+        sent: false,
+        reason: "notify_campaigner_id missing",
+        task_id: task.id,
+      };
     }
-    const adderUserId = String(requestBody?.data?.user_id || '').trim()
+    const adderUserId = String(requestBody?.data?.user_id || "").trim();
     if (adderUserId) {
       const { data: adderProfile, error: adderError } = await supabase
-        .from('profiles')
-        .select('full_name, campaigner_id')
-        .eq('id', adderUserId)
-        .maybeSingle()
-      if (adderError) throw adderError
-      if (adderProfile?.full_name) creatorName = String(adderProfile.full_name).trim()
-      if (adderProfile?.campaigner_id && adderProfile.campaigner_id === (overrideCampaignerId || task.campaigner_id)) {
-        return { handled: true, sent: false, reason: 'self collaborator skip', task_id: task.id }
+        .from("profiles")
+        .select("full_name, campaigner_id")
+        .eq("id", adderUserId)
+        .maybeSingle();
+      if (adderError) throw adderError;
+      if (adderProfile?.full_name)
+        creatorName = String(adderProfile.full_name).trim();
+      if (
+        adderProfile?.campaigner_id &&
+        adderProfile.campaigner_id ===
+          (overrideCampaignerId || task.campaigner_id)
+      ) {
+        return {
+          handled: true,
+          sent: false,
+          reason: "self collaborator skip",
+          task_id: task.id,
+        };
       }
     }
   }
 
-  const notifyCreator = ['task_high_priority_reminder_sent', 'task_completed', 'task_overdue_sent'].includes(notificationType)
-  let recipient: { id: string | null; full_name: string; phone: string } | null = null
+  const notifyCreator = [
+    "task_high_priority_reminder_sent",
+    "task_completed",
+    "task_overdue_sent",
+  ].includes(notificationType);
+  let recipient: {
+    id: string | null;
+    full_name: string;
+    phone: string;
+  } | null = null;
   if (notifyCreator) {
     if (!task.created_by) {
-      return { handled: true, sent: false, reason: 'task creator is missing', tenant_id: notificationTenantId }
+      return {
+        handled: true,
+        sent: false,
+        reason: "task creator is missing",
+        tenant_id: notificationTenantId,
+      };
     }
     if (creatorPhone) {
-      recipient = { id: creatorProfile?.id || task.created_by, full_name: creatorName, phone: creatorPhone }
+      recipient = {
+        id: creatorProfile?.id || task.created_by,
+        full_name: creatorName,
+        phone: creatorPhone,
+      };
     }
   } else if (campaigner?.active && campaigner?.phone) {
     recipient = {
       id: campaigner.id,
-      full_name: String(campaigner.full_name || ''),
+      full_name: String(campaigner.full_name || ""),
       phone: String(campaigner.phone),
-    }
+    };
   } else if (salesPerson?.active && salesPerson?.phone) {
     recipient = {
       id: salesPerson.id,
-      full_name: String(salesPerson.full_name || ''),
+      full_name: String(salesPerson.full_name || ""),
       phone: String(salesPerson.phone),
-    }
+    };
   }
 
   if (!recipient) {
     return {
       handled: true,
       sent: false,
-      reason: notifyCreator ? 'task creator phone is missing' : 'assignee is missing, inactive, or has no phone',
+      reason: notifyCreator
+        ? "task creator phone is missing"
+        : "assignee is missing, inactive, or has no phone",
       tenant_id: notificationTenantId,
       campaigner_id: campaignerId,
       sales_person_id: task.sales_person_id,
-    }
+    };
   }
 
   const deliveryRecipientKey = notifyCreator
-    ? `creator:${task.created_by || ''}`
+    ? `creator:${task.created_by || ""}`
     : taskNotificationRecipientKey({
-      notifyCampaignerId: overrideCampaignerId,
-      campaignerId: campaigner?.id || task.campaigner_id,
-      salesPersonId: task.sales_person_id,
-      eventKey: notificationType === 'task_update_added'
-        ? taskUpdateEventKey(String(requestBody?.data?.update_content || ''))
-        : null,
-    })
+        notifyCampaignerId: overrideCampaignerId,
+        campaignerId: campaigner?.id || task.campaigner_id,
+        salesPersonId: task.sales_person_id,
+        eventKey:
+          notificationType === "task_update_added"
+            ? taskUpdateEventKey(
+                String(requestBody?.data?.update_content || ""),
+              )
+            : null,
+      });
   const deliveryClaim = await claimTaskNotificationDelivery(supabase, {
     taskId: task.id,
     notificationType,
     recipientKey: deliveryRecipientKey,
-  })
-  if (deliveryClaim === 'duplicate') {
+  });
+  if (deliveryClaim === "duplicate") {
     return {
       handled: true,
       sent: false,
-      reason: 'duplicate task notification suppressed',
+      reason: "duplicate task notification suppressed",
       task_id: task.id,
       notification_type: notificationType,
-    }
+    };
   }
 
   // Carmen sender = the recipient's own tenant line whenever that tenant runs an
@@ -911,22 +1142,25 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     campaignerTenantId: campaigner?.tenant_id || null,
     salesPersonTenantId: salesPerson?.tenant_id || null,
     fallbackTenantId: notificationTenantId,
-  })
+  });
 
-  let senderTenantId: string | null = null
-  let carmenStep: any = null
-  let integration: any = null
-  const senderReasons = new Map<string, string>()
+  let senderTenantId: string | null = null;
+  let carmenStep: any = null;
+  let integration: any = null;
+  const senderReasons = new Map<string, string>();
 
   for (const candidateTenantId of senderTenantCandidates) {
-    const resolved = await resolveCarmenSenderForTenant(supabase, candidateTenantId)
+    const resolved = await resolveCarmenSenderForTenant(
+      supabase,
+      candidateTenantId,
+    );
     if (resolved.carmenStep && resolved.integration?.user_id) {
-      senderTenantId = candidateTenantId
-      carmenStep = resolved.carmenStep
-      integration = resolved.integration
-      break
+      senderTenantId = candidateTenantId;
+      carmenStep = resolved.carmenStep;
+      integration = resolved.integration;
+      break;
     }
-    if (resolved.reason) senderReasons.set(candidateTenantId, resolved.reason)
+    if (resolved.reason) senderReasons.set(candidateTenantId, resolved.reason);
   }
 
   if (!senderTenantId || !carmenStep || !integration) {
@@ -934,16 +1168,22 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
       taskId: task.id,
       notificationType,
       recipientKey: deliveryRecipientKey,
-    })
-    const reason = senderReasons.get(notificationTenantId)
-      || [...senderReasons.values()].pop()
-      || null
-    if (reason === 'tenant Carmen flow is inactive') {
-      return { handled: true, sent: false, reason, tenant_id: notificationTenantId }
+    });
+    const reason =
+      senderReasons.get(notificationTenantId) ||
+      [...senderReasons.values()].pop() ||
+      null;
+    if (reason === "tenant Carmen flow is inactive") {
+      return {
+        handled: true,
+        sent: false,
+        reason,
+        tenant_id: notificationTenantId,
+      };
     }
     // Let the regular task_assigned automation path handle tenants that do not
     // use a Carmen WhatsApp flow.
-    return { handled: false }
+    return { handled: false };
   }
 
   // Link tenant = recipient's home board (campaigner tenant), never Carmen/DMM
@@ -954,23 +1194,23 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     campaignerTenantId: campaigner?.tenant_id || null,
     salesPersonTenantId: salesPerson?.tenant_id || null,
     fallbackTenantId: notificationTenantId,
-  })
-  let recipientTenantSlug: string | null = null
+  });
+  let recipientTenantSlug: string | null = null;
   if (linkTenantId) {
     const { data: linkTenant, error: linkTenantError } = await supabase
-      .from('tenants')
-      .select('slug')
-      .eq('id', linkTenantId)
-      .maybeSingle()
-    if (linkTenantError) throw linkTenantError
-    recipientTenantSlug = linkTenant?.slug || null
+      .from("tenants")
+      .select("slug")
+      .eq("id", linkTenantId)
+      .maybeSingle();
+    if (linkTenantError) throw linkTenantError;
+    recipientTenantSlug = linkTenant?.slug || null;
   }
 
   const message = formatTaskNotificationMessage(
     notificationType,
     task,
-    client?.name || 'משימה כללית',
-    campaigner?.full_name || salesPerson?.full_name || '',
+    client?.name || "משימה כללית",
+    campaigner?.full_name || salesPerson?.full_name || "",
     recipient.full_name,
     creatorName,
     recipientTenantSlug,
@@ -978,26 +1218,26 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
       updateContent: requestBody?.data?.update_content,
       updaterName: requestBody?.data?.updater_name,
     },
-  )
+  );
   const sent = await sendCarmenReplyViaActionStep({
     supabase,
     automationId: carmenStep.automation_id,
     tenantId: senderTenantId,
     connectionUserId: integration.user_id,
-    chatId: `${String(recipient.phone).replace(/\D/g, '')}@c.us`,
+    chatId: `${String(recipient.phone).replace(/\D/g, "")}@c.us`,
     phoneNumber: recipient.phone,
     isGroup: false,
     message,
-  })
+  });
   if (!sent) {
     await releaseTaskNotificationDelivery(supabase, {
       taskId: task.id,
       notificationType,
       recipientKey: deliveryRecipientKey,
-    })
+    });
   }
 
-  console.log('[task-notification-carmen]', {
+  console.log("[task-notification-carmen]", {
     notification_type: notificationType,
     task_id: task.id,
     client_id: client?.id || null,
@@ -1008,7 +1248,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     campaigner_id: campaigner?.id || null,
     recipient_id: recipient.id,
     sent,
-  })
+  });
   return {
     handled: true,
     sent,
@@ -1021,491 +1261,669 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     recipient_tenant_slug: recipientTenantSlug,
     campaigner_id: campaigner?.id || null,
     recipient_id: recipient.id,
-  }
+  };
 }
 
-async function sendClientFollowUpFromTenantCarmen(supabase: any, requestBody: any) {
-  const clientId = String(requestBody?.data?.client_id || '').trim()
-  if (!clientId) return { handled: false }
-  const notificationType = String(requestBody?.trigger_type || '')
-  if (!CLIENT_FOLLOW_UP_NOTIFICATION_TYPES.has(notificationType)) return { handled: false }
+async function sendClientFollowUpFromTenantCarmen(
+  supabase: any,
+  requestBody: any,
+) {
+  const clientId = String(requestBody?.data?.client_id || "").trim();
+  if (!clientId) return { handled: false };
+  const notificationType = String(requestBody?.trigger_type || "");
+  if (!CLIENT_FOLLOW_UP_NOTIFICATION_TYPES.has(notificationType))
+    return { handled: false };
 
   const { data: client, error: clientError } = await supabase
-    .from('clients')
-    .select('id, name, tenant_id, agency_id, follow_up_date, status')
-    .eq('id', clientId)
-    .maybeSingle()
-  if (clientError) throw clientError
-  if (!client) return { handled: true, sent: false, reason: 'client not found' }
-  if (!client.tenant_id) return { handled: true, sent: false, reason: 'client tenant is missing' }
+    .from("clients")
+    .select("id, name, tenant_id, agency_id, follow_up_date, status")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (clientError) throw clientError;
+  if (!client)
+    return { handled: true, sent: false, reason: "client not found" };
+  if (!client.tenant_id)
+    return { handled: true, sent: false, reason: "client tenant is missing" };
 
-  const recipientPhone = String(requestBody?.data?.recipient_phone || '').trim()
-  const recipientName = String(requestBody?.data?.recipient_name || '').trim()
+  const recipientPhone = String(
+    requestBody?.data?.recipient_phone || "",
+  ).trim();
+  const recipientName = String(requestBody?.data?.recipient_name || "").trim();
   if (!recipientPhone) {
-    return { handled: true, sent: false, reason: 'recipient phone is missing', tenant_id: client.tenant_id }
+    return {
+      handled: true,
+      sent: false,
+      reason: "recipient phone is missing",
+      tenant_id: client.tenant_id,
+    };
   }
 
   const assigneeNames = Array.isArray(requestBody?.data?.assignee_names)
-    ? requestBody.data.assignee_names.map((name: unknown) => String(name || '').trim()).filter(Boolean)
-    : []
+    ? requestBody.data.assignee_names
+        .map((name: unknown) => String(name || "").trim())
+        .filter(Boolean)
+    : [];
 
   const { data: triggerSteps, error: triggerStepsError } = await supabase
-    .from('automation_flow_steps')
-    .select('automation_id, configuration, created_at')
-    .eq('tenant_id', client.tenant_id)
-    .eq('step_type', 'trigger')
-    .eq('action_type', 'carmen_whatsapp_session')
-    .order('created_at', { ascending: true })
-  if (triggerStepsError) throw triggerStepsError
+    .from("automation_flow_steps")
+    .select("automation_id, configuration, created_at")
+    .eq("tenant_id", client.tenant_id)
+    .eq("step_type", "trigger")
+    .eq("action_type", "carmen_whatsapp_session")
+    .order("created_at", { ascending: true });
+  if (triggerStepsError) throw triggerStepsError;
 
-  const automationIds = [...new Set((triggerSteps || []).map((step: any) => step.automation_id))]
-  if (!automationIds.length) return { handled: false }
+  const automationIds = [
+    ...new Set((triggerSteps || []).map((step: any) => step.automation_id)),
+  ];
+  if (!automationIds.length) return { handled: false };
 
   const { data: activeAutomations, error: automationsError } = await supabase
-    .from('automations')
-    .select('id, name')
-    .in('id', automationIds)
-    .eq('active', true)
-  if (automationsError) throw automationsError
-  const activeIds = new Set((activeAutomations || []).map((automation: any) => automation.id))
+    .from("automations")
+    .select("id, name")
+    .in("id", automationIds)
+    .eq("active", true);
+  if (automationsError) throw automationsError;
+  const activeIds = new Set(
+    (activeAutomations || []).map((automation: any) => automation.id),
+  );
   const rankedSteps = (triggerSteps || [])
     .filter((step: any) => activeIds.has(step.automation_id))
     .sort((a: any, b: any) => {
-      const aAll = (a.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
-      const bAll = (b.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
-      return aAll - bAll
-    })
-  const carmenStep = rankedSteps[0]
+      const aAll =
+        (a.configuration?.carmen_scope_mode || "all") === "all" ? 0 : 1;
+      const bAll =
+        (b.configuration?.carmen_scope_mode || "all") === "all" ? 0 : 1;
+      return aAll - bAll;
+    });
+  const carmenStep = rankedSteps[0];
   if (!carmenStep) {
-    return { handled: true, sent: false, reason: 'tenant Carmen flow is inactive', tenant_id: client.tenant_id }
+    return {
+      handled: true,
+      sent: false,
+      reason: "tenant Carmen flow is inactive",
+      tenant_id: client.tenant_id,
+    };
   }
 
   const { data: actionStep, error: actionStepError } = await supabase
-    .from('automation_flow_steps')
-    .select('configuration')
-    .eq('automation_id', carmenStep.automation_id)
-    .eq('step_type', 'action')
-    .in('action_type', ['send_manus_message', 'send_greenapi_message', 'send_green_api_message'])
-    .order('created_at', { ascending: true })
+    .from("automation_flow_steps")
+    .select("configuration")
+    .eq("automation_id", carmenStep.automation_id)
+    .eq("step_type", "action")
+    .in("action_type", [
+      "send_manus_message",
+      "send_greenapi_message",
+      "send_green_api_message",
+    ])
+    .order("created_at", { ascending: true })
     .limit(1)
-    .maybeSingle()
-  if (actionStepError) throw actionStepError
-  const integrationId = actionStep?.configuration?.green_api_integration_id
-    || actionStep?.configuration?.integration_id
-    || carmenStep.configuration?.carmen_integration_id
-    || null
+    .maybeSingle();
+  if (actionStepError) throw actionStepError;
+  const integrationId =
+    actionStep?.configuration?.green_api_integration_id ||
+    actionStep?.configuration?.integration_id ||
+    carmenStep.configuration?.carmen_integration_id ||
+    null;
 
   let integrationQuery = supabase
-    .from('tenant_integrations')
-    .select('id, user_id')
-    .eq('tenant_id', client.tenant_id)
-    .eq('is_active', true)
+    .from("tenant_integrations")
+    .select("id, user_id")
+    .eq("tenant_id", client.tenant_id)
+    .eq("is_active", true);
   integrationQuery = integrationId
-    ? integrationQuery.eq('id', integrationId)
-    : integrationQuery.in('integration_type', ['green_api', 'greenapi', 'manus_wa', 'manuswa']).order('created_at', { ascending: false }).limit(1)
-  const { data: integrations, error: integrationError } = await integrationQuery
-  if (integrationError) throw integrationError
-  const integration = integrations?.[0]
-  if (!integration?.user_id) return { handled: false }
+    ? integrationQuery.eq("id", integrationId)
+    : integrationQuery
+        .in("integration_type", [
+          "green_api",
+          "greenapi",
+          "manus_wa",
+          "manuswa",
+        ])
+        .order("created_at", { ascending: false })
+        .limit(1);
+  const { data: integrations, error: integrationError } =
+    await integrationQuery;
+  if (integrationError) throw integrationError;
+  const integration = integrations?.[0];
+  if (!integration?.user_id) return { handled: false };
 
   const message = formatClientFollowUpMessage(
     notificationType,
     client,
     recipientName,
     assigneeNames,
-  )
+  );
   const sent = await sendCarmenReplyViaActionStep({
     supabase,
     automationId: carmenStep.automation_id,
     tenantId: client.tenant_id,
     connectionUserId: integration.user_id,
-    chatId: `${String(recipientPhone).replace(/\D/g, '')}@c.us`,
+    chatId: `${String(recipientPhone).replace(/\D/g, "")}@c.us`,
     phoneNumber: recipientPhone,
     isGroup: false,
     message,
-  })
+  });
 
-  console.log('[client-follow-up-carmen]', {
+  console.log("[client-follow-up-carmen]", {
     notification_type: notificationType,
     client_id: client.id,
     tenant_id: client.tenant_id,
     recipient_phone: recipientPhone,
     sent,
-  })
+  });
   return {
     handled: true,
     sent,
     client_id: client.id,
     notification_type: notificationType,
     tenant_id: client.tenant_id,
-  }
+  };
 }
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const requestBody = await req.json()
+    const requestBody = await req.json();
 
     // Backward-compat alias: old name → new name
-    if (requestBody.trigger_type === 'ad_account_billing_issue') {
-      requestBody.trigger_type = 'ad_account_blocked'
+    if (requestBody.trigger_type === "ad_account_billing_issue") {
+      requestBody.trigger_type = "ad_account_blocked";
     }
 
     if (TASK_NOTIFICATION_TYPES.has(requestBody.trigger_type)) {
-      const taskNotification = await sendTaskNotificationFromTenantCarmen(supabase, requestBody)
+      const taskNotification = await sendTaskNotificationFromTenantCarmen(
+        supabase,
+        requestBody,
+      );
       if (taskNotification.handled) {
         return new Response(JSON.stringify(taskNotification), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: taskNotification.sent ? 200 : 202,
-        })
+        });
       }
     }
 
     if (CLIENT_FOLLOW_UP_NOTIFICATION_TYPES.has(requestBody.trigger_type)) {
-      const clientFollowUp = await sendClientFollowUpFromTenantCarmen(supabase, requestBody)
+      const clientFollowUp = await sendClientFollowUpFromTenantCarmen(
+        supabase,
+        requestBody,
+      );
       if (clientFollowUp.handled) {
         return new Response(JSON.stringify(clientFollowUp), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: clientFollowUp.sent ? 200 : 202,
-        })
+        });
       }
     }
 
     // ===== AUTOMATION SAFETY GUARDS =====
-    const MAX_EXECUTION_DEPTH = 10
-    const MAX_ACTIONS_PER_RUN = 50
-    const MAX_RUNTIME_SECONDS = 60
-    const executionStartTime = Date.now()
+    const MAX_EXECUTION_DEPTH = 10;
+    const MAX_ACTIONS_PER_RUN = 50;
+    const MAX_RUNTIME_SECONDS = 60;
+    const executionStartTime = Date.now();
 
     // Extract execution context for loop detection
-    const executionId = requestBody._execution_id || crypto.randomUUID()
-    const executionDepth = requestBody._execution_depth || 0
-    const executionChain: string[] = requestBody._execution_chain || []
+    const executionId = requestBody._execution_id || crypto.randomUUID();
+    const executionDepth = requestBody._execution_depth || 0;
+    const executionChain: string[] = requestBody._execution_chain || [];
 
     // Guard: max depth
     if (executionDepth >= MAX_EXECUTION_DEPTH) {
-      console.error(`🛑 SAFETY: Max execution depth (${MAX_EXECUTION_DEPTH}) reached. Aborting to prevent infinite recursion.`)
+      console.error(
+        `🛑 SAFETY: Max execution depth (${MAX_EXECUTION_DEPTH}) reached. Aborting to prevent infinite recursion.`,
+      );
       return new Response(
-        JSON.stringify({ error: 'Max automation depth exceeded', depth: executionDepth }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
-      )
+        JSON.stringify({
+          error: "Max automation depth exceeded",
+          depth: executionDepth,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429,
+        },
+      );
     }
 
     // Guard: loop detection - same trigger+entity already in chain
-    const entityKey = requestBody.data?.lead_id || requestBody.data?.entity_id || requestBody.data?.group_id || requestBody.data?.client_id || 'no-entity'
-    const loopKey = `${requestBody.trigger_type || requestBody.automationId}:${entityKey}`
+    const entityKey =
+      requestBody.data?.lead_id ||
+      requestBody.data?.entity_id ||
+      requestBody.data?.group_id ||
+      requestBody.data?.client_id ||
+      "no-entity";
+    const loopKey = `${requestBody.trigger_type || requestBody.automationId}:${entityKey}`;
     if (executionChain.includes(loopKey)) {
-      console.error(`🛑 SAFETY: Loop detected! Key "${loopKey}" already in execution chain: [${executionChain.join(' → ')}]`)
+      console.error(
+        `🛑 SAFETY: Loop detected! Key "${loopKey}" already in execution chain: [${executionChain.join(" → ")}]`,
+      );
       return new Response(
-        JSON.stringify({ error: 'Automation loop detected', loop_key: loopKey }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
-      )
+        JSON.stringify({
+          error: "Automation loop detected",
+          loop_key: loopKey,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429,
+        },
+      );
     }
 
     // Guard: cooldown - prevent same trigger+entity from firing again within 30 seconds
-    if (requestBody.trigger_type === 'whatsapp_message_received' && entityKey !== 'no-entity') {
-      const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString()
+    if (
+      requestBody.trigger_type === "whatsapp_message_received" &&
+      entityKey !== "no-entity"
+    ) {
+      const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
       const { data: recentExec } = await supabase
-        .from('automation_executions')
-        .select('id')
-        .eq('tenant_id', requestBody.tenant_id)
-        .eq('trigger_type', 'whatsapp_message_received')
-        .eq('entity_id', entityKey)
-        .gte('started_at', thirtySecondsAgo)
-        .eq('status', 'running')
+        .from("automation_executions")
+        .select("id")
+        .eq("tenant_id", requestBody.tenant_id)
+        .eq("trigger_type", "whatsapp_message_received")
+        .eq("entity_id", entityKey)
+        .gte("started_at", thirtySecondsAgo)
+        .eq("status", "running")
         .limit(1)
-        .maybeSingle()
-      
+        .maybeSingle();
+
       if (recentExec) {
         return new Response(
-          JSON.stringify({ error: 'Cooldown active', entity: entityKey }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
-        )
+          JSON.stringify({ error: "Cooldown active", entity: entityKey }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 429,
+          },
+        );
       }
     }
 
-    const { data: execRecord } = await supabase.from('automation_executions').insert({
-      execution_id: executionId,
-      tenant_id: requestBody.tenant_id || null,
-      automation_id: requestBody.automationId || null,
-      trigger_type: requestBody.trigger_type || null,
-      entity_id: entityKey !== 'no-entity' ? entityKey : null,
-      depth: executionDepth,
-      status: 'running',
-      started_at: new Date().toISOString(),
-    }).select('id').single()
+    const { data: execRecord } = await supabase
+      .from("automation_executions")
+      .insert({
+        execution_id: executionId,
+        tenant_id: requestBody.tenant_id || null,
+        automation_id: requestBody.automationId || null,
+        trigger_type: requestBody.trigger_type || null,
+        entity_id: entityKey !== "no-entity" ? entityKey : null,
+        depth: executionDepth,
+        status: "running",
+        started_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
 
     // ===== END SAFETY GUARDS =====
 
-    let automations: any[] = []
-    let payloadData: any
-    let tenantId: string
+    let automations: any[] = [];
+    let payloadData: any;
+    let tenantId: string;
 
-    const validateFlowTriggerConfig = (config: any, data: any, hasActiveCarmenSession?: boolean): { matches: boolean; reason?: string } => {
-      const safeConfig = config || {}
-      const safeData = data || {}
+    const validateFlowTriggerConfig = (
+      config: any,
+      data: any,
+      hasActiveCarmenSession?: boolean,
+    ): { matches: boolean; reason?: string } => {
+      const safeConfig = config || {};
+      const safeData = data || {};
 
       // ═══════════════════════════════════════════════════════════
       // CARMEN SCOPE ENFORCEMENT — CRITICAL SECURITY CHECK
       // Runs BEFORE session bypass. Prevents agent from responding
       // to wrong groups/phones even if a session is active.
       // ═══════════════════════════════════════════════════════════
-      const scopeMode = safeConfig.carmen_scope_mode
-      const groupCandidates: string[] = [safeData.group_id, safeData.group_chat_id].filter(Boolean) as string[]
-      if (scopeMode && scopeMode !== 'all') {
-        if (scopeMode === 'specific_group') {
-          const allowedGroupIds: string[] = Array.isArray(safeConfig.carmen_allowed_group_ids) && safeConfig.carmen_allowed_group_ids.length > 0
-            ? safeConfig.carmen_allowed_group_ids
-            : (safeConfig.carmen_allowed_group_id ? [safeConfig.carmen_allowed_group_id] : [])
+      const scopeMode = safeConfig.carmen_scope_mode;
+      const groupCandidates: string[] = [
+        safeData.group_id,
+        safeData.group_chat_id,
+      ].filter(Boolean) as string[];
+      if (scopeMode && scopeMode !== "all") {
+        if (scopeMode === "specific_group") {
+          const allowedGroupIds: string[] =
+            Array.isArray(safeConfig.carmen_allowed_group_ids) &&
+            safeConfig.carmen_allowed_group_ids.length > 0
+              ? safeConfig.carmen_allowed_group_ids
+              : safeConfig.carmen_allowed_group_id
+                ? [safeConfig.carmen_allowed_group_id]
+                : [];
           if (allowedGroupIds.length === 0) {
-            console.warn('[CARMEN SCOPE] specific_group configured but no group IDs set — blocking')
-            return { matches: false, reason: 'carmen_scope_no_group_configured' }
+            console.warn(
+              "[CARMEN SCOPE] specific_group configured but no group IDs set — blocking",
+            );
+            return {
+              matches: false,
+              reason: "carmen_scope_no_group_configured",
+            };
           }
-          if (groupCandidates.length === 0 || !allowedGroupIds.some((id: string) => groupCandidates.includes(id))) {
-            return { matches: false, reason: 'carmen_scope_group_mismatch' }
+          if (
+            groupCandidates.length === 0 ||
+            !allowedGroupIds.some((id: string) => groupCandidates.includes(id))
+          ) {
+            return { matches: false, reason: "carmen_scope_group_mismatch" };
           }
-        } else if (scopeMode === 'specific_phone') {
+        } else if (scopeMode === "specific_phone") {
           // Group messages must NOT be validated against a phone whitelist —
           // group scoping is a separate automation. Silently skip this automation.
-          if (safeData.group_id || safeData.group_chat_id || safeData.contact_type === 'group') {
-            return { matches: false, reason: 'carmen_scope_phone_ignored_in_group' }
+          if (
+            safeData.group_id ||
+            safeData.group_chat_id ||
+            safeData.contact_type === "group"
+          ) {
+            return {
+              matches: false,
+              reason: "carmen_scope_phone_ignored_in_group",
+            };
           }
-          const allowedPhones: string[] = safeConfig.carmen_allowed_phones || []
+          const allowedPhones: string[] =
+            safeConfig.carmen_allowed_phones || [];
           if (allowedPhones.length === 0) {
-            console.warn('[CARMEN SCOPE] specific_phone configured but no phones listed — blocking')
-            return { matches: false, reason: 'carmen_scope_no_phones_configured' }
+            console.warn(
+              "[CARMEN SCOPE] specific_phone configured but no phones listed — blocking",
+            );
+            return {
+              matches: false,
+              reason: "carmen_scope_no_phones_configured",
+            };
           }
-          const senderPhone = String(safeData.sender_phone || safeData.phone || '').trim()
-          const normalizePhone = (p: string) => String(p || '').replace(/\D/g, '').slice(-9)
-          const senderNorm = normalizePhone(senderPhone)
-          const allowedNorm = allowedPhones.map(normalizePhone).filter(Boolean)
+          const senderPhone = String(
+            safeData.sender_phone || safeData.phone || "",
+          ).trim();
+          const normalizePhone = (p: string) =>
+            String(p || "")
+              .replace(/\D/g, "")
+              .slice(-9);
+          const senderNorm = normalizePhone(senderPhone);
+          const allowedNorm = allowedPhones.map(normalizePhone).filter(Boolean);
           if (!senderNorm || !allowedNorm.includes(senderNorm)) {
-            console.warn('[CARMEN SCOPE] phone not in whitelist', { senderPhone, senderNorm, allowedNorm })
-            return { matches: false, reason: 'carmen_scope_phone_not_allowed' }
+            console.warn("[CARMEN SCOPE] phone not in whitelist", {
+              senderPhone,
+              senderNorm,
+              allowedNorm,
+            });
+            return { matches: false, reason: "carmen_scope_phone_not_allowed" };
           }
-        } else if (scopeMode === 'private_only') {
+        } else if (scopeMode === "private_only") {
           if (safeData.group_id || safeData.group_chat_id) {
-            return { matches: false, reason: 'carmen_scope_private_only_but_group' }
+            return {
+              matches: false,
+              reason: "carmen_scope_private_only_but_group",
+            };
           }
         }
         // Enforce specific Green API connection if set
-        if (safeConfig.carmen_connection_user_id && safeData.connection_user_id) {
-          if (safeConfig.carmen_connection_user_id !== safeData.connection_user_id) {
-            return { matches: false, reason: 'carmen_scope_connection_mismatch' }
+        if (
+          safeConfig.carmen_connection_user_id &&
+          safeData.connection_user_id
+        ) {
+          if (
+            safeConfig.carmen_connection_user_id !== safeData.connection_user_id
+          ) {
+            return {
+              matches: false,
+              reason: "carmen_scope_connection_mismatch",
+            };
           }
         }
       }
 
-      const keywordConfig = safeConfig.trigger_keyword || safeConfig.keyword
+      const keywordConfig = safeConfig.trigger_keyword || safeConfig.keyword;
       const isCarmenConfig = Boolean(
         safeConfig.carmen_session_mode ||
         safeConfig.trigger_keyword ||
         safeConfig.end_keyword ||
-        safeConfig.carmen_scope_mode
-      )
+        safeConfig.carmen_scope_mode,
+      );
 
       // CARMEN SESSION MODE: if there's an active session, bypass keyword check entirely
       // (scope enforcement above already ran and passed)
       if (isCarmenConfig && hasActiveCarmenSession) {
         // But still close session if end keyword is sent
         if (safeConfig.end_keyword && safeData.message_text) {
-          const endKw = String(safeConfig.end_keyword).toLowerCase()
-          const msgText = String(safeData.message_text).toLowerCase()
+          const endKw = String(safeConfig.end_keyword).toLowerCase();
+          const msgText = String(safeData.message_text).toLowerCase();
           if (msgText.includes(endKw)) {
-            return { matches: false, reason: 'carmen_session_ended' }
+            return { matches: false, reason: "carmen_session_ended" };
           }
         }
-        return { matches: true }
+        return { matches: true };
       }
 
-      if (safeConfig.facebook_form_id && safeConfig.facebook_form_id !== safeData.facebook_form_id) {
-        return { matches: false, reason: 'facebook_form_id_mismatch' }
+      if (
+        safeConfig.facebook_form_id &&
+        safeConfig.facebook_form_id !== safeData.facebook_form_id
+      ) {
+        return { matches: false, reason: "facebook_form_id_mismatch" };
       }
-      if (safeConfig.group_id && !groupCandidates.includes(safeConfig.group_id)) {
-        return { matches: false, reason: 'group_id_mismatch' }
+      if (
+        safeConfig.group_id &&
+        !groupCandidates.includes(safeConfig.group_id)
+      ) {
+        return { matches: false, reason: "group_id_mismatch" };
       }
-      if (safeConfig.connection_user_id && safeConfig.connection_user_id !== safeData.connection_user_id) {
-        return { matches: false, reason: 'connection_user_id_mismatch' }
+      if (
+        safeConfig.connection_user_id &&
+        safeConfig.connection_user_id !== safeData.connection_user_id
+      ) {
+        return { matches: false, reason: "connection_user_id_mismatch" };
       }
 
       if (keywordConfig && safeData.message_text) {
         const keywords = String(keywordConfig)
-          .split(',')
+          .split(",")
           .map((k: string) => k.trim().toLowerCase())
-          .filter(Boolean)
-        const msgText = String(safeData.message_text).toLowerCase()
-        const hasMatch = keywords.some((kw: string) => msgText.includes(kw))
+          .filter(Boolean);
+        const msgText = String(safeData.message_text).toLowerCase();
+        const hasMatch = keywords.some((kw: string) => msgText.includes(kw));
         if (!hasMatch) {
-          return { matches: false, reason: 'keyword_mismatch' }
+          return { matches: false, reason: "keyword_mismatch" };
         }
       } else if (keywordConfig && !safeData.message_text) {
-        return { matches: false, reason: 'keyword_no_message' }
+        return { matches: false, reason: "keyword_no_message" };
       }
 
-      if (safeConfig.source_filter === 'group' && !safeData.group_id) {
-        return { matches: false, reason: 'source_filter_group' }
+      if (safeConfig.source_filter === "group" && !safeData.group_id) {
+        return { matches: false, reason: "source_filter_group" };
       }
-      if (safeConfig.source_filter === 'all_groups' && !safeData.group_id) {
-        return { matches: false, reason: 'source_filter_all_groups' }
+      if (safeConfig.source_filter === "all_groups" && !safeData.group_id) {
+        return { matches: false, reason: "source_filter_all_groups" };
       }
-      if (safeConfig.source_filter === 'all_groups_except') {
+      if (safeConfig.source_filter === "all_groups_except") {
         if (groupCandidates.length === 0) {
-          return { matches: false, reason: 'source_filter_all_groups_except' }
+          return { matches: false, reason: "source_filter_all_groups_except" };
         }
-        const excludedIds = safeConfig.excluded_group_ids || []
-        if (excludedIds.length > 0 && excludedIds.some((id: string) => groupCandidates.includes(id))) {
-          return { matches: false, reason: 'group_excluded' }
+        const excludedIds = safeConfig.excluded_group_ids || [];
+        if (
+          excludedIds.length > 0 &&
+          excludedIds.some((id: string) => groupCandidates.includes(id))
+        ) {
+          return { matches: false, reason: "group_excluded" };
         }
       }
-      if (safeConfig.source_filter === 'multiple_groups') {
+      if (safeConfig.source_filter === "multiple_groups") {
         if (groupCandidates.length === 0) {
-          return { matches: false, reason: 'source_filter_multiple_groups' }
+          return { matches: false, reason: "source_filter_multiple_groups" };
         }
-        const selectedIds = safeConfig.selected_group_ids || []
-        if (selectedIds.length > 0 && !selectedIds.some((id: string) => groupCandidates.includes(id))) {
-          return { matches: false, reason: 'group_not_selected' }
+        const selectedIds = safeConfig.selected_group_ids || [];
+        if (
+          selectedIds.length > 0 &&
+          !selectedIds.some((id: string) => groupCandidates.includes(id))
+        ) {
+          return { matches: false, reason: "group_not_selected" };
         }
       }
-      if (safeConfig.source_filter === 'private' && safeData.group_id) {
-        return { matches: false, reason: 'source_filter_private' }
+      if (safeConfig.source_filter === "private" && safeData.group_id) {
+        return { matches: false, reason: "source_filter_private" };
       }
-      if (safeConfig.filter_status && safeConfig.filter_status !== 'any') {
-        const dataStatus = safeData.new_status || safeData.status
+      if (safeConfig.filter_status && safeConfig.filter_status !== "any") {
+        const dataStatus = safeData.new_status || safeData.status;
         if (dataStatus !== safeConfig.filter_status) {
-          return { matches: false, reason: 'status_mismatch' }
+          return { matches: false, reason: "status_mismatch" };
         }
       }
       // Specific phones whitelist
-      if (safeConfig.source_filter === 'specific_phones') {
-        const allowedPhones: string[] = safeConfig.allowed_phones || []
+      if (safeConfig.source_filter === "specific_phones") {
+        const allowedPhones: string[] = safeConfig.allowed_phones || [];
         if (allowedPhones.length === 0) {
-          console.warn('[TRIGGER] specific_phones selected but no phones configured — blocking')
-          return { matches: false, reason: 'specific_phones_none_configured' }
+          console.warn(
+            "[TRIGGER] specific_phones selected but no phones configured — blocking",
+          );
+          return { matches: false, reason: "specific_phones_none_configured" };
         }
-        const senderPhone = String(safeData.sender_phone || safeData.phone || '').trim()
-        const normalizePhone = (p: string) => String(p || '').replace(/\D/g, '').slice(-9)
-        const senderNorm = normalizePhone(senderPhone)
-        const allowedNorm = allowedPhones.map(normalizePhone).filter(Boolean)
+        const senderPhone = String(
+          safeData.sender_phone || safeData.phone || "",
+        ).trim();
+        const normalizePhone = (p: string) =>
+          String(p || "")
+            .replace(/\D/g, "")
+            .slice(-9);
+        const senderNorm = normalizePhone(senderPhone);
+        const allowedNorm = allowedPhones.map(normalizePhone).filter(Boolean);
         if (!senderNorm || !allowedNorm.includes(senderNorm)) {
-          console.warn('[TRIGGER] phone not in whitelist', { senderPhone, senderNorm, allowedNorm })
-          return { matches: false, reason: 'specific_phones_not_allowed' }
+          console.warn("[TRIGGER] phone not in whitelist", {
+            senderPhone,
+            senderNorm,
+            allowedNorm,
+          });
+          return { matches: false, reason: "specific_phones_not_allowed" };
         }
       }
-      return { matches: true }
-    }
+      return { matches: true };
+    };
 
     // Check if this is a direct automation execution by ID
     if (requestBody.automationId) {
       // Direct execution mode - fetch the specific automation
       const { data: automation, error: fetchError } = await supabase
-        .from('automations')
-        .select('*')
-        .eq('id', requestBody.automationId)
-        .single()
+        .from("automations")
+        .select("*")
+        .eq("id", requestBody.automationId)
+        .single();
 
       if (fetchError) {
-        console.error('Error fetching automation by ID:', fetchError)
-        throw fetchError
+        console.error("Error fetching automation by ID:", fetchError);
+        throw fetchError;
       }
 
       if (!automation) {
-        throw new Error(`Automation not found: ${requestBody.automationId}`)
+        throw new Error(`Automation not found: ${requestBody.automationId}`);
       }
 
-      automations = [automation]
+      automations = [automation];
       // Support both 'payload' and 'data' field names for the actual data
-      payloadData = requestBody.payload || requestBody.data || requestBody
-      tenantId = automation.tenant_id
+      payloadData = requestBody.payload || requestBody.data || requestBody;
+      tenantId = automation.tenant_id;
     } else {
       // Standard trigger mode - find automations by trigger_type
-      const payload = requestBody as AutomationPayload
-      payloadData = payload.data
-      tenantId = payload.tenant_id!
+      const payload = requestBody as AutomationPayload;
+      payloadData = payload.data;
+      tenantId = payload.tenant_id!;
 
       // Resolve automation_ids visible to this tenant: own + shared mirrors
       const { data: sharedRows } = await supabase
-        .from('automation_shared_tenants')
-        .select('automation_id')
-        .eq('tenant_id', payload.tenant_id)
-      const sharedAutomationIds: string[] = (sharedRows || []).map((r: any) => r.automation_id)
+        .from("automation_shared_tenants")
+        .select("automation_id")
+        .eq("tenant_id", payload.tenant_id);
+      const sharedAutomationIds: string[] = (sharedRows || []).map(
+        (r: any) => r.automation_id,
+      );
 
       // 1. Find non-flow automations by trigger_type — own OR shared into this tenant
-      const ownOrSharedFilter = sharedAutomationIds.length > 0
-        ? `tenant_id.eq.${payload.tenant_id},id.in.(${sharedAutomationIds.join(',')})`
-        : null
+      const ownOrSharedFilter =
+        sharedAutomationIds.length > 0
+          ? `tenant_id.eq.${payload.tenant_id},id.in.(${sharedAutomationIds.join(",")})`
+          : null;
 
       let foundQuery = supabase
-        .from('automations')
-        .select('*')
-        .eq('trigger_type', payload.trigger_type)
-        .eq('active', true)
+        .from("automations")
+        .select("*")
+        .eq("trigger_type", payload.trigger_type)
+        .eq("active", true);
       foundQuery = ownOrSharedFilter
         ? foundQuery.or(ownOrSharedFilter)
-        : foundQuery.eq('tenant_id', payload.tenant_id)
+        : foundQuery.eq("tenant_id", payload.tenant_id);
 
-      const { data: foundAutomations, error: fetchError } = await foundQuery
+      const { data: foundAutomations, error: fetchError } = await foundQuery;
 
       if (fetchError) {
-        console.error('Error fetching automations:', fetchError)
-        throw fetchError
+        console.error("Error fetching automations:", fetchError);
+        throw fetchError;
       }
-
 
       // CRITICAL: Exclude flow automations from generic trigger_type lookup.
       // Flow automations must ONLY be matched via trigger step configuration
       // (which validates group_id, keyword, source_filter etc.)
       // Without this, flows bypass their trigger step filters entirely.
-      automations = (foundAutomations || []).filter((a: any) => !a.is_flow)
+      automations = (foundAutomations || []).filter((a: any) => !a.is_flow);
 
       // 2. Also find flow automations — BUT ONLY if source is NOT 'crm'
       // When source === 'crm', we skip flow lookup entirely to prevent CRM leads from triggering flows
-      if (payload.source !== 'crm') {
+      if (payload.source !== "crm") {
         // CARMEN SESSION CHECK: before keyword filtering, check if there's an active Carmen session
         // for this sender. If yes, bypass keyword requirement so mid-session messages are routed.
-        let hasActiveCarmenSession = false
-        const senderPhone = payloadData?.sender_phone || payloadData?.phone || ''
-        const chatId = payloadData?.chat_id || payloadData?.group_chat_id || ''
-        const connectionUserId = payloadData?.connection_user_id || ''
-        const origin = requireOriginChatId(chatId)
+        let hasActiveCarmenSession = false;
+        const senderPhone =
+          payloadData?.sender_phone || payloadData?.phone || "";
+        const chatId = payloadData?.chat_id || payloadData?.group_chat_id || "";
+        const connectionUserId = payloadData?.connection_user_id || "";
+        const origin = requireOriginChatId(chatId);
         if (origin.ok) {
           // Lookup by chat JID only. Phone is the last speaker — filtering on it
           // dropped the same group when a different member spoke, and matching
           // phone across chats would steal another group's session.
           const sessionQuery = supabase
-            .from('carmen_whatsapp_sessions')
-            .select('id, agent_id, conversation_history, end_keyword, last_message_at, automation_id')
-            .eq('tenant_id', payload.tenant_id)
-            .eq('status', 'active')
-            .eq('chat_id', origin.chatId)
+            .from("carmen_whatsapp_sessions")
+            .select(
+              "id, agent_id, conversation_history, end_keyword, last_message_at, automation_id",
+            )
+            .eq("tenant_id", payload.tenant_id)
+            .eq("status", "active")
+            .eq("chat_id", origin.chatId);
           // connection_user_id is optional — only filter if present
           if (connectionUserId) {
-            sessionQuery.eq('connection_user_id', connectionUserId)
+            sessionQuery.eq("connection_user_id", connectionUserId);
           }
           const { data: activeSession } = await sessionQuery
-            .order('created_at', { ascending: false })
+            .order("created_at", { ascending: false })
             .limit(1)
-            .maybeSingle()
+            .maybeSingle();
 
           // 🔁 ECHO/LOOP GUARD: if incoming text equals Carmen's last assistant reply in this
           // session, it's a self-echo from the WhatsApp provider — skip session continuation.
           if (activeSession) {
-            const hist = activeSession.conversation_history || []
-            const lastAssistant = [...hist].reverse().find((m: any) => m?.role === 'assistant')
-            const incomingText = String(payloadData?.message_text || '').trim()
-            const lastText = String(lastAssistant?.content || '').trim()
-            if (incomingText && lastText && (incomingText === lastText || lastText.startsWith(incomingText) || incomingText.startsWith(lastText))) {
-              console.log('[CARMEN] Dropping echoed assistant reply for session', activeSession.id)
-              return new Response(JSON.stringify({ success: true, skipped: 'carmen_echo' }), {
-                status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              })
+            const hist = activeSession.conversation_history || [];
+            const lastAssistant = [...hist]
+              .reverse()
+              .find((m: any) => m?.role === "assistant");
+            const incomingText = String(payloadData?.message_text || "").trim();
+            const lastText = String(lastAssistant?.content || "").trim();
+            if (
+              incomingText &&
+              lastText &&
+              (incomingText === lastText ||
+                lastText.startsWith(incomingText) ||
+                incomingText.startsWith(lastText))
+            ) {
+              console.log(
+                "[CARMEN] Dropping echoed assistant reply for session",
+                activeSession.id,
+              );
+              return new Response(
+                JSON.stringify({ success: true, skipped: "carmen_echo" }),
+                {
+                  status: 200,
+                  headers: {
+                    ...corsHeaders,
+                    "Content-Type": "application/json",
+                  },
+                },
+              );
             }
           }
 
@@ -1513,166 +1931,206 @@ Deno.serve(async (req) => {
             // ── Timeout check: if session is stale, close it ──────────────────────
             // We need the trigger config to know the timeout setting
             // Fetch it from the automation's trigger step
-            let sessionTimeoutMinutes = 60 // default
+            let sessionTimeoutMinutes = 60; // default
             if (activeSession.automation_id) {
               const { data: tStep } = await supabase
-                .from('automation_flow_steps')
-                .select('configuration')
-                .eq('automation_id', activeSession.automation_id)
-                .eq('step_type', 'trigger')
+                .from("automation_flow_steps")
+                .select("configuration")
+                .eq("automation_id", activeSession.automation_id)
+                .eq("step_type", "trigger")
                 .limit(1)
-                .maybeSingle()
+                .maybeSingle();
               if (tStep?.configuration?.session_timeout_minutes != null) {
-                sessionTimeoutMinutes = tStep.configuration.session_timeout_minutes
+                sessionTimeoutMinutes =
+                  tStep.configuration.session_timeout_minutes;
               }
             }
             if (sessionTimeoutMinutes > 0 && activeSession.last_message_at) {
-              const lastMsg = new Date(activeSession.last_message_at).getTime()
-              const idleMs = Date.now() - lastMsg
+              const lastMsg = new Date(activeSession.last_message_at).getTime();
+              const idleMs = Date.now() - lastMsg;
               if (idleMs > sessionTimeoutMinutes * 60 * 1000) {
                 // Session timed out — close it
                 await supabase
-                  .from('carmen_whatsapp_sessions')
-                  .update({ status: 'ended', ended_at: new Date().toISOString() })
-                  .eq('id', activeSession.id)
-                console.log(`[CARMEN] Session ${activeSession.id} timed out after ${sessionTimeoutMinutes} min`)
+                  .from("carmen_whatsapp_sessions")
+                  .update({
+                    status: "ended",
+                    ended_at: new Date().toISOString(),
+                  })
+                  .eq("id", activeSession.id);
+                console.log(
+                  `[CARMEN] Session ${activeSession.id} timed out after ${sessionTimeoutMinutes} min`,
+                );
                 // Don't set hasActiveCarmenSession — let it fall through to keyword check
               } else {
-                hasActiveCarmenSession = true
+                hasActiveCarmenSession = true;
                 // Check if this message is the end keyword — if so, close session
-                const msgText = (payloadData?.message_text || '').toLowerCase()
-                const endKw = (activeSession.end_keyword || 'סיימנו').toLowerCase()
+                const msgText = (payloadData?.message_text || "").toLowerCase();
+                const endKw = (
+                  activeSession.end_keyword || "סיימנו"
+                ).toLowerCase();
                 if (msgText.includes(endKw)) {
                   await supabase
-                    .from('carmen_whatsapp_sessions')
-                    .update({ status: 'ended', ended_at: new Date().toISOString() })
-                    .eq('id', activeSession.id)
-                  hasActiveCarmenSession = false
-                  payloadData._carmen_session_ended = true
-                  console.log(`[CARMEN] Session ${activeSession.id} closed by end keyword`)
+                    .from("carmen_whatsapp_sessions")
+                    .update({
+                      status: "ended",
+                      ended_at: new Date().toISOString(),
+                    })
+                    .eq("id", activeSession.id);
+                  hasActiveCarmenSession = false;
+                  payloadData._carmen_session_ended = true;
+                  console.log(
+                    `[CARMEN] Session ${activeSession.id} closed by end keyword`,
+                  );
                 } else {
                   // Inject session context into payload for the AI agent
-                  payloadData._carmen_session_id = activeSession.id
-                  payloadData._carmen_agent_id = activeSession.agent_id
-                  payloadData._carmen_history = activeSession.conversation_history || []
+                  payloadData._carmen_session_id = activeSession.id;
+                  payloadData._carmen_agent_id = activeSession.agent_id;
+                  payloadData._carmen_history =
+                    activeSession.conversation_history || [];
                   // Update last_message_at
                   await supabase
-                    .from('carmen_whatsapp_sessions')
+                    .from("carmen_whatsapp_sessions")
                     .update({ last_message_at: new Date().toISOString() })
-                    .eq('id', activeSession.id)
+                    .eq("id", activeSession.id);
                 }
               }
             } else {
               // No timeout configured — session stays active indefinitely
-              hasActiveCarmenSession = true
-              const msgText = (payloadData?.message_text || '').toLowerCase()
-              const endKw = (activeSession.end_keyword || 'סיימנו').toLowerCase()
+              hasActiveCarmenSession = true;
+              const msgText = (payloadData?.message_text || "").toLowerCase();
+              const endKw = (
+                activeSession.end_keyword || "סיימנו"
+              ).toLowerCase();
               if (msgText.includes(endKw)) {
                 await supabase
-                  .from('carmen_whatsapp_sessions')
-                  .update({ status: 'ended', ended_at: new Date().toISOString() })
-                  .eq('id', activeSession.id)
-                hasActiveCarmenSession = false
-                payloadData._carmen_session_ended = true
+                  .from("carmen_whatsapp_sessions")
+                  .update({
+                    status: "ended",
+                    ended_at: new Date().toISOString(),
+                  })
+                  .eq("id", activeSession.id);
+                hasActiveCarmenSession = false;
+                payloadData._carmen_session_ended = true;
               } else {
-                payloadData._carmen_session_id = activeSession.id
-                payloadData._carmen_agent_id = activeSession.agent_id
-                payloadData._carmen_history = activeSession.conversation_history || []
+                payloadData._carmen_session_id = activeSession.id;
+                payloadData._carmen_agent_id = activeSession.agent_id;
+                payloadData._carmen_history =
+                  activeSession.conversation_history || [];
                 await supabase
-                  .from('carmen_whatsapp_sessions')
+                  .from("carmen_whatsapp_sessions")
                   .update({ last_message_at: new Date().toISOString() })
-                  .eq('id', activeSession.id)
+                  .eq("id", activeSession.id);
               }
             }
           }
         }
 
-        const triggerTypesToMatch = payload.trigger_type === 'whatsapp_message_received'
-          ? ['whatsapp_message_received', 'carmen_whatsapp_session']
-          : [payload.trigger_type]
+        const triggerTypesToMatch =
+          payload.trigger_type === "whatsapp_message_received"
+            ? ["whatsapp_message_received", "carmen_whatsapp_session"]
+            : [payload.trigger_type];
 
         // Include flow steps from own tenant OR from automations shared into this tenant
-        const flowStepFilter = sharedAutomationIds.length > 0
-          ? `tenant_id.eq.${payload.tenant_id},automation_id.in.(${sharedAutomationIds.join(',')})`
-          : null
+        const flowStepFilter =
+          sharedAutomationIds.length > 0
+            ? `tenant_id.eq.${payload.tenant_id},automation_id.in.(${sharedAutomationIds.join(",")})`
+            : null;
 
         let flowStepsQuery = supabase
-          .from('automation_flow_steps')
-          .select('automation_id, configuration, tenant_id')
-          .eq('step_type', 'trigger')
-          .in('action_type', triggerTypesToMatch)
+          .from("automation_flow_steps")
+          .select("automation_id, configuration, tenant_id")
+          .eq("step_type", "trigger")
+          .in("action_type", triggerTypesToMatch);
         flowStepsQuery = flowStepFilter
           ? flowStepsQuery.or(flowStepFilter)
-          : flowStepsQuery.eq('tenant_id', payload.tenant_id)
+          : flowStepsQuery.eq("tenant_id", payload.tenant_id);
 
-        const { data: flowTriggerSteps, error: flowError } = await flowStepsQuery
+        const { data: flowTriggerSteps, error: flowError } =
+          await flowStepsQuery;
 
         if (flowError) {
-          console.error('Error fetching flow trigger steps:', flowError)
+          console.error("Error fetching flow trigger steps:", flowError);
         }
 
         if (flowTriggerSteps && flowTriggerSteps.length > 0) {
           // Filter by trigger configuration BEFORE fetching automations
           const matchingSteps = flowTriggerSteps.filter((step: any) => {
-            const config = step.configuration || {}
-            const validation = validateFlowTriggerConfig(config, payloadData, hasActiveCarmenSession)
-            return validation.matches
-          })
-          const flowAutomationIds = matchingSteps.map((s: any) => s.automation_id)
+            const config = step.configuration || {};
+            const validation = validateFlowTriggerConfig(
+              config,
+              payloadData,
+              hasActiveCarmenSession,
+            );
+            return validation.matches;
+          });
+          const flowAutomationIds = matchingSteps.map(
+            (s: any) => s.automation_id,
+          );
           // Filter out IDs already found
-          const existingIds = new Set(automations.map((a: any) => a.id))
-          const newFlowIds = flowAutomationIds.filter((id: string) => !existingIds.has(id))
+          const existingIds = new Set(automations.map((a: any) => a.id));
+          const newFlowIds = flowAutomationIds.filter(
+            (id: string) => !existingIds.has(id),
+          );
 
           if (newFlowIds.length > 0) {
-            const { data: flowAutomations, error: flowAutoError } = await supabase
-              .from('automations')
-              .select('*')
-              .in('id', newFlowIds)
-              .eq('active', true)
+            const { data: flowAutomations, error: flowAutoError } =
+              await supabase
+                .from("automations")
+                .select("*")
+                .in("id", newFlowIds)
+                .eq("active", true);
 
             if (flowAutoError) {
-              console.error('Error fetching flow automations:', flowAutoError)
+              console.error("Error fetching flow automations:", flowAutoError);
             } else if (flowAutomations) {
-              automations = [...automations, ...flowAutomations]
+              automations = [...automations, ...flowAutomations];
             }
           }
         }
       } else {
         // When source is 'crm', also filter out any flow automations that were found in CRM automations
-        automations = automations.filter((a: any) => !a.is_flow)
+        automations = automations.filter((a: any) => !a.is_flow);
       }
     }
 
-    payloadData = await enrichLeadPayloadData(supabase, payloadData || {})
+    payloadData = await enrichLeadPayloadData(supabase, payloadData || {});
 
     // Execute each matching automation
     const results = await Promise.allSettled(
       (automations || []).map(async (automation) => {
-        const startTime = Date.now()
-        let claimInserted = false
-        const facebookLeadgenId = payloadData?.facebook_leadgen_id
+        const startTime = Date.now();
+        let claimInserted = false;
+        const facebookLeadgenId = payloadData?.facebook_leadgen_id;
         const releaseOwnedClaim = async () => {
-          if (!claimInserted || !facebookLeadgenId) return
+          if (!claimInserted || !facebookLeadgenId) return;
           await releaseFacebookLeadAutomationRun(supabase, {
             tenantId,
             automationId: automation.id,
             leadgenId: facebookLeadgenId,
-          })
-          claimInserted = false
-        }
-        
+          });
+          claimInserted = false;
+        };
+
         try {
           // Check conditions if any (pass trigger_type to skip irrelevant conditions)
-          if (automation.conditions && Object.keys(automation.conditions).length > 0) {
-            const conditionsMet = checkConditions(automation.conditions, payloadData, automation.trigger_type)
+          if (
+            automation.conditions &&
+            Object.keys(automation.conditions).length > 0
+          ) {
+            const conditionsMet = checkConditions(
+              automation.conditions,
+              payloadData,
+              automation.trigger_type,
+            );
             if (!conditionsMet) {
-              return
+              return;
             }
           }
 
-          let response: any
+          let response: any;
 
-          const isTestRunForDedup = Boolean(requestBody.automationId) && Boolean(payloadData?.test)
+          const isTestRunForDedup =
+            Boolean(requestBody.automationId) && Boolean(payloadData?.test);
           if (facebookLeadgenId && !isTestRunForDedup) {
             const claim = await claimFacebookLeadAutomationRun(supabase, {
               tenantId,
@@ -1680,119 +2138,146 @@ Deno.serve(async (req) => {
               leadgenId: facebookLeadgenId,
               formId: payloadData?.facebook_form_id,
               clientId: payloadData?.client_id,
-            })
+            });
             if (claim.duplicate) {
-              await supabase.from('automation_logs').insert({
+              await supabase.from("automation_logs").insert({
                 automation_id: automation.id,
                 success: true,
-                error_message: 'דולג: duplicate_facebook_leadgen',
+                error_message: "דולג: duplicate_facebook_leadgen",
                 payload: payloadData,
-                response: { skipped: 'duplicate_facebook_leadgen' },
+                response: { skipped: "duplicate_facebook_leadgen" },
                 execution_time_ms: Date.now() - startTime,
-              })
-              return { skipped: true, reason: 'duplicate_facebook_leadgen' }
+              });
+              return { skipped: true, reason: "duplicate_facebook_leadgen" };
             }
-            claimInserted = claim.inserted
+            claimInserted = claim.inserted;
           }
 
           // If this is a flow automation, execute flow steps sequentially
           if (automation.is_flow) {
             const { data: flowSteps, error: stepsError } = await supabase
-              .from('automation_flow_steps')
-              .select('*')
-              .eq('automation_id', automation.id)
-              .order('sort_order', { ascending: true })
+              .from("automation_flow_steps")
+              .select("*")
+              .eq("automation_id", automation.id)
+              .order("sort_order", { ascending: true });
 
             if (stepsError) {
-              console.error('Error fetching flow steps:', stepsError)
-              throw stepsError
+              console.error("Error fetching flow steps:", stepsError);
+              throw stepsError;
             }
-
 
             // === CRITICAL: Validate trigger step matches incoming payload ===
             // In TEST mode (direct execution by automationId with test=true),
             // we bypass trigger filter validation so the test always runs end-to-end
             // and shows up in the run history.
-            const isTestRun = Boolean(requestBody.automationId) && Boolean(payloadData?.test)
-            const triggerSteps = (flowSteps || []).filter((s: any) => s.step_type === 'trigger')
-            const incomingTriggerTypeForMatch = (requestBody as any).trigger_type || (requestBody as any).triggerType
+            const isTestRun =
+              Boolean(requestBody.automationId) && Boolean(payloadData?.test);
+            const triggerSteps = (flowSteps || []).filter(
+              (s: any) => s.step_type === "trigger",
+            );
+            const incomingTriggerTypeForMatch =
+              (requestBody as any).trigger_type ||
+              (requestBody as any).triggerType;
             // Support multiple triggers per automation (OR semantics):
             // pick the trigger step whose action_type matches the incoming event.
             const triggerStep =
-              triggerSteps.find((s: any) => s.action_type === incomingTriggerTypeForMatch) ||
-              triggerSteps.find((s: any) => s.action_type === 'carmen_whatsapp_session' && incomingTriggerTypeForMatch === 'whatsapp_message_received') ||
-              triggerSteps[0]
+              triggerSteps.find(
+                (s: any) => s.action_type === incomingTriggerTypeForMatch,
+              ) ||
+              triggerSteps.find(
+                (s: any) =>
+                  s.action_type === "carmen_whatsapp_session" &&
+                  incomingTriggerTypeForMatch === "whatsapp_message_received",
+              ) ||
+              triggerSteps[0];
             if (triggerStep && !isTestRun) {
               // Check action_type match (e.g. whatsapp_message_received vs lead_created)
-              const triggerActionType = triggerStep.action_type
-              const incomingTriggerType = (requestBody as any).trigger_type || (requestBody as any).triggerType
-              const triggerTypesMatch = !triggerActionType || !incomingTriggerType ||
+              const triggerActionType = triggerStep.action_type;
+              const incomingTriggerType =
+                (requestBody as any).trigger_type ||
+                (requestBody as any).triggerType;
+              const triggerTypesMatch =
+                !triggerActionType ||
+                !incomingTriggerType ||
                 triggerActionType === incomingTriggerType ||
-                (triggerActionType === 'carmen_whatsapp_session' && incomingTriggerType === 'whatsapp_message_received')
+                (triggerActionType === "carmen_whatsapp_session" &&
+                  incomingTriggerType === "whatsapp_message_received");
 
               if (!triggerTypesMatch) {
-                await releaseOwnedClaim()
+                await releaseOwnedClaim();
                 // Log skipped run so it appears in history
-                await supabase.from('automation_logs').insert({
+                await supabase.from("automation_logs").insert({
                   automation_id: automation.id,
                   success: false,
                   error_message: `דולג: trigger_type_mismatch (${triggerActionType} ≠ ${incomingTriggerType})`,
                   payload: payloadData,
                   execution_time_ms: Date.now() - startTime,
-                })
-                return { skipped: true, reason: 'trigger_type_mismatch' }
+                });
+                return { skipped: true, reason: "trigger_type_mismatch" };
               }
               // Also validate trigger step filters (group_id, keyword, etc.)
-              const config = triggerStep.configuration || {}
+              const config = triggerStep.configuration || {};
               const validation = validateFlowTriggerConfig(
                 config,
                 payloadData,
-                Boolean(payloadData?._carmen_session_id && !payloadData?._carmen_session_ended)
-              )
+                Boolean(
+                  payloadData?._carmen_session_id &&
+                  !payloadData?._carmen_session_ended,
+                ),
+              );
               if (!validation.matches) {
-                await releaseOwnedClaim()
+                await releaseOwnedClaim();
                 // Log skipped run so it appears in history
-                await supabase.from('automation_logs').insert({
+                await supabase.from("automation_logs").insert({
                   automation_id: automation.id,
                   success: false,
-                  error_message: `דולג: ${validation.reason || 'trigger_config_mismatch'}`,
+                  error_message: `דולג: ${validation.reason || "trigger_config_mismatch"}`,
                   payload: payloadData,
                   execution_time_ms: Date.now() - startTime,
-                })
-                return { skipped: true, reason: validation.reason || 'trigger_config_mismatch' }
+                });
+                return {
+                  skipped: true,
+                  reason: validation.reason || "trigger_config_mismatch",
+                };
               }
             }
 
             // === FB ENRICHMENT: Parse fb_ fields from notes (saved during sync) ===
             if (payloadData.test && payloadData.notes) {
-              const lines = String(payloadData.notes).split('\n')
-              let inFbSection = false
+              const lines = String(payloadData.notes).split("\n");
+              let inFbSection = false;
               // Meta lines from cron-sync-facebook-leads header (skip these)
               const metaKeys = new Set([
-                'leadgen_id', 'facebook lead id', 'facebook form', 'form id', 'created',
-              ])
+                "leadgen_id",
+                "facebook lead id",
+                "facebook form",
+                "form id",
+                "created",
+              ]);
               for (const line of lines) {
                 // Legacy section header
-                if (line.includes('--- שדות טופס פייסבוק ---')) {
-                  inFbSection = true
-                  continue
+                if (line.includes("--- שדות טופס פייסבוק ---")) {
+                  inFbSection = true;
+                  continue;
                 }
                 // New explicit format: fb_key: value
-                const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/)
+                const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/);
                 if (fbMatch) {
-                  if (!(fbMatch[1] in payloadData)) payloadData[fbMatch[1]] = fbMatch[2].trim()
-                  continue
+                  if (!(fbMatch[1] in payloadData))
+                    payloadData[fbMatch[1]] = fbMatch[2].trim();
+                  continue;
                 }
                 // Generic key: value — register as fb_key unless it's a known meta line
-                const kvMatch = line.match(/^([^:]+):\s*(.+)$/)
+                const kvMatch = line.match(/^([^:]+):\s*(.+)$/);
                 if (kvMatch) {
-                  const rawKey = kvMatch[1].trim()
-                  if (metaKeys.has(rawKey.toLowerCase())) continue
-                  const key = `fb_${rawKey}`
-                  if (!(key in payloadData)) payloadData[key] = kvMatch[2].trim()
-                  continue
+                  const rawKey = kvMatch[1].trim();
+                  if (metaKeys.has(rawKey.toLowerCase())) continue;
+                  const key = `fb_${rawKey}`;
+                  if (!(key in payloadData))
+                    payloadData[key] = kvMatch[2].trim();
+                  continue;
                 }
-                if (inFbSection) continue
+                if (inFbSection) continue;
               }
             }
             // === END FB ENRICHMENT ===
@@ -1804,75 +2289,95 @@ Deno.serve(async (req) => {
             // ═══════════════════════════════════════════════════════════════
 
             // Build adjacency map
-            type StepEdge = { targetId: string; sourceHandle: string | null }
-            const outEdges: Record<string, StepEdge[]> = {}
-            const inDegree: Record<string, number> = {}
-            const stepMap: Record<string, any> = {}
+            type StepEdge = { targetId: string; sourceHandle: string | null };
+            const outEdges: Record<string, StepEdge[]> = {};
+            const inDegree: Record<string, number> = {};
+            const stepMap: Record<string, any> = {};
 
-            for (const s of (flowSteps || [])) {
-              stepMap[s.id] = s
-              outEdges[s.id] = outEdges[s.id] || []
-              inDegree[s.id] = inDegree[s.id] || 0
+            for (const s of flowSteps || []) {
+              stepMap[s.id] = s;
+              outEdges[s.id] = outEdges[s.id] || [];
+              inDegree[s.id] = inDegree[s.id] || 0;
             }
-            for (const s of (flowSteps || [])) {
+            for (const s of flowSteps || []) {
               if (s.parent_step_id && stepMap[s.parent_step_id]) {
-                outEdges[s.parent_step_id].push({ targetId: s.id, sourceHandle: s.condition_branch || null })
-                inDegree[s.id] = (inDegree[s.id] || 0) + 1
+                outEdges[s.parent_step_id].push({
+                  targetId: s.id,
+                  sourceHandle: s.condition_branch || null,
+                });
+                inDegree[s.id] = (inDegree[s.id] || 0) + 1;
               }
             }
 
             // Topological sort
-            const topoQueue: string[] = Object.keys(stepMap).filter(id => (inDegree[id] || 0) === 0)
-            const topoOrder: string[] = []
-            const tempDeg = { ...inDegree }
+            const topoQueue: string[] = Object.keys(stepMap).filter(
+              (id) => (inDegree[id] || 0) === 0,
+            );
+            const topoOrder: string[] = [];
+            const tempDeg = { ...inDegree };
             while (topoQueue.length > 0) {
-              const cur = topoQueue.shift()!
-              topoOrder.push(cur)
-              for (const edge of (outEdges[cur] || [])) {
-                tempDeg[edge.targetId] = (tempDeg[edge.targetId] || 1) - 1
-                if (tempDeg[edge.targetId] === 0) topoQueue.push(edge.targetId)
+              const cur = topoQueue.shift()!;
+              topoOrder.push(cur);
+              for (const edge of outEdges[cur] || []) {
+                tempDeg[edge.targetId] = (tempDeg[edge.targetId] || 1) - 1;
+                if (tempDeg[edge.targetId] === 0) topoQueue.push(edge.targetId);
               }
             }
 
             // Per-node output store
-            const nodeOutputs: Record<string, any> = {}
-            const skippedNodes = new Set<string>()
+            const nodeOutputs: Record<string, any> = {};
+            const skippedNodes = new Set<string>();
 
-            const stepResults: any[] = []
-            let actionCount = 0
-            let previousStepOutput: any = null
+            const stepResults: any[] = [];
+            let actionCount = 0;
+            let previousStepOutput: any = null;
 
             for (const stepId of topoOrder) {
-              const step = stepMap[stepId]
-              if (!step) continue
+              const step = stepMap[stepId];
+              if (!step) continue;
 
               // SAFETY: Runtime timeout check
-              const elapsedSeconds = (Date.now() - executionStartTime) / 1000
+              const elapsedSeconds = (Date.now() - executionStartTime) / 1000;
               if (elapsedSeconds >= MAX_RUNTIME_SECONDS) {
-                console.error(`🛑 SAFETY: Runtime limit (${MAX_RUNTIME_SECONDS}s) exceeded after ${elapsedSeconds.toFixed(1)}s. Stopping flow.`)
-                stepResults.push({ step_id: step.id, action_type: step.action_type, success: false, error: 'Runtime limit exceeded' })
-                break
+                console.error(
+                  `🛑 SAFETY: Runtime limit (${MAX_RUNTIME_SECONDS}s) exceeded after ${elapsedSeconds.toFixed(1)}s. Stopping flow.`,
+                );
+                stepResults.push({
+                  step_id: step.id,
+                  action_type: step.action_type,
+                  success: false,
+                  error: "Runtime limit exceeded",
+                });
+                break;
               }
               // SAFETY: Max actions check
               if (actionCount >= MAX_ACTIONS_PER_RUN) {
-                console.error(`🛑 SAFETY: Max actions per run (${MAX_ACTIONS_PER_RUN}) reached. Stopping flow.`)
-                stepResults.push({ step_id: step.id, action_type: step.action_type, success: false, error: 'Max actions exceeded' })
-                break
+                console.error(
+                  `🛑 SAFETY: Max actions per run (${MAX_ACTIONS_PER_RUN}) reached. Stopping flow.`,
+                );
+                stepResults.push({
+                  step_id: step.id,
+                  action_type: step.action_type,
+                  success: false,
+                  error: "Max actions exceeded",
+                });
+                break;
               }
 
               // Skip trigger steps
-              if (step.step_type === 'trigger') {
-                nodeOutputs[step.id] = payloadData
-                continue
+              if (step.step_type === "trigger") {
+                nodeOutputs[step.id] = payloadData;
+                continue;
               }
 
               // Skip nodes on branches not taken
               if (skippedNodes.has(step.id)) {
-                for (const edge of (outEdges[step.id] || [])) skippedNodes.add(edge.targetId)
-                continue
+                for (const edge of outEdges[step.id] || [])
+                  skippedNodes.add(edge.targetId);
+                continue;
               }
 
-              const stepConfig = step.configuration || {}
+              const stepConfig = step.configuration || {};
 
               // Build stepData: merge payloadData + latest parent output
               const stepData: Record<string, any> = {
@@ -1880,150 +2385,246 @@ Deno.serve(async (req) => {
                 previous_step_output: previousStepOutput,
                 agent_output: previousStepOutput?.output || previousStepOutput,
                 _node_outputs: nodeOutputs,
-              }
+              };
 
-              let stepResponse: any = null
+              let stepResponse: any = null;
 
               try {
-                const effectiveActionType = step.action_type || step.step_type
+                const effectiveActionType = step.action_type || step.step_type;
 
                 // ── CONDITION (IF) ──────────────────────────────────────────
-                if (step.step_type === 'condition') {
-                  const field = stepConfig.condition_field || ''
-                  const operator = stepConfig.condition_operator || 'equals'
-                  const expected = String(stepConfig.condition_value || '')
-                  const actual = String(stepData[field] ?? '')
-                  let result = false
-                  if (operator === 'equals') result = actual === expected
-                  else if (operator === 'not_equals') result = actual !== expected
-                  else if (operator === 'contains') result = actual.toLowerCase().includes(expected.toLowerCase())
-                  else if (operator === 'not_contains') result = !actual.toLowerCase().includes(expected.toLowerCase())
-                  else if (operator === 'starts_with') result = actual.startsWith(expected)
-                  else if (operator === 'greater_than') result = parseFloat(actual) > parseFloat(expected)
-                  else if (operator === 'less_than') result = parseFloat(actual) < parseFloat(expected)
-                  else if (operator === 'is_empty') result = !actual || actual === 'undefined'
-                  else if (operator === 'is_not_empty') result = !!actual && actual !== 'undefined'
-                  stepResponse = { condition_result: result }
-                  nodeOutputs[step.id] = { ...stepData, condition_result: result }
-                  const notTakenHandle = result ? 'false' : 'true'
-                  for (const edge of (outEdges[step.id] || [])) {
-                    if (edge.sourceHandle === notTakenHandle) skippedNodes.add(edge.targetId)
+                if (step.step_type === "condition") {
+                  const field = stepConfig.condition_field || "";
+                  const operator = stepConfig.condition_operator || "equals";
+                  const expected = String(stepConfig.condition_value || "");
+                  const actual = String(stepData[field] ?? "");
+                  let result = false;
+                  if (operator === "equals") result = actual === expected;
+                  else if (operator === "not_equals")
+                    result = actual !== expected;
+                  else if (operator === "contains")
+                    result = actual
+                      .toLowerCase()
+                      .includes(expected.toLowerCase());
+                  else if (operator === "not_contains")
+                    result = !actual
+                      .toLowerCase()
+                      .includes(expected.toLowerCase());
+                  else if (operator === "starts_with")
+                    result = actual.startsWith(expected);
+                  else if (operator === "greater_than")
+                    result = parseFloat(actual) > parseFloat(expected);
+                  else if (operator === "less_than")
+                    result = parseFloat(actual) < parseFloat(expected);
+                  else if (operator === "is_empty")
+                    result = !actual || actual === "undefined";
+                  else if (operator === "is_not_empty")
+                    result = !!actual && actual !== "undefined";
+                  stepResponse = { condition_result: result };
+                  nodeOutputs[step.id] = {
+                    ...stepData,
+                    condition_result: result,
+                  };
+                  const notTakenHandle = result ? "false" : "true";
+                  for (const edge of outEdges[step.id] || []) {
+                    if (edge.sourceHandle === notTakenHandle)
+                      skippedNodes.add(edge.targetId);
                   }
-                  actionCount++
-                  stepResults.push({ step_id: step.id, action_type: 'condition', success: true, response: stepResponse })
-                  continue
+                  actionCount++;
+                  stepResults.push({
+                    step_id: step.id,
+                    action_type: "condition",
+                    success: true,
+                    response: stepResponse,
+                  });
+                  continue;
                 }
 
                 // ── SWITCH ──────────────────────────────────────────────────
-                if (step.step_type === 'switch') {
-                  const switchField = stepConfig.switch_field || ''
-                  const actualValue = String(stepData[switchField] ?? '')
-                  const branches: string[] = stepConfig.switch_branches || ['ברירת מחדל']
-                  const matchedBranch = branches.includes(actualValue) ? actualValue : branches[branches.length - 1]
-                  stepResponse = { matched_branch: matchedBranch }
-                  nodeOutputs[step.id] = { ...stepData, matched_branch: matchedBranch }
-                  for (const edge of (outEdges[step.id] || [])) {
-                    const branchName = edge.sourceHandle?.replace('branch_', '') || ''
-                    if (branchName !== matchedBranch) skippedNodes.add(edge.targetId)
+                if (step.step_type === "switch") {
+                  const switchField = stepConfig.switch_field || "";
+                  const actualValue = String(stepData[switchField] ?? "");
+                  const branches: string[] = stepConfig.switch_branches || [
+                    "ברירת מחדל",
+                  ];
+                  const matchedBranch = branches.includes(actualValue)
+                    ? actualValue
+                    : branches[branches.length - 1];
+                  stepResponse = { matched_branch: matchedBranch };
+                  nodeOutputs[step.id] = {
+                    ...stepData,
+                    matched_branch: matchedBranch,
+                  };
+                  for (const edge of outEdges[step.id] || []) {
+                    const branchName =
+                      edge.sourceHandle?.replace("branch_", "") || "";
+                    if (branchName !== matchedBranch)
+                      skippedNodes.add(edge.targetId);
                   }
-                  actionCount++
-                  stepResults.push({ step_id: step.id, action_type: 'switch', success: true, response: stepResponse })
-                  continue
+                  actionCount++;
+                  stepResults.push({
+                    step_id: step.id,
+                    action_type: "switch",
+                    success: true,
+                    response: stepResponse,
+                  });
+                  continue;
                 }
 
                 // ── MERGE ───────────────────────────────────────────────────
-                if (step.step_type === 'merge') {
-                  const mergedData: Record<string, any> = { ...stepData }
-                  Object.values(nodeOutputs).forEach(o => { if (o && typeof o === 'object') Object.assign(mergedData, o) })
-                  stepResponse = { merged: true }
-                  nodeOutputs[step.id] = mergedData
-                  Object.assign(payloadData, mergedData)
-                  actionCount++
-                  stepResults.push({ step_id: step.id, action_type: 'merge', success: true, response: stepResponse })
-                  continue
+                if (step.step_type === "merge") {
+                  const mergedData: Record<string, any> = { ...stepData };
+                  Object.values(nodeOutputs).forEach((o) => {
+                    if (o && typeof o === "object")
+                      Object.assign(mergedData, o);
+                  });
+                  stepResponse = { merged: true };
+                  nodeOutputs[step.id] = mergedData;
+                  Object.assign(payloadData, mergedData);
+                  actionCount++;
+                  stepResults.push({
+                    step_id: step.id,
+                    action_type: "merge",
+                    success: true,
+                    response: stepResponse,
+                  });
+                  continue;
                 }
 
                 // ── LOOP ────────────────────────────────────────────────────
-                if (step.step_type === 'loop') {
-                  const loopField = stepConfig.loop_field || ''
-                  const rawItems = stepData[loopField]
+                if (step.step_type === "loop") {
+                  const loopField = stepConfig.loop_field || "";
+                  const rawItems = stepData[loopField];
                   const items: any[] = Array.isArray(rawItems)
                     ? rawItems
-                    : typeof rawItems === 'string'
-                    ? rawItems.split(',').map((s: string) => s.trim()).filter(Boolean)
-                    : []
-                  stepResponse = { loop_items_count: items.length }
-                  nodeOutputs[step.id] = { ...stepData, loop_items: items, loop_current_item: items[0] }
-                  payloadData.loop_items = items
-                  payloadData.loop_current_item = items[0]
+                    : typeof rawItems === "string"
+                      ? rawItems
+                          .split(",")
+                          .map((s: string) => s.trim())
+                          .filter(Boolean)
+                      : [];
+                  stepResponse = { loop_items_count: items.length };
+                  nodeOutputs[step.id] = {
+                    ...stepData,
+                    loop_items: items,
+                    loop_current_item: items[0],
+                  };
+                  payloadData.loop_items = items;
+                  payloadData.loop_current_item = items[0];
                   if (items.length === 0) {
-                    for (const edge of (outEdges[step.id] || [])) {
-                      if (edge.sourceHandle === 'loop_body') skippedNodes.add(edge.targetId)
+                    for (const edge of outEdges[step.id] || []) {
+                      if (edge.sourceHandle === "loop_body")
+                        skippedNodes.add(edge.targetId);
                     }
                   }
-                  actionCount++
-                  stepResults.push({ step_id: step.id, action_type: 'loop', success: true, response: stepResponse })
-                  continue
+                  actionCount++;
+                  stepResults.push({
+                    step_id: step.id,
+                    action_type: "loop",
+                    success: true,
+                    response: stepResponse,
+                  });
+                  continue;
                 }
 
                 // ── CODE ────────────────────────────────────────────────────
-                if (step.step_type === 'code') {
-                  const codeStr = stepConfig.code || 'return {};'
+                if (step.step_type === "code") {
+                  const codeStr = stepConfig.code || "return {};";
                   try {
-                    const fn = new Function('$input', `"use strict"; ${codeStr}`)
-                    const result = fn({ ...stepData })
-                    stepResponse = result && typeof result === 'object' ? result : { output: result }
-                    if (stepResponse && typeof stepResponse === 'object') Object.assign(payloadData, stepResponse)
-                    nodeOutputs[step.id] = { ...stepData, ...stepResponse }
-                    previousStepOutput = stepResponse
+                    const fn = new Function(
+                      "$input",
+                      `"use strict"; ${codeStr}`,
+                    );
+                    const result = fn({ ...stepData });
+                    stepResponse =
+                      result && typeof result === "object"
+                        ? result
+                        : { output: result };
+                    if (stepResponse && typeof stepResponse === "object")
+                      Object.assign(payloadData, stepResponse);
+                    nodeOutputs[step.id] = { ...stepData, ...stepResponse };
+                    previousStepOutput = stepResponse;
                   } catch (codeErr: any) {
-                    stepResponse = { error: codeErr.message }
-                    nodeOutputs[step.id] = { ...stepData, code_error: codeErr.message }
+                    stepResponse = { error: codeErr.message };
+                    nodeOutputs[step.id] = {
+                      ...stepData,
+                      code_error: codeErr.message,
+                    };
                   }
-                  actionCount++
-                  stepResults.push({ step_id: step.id, action_type: 'code', success: !stepResponse?.error, response: stepResponse })
-                  continue
+                  actionCount++;
+                  stepResults.push({
+                    step_id: step.id,
+                    action_type: "code",
+                    success: !stepResponse?.error,
+                    response: stepResponse,
+                  });
+                  continue;
                 }
 
                 // ── ERROR BRANCH ────────────────────────────────────────────
-                if (step.step_type === 'error_branch') {
-                  const prevResult = stepResults[stepResults.length - 1]
-                  const hadError = prevResult && !prevResult.success
-                  stepResponse = { had_error: hadError, prev_error: prevResult?.error || null }
-                  nodeOutputs[step.id] = { ...stepData, had_error: hadError }
-                  for (const edge of (outEdges[step.id] || [])) {
-                    if (hadError && edge.sourceHandle === 'success') skippedNodes.add(edge.targetId)
-                    if (!hadError && edge.sourceHandle === 'error') skippedNodes.add(edge.targetId)
+                if (step.step_type === "error_branch") {
+                  const prevResult = stepResults[stepResults.length - 1];
+                  const hadError = prevResult && !prevResult.success;
+                  stepResponse = {
+                    had_error: hadError,
+                    prev_error: prevResult?.error || null,
+                  };
+                  nodeOutputs[step.id] = { ...stepData, had_error: hadError };
+                  for (const edge of outEdges[step.id] || []) {
+                    if (hadError && edge.sourceHandle === "success")
+                      skippedNodes.add(edge.targetId);
+                    if (!hadError && edge.sourceHandle === "error")
+                      skippedNodes.add(edge.targetId);
                   }
-                  actionCount++
-                  stepResults.push({ step_id: step.id, action_type: 'error_branch', success: true, response: stepResponse })
-                  continue
+                  actionCount++;
+                  stepResults.push({
+                    step_id: step.id,
+                    action_type: "error_branch",
+                    success: true,
+                    response: stepResponse,
+                  });
+                  continue;
                 }
 
                 // ── DELAY ───────────────────────────────────────────────────
-                if (step.step_type === 'delay') {
-                  const amount = parseInt(stepConfig.delay_amount || '1', 10)
-                  const unit = stepConfig.delay_unit || 'minutes'
-                  const ms = unit === 'minutes' ? amount * 60000 : unit === 'hours' ? amount * 3600000 : amount * 86400000
-                  if (ms <= 30000) await new Promise(r => setTimeout(r, ms))
-                  stepResponse = { delayed_ms: ms }
-                  nodeOutputs[step.id] = stepData
-                  actionCount++
-                  stepResults.push({ step_id: step.id, action_type: 'delay', success: true, response: stepResponse })
-                  continue
+                if (step.step_type === "delay") {
+                  const amount = parseInt(stepConfig.delay_amount || "1", 10);
+                  const unit = stepConfig.delay_unit || "minutes";
+                  const ms =
+                    unit === "minutes"
+                      ? amount * 60000
+                      : unit === "hours"
+                        ? amount * 3600000
+                        : amount * 86400000;
+                  if (ms <= 30000) await new Promise((r) => setTimeout(r, ms));
+                  stepResponse = { delayed_ms: ms };
+                  nodeOutputs[step.id] = stepData;
+                  actionCount++;
+                  stepResults.push({
+                    step_id: step.id,
+                    action_type: "delay",
+                    success: true,
+                    response: stepResponse,
+                  });
+                  continue;
                 }
 
                 // ── REGULAR ACTIONS ─────────────────────────────────────────
-                if (effectiveActionType === 'agent') {
-                  const agentId = stepConfig.agent_id
+                if (effectiveActionType === "agent") {
+                  const agentId = stepConfig.agent_id;
                   if (agentId) {
                     // CARMEN SESSION: detect from trigger step config OR legacy automation.configuration
                     // Trigger step config takes priority (new Flow Builder approach)
-                    const triggerStepForCarmen = (flowSteps || []).find((s: any) => s.step_type === 'trigger')
-                    const triggerCfg = triggerStepForCarmen?.configuration || {}
-                      const isCarmenFlow = triggerStepForCarmen?.action_type === 'carmen_whatsapp_session' ||
-                        triggerCfg.carmen_session_mode ||
-                      (automation as any).configuration?.carmen_session_mode
+                    const triggerStepForCarmen = (flowSteps || []).find(
+                      (s: any) => s.step_type === "trigger",
+                    );
+                    const triggerCfg =
+                      triggerStepForCarmen?.configuration || {};
+                    const isCarmenFlow =
+                      triggerStepForCarmen?.action_type ===
+                        "carmen_whatsapp_session" ||
+                      triggerCfg.carmen_session_mode ||
+                      (automation as any).configuration?.carmen_session_mode;
 
                     // HARD GUARD: Carmen WhatsApp flows are now owned end-to-end by
                     // `handleCarmenMessage` in the webhooks (green-api-webhook / manus-wa-webhook).
@@ -2031,186 +2632,290 @@ Deno.serve(async (req) => {
                     // `step_instruction` (treated as a user message) back into the chat as
                     // "ההנחיות נשמרו" loops. Skip the agent + downstream send entirely.
                     if (isCarmenFlow) {
-                      console.log('[trigger-automation] Skipping legacy Carmen agent path — owned by webhook handler', { automationId: automation.id })
+                      console.log(
+                        "[trigger-automation] Skipping legacy Carmen agent path — owned by webhook handler",
+                        { automationId: automation.id },
+                      );
                       // Mark all downstream steps as skipped so the executed send step
                       // (which would otherwise log "send_manus_message" without text) is
                       // not reported as a successful run.
-                      const queue: string[] = [step.id]
+                      const queue: string[] = [step.id];
                       while (queue.length) {
-                        const cur = queue.shift()!
-                        for (const edge of (outEdges[cur] || [])) {
+                        const cur = queue.shift()!;
+                        for (const edge of outEdges[cur] || []) {
                           if (!skippedNodes.has(edge.targetId)) {
-                            skippedNodes.add(edge.targetId)
-                            queue.push(edge.targetId)
+                            skippedNodes.add(edge.targetId);
+                            queue.push(edge.targetId);
                           }
                         }
                       }
-                      stepResponse = { success: true, skipped: 'carmen_owned_by_webhook' }
-                      previousStepOutput = { success: true, output: '', skipped: 'carmen_owned_by_webhook' }
-                      nodeOutputs[step.id] = stepData
-                      stepResults.push({ step_id: step.id, action_type: 'agent', success: true, response: stepResponse })
-                      continue
+                      stepResponse = {
+                        success: true,
+                        skipped: "carmen_owned_by_webhook",
+                      };
+                      previousStepOutput = {
+                        success: true,
+                        output: "",
+                        skipped: "carmen_owned_by_webhook",
+                      };
+                      nodeOutputs[step.id] = stepData;
+                      stepResults.push({
+                        step_id: step.id,
+                        action_type: "agent",
+                        success: true,
+                        response: stepResponse,
+                      });
+                      continue;
                     }
 
                     if (isCarmenFlow) {
-                      const sPhone = payloadData?.sender_phone || payloadData?.phone || ''
-                      const cId = payloadData?.chat_id || payloadData?.group_chat_id || ''
+                      const sPhone =
+                        payloadData?.sender_phone || payloadData?.phone || "";
+                      const cId =
+                        payloadData?.chat_id ||
+                        payloadData?.group_chat_id ||
+                        "";
 
                       // ── Timeout check: close expired sessions ──────────────
-                      const timeoutMinutes = triggerCfg.session_timeout_minutes ??
-                        (automation as any).configuration?.session_timeout_minutes ?? 60
-                      if (timeoutMinutes > 0 && payloadData._carmen_session_id) {
+                      const timeoutMinutes =
+                        triggerCfg.session_timeout_minutes ??
+                        (automation as any).configuration
+                          ?.session_timeout_minutes ??
+                        60;
+                      if (
+                        timeoutMinutes > 0 &&
+                        payloadData._carmen_session_id
+                      ) {
                         const { data: sessionRow } = await supabase
-                          .from('carmen_whatsapp_sessions')
-                          .select('last_message_at')
-                          .eq('id', payloadData._carmen_session_id)
-                          .single()
+                          .from("carmen_whatsapp_sessions")
+                          .select("last_message_at")
+                          .eq("id", payloadData._carmen_session_id)
+                          .single();
                         if (sessionRow?.last_message_at) {
-                          const lastMsg = new Date(sessionRow.last_message_at).getTime()
-                          const idleMs = Date.now() - lastMsg
+                          const lastMsg = new Date(
+                            sessionRow.last_message_at,
+                          ).getTime();
+                          const idleMs = Date.now() - lastMsg;
                           if (idleMs > timeoutMinutes * 60 * 1000) {
                             // Session timed out — close it and start fresh
                             await supabase
-                              .from('carmen_whatsapp_sessions')
-                              .update({ status: 'ended', ended_at: new Date().toISOString() })
-                              .eq('id', payloadData._carmen_session_id)
-                            payloadData._carmen_session_id = undefined
-                            payloadData._carmen_history = []
-                            console.log(`[CARMEN] Session timed out after ${timeoutMinutes} minutes — starting fresh`)
+                              .from("carmen_whatsapp_sessions")
+                              .update({
+                                status: "ended",
+                                ended_at: new Date().toISOString(),
+                              })
+                              .eq("id", payloadData._carmen_session_id);
+                            payloadData._carmen_session_id = undefined;
+                            payloadData._carmen_history = [];
+                            console.log(
+                              `[CARMEN] Session timed out after ${timeoutMinutes} minutes — starting fresh`,
+                            );
                           }
                         }
                       }
 
                       if (!payloadData._carmen_session_id) {
                         // No active session — only create one if trigger keyword is present AND message is outgoing
-                        const messageDirection = String(payloadData?.direction || '').toLowerCase()
-                        const isOutgoingMessage = messageDirection === 'outgoing' || messageDirection === 'outbound'
-                        const triggerKeyword = triggerCfg.trigger_keyword ||
-                          (automation as any).configuration?.trigger_keyword || 'כרמן'
-                        const messageText = (payloadData?.text || payloadData?.message_text || '').toLowerCase()
-                        const triggerWords = [triggerKeyword.toLowerCase(), 'carmen', 'כרמן']
-                        const hasTrigger = triggerWords.some(kw => messageText.includes(kw))
+                        const messageDirection = String(
+                          payloadData?.direction || "",
+                        ).toLowerCase();
+                        const isOutgoingMessage =
+                          messageDirection === "outgoing" ||
+                          messageDirection === "outbound";
+                        const triggerKeyword =
+                          triggerCfg.trigger_keyword ||
+                          (automation as any).configuration?.trigger_keyword ||
+                          "כרמן";
+                        const messageText = (
+                          payloadData?.text ||
+                          payloadData?.message_text ||
+                          ""
+                        ).toLowerCase();
+                        const triggerWords = [
+                          triggerKeyword.toLowerCase(),
+                          "carmen",
+                          "כרמן",
+                        ];
+                        const hasTrigger = triggerWords.some((kw) =>
+                          messageText.includes(kw),
+                        );
 
                         // In group chats, allow inbound trigger keyword (group members can invoke Carmen).
                         // In private chats, only outbound (operator's own device) can start a session.
-                        const isGroupChat = String(cId).includes('@g.us')
-                        const allowedByDirection = isOutgoingMessage || (isGroupChat && messageDirection === 'inbound')
+                        const isGroupChat = String(cId).includes("@g.us");
+                        const allowedByDirection =
+                          isOutgoingMessage ||
+                          (isGroupChat && messageDirection === "inbound");
                         if (!hasTrigger || !allowedByDirection) {
-                          console.log(`[CARMEN] No active session — skipping: hasTrigger=${hasTrigger}, direction=${messageDirection}, isGroup=${isGroupChat} for chat ${cId}`)
-                          continue
+                          console.log(
+                            `[CARMEN] No active session — skipping: hasTrigger=${hasTrigger}, direction=${messageDirection}, isGroup=${isGroupChat} for chat ${cId}`,
+                          );
+                          continue;
                         }
 
                         // Trigger keyword found — create new session keyed by THIS chat JID.
                         // Never fall back to speaker phone: the same person sits in many groups.
-                        const originForCreate = requireOriginChatId(cId)
+                        const originForCreate = requireOriginChatId(cId);
                         if (!originForCreate.ok) {
-                          console.log('[CARMEN] refusing to create session without chat_id')
-                          continue
+                          console.log(
+                            "[CARMEN] refusing to create session without chat_id",
+                          );
+                          continue;
                         }
-                        const connUserId = payloadData?.connection_user_id || ''
+                        const connUserId =
+                          payloadData?.connection_user_id || "";
                         const { data: newSession } = await supabase
-                          .from('carmen_whatsapp_sessions')
+                          .from("carmen_whatsapp_sessions")
                           .insert({
                             tenant_id: tenantId,
                             chat_id: originForCreate.chatId,
                             phone: sPhone,
-                            sender_name: payloadData?.sender_name || payloadData?.contact_name || '',
+                            sender_name:
+                              payloadData?.sender_name ||
+                              payloadData?.contact_name ||
+                              "",
                             agent_id: agentId,
                             connection_user_id: connUserId || null,
                             conversation_history: [],
-                            status: 'active',
+                            status: "active",
                             automation_id: automation.id || null,
                             started_by_keyword: triggerKeyword,
-                            end_keyword: triggerCfg.end_keyword ||
-                              (automation as any).configuration?.end_keyword || 'סיימנו',
+                            end_keyword:
+                              triggerCfg.end_keyword ||
+                              (automation as any).configuration?.end_keyword ||
+                              "סיימנו",
                           })
-                          .select('id')
-                          .single()
+                          .select("id")
+                          .single();
                         if (newSession) {
-                          payloadData._carmen_session_id = newSession.id
-                          payloadData._carmen_history = []
-                          console.log(`[CARMEN] New session created: ${newSession.id} for chat ${cId}`)
+                          payloadData._carmen_session_id = newSession.id;
+                          payloadData._carmen_history = [];
+                          console.log(
+                            `[CARMEN] New session created: ${newSession.id} for chat ${cId}`,
+                          );
                         }
                       } else {
                         // Session exists — only respond to INBOUND messages from the user.
                         // Outbound messages are Carmen's own replies echoed back by the webhook;
                         // processing them would cause Carmen to reply to herself in a loop and
                         // hallucinate confirmations without actually invoking tools.
-                        const messageDirection = String(payloadData?.direction || '').toLowerCase()
-                        const isOutgoingMessage = messageDirection === 'outgoing' || messageDirection === 'outbound'
+                        const messageDirection = String(
+                          payloadData?.direction || "",
+                        ).toLowerCase();
+                        const isOutgoingMessage =
+                          messageDirection === "outgoing" ||
+                          messageDirection === "outbound";
                         if (isOutgoingMessage) {
-                          console.log(`[CARMEN] Active session ${payloadData._carmen_session_id} — skipping outbound echo for chat ${cId}`)
-                          continue
+                          console.log(
+                            `[CARMEN] Active session ${payloadData._carmen_session_id} — skipping outbound echo for chat ${cId}`,
+                          );
+                          continue;
                         }
                         // Update last_message_at on inbound messages to keep session alive
                         await supabase
-                          .from('carmen_whatsapp_sessions')
+                          .from("carmen_whatsapp_sessions")
                           .update({ last_message_at: new Date().toISOString() })
-                          .eq('id', payloadData._carmen_session_id)
+                          .eq("id", payloadData._carmen_session_id);
                       }
                     }
 
                     // Build command_text from step_instruction with variable replacement
-                    let commandText = stepConfig.step_instruction || payloadData?.command_text || payloadData?.text || 'הפעל את האוטומציה'
-                    
+                    let commandText =
+                      stepConfig.step_instruction ||
+                      payloadData?.command_text ||
+                      payloadData?.text ||
+                      "הפעל את האוטומציה";
+
                     // Replace {{variable}} placeholders with actual values from stepData
                     // Use [^}]+ instead of \w+ to support Hebrew characters and special symbols in variable names
-                    commandText = commandText.replace(/\{\{([^}]+)\}\}/g, (match: string, key: string) => {
-                      const trimmedKey = key.trim()
-                      if (stepData[trimmedKey] !== undefined && stepData[trimmedKey] !== null) return String(stepData[trimmedKey])
-                      if (payloadData?.[trimmedKey] !== undefined && payloadData?.[trimmedKey] !== null) return String(payloadData[trimmedKey])
-                      return match // Keep placeholder if no value found
-                    })
+                    commandText = commandText.replace(
+                      /\{\{([^}]+)\}\}/g,
+                      (match: string, key: string) => {
+                        const trimmedKey = key.trim();
+                        if (
+                          stepData[trimmedKey] !== undefined &&
+                          stepData[trimmedKey] !== null
+                        )
+                          return String(stepData[trimmedKey]);
+                        if (
+                          payloadData?.[trimmedKey] !== undefined &&
+                          payloadData?.[trimmedKey] !== null
+                        )
+                          return String(payloadData[trimmedKey]);
+                        return match; // Keep placeholder if no value found
+                      },
+                    );
 
                     // Append output format instruction if specified
-                    const outputFormat = stepConfig.output_format
-                    let agentTemperature: number | undefined = undefined
-                    if (outputFormat === 'json') {
-                      commandText += '\n\nחשוב: החזר את התשובה בפורמט JSON בלבד, ללא טקסט נוסף.'
-                      agentTemperature = 0.1
-                    } else if (outputFormat === 'single_value') {
-                      commandText += '\n\nחשוב: החזר ערך בודד בלבד, ללא הסברים או טקסט נוסף.'
-                      agentTemperature = 0.1
-                    } else if (outputFormat === 'single_reply') {
-                      commandText += '\n\nחשוב מאוד: החזר תשובה אחת ישירה בלבד, במשפט קצר, ללא רשימות, ללא חלופות, ללא הומור וללא ניסוחים כמו "הנה כמה אפשרויות".'
-                      agentTemperature = 0.1
+                    const outputFormat = stepConfig.output_format;
+                    let agentTemperature: number | undefined = undefined;
+                    if (outputFormat === "json") {
+                      commandText +=
+                        "\n\nחשוב: החזר את התשובה בפורמט JSON בלבד, ללא טקסט נוסף.";
+                      agentTemperature = 0.1;
+                    } else if (outputFormat === "single_value") {
+                      commandText +=
+                        "\n\nחשוב: החזר ערך בודד בלבד, ללא הסברים או טקסט נוסף.";
+                      agentTemperature = 0.1;
+                    } else if (outputFormat === "single_reply") {
+                      commandText +=
+                        '\n\nחשוב מאוד: החזר תשובה אחת ישירה בלבד, במשפט קצר, ללא רשימות, ללא חלופות, ללא הומור וללא ניסוחים כמו "הנה כמה אפשרויות".';
+                      agentTemperature = 0.1;
                     }
 
-                    const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
+                    const agentUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/run-ai-agent`;
                     // Build conversation history — only from THIS chat's session.
                     // Never restore by speaker phone: the same person is in many groups.
-                    let carmenHistory: any[] = payloadData?._carmen_history || []
+                    let carmenHistory: any[] =
+                      payloadData?._carmen_history || [];
                     if (carmenHistory.length === 0) {
-                      const originChat = requireOriginChatId(payloadData?.chat_id || payloadData?.group_chat_id || '')
+                      const originChat = requireOriginChatId(
+                        payloadData?.chat_id ||
+                          payloadData?.group_chat_id ||
+                          "",
+                      );
 
                       if (originChat.ok) {
-                        const freshSince = new Date(Date.now() - 30 * 60_000).toISOString()
+                        const freshSince = new Date(
+                          Date.now() - 30 * 60_000,
+                        ).toISOString();
                         let previousSessionQuery = supabase
-                          .from('carmen_whatsapp_sessions')
-                          .select('id, conversation_history, last_message_at')
-                          .eq('tenant_id', tenantId)
-                          .eq('chat_id', originChat.chatId)
-                          .gte('last_message_at', freshSince)
-                          .order('last_message_at', { ascending: false })
-                          .order('created_at', { ascending: false })
-                          .limit(1)
+                          .from("carmen_whatsapp_sessions")
+                          .select("id, conversation_history, last_message_at")
+                          .eq("tenant_id", tenantId)
+                          .eq("chat_id", originChat.chatId)
+                          .gte("last_message_at", freshSince)
+                          .order("last_message_at", { ascending: false })
+                          .order("created_at", { ascending: false })
+                          .limit(1);
 
                         if (payloadData?.connection_user_id) {
-                          previousSessionQuery = previousSessionQuery.eq('connection_user_id', payloadData.connection_user_id)
+                          previousSessionQuery = previousSessionQuery.eq(
+                            "connection_user_id",
+                            payloadData.connection_user_id,
+                          );
                         }
                         if (payloadData?._carmen_session_id) {
-                          previousSessionQuery = previousSessionQuery.neq('id', payloadData._carmen_session_id)
+                          previousSessionQuery = previousSessionQuery.neq(
+                            "id",
+                            payloadData._carmen_session_id,
+                          );
                         }
 
-                        const { data: previousSession } = await previousSessionQuery.maybeSingle()
-                        const previousHistory = Array.isArray(previousSession?.conversation_history)
+                        const { data: previousSession } =
+                          await previousSessionQuery.maybeSingle();
+                        const previousHistory = Array.isArray(
+                          previousSession?.conversation_history,
+                        )
                           ? previousSession.conversation_history
-                          : []
+                          : [];
 
                         if (previousHistory.length > 0) {
-                          carmenHistory = previousHistory
-                          payloadData._carmen_history = previousHistory
-                          console.log(`[CARMEN] Restored ${previousHistory.length} history items from recent session ${previousSession?.id}`)
+                          carmenHistory = previousHistory;
+                          payloadData._carmen_history = previousHistory;
+                          console.log(
+                            `[CARMEN] Restored ${previousHistory.length} history items from recent session ${previousSession?.id}`,
+                          );
                         }
                       }
                     }
@@ -2219,7 +2924,7 @@ Deno.serve(async (req) => {
                       command_text: commandText,
                       temperature: agentTemperature,
                       automation_id: automation.id,
-                      user_name: payloadData?.user_name || 'מערכת',
+                      user_name: payloadData?.user_name || "מערכת",
                       lead_data: {
                         lead_id: stepData.lead_id,
                         contact_name: stepData.contact_name,
@@ -2232,362 +2937,709 @@ Deno.serve(async (req) => {
                         pipeline_stage: stepData.pipeline_stage,
                         agency_name: stepData.agency_name,
                         ...Object.fromEntries(
-                          Object.entries(stepData)
-                            .filter(([k]) => k.startsWith('fb_'))
+                          Object.entries(stepData).filter(([k]) =>
+                            k.startsWith("fb_"),
+                          ),
                         ),
                       },
-                    }
+                    };
                     // Pin a skin on this agent node (Strangler-additive): a flow
                     // node may set configuration.skin_slugs (array) or .skin
                     // (string) to force a specific skin from the ai_skills catalog
                     // (e.g. "campaigner"/"seo"/"analyst"). Passed through as
                     // task_skills, which run-ai-agent resolves by slug. If unset,
                     // behavior is unchanged.
-                    const nodeSkins: string[] = Array.isArray(stepConfig.skin_slugs)
+                    const nodeSkins: string[] = Array.isArray(
+                      stepConfig.skin_slugs,
+                    )
                       ? stepConfig.skin_slugs
-                      : (stepConfig.skin ? [stepConfig.skin] : [])
+                      : stepConfig.skin
+                        ? [stepConfig.skin]
+                        : [];
                     if (nodeSkins.length > 0) {
-                      agentBody.task_skills = nodeSkins
+                      agentBody.task_skills = nodeSkins;
                     }
                     // Pass conversation history for Carmen sessions
                     if (carmenHistory.length > 0) {
-                      agentBody.conversation_history = carmenHistory
+                      agentBody.conversation_history = carmenHistory;
                     }
                     const waNotify = buildWaNotifyFromOrigin({
                       tenantId,
                       automationId: automation.id,
-                      connectionUserId: String(payloadData?.connection_user_id || ''),
-                      chatId: payloadData?.chat_id || payloadData?.group_chat_id || '',
-                      speakerPhone: payloadData?.sender_phone || payloadData?.phone || null,
-                    })
-                    if (waNotify) agentBody.wa_notify = waNotify
+                      connectionUserId: String(
+                        payloadData?.connection_user_id || "",
+                      ),
+                      chatId:
+                        payloadData?.chat_id ||
+                        payloadData?.group_chat_id ||
+                        "",
+                      speakerPhone:
+                        payloadData?.sender_phone || payloadData?.phone || null,
+                    });
+                    if (waNotify) agentBody.wa_notify = waNotify;
                     const agentRes = await fetch(agentUrl, {
-                      method: 'POST',
+                      method: "POST",
                       headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                       },
                       body: JSON.stringify(agentBody),
-                    })
-                    stepResponse = await agentRes.json()
-                    previousStepOutput = stepResponse
+                    });
+                    stepResponse = await agentRes.json();
+                    previousStepOutput = stepResponse;
                     // SESSION: save updated history after agent responds (for whatsapp_session step)
                     if (stepResponse?.output) {
                       const updatedHistory = [
                         ...carmenHistory,
-                        { role: 'user', content: commandText, ts: new Date().toISOString() },
-                        { role: 'assistant', content: stepResponse.output, ts: new Date().toISOString() },
-                      ]
+                        {
+                          role: "user",
+                          content: commandText,
+                          ts: new Date().toISOString(),
+                        },
+                        {
+                          role: "assistant",
+                          content: stepResponse.output,
+                          ts: new Date().toISOString(),
+                        },
+                      ];
                       // Store in payloadData so the whatsapp_session step can use it
-                      payloadData._pending_session_history = updatedHistory
+                      payloadData._pending_session_history = updatedHistory;
                       // Also update carmen_whatsapp_sessions if applicable
                       if (payloadData?._carmen_session_id) {
                         await supabase
-                          .from('carmen_whatsapp_sessions')
+                          .from("carmen_whatsapp_sessions")
                           .update({
                             conversation_history: updatedHistory,
                             last_message_at: new Date().toISOString(),
                           })
-                          .eq('id', payloadData._carmen_session_id)
+                          .eq("id", payloadData._carmen_session_id);
                       }
                     }
                   }
-                } else if (effectiveActionType === 'send_greenapi_message' || effectiveActionType === 'send_manus_message') {
+                } else if (
+                  effectiveActionType === "send_greenapi_message" ||
+                  effectiveActionType === "send_manus_message"
+                ) {
                   // If message_template contains {{agent_output}}, replace it.
                   // Distinguish between real failures (throw) and legitimate empty output
                   // (agent intentionally produced no text — e.g. only tool calls, or the
                   // AI step was suppressed). In the empty-output case, skip the send step
                   // silently instead of raising a misleading "כרמן לא החזירה תשובה" error.
-                  if (stepConfig.message_template?.includes('{{agent_output}}') && !previousStepOutput?.output) {
-                    if (previousStepOutput && previousStepOutput.success === false) {
-                      throw new Error('כרמן לא החזירה תשובה לשליחה, לכן ההודעה לא נשלחה')
+                  if (
+                    stepConfig.message_template?.includes("{{agent_output}}") &&
+                    !previousStepOutput?.output
+                  ) {
+                    if (
+                      previousStepOutput &&
+                      previousStepOutput.success === false
+                    ) {
+                      throw new Error(
+                        "כרמן לא החזירה תשובה לשליחה, לכן ההודעה לא נשלחה",
+                      );
                     }
-                    console.log('[trigger-automation] Skipping send step — agent returned no text output')
-                    stepResponse = { success: true, skipped: 'empty_agent_output' }
-                    previousStepOutput = stepResponse
+                    console.log(
+                      "[trigger-automation] Skipping send step — agent returned no text output",
+                    );
+                    stepResponse = {
+                      success: true,
+                      skipped: "empty_agent_output",
+                    };
+                    previousStepOutput = stepResponse;
                   } else {
                     if (stepConfig.message_template && previousStepOutput) {
-                      const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
-                      stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
+                      const agentText =
+                        previousStepOutput?.output ||
+                        (typeof previousStepOutput === "string"
+                          ? previousStepOutput
+                          : JSON.stringify(previousStepOutput));
+                      stepConfig.message_template =
+                        stepConfig.message_template.replace(
+                          /\{\{agent_output\}\}/g,
+                          agentText,
+                        );
                       // Also support {{previous_step_output}}
-                      stepConfig.message_template = stepConfig.message_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                      stepConfig.message_template =
+                        stepConfig.message_template.replace(
+                          /\{\{previous_step_output\}\}/g,
+                          agentText,
+                        );
                     }
-                    stepResponse = await executeGreenApiMessage(supabase, stepConfig, stepData, tenantId)
-                    previousStepOutput = stepResponse
+                    stepResponse = await executeGreenApiMessage(
+                      supabase,
+                      stepConfig,
+                      stepData,
+                      tenantId,
+                    );
+                    previousStepOutput = stepResponse;
                   }
-                } else if (effectiveActionType === 'send_meta_whatsapp_message') {
-                  if (stepConfig.message_template?.includes('{{agent_output}}') && !previousStepOutput?.output) {
-                    if (previousStepOutput && previousStepOutput.success === false) {
-                      throw new Error('כרמן לא החזירה תשובה לשליחה, לכן ההודעה לא נשלחה')
+                } else if (
+                  effectiveActionType === "send_meta_whatsapp_message"
+                ) {
+                  if (
+                    stepConfig.message_template?.includes("{{agent_output}}") &&
+                    !previousStepOutput?.output
+                  ) {
+                    if (
+                      previousStepOutput &&
+                      previousStepOutput.success === false
+                    ) {
+                      throw new Error(
+                        "כרמן לא החזירה תשובה לשליחה, לכן ההודעה לא נשלחה",
+                      );
                     }
-                    stepResponse = { success: true, skipped: 'empty_agent_output' }
-                    previousStepOutput = stepResponse
+                    stepResponse = {
+                      success: true,
+                      skipped: "empty_agent_output",
+                    };
+                    previousStepOutput = stepResponse;
                   } else {
                     if (stepConfig.message_template && previousStepOutput) {
-                      const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
-                      stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
-                      stepConfig.message_template = stepConfig.message_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                      const agentText =
+                        previousStepOutput?.output ||
+                        (typeof previousStepOutput === "string"
+                          ? previousStepOutput
+                          : JSON.stringify(previousStepOutput));
+                      stepConfig.message_template =
+                        stepConfig.message_template.replace(
+                          /\{\{agent_output\}\}/g,
+                          agentText,
+                        );
+                      stepConfig.message_template =
+                        stepConfig.message_template.replace(
+                          /\{\{previous_step_output\}\}/g,
+                          agentText,
+                        );
                     }
-                    if (Array.isArray(stepConfig.template_variables) && previousStepOutput) {
-                      const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
-                      stepConfig.template_variables = stepConfig.template_variables.map((value: string) =>
-                        String(value ?? '')
-                          .replace(/\{\{agent_output\}\}/g, agentText)
-                          .replace(/\{\{previous_step_output\}\}/g, agentText),
-                      )
+                    if (
+                      Array.isArray(stepConfig.template_variables) &&
+                      previousStepOutput
+                    ) {
+                      const agentText =
+                        previousStepOutput?.output ||
+                        (typeof previousStepOutput === "string"
+                          ? previousStepOutput
+                          : JSON.stringify(previousStepOutput));
+                      stepConfig.template_variables =
+                        stepConfig.template_variables.map((value: string) =>
+                          String(value ?? "")
+                            .replace(/\{\{agent_output\}\}/g, agentText)
+                            .replace(
+                              /\{\{previous_step_output\}\}/g,
+                              agentText,
+                            ),
+                        );
                     }
-                    stepResponse = await executeMetaWhatsappMessage(supabase, stepConfig, stepData, tenantId)
-                    previousStepOutput = stepResponse
+                    stepResponse = await executeMetaWhatsappMessage(
+                      supabase,
+                      stepConfig,
+                      stepData,
+                      tenantId,
+                    );
+                    previousStepOutput = stepResponse;
                   }
-                } else if (effectiveActionType === 'send_whatsapp') {
+                } else if (effectiveActionType === "send_whatsapp") {
                   if (stepConfig.message_template && previousStepOutput) {
-                    const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
-                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
-                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                    const agentText =
+                      previousStepOutput?.output ||
+                      (typeof previousStepOutput === "string"
+                        ? previousStepOutput
+                        : JSON.stringify(previousStepOutput));
+                    stepConfig.message_template =
+                      stepConfig.message_template.replace(
+                        /\{\{agent_output\}\}/g,
+                        agentText,
+                      );
+                    stepConfig.message_template =
+                      stepConfig.message_template.replace(
+                        /\{\{previous_step_output\}\}/g,
+                        agentText,
+                      );
                   }
-                  stepResponse = await executeSendWhatsapp(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'webhook') {
-                  stepResponse = await executeWebhook(stepConfig, stepData)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'add_lead_update') {
+                  stepResponse = await executeSendWhatsapp(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                    tenantId,
+                  );
+                  previousStepOutput = stepResponse;
+                } else if (effectiveActionType === "webhook") {
+                  stepResponse = await executeWebhook(stepConfig, stepData);
+                  previousStepOutput = stepResponse;
+                } else if (effectiveActionType === "add_lead_update") {
                   if (stepConfig.update_text && previousStepOutput) {
-                    const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : '')
-                    stepConfig.update_text = stepConfig.update_text.replace(/\{\{agent_output\}\}/g, agentText)
+                    const agentText =
+                      previousStepOutput?.output ||
+                      (typeof previousStepOutput === "string"
+                        ? previousStepOutput
+                        : "");
+                    stepConfig.update_text = stepConfig.update_text.replace(
+                      /\{\{agent_output\}\}/g,
+                      agentText,
+                    );
                   }
-                  stepResponse = await executeAddLeadUpdate(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'add_client_update') {
-                  stepResponse = await executeAddClientUpdate(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'create_task') {
-                  stepResponse = await executeCreateTask(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'create_lead') {
-                  stepResponse = await executeCreateLead(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'send_signature') {
-                  stepResponse = await executeSendSignature(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'update_status') {
-                  stepResponse = await executeStatusUpdate(supabase, stepConfig, stepData)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'create_manychat_subscriber') {
-                  stepResponse = await executeCreateManychatSubscriber(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'send_greenapi_to_campaigner') {
-                  stepResponse = await executeGreenApiToCampaigner(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'send_telegram') {
+                  stepResponse = await executeAddLeadUpdate(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                    tenantId,
+                  );
+                  previousStepOutput = stepResponse;
+                } else if (effectiveActionType === "add_client_update") {
+                  stepResponse = await executeAddClientUpdate(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                    tenantId,
+                  );
+                  previousStepOutput = stepResponse;
+                } else if (effectiveActionType === "create_task") {
+                  stepResponse = await executeCreateTask(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                    tenantId,
+                  );
+                  previousStepOutput = stepResponse;
+                } else if (effectiveActionType === "create_lead") {
+                  stepResponse = await executeCreateLead(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                    tenantId,
+                  );
+                  previousStepOutput = stepResponse;
+                } else if (effectiveActionType === "send_signature") {
+                  stepResponse = await executeSendSignature(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                    tenantId,
+                  );
+                  previousStepOutput = stepResponse;
+                } else if (effectiveActionType === "update_status") {
+                  stepResponse = await executeStatusUpdate(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                  );
+                  previousStepOutput = stepResponse;
+                } else if (
+                  effectiveActionType === "create_manychat_subscriber"
+                ) {
+                  stepResponse = await executeCreateManychatSubscriber(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                    tenantId,
+                  );
+                  previousStepOutput = stepResponse;
+                } else if (
+                  effectiveActionType === "send_greenapi_to_campaigner"
+                ) {
+                  stepResponse = await executeGreenApiToCampaigner(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                    tenantId,
+                  );
+                  previousStepOutput = stepResponse;
+                } else if (effectiveActionType === "send_telegram") {
                   // Replace dynamic variables in message template
                   if (stepConfig.message_template && previousStepOutput) {
-                    const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
-                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
-                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                    const agentText =
+                      previousStepOutput?.output ||
+                      (typeof previousStepOutput === "string"
+                        ? previousStepOutput
+                        : JSON.stringify(previousStepOutput));
+                    stepConfig.message_template =
+                      stepConfig.message_template.replace(
+                        /\{\{agent_output\}\}/g,
+                        agentText,
+                      );
+                    stepConfig.message_template =
+                      stepConfig.message_template.replace(
+                        /\{\{previous_step_output\}\}/g,
+                        agentText,
+                      );
                   }
                   // Replace contact_name variable (special alias)
                   if (stepConfig.message_template) {
-                    const contactName = stepData?.contact_name || stepData?.sender_name || stepData?.name || ''
-                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{contact_name\}\}/g, contactName)
+                    const contactName =
+                      stepData?.contact_name ||
+                      stepData?.sender_name ||
+                      stepData?.name ||
+                      "";
+                    stepConfig.message_template =
+                      stepConfig.message_template.replace(
+                        /\{\{contact_name\}\}/g,
+                        contactName,
+                      );
                   }
                   // Generic field replacement: replace {{field_name}} with any value from stepData (lead fields, etc.)
                   if (stepConfig.message_template) {
-                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g, (match: string, key: string) => {
-                      const value = stepData?.[key]
-                      if (value === undefined || value === null) return match
-                      if (typeof value === 'object') return JSON.stringify(value)
-                      return String(value)
-                    })
+                    stepConfig.message_template =
+                      stepConfig.message_template.replace(
+                        /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g,
+                        (match: string, key: string) => {
+                          const value = stepData?.[key];
+                          if (value === undefined || value === null)
+                            return match;
+                          if (typeof value === "object")
+                            return JSON.stringify(value);
+                          return String(value);
+                        },
+                      );
                   }
                   // Resolve chat_id - could be dynamic variable
-                  let telegramChatId = stepConfig.telegram_chat_id || ''
-                  if (telegramChatId === '{{chat_id}}') {
-                    telegramChatId = stepData?.chat_id || stepData?.telegram_chat_id || ''
+                  let telegramChatId = stepConfig.telegram_chat_id || "";
+                  if (telegramChatId === "{{chat_id}}") {
+                    telegramChatId =
+                      stepData?.chat_id || stepData?.telegram_chat_id || "";
                   }
-                  
-                  if (!Deno.env.get('TELEGRAM_BOT_TOKEN')) {
-                    throw new Error('Telegram integration not configured (missing TELEGRAM_BOT_TOKEN)')
+
+                  if (!Deno.env.get("TELEGRAM_BOT_TOKEN")) {
+                    throw new Error(
+                      "Telegram integration not configured (missing TELEGRAM_BOT_TOKEN)",
+                    );
                   }
                   if (!telegramChatId) {
-                    throw new Error('Telegram chat_id is required')
+                    throw new Error("Telegram chat_id is required");
                   }
-                  
+
                   // Verify tenant has an active bot (primary OR shared shadow record)
                   const { data: tgBotState } = await supabase
-                    .from('telegram_bot_state')
-                    .select('id, shared_from_state_id')
-                    .eq('tenant_id', tenantId)
-                    .eq('is_active', true)
-                    .maybeSingle()
-                  
+                    .from("telegram_bot_state")
+                    .select("id, shared_from_state_id")
+                    .eq("tenant_id", tenantId)
+                    .eq("is_active", true)
+                    .maybeSingle();
+
                   if (!tgBotState) {
-                    throw new Error('לארגון זה אין בוט טלגרם פעיל. יש לחבר בוט בהגדרות הטלגרם או לבקש שיתוף מארגון אחר.')
+                    throw new Error(
+                      "לארגון זה אין בוט טלגרם פעיל. יש לחבר בוט בהגדרות הטלגרם או לבקש שיתוף מארגון אחר.",
+                    );
                   }
-                  
-                  const TG_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')
-                  if (!TG_BOT_TOKEN) throw new Error('TELEGRAM_BOT_TOKEN not configured')
-                  const telegramResponse = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      chat_id: telegramChatId,
-                      text: stepConfig.message_template || 'No message configured',
-                      parse_mode: stepConfig.telegram_parse_mode || 'HTML',
-                    }),
-                  })
-                  
-                  const telegramData = await telegramResponse.json()
+
+                  const TG_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
+                  if (!TG_BOT_TOKEN)
+                    throw new Error("TELEGRAM_BOT_TOKEN not configured");
+                  const telegramResponse = await fetch(
+                    `https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        chat_id: telegramChatId,
+                        text:
+                          stepConfig.message_template ||
+                          "No message configured",
+                        parse_mode: stepConfig.telegram_parse_mode || "HTML",
+                      }),
+                    },
+                  );
+
+                  const telegramData = await telegramResponse.json();
                   if (!telegramResponse.ok) {
-                    throw new Error(`Telegram API failed [${telegramResponse.status}]: ${JSON.stringify(telegramData)}`)
+                    throw new Error(
+                      `Telegram API failed [${telegramResponse.status}]: ${JSON.stringify(telegramData)}`,
+                    );
                   }
-                  
+
                   // Store outbound message
-                  await supabase.from('telegram_messages').insert({
+                  await supabase.from("telegram_messages").insert({
                     tenant_id: tenantId,
                     chat_id: parseInt(telegramChatId),
                     text: stepConfig.message_template,
-                    direction: 'outbound',
+                    direction: "outbound",
                     raw_update: telegramData.result,
-                  })
-                  
-                  stepResponse = { success: true, message_id: telegramData.result?.message_id }
-                  previousStepOutput = stepResponse
+                  });
+
+                  stepResponse = {
+                    success: true,
+                    message_id: telegramData.result?.message_id,
+                  };
+                  previousStepOutput = stepResponse;
                   // WHATSAPP SESSION STEP: save/update conversation history by chat_id
                   // Never key this on sender_phone — that would merge every group the same speaker is in.
-                  const originSession = requireOriginChatId(payloadData?.chat_id || payloadData?.group_chat_id)
-                  const chatId = originSession.ok ? originSession.chatId : ''
-                  const agentOutput = previousStepOutput?.output || ''
-                  const userMsg = payloadData?.message_text || payloadData?.text || ''
+                  const originSession = requireOriginChatId(
+                    payloadData?.chat_id || payloadData?.group_chat_id,
+                  );
+                  const chatId = originSession.ok ? originSession.chatId : "";
+                  const agentOutput = previousStepOutput?.output || "";
+                  const userMsg =
+                    payloadData?.message_text || payloadData?.text || "";
                   // Use pre-built history from agent step if available
-                  const pendingHistory = payloadData?._pending_session_history
+                  const pendingHistory = payloadData?._pending_session_history;
                   if (chatId && (agentOutput || pendingHistory)) {
                     // Load existing session
                     const { data: existingSession } = await supabase
-                      .from('whatsapp_sessions')
-                      .select('id, conversation_history')
-                      .eq('tenant_id', tenantId)
-                      .eq('chat_id', chatId)
-                      .eq('status', 'active')
-                      .order('created_at', { ascending: false })
+                      .from("whatsapp_sessions")
+                      .select("id, conversation_history")
+                      .eq("tenant_id", tenantId)
+                      .eq("chat_id", chatId)
+                      .eq("status", "active")
+                      .order("created_at", { ascending: false })
                       .limit(1)
-                      .maybeSingle()
+                      .maybeSingle();
                     // Use pre-built history from agent step if available, otherwise build from scratch
-                    const prevHistory: any[] = existingSession?.conversation_history || []
+                    const prevHistory: any[] =
+                      existingSession?.conversation_history || [];
                     const updatedHistory = pendingHistory || [
                       ...prevHistory,
-                      { role: 'user', content: userMsg, ts: new Date().toISOString() },
-                      { role: 'assistant', content: agentOutput, ts: new Date().toISOString() },
-                    ]
+                      {
+                        role: "user",
+                        content: userMsg,
+                        ts: new Date().toISOString(),
+                      },
+                      {
+                        role: "assistant",
+                        content: agentOutput,
+                        ts: new Date().toISOString(),
+                      },
+                    ];
                     if (existingSession) {
                       await supabase
-                        .from('whatsapp_sessions')
-                        .update({ conversation_history: updatedHistory, last_message_at: new Date().toISOString() })
-                        .eq('id', existingSession.id)
-                    } else {
-                      await supabase
-                        .from('whatsapp_sessions')
-                        .insert({
-                          tenant_id: tenantId,
-                          chat_id: chatId,
+                        .from("whatsapp_sessions")
+                        .update({
                           conversation_history: updatedHistory,
-                          status: 'active',
                           last_message_at: new Date().toISOString(),
                         })
+                        .eq("id", existingSession.id);
+                    } else {
+                      await supabase.from("whatsapp_sessions").insert({
+                        tenant_id: tenantId,
+                        chat_id: chatId,
+                        conversation_history: updatedHistory,
+                        status: "active",
+                        last_message_at: new Date().toISOString(),
+                      });
                     }
                     // Inject history into payloadData for subsequent steps in same run
-                    payloadData._session_history = updatedHistory
-                    stepResponse = { saved: true, turns: updatedHistory.length / 2 }
+                    payloadData._session_history = updatedHistory;
+                    stepResponse = {
+                      saved: true,
+                      turns: updatedHistory.length / 2,
+                    };
                     // IMPORTANT: do NOT overwrite previousStepOutput — keep agent output for send step
                     // previousStepOutput stays as the agent's output so send_greenapi_message uses it
                   }
-                } else if (effectiveActionType === 'email') {
+                } else if (effectiveActionType === "email") {
                   if (previousStepOutput) {
-                    const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
+                    const agentText =
+                      previousStepOutput?.output ||
+                      (typeof previousStepOutput === "string"
+                        ? previousStepOutput
+                        : JSON.stringify(previousStepOutput));
                     if (stepConfig.subject_template) {
-                      stepConfig.subject_template = stepConfig.subject_template.replace(/\{\{agent_output\}\}/g, agentText)
-                      stepConfig.subject_template = stepConfig.subject_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                      stepConfig.subject_template =
+                        stepConfig.subject_template.replace(
+                          /\{\{agent_output\}\}/g,
+                          agentText,
+                        );
+                      stepConfig.subject_template =
+                        stepConfig.subject_template.replace(
+                          /\{\{previous_step_output\}\}/g,
+                          agentText,
+                        );
                     }
                     if (stepConfig.body_template) {
-                      stepConfig.body_template = stepConfig.body_template.replace(/\{\{agent_output\}\}/g, agentText)
-                      stepConfig.body_template = stepConfig.body_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                      stepConfig.body_template =
+                        stepConfig.body_template.replace(
+                          /\{\{agent_output\}\}/g,
+                          agentText,
+                        );
+                      stepConfig.body_template =
+                        stepConfig.body_template.replace(
+                          /\{\{previous_step_output\}\}/g,
+                          agentText,
+                        );
                     }
                   }
-                  stepResponse = await executeEmail(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'run_manus_task') {
-                  stepResponse = await executeRunManusTask(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
-                } else if (effectiveActionType === 'send_manus_direct') {
-                  stepResponse = await executeSendManusMessage(supabase, stepConfig, stepData, tenantId)
-                  previousStepOutput = stepResponse
+                  stepResponse = await executeEmail(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                    tenantId,
+                  );
+                  previousStepOutput = stepResponse;
+                } else if (effectiveActionType === "run_manus_task") {
+                  stepResponse = await executeRunManusTask(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                    tenantId,
+                  );
+                  previousStepOutput = stepResponse;
+                } else if (effectiveActionType === "send_manus_direct") {
+                  stepResponse = await executeSendManusMessage(
+                    supabase,
+                    stepConfig,
+                    stepData,
+                    tenantId,
+                  );
+                  previousStepOutput = stepResponse;
                 } else {
                 }
                 // Store output for downstream nodes
                 nodeOutputs[step.id] = {
                   ...stepData,
-                  ...(stepResponse && typeof stepResponse === 'object' ? stepResponse : { output: stepResponse }),
-                }
-                actionCount++
-                stepResults.push({ step_id: step.id, action_type: effectiveActionType, success: true, response: stepResponse })
+                  ...(stepResponse && typeof stepResponse === "object"
+                    ? stepResponse
+                    : { output: stepResponse }),
+                };
+                actionCount++;
+                stepResults.push({
+                  step_id: step.id,
+                  action_type: effectiveActionType,
+                  success: true,
+                  response: stepResponse,
+                });
               } catch (stepErr: any) {
-                console.error(`Error in flow step ${step.id}:`, stepErr)
-                nodeOutputs[step.id] = { ...payloadData, _error: stepErr.message }
-                stepResults.push({ step_id: step.id, action_type: step.action_type, success: false, error: stepErr.message })
+                console.error(`Error in flow step ${step.id}:`, stepErr);
+                nodeOutputs[step.id] = {
+                  ...payloadData,
+                  _error: stepErr.message,
+                };
+                stepResults.push({
+                  step_id: step.id,
+                  action_type: step.action_type,
+                  success: false,
+                  error: stepErr.message,
+                });
                 // Continue to next step even if one fails
               }
             }
 
-            response = { 
-              flow: true, 
+            response = {
+              flow: true,
               steps: stepResults,
-              agent_output: stepResults.find(s => s.action_type === 'agent')?.response?.output || null,
-            }
+              agent_output:
+                stepResults.find((s) => s.action_type === "agent")?.response
+                  ?.output || null,
+            };
           } else {
             // Non-flow: execute single action as before
-            if (automation.action_type === 'webhook') {
-              response = await executeWebhook(automation.configuration, payloadData)
-            } else if (automation.action_type === 'email') {
-              response = await executeEmail(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'notification') {
-              response = await executeNotification(automation.configuration, payloadData)
-            } else if (automation.action_type === 'update_status') {
-              response = await executeStatusUpdate(supabase, automation.configuration, payloadData)
-            } else if (automation.action_type === 'send_whatsapp') {
-              response = await executeSendWhatsapp(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'create_manychat_subscriber') {
-              response = await executeCreateManychatSubscriber(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'send_greenapi_message' || automation.action_type === 'send_manus_message') {
-              response = await executeGreenApiMessage(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'send_meta_whatsapp_message') {
-              response = await executeMetaWhatsappMessage(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'send_greenapi_to_campaigner') {
-              response = await executeGreenApiToCampaigner(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'add_lead_update') {
-              response = await executeAddLeadUpdate(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'add_client_update') {
-              response = await executeAddClientUpdate(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'create_task') {
-              response = await executeCreateTask(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'create_lead') {
-              response = await executeCreateLead(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'send_signature') {
-              response = await executeSendSignature(supabase, automation.configuration, payloadData, tenantId)
-            } else if (automation.action_type === 'agent') {
-              const agentConfig = automation.configuration || {}
-              const agentId = agentConfig.agent_id
+            if (automation.action_type === "webhook") {
+              response = await executeWebhook(
+                automation.configuration,
+                payloadData,
+              );
+            } else if (automation.action_type === "email") {
+              response = await executeEmail(
+                supabase,
+                automation.configuration,
+                payloadData,
+                tenantId,
+              );
+            } else if (automation.action_type === "notification") {
+              response = await executeNotification(
+                automation.configuration,
+                payloadData,
+              );
+            } else if (automation.action_type === "update_status") {
+              response = await executeStatusUpdate(
+                supabase,
+                automation.configuration,
+                payloadData,
+              );
+            } else if (automation.action_type === "send_whatsapp") {
+              response = await executeSendWhatsapp(
+                supabase,
+                automation.configuration,
+                payloadData,
+                tenantId,
+              );
+            } else if (
+              automation.action_type === "create_manychat_subscriber"
+            ) {
+              response = await executeCreateManychatSubscriber(
+                supabase,
+                automation.configuration,
+                payloadData,
+                tenantId,
+              );
+            } else if (
+              automation.action_type === "send_greenapi_message" ||
+              automation.action_type === "send_manus_message"
+            ) {
+              response = await executeGreenApiMessage(
+                supabase,
+                automation.configuration,
+                payloadData,
+                tenantId,
+              );
+            } else if (
+              automation.action_type === "send_meta_whatsapp_message"
+            ) {
+              response = await executeMetaWhatsappMessage(
+                supabase,
+                automation.configuration,
+                payloadData,
+                tenantId,
+              );
+            } else if (
+              automation.action_type === "send_greenapi_to_campaigner"
+            ) {
+              response = await executeGreenApiToCampaigner(
+                supabase,
+                automation.configuration,
+                payloadData,
+                tenantId,
+              );
+            } else if (automation.action_type === "add_lead_update") {
+              response = await executeAddLeadUpdate(
+                supabase,
+                automation.configuration,
+                payloadData,
+                tenantId,
+              );
+            } else if (automation.action_type === "add_client_update") {
+              response = await executeAddClientUpdate(
+                supabase,
+                automation.configuration,
+                payloadData,
+                tenantId,
+              );
+            } else if (automation.action_type === "create_task") {
+              response = await executeCreateTask(
+                supabase,
+                automation.configuration,
+                payloadData,
+                tenantId,
+              );
+            } else if (automation.action_type === "create_lead") {
+              response = await executeCreateLead(
+                supabase,
+                automation.configuration,
+                payloadData,
+                tenantId,
+              );
+            } else if (automation.action_type === "send_signature") {
+              response = await executeSendSignature(
+                supabase,
+                automation.configuration,
+                payloadData,
+                tenantId,
+              );
+            } else if (automation.action_type === "agent") {
+              const agentConfig = automation.configuration || {};
+              const agentId = agentConfig.agent_id;
               if (agentId) {
-                const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
+                const agentUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/run-ai-agent`;
                 const agentRes = await fetch(agentUrl, {
-                  method: 'POST',
+                  method: "POST",
                   headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                   },
                   body: JSON.stringify({
                     agent_id: agentId,
-                    command_text: payloadData?.command_text || payloadData?.text || 'הפעל את האוטומציה',
+                    command_text:
+                      payloadData?.command_text ||
+                      payloadData?.text ||
+                      "הפעל את האוטומציה",
                     automation_id: automation.id,
-                    user_name: payloadData?.user_name || 'מערכת',
+                    user_name: payloadData?.user_name || "מערכת",
                     lead_data: {
                       lead_id: payloadData?.lead_id,
                       contact_name: payloadData?.contact_name,
@@ -2601,100 +3653,142 @@ Deno.serve(async (req) => {
                       agency_name: payloadData?.agency_name,
                     },
                   }),
-                })
-                response = await agentRes.json()
+                });
+                response = await agentRes.json();
               } else {
-                response = { error: 'No agent_id configured in automation' }
+                response = { error: "No agent_id configured in automation" };
               }
             }
           }
 
-          const executionTime = Date.now() - startTime
+          const executionTime = Date.now() - startTime;
 
           // A flow reports per-step results, so the run is only a success when every
           // step succeeded. Without this a run whose only action failed was logged
           // green and the failure was buried inside the response payload.
-          const flowStepResults = (response as { steps?: Array<{ success?: boolean; error?: string }> } | null)?.steps
+          const flowStepResults = (
+            response as {
+              steps?: Array<{ success?: boolean; error?: string }>;
+            } | null
+          )?.steps;
           const failedSteps = Array.isArray(flowStepResults)
             ? flowStepResults.filter((step) => step?.success === false)
-            : []
-          const succeeded = failedSteps.length === 0
-          if (!succeeded) await releaseOwnedClaim()
+            : [];
+          const succeeded = failedSteps.length === 0;
+          if (!succeeded) await releaseOwnedClaim();
 
-          await supabase.from('automation_logs').insert({
-            automation_id: automation.id,
-            success: succeeded,
-            error_message: succeeded
-              ? null
-              : failedSteps.map((step) => step?.error || 'שלב נכשל').join(' | '),
-            payload: payloadData,
-            response: response,
-            execution_time_ms: executionTime,
-          }).select('id').single().then(async ({ data: logRow }) => {
-            if (succeeded || !logRow?.id) return
-            if (!isLeadAlertSendWhatsappFailure(null, failedSteps, payloadData)) return
-            const errorMessage = failedSteps.map((step) => step?.error || 'שלב נכשל').join(' | ')
-            await queueLeadAlertFailureNotification(supabase, {
-              automation_log_id: logRow.id,
-              tenant_id: automation.tenant_id,
-              client_phone: payloadData?.client_phone ?? null,
-              lead_name: payloadData?.lead_name ?? payloadData?.contact_name ?? null,
-              client_name: payloadData?.client_name ?? null,
-              error_message: errorMessage,
+          await supabase
+            .from("automation_logs")
+            .insert({
+              automation_id: automation.id,
+              success: succeeded,
+              error_message: succeeded
+                ? null
+                : failedSteps
+                    .map((step) => step?.error || "שלב נכשל")
+                    .join(" | "),
+              payload: payloadData,
+              response: response,
+              execution_time_ms: executionTime,
             })
-            await deliverPendingLeadAlertFailureNotifications(supabase).catch((err) => {
-              console.error('[lead-alert-failure] immediate notify failed:', err)
+            .select("id")
+            .single()
+            .then(async ({ data: logRow }) => {
+              if (succeeded || !logRow?.id) return;
+              if (
+                !isLeadAlertSendWhatsappFailure(null, failedSteps, payloadData)
+              )
+                return;
+              const errorMessage = failedSteps
+                .map((step) => step?.error || "שלב נכשל")
+                .join(" | ");
+              await queueLeadAlertFailureNotification(supabase, {
+                automation_log_id: logRow.id,
+                tenant_id: automation.tenant_id,
+                client_phone: payloadData?.client_phone ?? null,
+                lead_name:
+                  payloadData?.lead_name ?? payloadData?.contact_name ?? null,
+                client_name: payloadData?.client_name ?? null,
+                error_message: errorMessage,
+              });
+              await deliverPendingLeadAlertFailureNotifications(supabase).catch(
+                (err) => {
+                  console.error(
+                    "[lead-alert-failure] immediate notify failed:",
+                    err,
+                  );
+                },
+              );
             })
-          }).catch((err) => {
-            console.error('[lead-alert-failure] log insert hook failed:', err)
-          })
+            .catch((err) => {
+              console.error(
+                "[lead-alert-failure] log insert hook failed:",
+                err,
+              );
+            });
 
-          return { success: succeeded, automation_id: automation.id, response }
+          return { success: succeeded, automation_id: automation.id, response };
         } catch (error) {
-          await releaseOwnedClaim()
-          const executionTime = Date.now() - startTime
-          console.error(`Error executing automation ${automation.id}:`, error)
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await releaseOwnedClaim();
+          const executionTime = Date.now() - startTime;
+          console.error(`Error executing automation ${automation.id}:`, error);
+          const errorMessage =
+            error instanceof Error ? error.message : "Unknown error";
 
           // Log failure
-          await supabase.from('automation_logs').insert({
+          await supabase.from("automation_logs").insert({
             automation_id: automation.id,
             success: false,
             error_message: errorMessage,
             payload: payloadData,
             execution_time_ms: executionTime,
-          })
+          });
 
-          return { success: false, automation_id: automation.id, error: errorMessage }
+          return {
+            success: false,
+            automation_id: automation.id,
+            error: errorMessage,
+          };
         }
-      })
-    )
+      }),
+    );
 
     return new Response(
       JSON.stringify({
         success: true,
-        results: results.map(r => r.status === 'fulfilled' ? r.value : { error: r.reason }),
+        results: results.map((r) =>
+          r.status === "fulfilled" ? r.value : { error: r.reason },
+        ),
         executed: results.length,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (error) {
-    console.error('Error in trigger-automation:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-    )
+    console.error("Error in trigger-automation:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400,
+    });
   }
-})
+});
 
 // Helper function to check conditions
-function checkConditions(conditions: any, data: any, triggerType?: string): boolean {
+function checkConditions(
+  conditions: any,
+  data: any,
+  triggerType?: string,
+): boolean {
   try {
     for (const [key, value] of Object.entries(conditions)) {
       // Special handling for new_status - only relevant for status change triggers
-      if (key === 'new_status') {
-        if (triggerType && triggerType !== 'lead_status_changed' && triggerType !== 'task_status_changed') {
+      if (key === "new_status") {
+        if (
+          triggerType &&
+          triggerType !== "lead_status_changed" &&
+          triggerType !== "task_status_changed"
+        ) {
           continue;
         }
         const dataStatus = data.new_status || data.status;
@@ -2703,104 +3797,103 @@ function checkConditions(conditions: any, data: any, triggerType?: string): bool
         }
       }
       // WhatsApp message received trigger conditions
-      else if (triggerType === 'whatsapp_message_received') {
-        if (key === 'source_filter') {
+      else if (triggerType === "whatsapp_message_received") {
+        if (key === "source_filter") {
           // Handle source_filter logic here
-          if (value === 'group' && !data.group_id) return false;
-          if (value === 'all_groups' && !data.group_id) return false;
-          if (value === 'all_groups_except') {
+          if (value === "group" && !data.group_id) return false;
+          if (value === "all_groups" && !data.group_id) return false;
+          if (value === "all_groups_except") {
             if (!data.group_id) return false;
             const excludedIds = conditions.excluded_group_ids || [];
-            if (excludedIds.length > 0 && excludedIds.includes(data.group_id)) return false;
+            if (excludedIds.length > 0 && excludedIds.includes(data.group_id))
+              return false;
           }
-          if (value === 'multiple_groups') {
+          if (value === "multiple_groups") {
             if (!data.group_id) return false;
             const selectedIds = conditions.selected_group_ids || [];
-            if (selectedIds.length > 0 && !selectedIds.includes(data.group_id)) return false;
+            if (selectedIds.length > 0 && !selectedIds.includes(data.group_id))
+              return false;
           }
-          if (value === 'private' && data.group_id) return false;
+          if (value === "private" && data.group_id) return false;
           continue;
         }
-        if (key === 'selected_group_ids' || key === 'excluded_group_ids') {
+        if (key === "selected_group_ids" || key === "excluded_group_ids") {
           // Already handled by source_filter above
           continue;
         }
-        if (key === 'group_id' && value) {
+        if (key === "group_id" && value) {
           if (data.group_id !== value) {
             return false;
           }
         }
-        if (key === 'keyword' && value) {
+        if (key === "keyword" && value) {
           const keyword = String(value).toLowerCase();
-          const msgText = (data.message_text || '').toLowerCase();
+          const msgText = (data.message_text || "").toLowerCase();
           if (!msgText.includes(keyword)) {
             return false;
           }
         }
-        if (key === 'tag_id' && value) {
+        if (key === "tag_id" && value) {
           const contactTags = data.tags || [];
           if (!contactTags.includes(value)) {
             return false;
           }
         }
-        if (key === 'connection_user_id' && value) {
+        if (key === "connection_user_id" && value) {
           if (data.connection_user_id !== value) {
             return false;
           }
         }
-      }
-      else if (data[key] !== value) {
+      } else if (data[key] !== value) {
         return false;
       }
     }
     return true;
   } catch (error) {
-    console.error('Error checking conditions:', error)
+    console.error("Error checking conditions:", error);
     return false;
   }
 }
 
 // Execute webhook action
 async function executeWebhook(config: any, data: any) {
-  
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     ...(config.headers || {}),
-  }
+  };
 
   // Send data as flat JSON object with individual fields
   // This makes it easy to map fields in Make.com
-  const bodyData = JSON.stringify(data)
-
+  const bodyData = JSON.stringify(data);
 
   const response = await fetch(config.url, {
-    method: config.method || 'POST',
+    method: config.method || "POST",
     headers: headers,
     body: bodyData,
-  })
+  });
 
-  const responseText = await response.text()
-  
+  const responseText = await response.text();
+
   return {
     status: response.status,
     statusText: response.statusText,
     body: responseText,
-  }
+  };
 }
 
 function textToHtml(body: string): string {
   return body
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br/>')
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br/>");
 }
 
 function parseEmailList(raw: string): string[] {
-  return String(raw || '')
+  return String(raw || "")
     .split(/[,;\s]+/)
     .map((v) => v.trim().toLowerCase())
-    .filter((v) => v.includes('@'))
+    .filter((v) => v.includes("@"));
 }
 
 async function resolveEmailRecipients(
@@ -2809,34 +3902,38 @@ async function resolveEmailRecipients(
   data: any,
   tenantId: string,
 ): Promise<string[]> {
-  const out: string[] = []
+  const out: string[] = [];
   for (const r of recipients || []) {
     try {
-      if (!r || typeof r !== 'object') continue
+      if (!r || typeof r !== "object") continue;
       switch (r.type) {
-        case 'email_field': {
-          const v = r.field ? data?.[r.field] : null
-          if (v) out.push(...parseEmailList(String(v)))
-          break
+        case "email_field": {
+          const v = r.field ? data?.[r.field] : null;
+          if (v) out.push(...parseEmailList(String(v)));
+          break;
         }
-        case 'email_manual': {
-          if (r.email) out.push(...parseEmailList(r.email))
-          break
+        case "email_manual": {
+          if (r.email) out.push(...parseEmailList(r.email));
+          break;
         }
-        case 'contact_lookup': {
-          if (!r.id) break
-          const table = r.entity === 'client' ? 'clients' : 'leads'
+        case "contact_lookup": {
+          if (!r.id) break;
+          const table = r.entity === "client" ? "clients" : "leads";
           const { data: row } = await supabase
-            .from(table).select('email').eq('id', r.id).eq('tenant_id', tenantId).maybeSingle()
-          if (row?.email) out.push(...parseEmailList(row.email))
-          break
+            .from(table)
+            .select("email")
+            .eq("id", r.id)
+            .eq("tenant_id", tenantId)
+            .maybeSingle();
+          if (row?.email) out.push(...parseEmailList(row.email));
+          break;
         }
       }
     } catch (e) {
-      console.error('[email-recipients] resolve error', r, e)
+      console.error("[email-recipients] resolve error", r, e);
     }
   }
-  return Array.from(new Set(out))
+  return Array.from(new Set(out));
 }
 
 async function resolveAutomationEmailFrom(
@@ -2844,51 +3941,62 @@ async function resolveAutomationEmailFrom(
   config: any,
   tenantId: string,
 ): Promise<{ fromEmail: string; fromName: string | null }> {
-  let domainRow: any = null
+  let domainRow: any = null;
   if (config?.sender_domain_id) {
     const { data } = await supabase
-      .from('broadcast_email_domains')
-      .select('domain, default_local, from_name, is_default')
-      .eq('id', config.sender_domain_id)
-      .eq('tenant_id', tenantId)
-      .maybeSingle()
-    domainRow = data
+      .from("broadcast_email_domains")
+      .select("domain, default_local, from_name, is_default")
+      .eq("id", config.sender_domain_id)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    domainRow = data;
   }
   if (!domainRow) {
     const { data } = await supabase
-      .from('broadcast_email_domains')
-      .select('domain, default_local, from_name, is_default')
-      .eq('tenant_id', tenantId)
-      .order('is_default', { ascending: false })
-      .order('created_at', { ascending: true })
+      .from("broadcast_email_domains")
+      .select("domain, default_local, from_name, is_default")
+      .eq("tenant_id", tenantId)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: true })
       .limit(1)
-      .maybeSingle()
-    domainRow = data
+      .maybeSingle();
+    domainRow = data;
   }
   if (!domainRow?.domain) {
-    throw new Error('לא הוגדר דומיין שליחה מאומת לארגון. הוסף דומיין בדיוור → הגדרות שולח.')
+    throw new Error(
+      "לא הוגדר דומיין שליחה מאומת לארגון. הוסף דומיין בדיוור → הגדרות שולח.",
+    );
   }
 
-  let domainName = String(domainRow.domain || '').trim().toLowerCase()
-  let defaultLocal = String(domainRow.default_local || 'noreply').trim().toLowerCase()
+  let domainName = String(domainRow.domain || "")
+    .trim()
+    .toLowerCase();
+  let defaultLocal = String(domainRow.default_local || "noreply")
+    .trim()
+    .toLowerCase();
   const looksLikeVerifiedDomain = (value: string) =>
-    /\.(co\.il|org\.il|ac\.il|gov\.il|com|net|org|io|co)$/i.test(value)
-  if (looksLikeVerifiedDomain(defaultLocal) && !looksLikeVerifiedDomain(domainName)) {
-    const swappedLocal = domainName || 'noreply'
-    domainName = defaultLocal
-    defaultLocal = swappedLocal
+    /\.(co\.il|org\.il|ac\.il|gov\.il|com|net|org|io|co)$/i.test(value);
+  if (
+    looksLikeVerifiedDomain(defaultLocal) &&
+    !looksLikeVerifiedDomain(domainName)
+  ) {
+    const swappedLocal = domainName || "noreply";
+    domainName = defaultLocal;
+    defaultLocal = swappedLocal;
   }
 
-  const fromMode = config?.from_mode || 'default'
-  const localPart = fromMode === 'custom'
-    ? String(config?.from_local || defaultLocal || 'noreply').trim()
-    : String(defaultLocal || 'noreply').trim()
-  const fromEmail = `${localPart}@${domainName}`
-  const fromName = fromMode === 'custom'
-    ? (String(config?.from_name || '').trim() || domainRow.from_name || null)
-    : (domainRow.from_name || null)
+  const fromMode = config?.from_mode || "default";
+  const localPart =
+    fromMode === "custom"
+      ? String(config?.from_local || defaultLocal || "noreply").trim()
+      : String(defaultLocal || "noreply").trim();
+  const fromEmail = `${localPart}@${domainName}`;
+  const fromName =
+    fromMode === "custom"
+      ? String(config?.from_name || "").trim() || domainRow.from_name || null
+      : domainRow.from_name || null;
 
-  return { fromEmail, fromName }
+  return { fromEmail, fromName };
 }
 
 // Fill lead fields from DB when trigger payload omitted them (e.g. webhook lead_created).
@@ -2896,27 +4004,36 @@ async function enrichLeadPayloadData(
   supabase: any,
   data: Record<string, any>,
 ): Promise<Record<string, any>> {
-  const leadId = data?.lead_id || data?.id
-  if (!leadId) return data
+  const leadId = data?.lead_id || data?.id;
+  if (!leadId) return data;
 
-  const isBlank = (value: unknown) => value == null || String(value).trim() === ''
-  const needsNotes = isBlank(data.notes)
-  const needsEmail = isBlank(data.email)
-  const needsContact = isBlank(data.contact_name)
-  const needsPhone = isBlank(data.phone)
-  const needsCompany = isBlank(data.company_name)
+  const isBlank = (value: unknown) =>
+    value == null || String(value).trim() === "";
+  const needsNotes = isBlank(data.notes);
+  const needsEmail = isBlank(data.email);
+  const needsContact = isBlank(data.contact_name);
+  const needsPhone = isBlank(data.phone);
+  const needsCompany = isBlank(data.company_name);
 
-  if (!needsNotes && !needsEmail && !needsContact && !needsPhone && !needsCompany) {
-    return data
+  if (
+    !needsNotes &&
+    !needsEmail &&
+    !needsContact &&
+    !needsPhone &&
+    !needsCompany
+  ) {
+    return data;
   }
 
   const { data: lead } = await supabase
-    .from('leads')
-    .select('id, notes, email, contact_name, phone, company_name, source, status, campaign_name, agency_id')
-    .eq('id', leadId)
-    .maybeSingle()
+    .from("leads")
+    .select(
+      "id, notes, email, contact_name, phone, company_name, source, status, campaign_name, agency_id",
+    )
+    .eq("id", leadId)
+    .maybeSingle();
 
-  if (!lead) return data
+  if (!lead) return data;
 
   return {
     ...data,
@@ -2924,43 +4041,73 @@ async function enrichLeadPayloadData(
     id: data.id || lead.id,
     ...(needsNotes && lead.notes ? { notes: lead.notes } : {}),
     ...(needsEmail && lead.email ? { email: lead.email } : {}),
-    ...(needsContact && lead.contact_name ? { contact_name: lead.contact_name } : {}),
+    ...(needsContact && lead.contact_name
+      ? { contact_name: lead.contact_name }
+      : {}),
     ...(needsPhone && lead.phone ? { phone: lead.phone } : {}),
-    ...(needsCompany && lead.company_name ? { company_name: lead.company_name } : {}),
+    ...(needsCompany && lead.company_name
+      ? { company_name: lead.company_name }
+      : {}),
     ...(data.source == null && lead.source ? { source: lead.source } : {}),
     ...(data.status == null && lead.status ? { status: lead.status } : {}),
-    ...(data.campaign_name == null && lead.campaign_name ? { campaign_name: lead.campaign_name } : {}),
-    ...(data.agency_id == null && lead.agency_id ? { agency_id: lead.agency_id } : {}),
-  }
+    ...(data.campaign_name == null && lead.campaign_name
+      ? { campaign_name: lead.campaign_name }
+      : {}),
+    ...(data.agency_id == null && lead.agency_id
+      ? { agency_id: lead.agency_id }
+      : {}),
+  };
 }
 
 // Execute email action via Resend
-async function executeEmail(supabase: any, config: any, data: any, tenantId: string) {
-  const recipients = Array.isArray(config?.email_recipients) ? config.email_recipients : []
-  const emails = await resolveEmailRecipients(supabase, recipients, data, tenantId)
+async function executeEmail(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const recipients = Array.isArray(config?.email_recipients)
+    ? config.email_recipients
+    : [];
+  const emails = await resolveEmailRecipients(
+    supabase,
+    recipients,
+    data,
+    tenantId,
+  );
   if (emails.length === 0) {
-    throw new Error('לא נמצאו כתובות אימייל לשליחה')
+    throw new Error("לא נמצאו כתובות אימייל לשליחה");
   }
 
-  const subject = replaceTemplateVariables(config?.subject_template || '', data).trim()
-  const body = replaceTemplateVariables(config?.body_template || config?.message_template || '', data).trim()
-  if (!subject) throw new Error('נושא האימייל חסר')
-  if (!body) throw new Error('גוף האימייל חסר')
+  const subject = replaceTemplateVariables(
+    config?.subject_template || "",
+    data,
+  ).trim();
+  const body = replaceTemplateVariables(
+    config?.body_template || config?.message_template || "",
+    data,
+  ).trim();
+  if (!subject) throw new Error("נושא האימייל חסר");
+  if (!body) throw new Error("גוף האימייל חסר");
 
-  const { fromEmail, fromName } = await resolveAutomationEmailFrom(supabase, config, tenantId)
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  if (!supabaseUrl || !serviceKey) throw new Error('Supabase env vars missing')
+  const { fromEmail, fromName } = await resolveAutomationEmailFrom(
+    supabase,
+    config,
+    tenantId,
+  );
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) throw new Error("Supabase env vars missing");
 
-  const html = `<div dir="rtl" style="font-family:system-ui,Arial,sans-serif">${textToHtml(body)}</div>`
-  const results: Array<{ to: string; id?: string }> = []
+  const html = `<div dir="rtl" style="font-family:system-ui,Arial,sans-serif">${textToHtml(body)}</div>`;
+  const results: Array<{ to: string; id?: string }> = [];
 
   for (const to of emails) {
     const res = await fetch(`${supabaseUrl}/functions/v1/send-resend-email`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
       },
       body: JSON.stringify({
         to,
@@ -2970,152 +4117,178 @@ async function executeEmail(supabase: any, config: any, data: any, tenantId: str
         fromEmail,
         fromName: fromName || undefined,
         replyTo: config?.reply_to || undefined,
-        tags: [{ name: 'automation_email', value: tenantId }],
+        tags: [{ name: "automation_email", value: tenantId }],
       }),
-    })
-    const json = await res.json().catch(() => ({}))
+    });
+    const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(`שגיאה בשליחת אימייל ל-${to}: ${JSON.stringify(json)}`)
+      throw new Error(`שגיאה בשליחת אימייל ל-${to}: ${JSON.stringify(json)}`);
     }
-    results.push({ to, id: json?.id })
+    results.push({ to, id: json?.id });
   }
 
-  return { success: true, sent: results.length, results, from: fromEmail }
+  return { success: true, sent: results.length, results, from: fromEmail };
 }
 
 // Execute notification action (placeholder)
 async function executeNotification(config: any, data: any) {
-  return { message: 'Notification action not implemented' }
+  return { message: "Notification action not implemented" };
 }
 
 // Execute status update action
 async function executeStatusUpdate(supabase: any, config: any, data: any) {
-  
-  const { entity, status, update_field, update_field_value } = config
-  const recordId = data.id
-  
+  const { entity, status, update_field, update_field_value } = config;
+  const recordId = data.id;
+
   if (!recordId) {
-    throw new Error('No record ID provided for status update')
+    throw new Error("No record ID provided for status update");
   }
-  
+
   // Determine which table to update
-  const table = entity === 'lead' ? 'leads' : 'tasks'
-  
-  
+  const table = entity === "lead" ? "leads" : "tasks";
+
   // Build update object
-  const updateData: any = {}
-  
+  const updateData: any = {};
+
   // Update status only if provided (optional now)
   if (status) {
-    updateData.status = status
+    updateData.status = status;
   }
-  
+
   // Update additional date field if specified
-  if (update_field && update_field !== 'none' && update_field_value === 'today') {
-    const today = new Date().toISOString().split('T')[0] // Format: YYYY-MM-DD
-    updateData[update_field] = today
+  if (
+    update_field &&
+    update_field !== "none" &&
+    update_field_value === "today"
+  ) {
+    const today = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
+    updateData[update_field] = today;
   }
-  
+
   // Ensure we have something to update
   if (Object.keys(updateData).length === 0) {
-    return { success: true, message: 'No updates needed' }
+    return { success: true, message: "No updates needed" };
   }
-  
-  
+
   const { data: updateResult, error } = await supabase
     .from(table)
     .update(updateData)
-    .eq('id', recordId)
+    .eq("id", recordId)
     .select()
-    .single()
-  
+    .single();
+
   if (error) {
-    console.error(`Error updating ${table}:`, error)
-    throw error
+    console.error(`Error updating ${table}:`, error);
+    throw error;
   }
-  
-  
+
   return {
     success: true,
     entity: entity,
     recordId: recordId,
     updates: updateData,
-    result: updateResult
-  }
+    result: updateResult,
+  };
 }
 
 // Execute send WhatsApp action via ManyChat
-async function executeSendWhatsapp(supabase: any, config: any, data: any, tenantId: string) {
-  const phoneFieldForLock = typeof config.phone_field === 'string' ? config.phone_field.trim() : ''
-  const destinationForLock = phoneFieldForLock && data?.[phoneFieldForLock] != null
-    ? String(data[phoneFieldForLock]).trim()
-    : ''
+async function executeSendWhatsapp(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const phoneFieldForLock =
+    typeof config.phone_field === "string" ? config.phone_field.trim() : "";
+  const destinationForLock =
+    phoneFieldForLock && data?.[phoneFieldForLock] != null
+      ? String(data[phoneFieldForLock]).trim()
+      : "";
   const useDestinationLock = Boolean(
-    destinationForLock
-    && (data?.lead_name || data?.contact_name)
-    && (phoneFieldForLock === 'client_phone' || phoneFieldForLock === 'recipient_phone'),
-  )
+    destinationForLock &&
+    (data?.lead_name || data?.contact_name) &&
+    (phoneFieldForLock === "client_phone" ||
+      phoneFieldForLock === "recipient_phone"),
+  );
   if (useDestinationLock) {
     return withManyChatDestinationLock(supabase, destinationForLock, () =>
-      executeSendWhatsappCore(supabase, config, data, tenantId))
+      executeSendWhatsappCore(supabase, config, data, tenantId),
+    );
   }
-  return executeSendWhatsappCore(supabase, config, data, tenantId)
+  return executeSendWhatsappCore(supabase, config, data, tenantId);
 }
 
-async function executeSendWhatsappCore(supabase: any, config: any, data: any, tenantId: string) {
-  
-  const { manychat_tag_id, manychat_flow_ns, field_mapping } = config
-  
+async function executeSendWhatsappCore(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const { manychat_tag_id, manychat_flow_ns, field_mapping } = config;
+
   // Get ManyChat integration settings for this tenant
   const { data: integration, error: integrationError } = await supabase
-    .from('tenant_integrations')
-    .select('api_key, settings')
-    .eq('tenant_id', tenantId)
-    .eq('integration_type', 'manychat')
-    .eq('is_active', true)
-    .maybeSingle()
-  
+    .from("tenant_integrations")
+    .select("api_key, settings")
+    .eq("tenant_id", tenantId)
+    .eq("integration_type", "manychat")
+    .eq("is_active", true)
+    .maybeSingle();
+
   if (integrationError) {
-    console.error('Error fetching ManyChat integration:', integrationError)
-    throw new Error('שגיאה בטעינת הגדרות ManyChat')
+    console.error("Error fetching ManyChat integration:", integrationError);
+    throw new Error("שגיאה בטעינת הגדרות ManyChat");
   }
-  
+
   if (!integration?.api_key) {
-    throw new Error('לא נמצא חיבור ManyChat פעיל לארגון זה')
+    throw new Error("לא נמצא חיבור ManyChat פעיל לארגון זה");
   }
-  
-  const apiKey = integration.api_key
-  const baseUrl = 'https://api.manychat.com/fb'
-  
+
+  const apiKey = integration.api_key;
+  const baseUrl = "https://api.manychat.com/fb";
+
   // Get the subscriber ID from lead or client
-  let subscriberId: string | null = null
-  let contactPhone: string | null = null
-  let contactRecord: any = null
-  let contactType: 'lead' | 'client' | null = null
+  let subscriberId: string | null = null;
+  let contactPhone: string | null = null;
+  let contactRecord: any = null;
+  let contactType: "lead" | "client" | null = null;
 
   // Lead→client alerts (Make/Webhook) pass phone_field=client_phone with no
   // client_id/lead_id. Resolve that phone before CRM lookups so we tag the client,
   // not the lead. Only honor an explicit phone_field — never guess from payload.
-  const phoneField = typeof config.phone_field === 'string' ? config.phone_field.trim() : ''
-  if (phoneField && data?.[phoneField] != null && String(data[phoneField]).trim()) {
-    contactPhone = String(data[phoneField]).trim()
+  const phoneField =
+    typeof config.phone_field === "string" ? config.phone_field.trim() : "";
+  if (
+    phoneField &&
+    data?.[phoneField] != null &&
+    String(data[phoneField]).trim()
+  ) {
+    contactPhone = String(data[phoneField]).trim();
   }
 
   const phoneLast9 = (value: string | null | undefined): string =>
-    String(value ?? '').replace(/\D/g, '').slice(-9)
+    String(value ?? "")
+      .replace(/\D/g, "")
+      .slice(-9);
 
   // When phone_field sends a different destination (e.g. campaigner testing on their
   // own number), resolve ManyChat by that phone only — do not link CRM records.
   const destinationMatchesContactRecord = (): boolean => {
-    if (!contactRecord?.phone || !contactPhone) return true
-    return phoneLast9(contactPhone) === phoneLast9(contactRecord.phone)
-  }
-  const shouldLinkSubscriberToCrm = (): boolean => !phoneField || destinationMatchesContactRecord()
-  
+    if (!contactRecord?.phone || !contactPhone) return true;
+    return phoneLast9(contactPhone) === phoneLast9(contactRecord.phone);
+  };
+  const shouldLinkSubscriberToCrm = (): boolean =>
+    !phoneField || destinationMatchesContactRecord();
+
   // Helper to check if subscriber ID is valid (not a sync conflict status)
   const isValidSubscriberId = (id: string | null | undefined): boolean => {
     if (!id) return false;
-    const invalidStatuses = ['SYNC_CONFLICT', 'NEEDS_MANUAL_LINK', 'SYNC_ERROR', 'EXISTING_WA_SUBSCRIBER'];
+    const invalidStatuses = [
+      "SYNC_CONFLICT",
+      "NEEDS_MANUAL_LINK",
+      "SYNC_ERROR",
+      "EXISTING_WA_SUBSCRIBER",
+    ];
     return !invalidStatuses.includes(id);
   };
 
@@ -3126,32 +4299,36 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
   const verifyAndFixSubscriberId = async (
     phone: string,
     savedId: string | null,
-    type: 'lead' | 'client',
-    recordId: string
+    type: "lead" | "client",
+    recordId: string,
   ): Promise<string | null> => {
-    
     // Step 1: Get field_id for phone_number custom field
     const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId);
     if (!fieldId) {
       // Fall back to saved ID if we can't search
       return isValidSubscriberId(savedId) ? savedId : null;
     }
-    
-    // Step 2: Generate phone format candidates for search
-    const cleanPhone = phone.replace(/\D/g, '');
-    const last9Digits = cleanPhone.slice(-9);
-    const phoneCandidates = [...new Set([
-      `+972${last9Digits}`,
-      `972${last9Digits}`,
-      `0${last9Digits}`,
-      cleanPhone
-    ])];
-    
-    // Step 3: Search for subscriber by custom field
-    const foundId = await findSubscriberByCustomFieldMC(apiKey, fieldId, phoneCandidates);
-    
-    if (foundId) {
 
+    // Step 2: Generate phone format candidates for search
+    const cleanPhone = phone.replace(/\D/g, "");
+    const last9Digits = cleanPhone.slice(-9);
+    const phoneCandidates = [
+      ...new Set([
+        `+972${last9Digits}`,
+        `972${last9Digits}`,
+        `0${last9Digits}`,
+        cleanPhone,
+      ]),
+    ];
+
+    // Step 3: Search for subscriber by custom field
+    const foundId = await findSubscriberByCustomFieldMC(
+      apiKey,
+      fieldId,
+      phoneCandidates,
+    );
+
+    if (foundId) {
       // IMPORTANT:
       // If the subscriber we found via the custom field is NOT a valid WhatsApp subscriber
       // (e.g., status=deleted or whatsapp_phone is missing), we must NOT use it for tagging.
@@ -3162,41 +4339,50 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
       if (!foundIsWhatsApp) {
         return null;
       }
-      
+
       // Step 4: Compare with saved ID
       if (savedId && savedId !== foundId) {
         // Log ERROR level so it's easy to find in logs
-        console.error(`🚨 ID MISMATCH ERROR: ${type} ${recordId} - Saved ID: ${savedId}, ManyChat Found ID: ${foundId}`);
-        console.error(`🔧 AUTO-FIX TRIGGERED: Updating ${type} ${recordId} manychat_subscriber_id from ${savedId} to ${foundId}`);
-        
+        console.error(
+          `🚨 ID MISMATCH ERROR: ${type} ${recordId} - Saved ID: ${savedId}, ManyChat Found ID: ${foundId}`,
+        );
+        console.error(
+          `🔧 AUTO-FIX TRIGGERED: Updating ${type} ${recordId} manychat_subscriber_id from ${savedId} to ${foundId}`,
+        );
+
         // Update the database with the correct ID
-        const table = type === 'lead' ? 'leads' : 'clients';
+        const table = type === "lead" ? "leads" : "clients";
         if (shouldLinkSubscriberToCrm()) {
           const { error: updateError } = await supabase
             .from(table)
             .update({ manychat_subscriber_id: foundId })
-            .eq('id', recordId);
-          
+            .eq("id", recordId);
+
           if (updateError) {
-            console.error(`❌ CRITICAL: Failed to fix ${type} ${recordId}:`, updateError);
-            throw new Error(`ID Mismatch detected for ${type} ${recordId}: Saved=${savedId}, Found=${foundId}. Fix failed: ${updateError.message}`);
+            console.error(
+              `❌ CRITICAL: Failed to fix ${type} ${recordId}:`,
+              updateError,
+            );
+            throw new Error(
+              `ID Mismatch detected for ${type} ${recordId}: Saved=${savedId}, Found=${foundId}. Fix failed: ${updateError.message}`,
+            );
           }
         }
       } else if (!savedId) {
         // No saved ID - save the found one
         if (shouldLinkSubscriberToCrm()) {
-          const table = type === 'lead' ? 'leads' : 'clients';
+          const table = type === "lead" ? "leads" : "clients";
           await supabase
             .from(table)
             .update({ manychat_subscriber_id: foundId })
-            .eq('id', recordId);
+            .eq("id", recordId);
         }
       } else {
       }
-      
+
       return foundId;
     }
-    
+
     // Return null to trigger fallback searches or creation
     return null;
   };
@@ -3204,53 +4390,64 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
   // ManyChat sometimes returns a single object and sometimes an array.
   // Prefer subscribers with whatsapp_phone (not deleted).
   const extractSubscriberId = (result: any): string | null => {
-    if (!result || result.status !== 'success' || !result.data) return null;
-    const subscribers = Array.isArray(result.data) ? result.data : [result.data];
-    
+    if (!result || result.status !== "success" || !result.data) return null;
+    const subscribers = Array.isArray(result.data)
+      ? result.data
+      : [result.data];
+
     // Priority 1: Active subscriber with whatsapp_phone
-    const withWA = subscribers.find((s: any) => s?.status !== 'deleted' && s?.whatsapp_phone && s?.id);
+    const withWA = subscribers.find(
+      (s: any) => s?.status !== "deleted" && s?.whatsapp_phone && s?.id,
+    );
     if (withWA?.id) {
       return String(withWA.id);
     }
-    
+
     // Priority 2: Active subscriber (no WA phone but not deleted)
-    const active = subscribers.find((s: any) => s?.status !== 'deleted' && s?.id);
+    const active = subscribers.find(
+      (s: any) => s?.status !== "deleted" && s?.id,
+    );
     if (active?.id) {
       return String(active.id);
     }
-    
+
     // Fallback: any subscriber with ID (including deleted)
     const anyWithId = subscribers.find((s: any) => s?.id);
     if (anyWithId?.id) {
       return String(anyWithId.id);
     }
-    
+
     return null;
   };
 
   // Helper: Validate subscriber has whatsapp_phone (so it's the WA subscriber, not Messenger)
-  const validateSubscriberHasWhatsApp = async (subId: string): Promise<boolean> => {
+  const validateSubscriberHasWhatsApp = async (
+    subId: string,
+  ): Promise<boolean> => {
     try {
-      const infoUrl = `${baseUrl}/subscriber/getInfo?subscriber_id=${encodeURIComponent(subId)}`
+      const infoUrl = `${baseUrl}/subscriber/getInfo?subscriber_id=${encodeURIComponent(subId)}`;
       const res = await fetch(infoUrl, {
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      })
-      if (!res.ok) return false
-      const info = await res.json()
-      const sub = info?.data
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!res.ok) return false;
+      const info = await res.json();
+      const sub = info?.data;
       // Valid if status != deleted AND whatsapp_phone is populated
-      if (sub?.status === 'deleted') {
-        return false
+      if (sub?.status === "deleted") {
+        return false;
       }
       if (!sub?.whatsapp_phone) {
-        return false
+        return false;
       }
-      return true
+      return true;
     } catch (e) {
-      return false
+      return false;
     }
-  }
+  };
 
   // ============================================
   // NEW LOGIC: ALWAYS verify by phone_number custom field first
@@ -3259,40 +4456,54 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
   if (data.client_id) {
     // Prefer client when present — lead-alert webhooks may include both ids.
     const { data: client } = await supabase
-      .from('clients')
-      .select('id, manychat_subscriber_id, contact_name, phone')
-      .eq('id', data.client_id)
-      .single()
-    contactRecord = client
-    contactType = 'client'
-    if (!contactPhone && !phoneField) contactPhone = client?.phone ?? null
-    
+      .from("clients")
+      .select("id, manychat_subscriber_id, contact_name, phone")
+      .eq("id", data.client_id)
+      .single();
+    contactRecord = client;
+    contactType = "client";
+    if (!contactPhone && !phoneField) contactPhone = client?.phone ?? null;
+
     // NEW: If we have a phone, ALWAYS verify and potentially fix the subscriber ID
     if (contactPhone && shouldLinkSubscriberToCrm()) {
-      const savedId = isValidSubscriberId(client?.manychat_subscriber_id) ? client.manychat_subscriber_id : null;
-      
+      const savedId = isValidSubscriberId(client?.manychat_subscriber_id)
+        ? client.manychat_subscriber_id
+        : null;
+
       // This function searches by phone_number custom field and fixes mismatches
-      const verifiedId = await verifyAndFixSubscriberId(contactPhone, savedId, 'client', client.id);
+      const verifiedId = await verifyAndFixSubscriberId(
+        contactPhone,
+        savedId,
+        "client",
+        client.id,
+      );
       if (verifiedId) {
         subscriberId = verifiedId;
       }
     }
   } else if (data.lead_id) {
     const { data: lead } = await supabase
-      .from('leads')
-      .select('id, manychat_subscriber_id, contact_name, phone')
-      .eq('id', data.lead_id)
-      .single()
-    contactRecord = lead
-    contactType = 'lead'
-    if (!contactPhone && !phoneField) contactPhone = lead?.phone ?? null
-    
+      .from("leads")
+      .select("id, manychat_subscriber_id, contact_name, phone")
+      .eq("id", data.lead_id)
+      .single();
+    contactRecord = lead;
+    contactType = "lead";
+    if (!contactPhone && !phoneField) contactPhone = lead?.phone ?? null;
+
     // NEW: If we have a phone, ALWAYS verify and potentially fix the subscriber ID
     if (contactPhone && shouldLinkSubscriberToCrm()) {
-      const savedId = isValidSubscriberId(lead?.manychat_subscriber_id) ? lead.manychat_subscriber_id : null;
-      
+      const savedId = isValidSubscriberId(lead?.manychat_subscriber_id)
+        ? lead.manychat_subscriber_id
+        : null;
+
       // This function searches by phone_number custom field and fixes mismatches
-      const verifiedId = await verifyAndFixSubscriberId(contactPhone, savedId, 'lead', lead.id);
+      const verifiedId = await verifyAndFixSubscriberId(
+        contactPhone,
+        savedId,
+        "lead",
+        lead.id,
+      );
       if (verifiedId) {
         subscriberId = verifiedId;
       }
@@ -3300,58 +4511,58 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
   }
 
   if (!contactPhone && data.phone != null && String(data.phone).trim()) {
-    contactPhone = String(data.phone).trim()
+    contactPhone = String(data.phone).trim();
   }
 
   const persistManychatSubscriberId = async (subId: string) => {
-    if (!shouldLinkSubscriberToCrm() || !contactRecord?.id || !contactType) return
-    const table = contactType === 'lead' ? 'leads' : 'clients'
-    await supabase.from(table).update({ manychat_subscriber_id: subId }).eq('id', contactRecord.id)
-  }
+    if (!shouldLinkSubscriberToCrm() || !contactRecord?.id || !contactType)
+      return;
+    const table = contactType === "lead" ? "leads" : "clients";
+    await supabase
+      .from(table)
+      .update({ manychat_subscriber_id: subId })
+      .eq("id", contactRecord.id);
+  };
 
-  
   // If no subscriber ID, try to find by phone number
   if (!subscriberId && contactPhone) {
-    
     // Clean phone number - remove all non-digits
-    const cleanPhone = contactPhone.replace(/\D/g, '')
-    
+    const cleanPhone = contactPhone.replace(/\D/g, "");
+
     // Try multiple phone formats - without + sign first (ManyChat may not use +)
     const phoneFormats = [
-      cleanPhone,                           // Full number: 972507677613
-      cleanPhone.slice(-9),                 // Last 9 digits: 507677613
-      '972' + cleanPhone.slice(-9),         // With country code: 972507677613
-      '0' + cleanPhone.slice(-9),           // With leading 0: 0507677613
-    ]
-    
+      cleanPhone, // Full number: 972507677613
+      cleanPhone.slice(-9), // Last 9 digits: 507677613
+      "972" + cleanPhone.slice(-9), // With country code: 972507677613
+      "0" + cleanPhone.slice(-9), // With leading 0: 0507677613
+    ];
+
     // Remove duplicates
-    const uniqueFormats = [...new Set(phoneFormats)]
-    
+    const uniqueFormats = [...new Set(phoneFormats)];
+
     for (const phoneFormat of uniqueFormats) {
-      
       // ManyChat API uses direct "phone" parameter (not field_name/field_value)
-      const searchUrl = `${baseUrl}/subscriber/findBySystemField?phone=${encodeURIComponent(phoneFormat)}`
+      const searchUrl = `${baseUrl}/subscriber/findBySystemField?phone=${encodeURIComponent(phoneFormat)}`;
       const searchResponse = await fetch(searchUrl, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-      })
-      
-      
+      });
+
       if (searchResponse.ok) {
-        const searchResult = await searchResponse.json()
-        
+        const searchResult = await searchResponse.json();
+
         const foundId = extractSubscriberId(searchResult);
         if (foundId) {
           subscriberId = foundId;
-          
-          await persistManychatSubscriberId(subscriberId)
-          break // Found subscriber, exit loop
+
+          await persistManychatSubscriberId(subscriberId);
+          break; // Found subscriber, exit loop
         }
       } else {
-        const errorText = await searchResponse.text()
+        const errorText = await searchResponse.text();
       }
     }
   }
@@ -3364,153 +4575,208 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
 
   // If still no subscriber, try Custom Field lookup (phone_number) using field_id
   if (!subscriberId && contactPhone) {
-    const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId)
-    subscriberId = await findSubscriberByWhatsAppPhoneMC(apiKey, fieldId, contactPhone)
+    const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId);
+    subscriberId = await findSubscriberByWhatsAppPhoneMC(
+      apiKey,
+      fieldId,
+      contactPhone,
+    );
     if (subscriberId) {
-      await persistManychatSubscriberId(subscriberId)
+      await persistManychatSubscriberId(subscriberId);
     }
   }
-  
+
   // If still no subscriber found, try to create a new one in ManyChat
-  let waIdGhostConflict = false
+  let waIdGhostConflict = false;
   if (!subscriberId && contactPhone) {
-    
-    const cleanPhone = contactPhone.replace(/\D/g, '')
+    const cleanPhone = contactPhone.replace(/\D/g, "");
     // Format for WhatsApp: international format with + for whatsapp_phone
-    const last9Digits = cleanPhone.slice(-9)
-    const whatsappPhone = '+972' + last9Digits
-    
-    
+    const last9Digits = cleanPhone.slice(-9);
+    const whatsappPhone = "+972" + last9Digits;
+
     try {
       // Set both whatsapp_phone AND phone so findBySystemField can re-find this
       // contact later. phone requires has_opt_in_sms + consent_phrase.
-      const createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+      const createResponse = await fetch(
+        `${baseUrl}/subscriber/createSubscriber`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            first_name:
+              contactRecord?.contact_name ||
+              data?.client_name ||
+              data?.contact_name ||
+              "Unknown",
+            whatsapp_phone: whatsappPhone,
+            phone: `972${last9Digits}`,
+            has_opt_in_sms: true,
+            // Some ManyChat accounts deny importing email. Don't attempt it here.
+            has_opt_in_email: false,
+            consent_phrase: "אני מאשר קבלת הודעות ודיוור פרסומי",
+          }),
         },
-        body: JSON.stringify({
-          first_name: contactRecord?.contact_name || data?.client_name || data?.contact_name || 'Unknown',
-          whatsapp_phone: whatsappPhone,
-          phone: `972${last9Digits}`,
-          has_opt_in_sms: true,
-          // Some ManyChat accounts deny importing email. Don't attempt it here.
-          has_opt_in_email: false,
-          consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
-        }),
-      })
-      
-      const createResult = await createResponse.json()
-      
-      if (createResult.status === 'success' && createResult.data?.id) {
-        subscriberId = createResult.data.id.toString()
-        
+      );
+
+      const createResult = await createResponse.json();
+
+      if (createResult.status === "success" && createResult.data?.id) {
+        subscriberId = createResult.data.id.toString();
+
         // IMPORTANT: Save phone to custom field for future lookups
-        await setPhoneCustomFieldMC(apiKey, subscriberId!, whatsappPhone)
-        
-        await persistManychatSubscriberId(subscriberId)
+        await setPhoneCustomFieldMC(apiKey, subscriberId!, whatsappPhone);
+
+        await persistManychatSubscriberId(subscriberId);
       } else {
         // If creation failed due to existing wa_id conflict
-        const errStr = JSON.stringify(createResult)
-        console.error('Failed to create subscriber:', createResult)
+        const errStr = JSON.stringify(createResult);
+        console.error("Failed to create subscriber:", createResult);
 
-        if (errStr.includes('wa_id') || errStr.includes('WhatsApp ID already exists') || /already exists/i.test(errStr)) {
-          const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId)
-          const waIdDigits = extractManyChatWaIdFromCreateError(createResult)
-          const recoverPhone = waIdDigits ? `972${waIdDigits.slice(-9)}` : contactPhone
-          subscriberId = await findSubscriberByWhatsAppPhoneMC(apiKey, fieldId, recoverPhone)
+        if (
+          errStr.includes("wa_id") ||
+          errStr.includes("WhatsApp ID already exists") ||
+          /already exists/i.test(errStr)
+        ) {
+          const fieldId = await getPhoneNumberFieldIdMC(
+            apiKey,
+            supabase,
+            tenantId,
+          );
+          const waIdDigits = extractManyChatWaIdFromCreateError(createResult);
+          const recoverPhone = waIdDigits
+            ? `972${waIdDigits.slice(-9)}`
+            : contactPhone;
+          subscriberId = await findSubscriberByWhatsAppPhoneMC(
+            apiKey,
+            fieldId,
+            recoverPhone,
+          );
           if (subscriberId) {
-            await ensureManyChatPhoneCustomFieldMC(apiKey, subscriberId, recoverPhone)
-            await persistManychatSubscriberId(subscriberId)
+            await ensureManyChatPhoneCustomFieldMC(
+              apiKey,
+              subscriberId,
+              recoverPhone,
+            );
+            await persistManychatSubscriberId(subscriberId);
           } else {
-            waIdGhostConflict = true
-            if (shouldLinkSubscriberToCrm() && contactType === 'lead' && contactRecord?.id) {
-              await supabase.from('leads')
-                .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
-                .eq('id', contactRecord.id)
-            } else if (shouldLinkSubscriberToCrm() && contactType === 'client' && contactRecord?.id) {
-              await supabase.from('clients')
-                .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
-                .eq('id', contactRecord.id)
+            waIdGhostConflict = true;
+            if (
+              shouldLinkSubscriberToCrm() &&
+              contactType === "lead" &&
+              contactRecord?.id
+            ) {
+              await supabase
+                .from("leads")
+                .update({ manychat_subscriber_id: "EXISTING_WA_SUBSCRIBER" })
+                .eq("id", contactRecord.id);
+            } else if (
+              shouldLinkSubscriberToCrm() &&
+              contactType === "client" &&
+              contactRecord?.id
+            ) {
+              await supabase
+                .from("clients")
+                .update({ manychat_subscriber_id: "EXISTING_WA_SUBSCRIBER" })
+                .eq("id", contactRecord.id);
             }
           }
         }
       }
     } catch (createError) {
-      console.error('Error creating subscriber:', createError)
+      console.error("Error creating subscriber:", createError);
     }
   }
-  
+
   if (!subscriberId) {
     if (waIdGhostConflict && contactPhone) {
       throw new Error(
         `איש הקשר ${contactPhone} נמחק ב-ManyChat (wa_id תפוס) — לא ניתן לשלוח. ` +
-        'שלחו הודעת WhatsApp למספר DMM 77 כדי להירשם מחדש, או מחקו לצמיתות את איש הקשר הישן ב-ManyChat Live Chat.',
-      )
+          "שלחו הודעת WhatsApp למספר DMM 77 כדי להירשם מחדש, או מחקו לצמיתות את איש הקשר הישן ב-ManyChat Live Chat.",
+      );
     }
-    throw new Error('לא נמצא Subscriber ID של ManyChat ולא ניתן היה ליצור subscriber חדש. ודא שלליד יש מספר טלפון תקין')
+    throw new Error(
+      "לא נמצא Subscriber ID של ManyChat ולא ניתן היה ליצור subscriber חדש. ודא שלליד יש מספר טלפון תקין",
+    );
   }
 
-  await ensureManyChatPhoneCustomFieldMC(apiKey, subscriberId, contactPhone ?? '')
+  await ensureManyChatPhoneCustomFieldMC(
+    apiKey,
+    subscriberId,
+    contactPhone ?? "",
+  );
 
-  const subscriberIdNum = Number(subscriberId)
+  const subscriberIdNum = Number(subscriberId);
   if (!Number.isFinite(subscriberIdNum)) {
-    throw new Error(`Subscriber ID לא תקין (לא מספר): ${subscriberId}`)
+    throw new Error(`Subscriber ID לא תקין (לא מספר): ${subscriberId}`);
   }
-  
+
   // Update custom fields if mapping is provided.
   // Legacy meeting keys (date/time/location/contact) stay supported; lead-alert
   // automations use custom_fields: [{ field_id|field_name, value_template }].
-  const customFieldUpdates: Array<{ field_id?: number; field_name?: string; field_value: string }> = []
+  const customFieldUpdates: Array<{
+    field_id?: number;
+    field_name?: string;
+    field_value: string;
+  }> = [];
 
   if (field_mapping?.date && data.meeting_date) {
     customFieldUpdates.push({
       field_id: parseInt(field_mapping.date),
       field_value: String(data.meeting_date),
-    })
+    });
   }
 
   if (field_mapping?.time && data.meeting_time) {
     customFieldUpdates.push({
       field_id: parseInt(field_mapping.time),
       field_value: String(data.meeting_time),
-    })
+    });
   }
 
   if (field_mapping?.location && data.meeting_location) {
     customFieldUpdates.push({
       field_id: parseInt(field_mapping.location),
       field_value: String(data.meeting_location),
-    })
+    });
   }
 
   if (field_mapping?.contact && data.contact_name) {
     customFieldUpdates.push({
       field_id: parseInt(field_mapping.contact),
       field_value: String(data.contact_name),
-    })
+    });
   }
 
-  const customFields = Array.isArray(config.custom_fields) ? config.custom_fields : []
+  const customFields = Array.isArray(config.custom_fields)
+    ? config.custom_fields
+    : [];
   for (const entry of customFields) {
-    if (!entry || typeof entry !== 'object') continue
-    const fieldId = Number.parseInt(String(entry.field_id ?? '').trim(), 10)
-    const fieldName = typeof entry.field_name === 'string' ? entry.field_name.trim() : ''
-    const template = String(entry.value_template ?? entry.value ?? '')
-    if (!template || (!Number.isFinite(fieldId) && !fieldName)) continue
+    if (!entry || typeof entry !== "object") continue;
+    const fieldId = Number.parseInt(String(entry.field_id ?? "").trim(), 10);
+    const fieldName =
+      typeof entry.field_name === "string" ? entry.field_name.trim() : "";
+    const template = String(entry.value_template ?? entry.value ?? "");
+    if (!template || (!Number.isFinite(fieldId) && !fieldName)) continue;
     // Always write a value — skipping empties left stale ManyChat fields (previous
     // lead's name/phone) and unresolved {{lead_email}} literals on the contact.
-    const resolvedRaw = replaceTemplateVariables(template, { ...data }, undefined).trim()
-    const unresolved = /\{\{[^}]+\}\}/.test(resolvedRaw)
-    const resolved = !resolvedRaw || unresolved
-      ? sanitizeTemplateParameter('')
-      : sanitizeTemplateParameter(resolvedRaw)
+    const resolvedRaw = replaceTemplateVariables(
+      template,
+      { ...data },
+      undefined,
+    ).trim();
+    const unresolved = /\{\{[^}]+\}\}/.test(resolvedRaw);
+    const resolved =
+      !resolvedRaw || unresolved
+        ? sanitizeTemplateParameter("")
+        : sanitizeTemplateParameter(resolvedRaw);
     customFieldUpdates.push({
       ...(Number.isFinite(fieldId) ? { field_id: fieldId } : {}),
       ...(fieldName ? { field_name: fieldName } : {}),
       field_value: resolved,
-    })
+    });
   }
 
   if (customFieldUpdates.length > 0) {
@@ -3519,70 +4785,92 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
       apiKey,
       subscriberIdNum,
       customFieldUpdates,
-    )
+    );
     if (!sync.ok) {
-      console.error('[send_whatsapp] custom fields not verified before send:', sync.mismatches)
+      console.error(
+        "[send_whatsapp] custom fields not verified before send:",
+        sync.mismatches,
+      );
       throw new Error(
-        `שדות ManyChat לא התעדכנו לפני שליחה (${sync.mismatches.slice(0, 2).join('; ')})`,
-      )
+        `שדות ManyChat לא התעדכנו לפני שליחה (${sync.mismatches.slice(0, 2).join("; ")})`,
+      );
     }
   }
 
   const resolvedFields = Object.fromEntries(
     customFieldUpdates
       .filter((fieldUpdate) => fieldUpdate.field_name)
-      .map((fieldUpdate) => [String(fieldUpdate.field_name), fieldUpdate.field_value]),
-  )
+      .map((fieldUpdate) => [
+        String(fieldUpdate.field_name),
+        fieldUpdate.field_value,
+      ]),
+  );
 
-  const flowNs = typeof manychat_flow_ns === 'string' ? manychat_flow_ns.trim() : ''
-  const tagIdNum = Number.parseInt(String(manychat_tag_id ?? '').trim(), 10)
-  const hasTag = Number.isFinite(tagIdNum)
+  const flowNs =
+    typeof manychat_flow_ns === "string" ? manychat_flow_ns.trim() : "";
+  const tagIdNum = Number.parseInt(String(manychat_tag_id ?? "").trim(), 10);
+  const hasTag = Number.isFinite(tagIdNum);
   // Tag delivery triggers the ManyChat Flow «ליד חדש ללקוח» (tag aios_lead_alert).
   // sendFlow returns API success but often does not deliver when the Flow start is
   // tag-triggered — use manychat_delivery: "sendFlow" only after verifying delivery.
   const preferSendFlowDelivery =
-    Boolean(flowNs) && String(config.manychat_delivery ?? '').trim() === 'sendFlow'
+    Boolean(flowNs) &&
+    String(config.manychat_delivery ?? "").trim() === "sendFlow";
 
   if (preferSendFlowDelivery) {
     if (hasTag) {
-      await removeManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum)
-      const tagWait = await waitForManyChatTagRemoved(baseUrl, apiKey, subscriberIdNum, tagIdNum)
+      await removeManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum);
+      const tagWait = await waitForManyChatTagRemoved(
+        baseUrl,
+        apiKey,
+        subscriberIdNum,
+        tagIdNum,
+      );
       if (!tagWait.removed) {
         console.warn(
           `[send_whatsapp] tag ${tagIdNum} still on subscriber ${subscriberIdNum} before sendFlow; continuing`,
-        )
+        );
       }
     }
 
     if (customFieldUpdates.length > 0) {
-      const fieldsBeforeSend = await readManyChatSubscriberFields(baseUrl, apiKey, subscriberIdNum)
-      const preSendMismatches = leadAlertFieldMismatches(fieldsBeforeSend, resolvedFields)
+      const fieldsBeforeSend = await readManyChatSubscriberFields(
+        baseUrl,
+        apiKey,
+        subscriberIdNum,
+      );
+      const preSendMismatches = leadAlertFieldMismatches(
+        fieldsBeforeSend,
+        resolvedFields,
+      );
       if (preSendMismatches.length) {
         throw new Error(
-          `שדות ManyChat השתנו לפני sendFlow (${preSendMismatches.slice(0, 2).join('; ')})`,
-        )
+          `שדות ManyChat השתנו לפני sendFlow (${preSendMismatches.slice(0, 2).join("; ")})`,
+        );
       }
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 3000))
+    await new Promise((resolve) => setTimeout(resolve, 3000));
     const flowResponse = await fetch(`${baseUrl}/sending/sendFlow`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         subscriber_id: subscriberIdNum,
         flow_ns: flowNs,
       }),
-    })
-    const flowResult = await flowResponse.json().catch(() => ({}))
-    if (!flowResponse.ok || flowResult?.status !== 'success') {
-      throw new Error(`שגיאה בשליחת Flow ב-ManyChat: ${JSON.stringify(flowResult)}`)
+    });
+    const flowResult = await flowResponse.json().catch(() => ({}));
+    if (!flowResponse.ok || flowResult?.status !== "success") {
+      throw new Error(
+        `שגיאה בשליחת Flow ב-ManyChat: ${JSON.stringify(flowResult)}`,
+      );
     }
 
     if (hasTag) {
-      await removeManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum)
+      await removeManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum);
     }
 
     return {
@@ -3590,56 +4878,48 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
       subscriber_id: subscriberId,
       fields_updated: customFieldUpdates.length,
       resolved_fields: resolvedFields,
-      delivery: 'sendFlow',
+      delivery: "sendFlow",
       flow_ns: flowNs,
       flow_result: flowResult,
       destination_phone: contactPhone,
-    }
+    };
   }
 
-  const preferTagDelivery = hasTag && config.manychat_delivery !== 'sendFlow'
+  const preferTagDelivery = hasTag && config.manychat_delivery !== "sendFlow";
 
   if (preferTagDelivery) {
-    const { tag_result: tagResult, tag_wait: tagWait } = await retriggerManyChatTag(
-      baseUrl,
-      apiKey,
-      subscriberIdNum,
-      tagIdNum,
-    )
+    const { tag_result: tagResult, tag_wait: tagWait } =
+      await retriggerManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum);
 
     return {
       success: true,
       subscriber_id: subscriberId,
       fields_updated: customFieldUpdates.length,
       resolved_fields: resolvedFields,
-      delivery: 'tag',
+      delivery: "tag",
       tag_id: manychat_tag_id,
       flow_ns: flowNs || null,
       tag_result: tagResult,
       tag_wait: tagWait,
       destination_phone: contactPhone,
-    }
+    };
   }
 
   if (hasTag) {
-    const { tag_result: tagResult, tag_wait: tagWait } = await retriggerManyChatTag(
-      baseUrl,
-      apiKey,
-      subscriberIdNum,
-      tagIdNum,
-    )
+    const { tag_result: tagResult, tag_wait: tagWait } =
+      await retriggerManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum);
 
     return {
       success: true,
       subscriber_id: subscriberId,
       fields_updated: customFieldUpdates.length,
       resolved_fields: resolvedFields,
-      delivery: 'tag',
+      delivery: "tag",
       tag_id: manychat_tag_id,
       tag_result: tagResult,
       tag_wait: tagWait,
       destination_phone: contactPhone,
-    }
+    };
   }
 
   return {
@@ -3647,136 +4927,148 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
     subscriber_id: subscriberId,
     fields_updated: customFieldUpdates.length,
     resolved_fields: resolvedFields,
-    message: 'No tag or flow configured',
+    message: "No tag or flow configured",
     destination_phone: contactPhone,
-  }
+  };
 }
 
 // Execute create ManyChat subscriber action
-async function executeCreateManychatSubscriber(supabase: any, config: any, data: any, tenantId: string) {
-  
-  const { manychat_tag_id } = config
-  
+async function executeCreateManychatSubscriber(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const { manychat_tag_id } = config;
+
   // Get ManyChat integration settings for this tenant
   const { data: integration, error: integrationError } = await supabase
-    .from('tenant_integrations')
-    .select('api_key, settings')
-    .eq('tenant_id', tenantId)
-    .eq('integration_type', 'manychat')
-    .eq('is_active', true)
-    .maybeSingle()
-  
+    .from("tenant_integrations")
+    .select("api_key, settings")
+    .eq("tenant_id", tenantId)
+    .eq("integration_type", "manychat")
+    .eq("is_active", true)
+    .maybeSingle();
+
   if (integrationError) {
-    console.error('Error fetching ManyChat integration:', integrationError)
-    throw new Error('שגיאה בטעינת הגדרות ManyChat')
+    console.error("Error fetching ManyChat integration:", integrationError);
+    throw new Error("שגיאה בטעינת הגדרות ManyChat");
   }
-  
+
   if (!integration?.api_key) {
-    throw new Error('לא נמצא חיבור ManyChat פעיל לארגון זה')
+    throw new Error("לא נמצא חיבור ManyChat פעיל לארגון זה");
   }
-  
-  const apiKey = integration.api_key
-  const baseUrl = 'https://api.manychat.com/fb'
-  
+
+  const apiKey = integration.api_key;
+  const baseUrl = "https://api.manychat.com/fb";
+
   // Get lead data
-  let leadRecord: any = null
-  const leadId = data.id || data.lead_id
-  
+  let leadRecord: any = null;
+  const leadId = data.id || data.lead_id;
+
   if (leadId) {
     const { data: lead } = await supabase
-      .from('leads')
-      .select('id, manychat_subscriber_id, contact_name, company_name, phone, email')
-      .eq('id', leadId)
-      .single()
-    leadRecord = lead
+      .from("leads")
+      .select(
+        "id, manychat_subscriber_id, contact_name, company_name, phone, email",
+      )
+      .eq("id", leadId)
+      .single();
+    leadRecord = lead;
   }
-  
+
   if (!leadRecord) {
-    throw new Error('לא נמצא ליד עם נתונים')
+    throw new Error("לא נמצא ליד עם נתונים");
   }
 
   // Helper to check if subscriber ID is valid (not a sync conflict status)
   const isValidSubscriberId = (id: string | null | undefined): boolean => {
     if (!id) return false;
-    const invalidStatuses = ['SYNC_CONFLICT', 'NEEDS_MANUAL_LINK', 'SYNC_ERROR', 'EXISTING_WA_SUBSCRIBER'];
+    const invalidStatuses = [
+      "SYNC_CONFLICT",
+      "NEEDS_MANUAL_LINK",
+      "SYNC_ERROR",
+      "EXISTING_WA_SUBSCRIBER",
+    ];
     return !invalidStatuses.includes(id);
   };
-  
+
   // If subscriber already exists with VALID ID, skip creation
   if (isValidSubscriberId(leadRecord.manychat_subscriber_id)) {
-    
     // Still add tag if configured
-    if (manychat_tag_id && manychat_tag_id !== 'none') {
+    if (manychat_tag_id && manychat_tag_id !== "none") {
       const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           subscriber_id: leadRecord.manychat_subscriber_id,
           tag_id: parseInt(manychat_tag_id),
         }),
-      })
-      const tagResult = await tagResponse.json()
+      });
+      const tagResult = await tagResponse.json();
     }
-    
+
     return {
       success: true,
       subscriber_id: leadRecord.manychat_subscriber_id,
-      message: 'Subscriber already exists, tag added if configured'
-    }
+      message: "Subscriber already exists, tag added if configured",
+    };
   }
 
   // Log if subscriber has a conflict status
   if (leadRecord.manychat_subscriber_id) {
   }
-  
+
   // Prepare phone number for lookup/creation
-  const contactPhone = leadRecord.phone
+  const contactPhone = leadRecord.phone;
   if (!contactPhone) {
-    throw new Error('לליד אין מספר טלפון')
+    throw new Error("לליד אין מספר טלפון");
   }
-  
-  const cleanPhone = contactPhone.replace(/\D/g, '')
-  const last9Digits = cleanPhone.slice(-9)
-  const whatsappPhone = '+972' + last9Digits
-  const waIdCandidates = [...new Set([`972${last9Digits}`, `+972${last9Digits}`])]
-  const contactName = leadRecord.contact_name || leadRecord.company_name || 'Unknown'
-  
+
+  const cleanPhone = contactPhone.replace(/\D/g, "");
+  const last9Digits = cleanPhone.slice(-9);
+  const whatsappPhone = "+972" + last9Digits;
+  const waIdCandidates = [
+    ...new Set([`972${last9Digits}`, `+972${last9Digits}`]),
+  ];
+  const contactName =
+    leadRecord.contact_name || leadRecord.company_name || "Unknown";
+
   // Generate phone candidates for lookup (multi-format)
   const phoneCandidates = [
     `+972${last9Digits}`,
     `972${last9Digits}`,
     `0${last9Digits}`,
     cleanPhone,
-    contactPhone.replace(/[\s\-\(\)]/g, '')
-  ]
-  
+    contactPhone.replace(/[\s\-\(\)]/g, ""),
+  ];
+
   // Step 1: Try to find existing subscriber by phone in ManyChat
-  let subscriberId: string | null = null
-  
+  let subscriberId: string | null = null;
+
   for (const candidate of phoneCandidates) {
     try {
       const findResponse = await fetch(
         `${baseUrl}/subscriber/findBySystemField?phone=${encodeURIComponent(candidate)}`,
         {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
           },
-        }
-      )
-      const findResult = await findResponse.json()
+        },
+      );
+      const findResult = await findResponse.json();
 
-      const foundId = extractSubscriberId(findResult)
+      const foundId = extractSubscriberId(findResult);
       if (foundId) {
-        subscriberId = foundId
-        break
+        subscriberId = foundId;
+        break;
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   // NOTE: wa_id and whatsapp_phone are NOT supported by ManyChat findBySystemField API
@@ -3787,45 +5079,49 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
 
   // Step 1c: Try to find by Custom Field (phone_number) using field_id
   if (!subscriberId) {
-    
     // Get field_id (cached or from API)
-    const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId)
+    const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId);
     if (fieldId) {
-      subscriberId = await findSubscriberByCustomFieldMC(apiKey, fieldId, phoneCandidates)
+      subscriberId = await findSubscriberByCustomFieldMC(
+        apiKey,
+        fieldId,
+        phoneCandidates,
+      );
       if (subscriberId) {
       }
     } else {
     }
   }
-  
+
   // Step 2: If found, update lead and add tag
   if (subscriberId) {
-    await supabase.from('leads')
+    await supabase
+      .from("leads")
       .update({ manychat_subscriber_id: subscriberId })
-      .eq('id', leadRecord.id)
-    
-    if (manychat_tag_id && manychat_tag_id !== 'none') {
+      .eq("id", leadRecord.id);
+
+    if (manychat_tag_id && manychat_tag_id !== "none") {
       const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           subscriber_id: subscriberId,
           tag_id: parseInt(manychat_tag_id),
         }),
-      })
-      const tagResult = await tagResponse.json()
+      });
+      const tagResult = await tagResponse.json();
     }
-    
+
     return {
       success: true,
       subscriber_id: subscriberId,
-      message: 'Found existing subscriber in ManyChat, linked to lead'
-    }
+      message: "Found existing subscriber in ManyChat, linked to lead",
+    };
   }
-  
+
   // Step 3: Create new subscriber (only if not found)
 
   const createBodyBase: any = {
@@ -3836,62 +5132,67 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     has_opt_in_sms: true,
     // Some ManyChat accounts deny importing email. We don't import it on create.
     has_opt_in_email: false,
-    consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
-  }
+    consent_phrase: "אני מאשר קבלת הודעות ודיוור פרסומי",
+  };
 
   const createBodyWithPhone = {
     ...createBodyBase,
     phone: whatsappPhone,
-  }
+  };
 
   let createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(createBodyWithPhone),
-  })
+  });
 
-  let createResult = await createResponse.json()
+  let createResult = await createResponse.json();
 
   // If ManyChat denies importing phone, retry without "phone" field
-  const createResultStr = JSON.stringify(createResult)
+  const createResultStr = JSON.stringify(createResult);
   if (
-    (createResultStr.includes('Permission denied to import phone') || createResultStr.includes('Permission denied')) &&
-    (createResultStr.includes('phone') || createResultStr.includes('warning'))
+    (createResultStr.includes("Permission denied to import phone") ||
+      createResultStr.includes("Permission denied")) &&
+    (createResultStr.includes("phone") || createResultStr.includes("warning"))
   ) {
     createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         ...createBodyBase,
       }),
-    })
-    createResult = await createResponse.json()
+    });
+    createResult = await createResponse.json();
   }
-  
-  if (createResult.status !== 'success' || !createResult.data?.id) {
-    // If creation failed, check if it's the "WhatsApp ID already exists" case
-    const createResultStr = JSON.stringify(createResult)
 
-    if (createResultStr.includes('wa_id') || createResultStr.includes('WhatsApp ID already exists')) {
-      
+  if (createResult.status !== "success" || !createResult.data?.id) {
+    // If creation failed, check if it's the "WhatsApp ID already exists" case
+    const createResultStr = JSON.stringify(createResult);
+
+    if (
+      createResultStr.includes("wa_id") ||
+      createResultStr.includes("WhatsApp ID already exists")
+    ) {
       // Mark with special status to indicate this specific scenario
-      const specialStatus = 'EXISTING_WA_SUBSCRIBER'
-      await supabase.from('leads')
+      const specialStatus = "EXISTING_WA_SUBSCRIBER";
+      await supabase
+        .from("leads")
         .update({ manychat_subscriber_id: specialStatus })
-        .eq('id', leadRecord.id)
-      
+        .eq("id", leadRecord.id);
+
       return {
         success: false,
         subscriber_id: null,
         status: specialStatus,
-        message: 'המנוי קיים ב-ManyChat אך נוצר דרך וואטסאפ ללא שדה טלפון. יש ליצור Flow ב-ManyChat שמעתיק את whatsapp_phone לשדה phone_number'
-      }
+        message:
+          "המנוי קיים ב-ManyChat אך נוצר דרך וואטסאפ ללא שדה טלפון. יש ליצור Flow ב-ManyChat שמעתיק את whatsapp_phone לשדה phone_number",
+      };
     }
 
     // Try one more lookup by phone (not wa_id/whatsapp_phone - those don't work)
@@ -3900,146 +5201,154 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
         const retryFind = await fetch(
           `${baseUrl}/subscriber/findBySystemField?phone=${encodeURIComponent(candidate)}`,
           {
-            method: 'GET',
+            method: "GET",
             headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
             },
-          }
-        )
-        const retryResult = await retryFind.json()
-        const foundId = extractSubscriberId(retryResult)
+          },
+        );
+        const retryResult = await retryFind.json();
+        const foundId = extractSubscriberId(retryResult);
         if (foundId) {
-          subscriberId = foundId
-          
-          await supabase.from('leads')
+          subscriberId = foundId;
+
+          await supabase
+            .from("leads")
             .update({ manychat_subscriber_id: subscriberId })
-            .eq('id', leadRecord.id)
-          
-          if (manychat_tag_id && manychat_tag_id !== 'none') {
+            .eq("id", leadRecord.id);
+
+          if (manychat_tag_id && manychat_tag_id !== "none") {
             await fetch(`${baseUrl}/subscriber/addTag`, {
-              method: 'POST',
+              method: "POST",
               headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
               },
               body: JSON.stringify({
                 subscriber_id: subscriberId,
                 tag_id: parseInt(manychat_tag_id),
               }),
-            })
+            });
           }
-          
+
           return {
             success: true,
             subscriber_id: subscriberId,
-            message: 'Found existing subscriber on retry, linked to lead'
-          }
+            message: "Found existing subscriber on retry, linked to lead",
+          };
         }
       } catch (e) {
         // Continue to next candidate
       }
     }
-    
+
     // Mark as NEEDS_MANUAL_LINK for other failure types
-    await supabase.from('leads')
-      .update({ manychat_subscriber_id: 'NEEDS_MANUAL_LINK' })
-      .eq('id', leadRecord.id)
-    
-    throw new Error(`שגיאה ביצירת subscriber ב-ManyChat: ${JSON.stringify(createResult)}`)
+    await supabase
+      .from("leads")
+      .update({ manychat_subscriber_id: "NEEDS_MANUAL_LINK" })
+      .eq("id", leadRecord.id);
+
+    throw new Error(
+      `שגיאה ביצירת subscriber ב-ManyChat: ${JSON.stringify(createResult)}`,
+    );
   }
-  
-  subscriberId = createResult.data.id.toString()
-  
+
+  subscriberId = createResult.data.id.toString();
+
   // IMPORTANT: Save phone to custom field for future lookups
-  await setPhoneCustomFieldMC(apiKey, subscriberId!, whatsappPhone)
-  
+  await setPhoneCustomFieldMC(apiKey, subscriberId!, whatsappPhone);
+
   // Save subscriber ID to lead
-  await supabase.from('leads')
+  await supabase
+    .from("leads")
     .update({ manychat_subscriber_id: subscriberId })
-    .eq('id', leadRecord.id)
-  
+    .eq("id", leadRecord.id);
+
   // Add tag if configured
-  if (manychat_tag_id && manychat_tag_id !== 'none') {
+  if (manychat_tag_id && manychat_tag_id !== "none") {
     const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         subscriber_id: subscriberId,
         tag_id: parseInt(manychat_tag_id),
       }),
-    })
-    const tagResult = await tagResponse.json()
-    
+    });
+    const tagResult = await tagResponse.json();
+
     return {
       success: true,
       subscriber_id: subscriberId,
       tag_id: manychat_tag_id,
       tag_result: tagResult,
-      message: 'Subscriber created and tag added'
-    }
+      message: "Subscriber created and tag added",
+    };
   }
-  
+
   return {
     success: true,
     subscriber_id: subscriberId,
-    message: 'Subscriber created successfully'
-  }
+    message: "Subscriber created successfully",
+  };
 }
 
 // Helper function to replace template variables
-function replaceTemplateVariables(template: string, data: any, tenantSlug?: string): string {
+function replaceTemplateVariables(
+  template: string,
+  data: any,
+  tenantSlug?: string,
+): string {
   // Current date/time info
-  const now = new Date()
-  const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
-  const dayOfWeek = days[now.getDay()]
-  const formattedDate = `${now.getDate().toString().padStart(2, '0')}.${(now.getMonth() + 1).toString().padStart(2, '0')}.${now.getFullYear()}`
-  const formattedTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
-  
+  const now = new Date();
+  const days = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+  const dayOfWeek = days[now.getDay()];
+  const formattedDate = `${now.getDate().toString().padStart(2, "0")}.${(now.getMonth() + 1).toString().padStart(2, "0")}.${now.getFullYear()}`;
+  const formattedTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+
   // Format due_date if provided
-  let formattedDueDate = ''
+  let formattedDueDate = "";
   if (data.due_date) {
-    const dueDate = new Date(data.due_date)
-    formattedDueDate = `${dueDate.getDate().toString().padStart(2, '0')}.${(dueDate.getMonth() + 1).toString().padStart(2, '0')}.${dueDate.getFullYear()}`
+    const dueDate = new Date(data.due_date);
+    formattedDueDate = `${dueDate.getDate().toString().padStart(2, "0")}.${(dueDate.getMonth() + 1).toString().padStart(2, "0")}.${dueDate.getFullYear()}`;
   }
-  
+
   // Priority translation
   const priorityMap: Record<string, string> = {
-    'high': 'גבוהה',
-    'medium': 'בינונית', 
-    'low': 'נמוכה'
-  }
-  const priorityValue = data.priority?.toString() || ''
-  const formattedPriority = priorityMap[priorityValue.toLowerCase()] || priorityValue
-  
+    high: "גבוהה",
+    medium: "בינונית",
+    low: "נמוכה",
+  };
+  const priorityValue = data.priority?.toString() || "";
+  const formattedPriority =
+    priorityMap[priorityValue.toLowerCase()] || priorityValue;
+
   // Base URL for links - use actual production URL
-  const appUrl = Deno.env.get('APP_URL') || 'https://aios.co.il'
-  const baseUrl = tenantSlug 
-    ? `${appUrl}/t/${tenantSlug}` 
-    : appUrl
-  
+  const appUrl = Deno.env.get("APP_URL") || "https://aios.co.il";
+  const baseUrl = tenantSlug ? `${appUrl}/t/${tenantSlug}` : appUrl;
+
   const variables: Record<string, string> = {
     // Contact info
-    contact_name: data.contact_name || '',
-    company_name: data.company_name || data.name || '',
-    phone: data.phone || '',
-    email: data.email || '',
-    status: data.status || data.new_status || '',
-    old_status: data.old_status || '',
-    new_status: data.new_status || data.status || '',
+    contact_name: data.contact_name || "",
+    company_name: data.company_name || data.name || "",
+    phone: data.phone || "",
+    email: data.email || "",
+    status: data.status || data.new_status || "",
+    old_status: data.old_status || "",
+    new_status: data.new_status || data.status || "",
     // Date/time
     date: formattedDate,
     time: formattedTime,
     day_of_week: dayOfWeek,
     // Task info
-    task_title: data.task_title || '',
-    task_status: data.task_status || '',
-    client_name: data.client_name || '',
-    campaigner_name: data.campaigner_name || '',
-    agency_name: data.agency_name || '',
+    task_title: data.task_title || "",
+    task_status: data.task_status || "",
+    client_name: data.client_name || "",
+    campaigner_name: data.campaigner_name || "",
+    agency_name: data.agency_name || "",
     priority: formattedPriority,
     due_date: formattedDueDate,
     // Link variables
@@ -4047,80 +5356,103 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
     leads_link: `${baseUrl}/leads`,
     clients_link: `${baseUrl}/clients`,
     // Chat/message variables
-    message_text: data.message_text || '',
-    sender_name: data.contact_name || data.sender_name || '',
-    sender_phone: data.sender_phone || '',
-    group_name: data.group_name || '',
-    group_invite_link: data.group_invite_link || '',
-  }
-  
+    message_text: data.message_text || "",
+    sender_name: data.contact_name || data.sender_name || "",
+    sender_phone: data.sender_phone || "",
+    group_name: data.group_name || "",
+    group_invite_link: data.group_invite_link || "",
+  };
+
   const stringifyVariable = (value: unknown): string => {
-    if (value === undefined || value === null) return ''
-    if (typeof value === 'string') return value
-    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-    try { return JSON.stringify(value) } catch { return String(value) }
-  }
+    if (value === undefined || value === null) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean")
+      return String(value);
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  };
 
   const registerVariable = (key: string, value: unknown, override = false) => {
-    if (!key || value === undefined || value === null) return
-    const textValue = stringifyVariable(value)
-    if (override || !(key in variables)) variables[key] = textValue
+    if (!key || value === undefined || value === null) return;
+    const textValue = stringifyVariable(value);
+    if (override || !(key in variables)) variables[key] = textValue;
 
     // Register common spacing variants so {{fb_phone_number}}, {{fb phone number}}
     // and {{fb_phone number}} can all resolve to the same value.
-    const underscore = key.replace(/\s+/g, '_')
-    if (!(underscore in variables)) variables[underscore] = textValue
-    const spaced = key.replace(/_/g, ' ')
-    if (!(spaced in variables)) variables[spaced] = textValue
-  }
+    const underscore = key.replace(/\s+/g, "_");
+    if (!(underscore in variables)) variables[underscore] = textValue;
+    const spaced = key.replace(/_/g, " ");
+    if (!(spaced in variables)) variables[spaced] = textValue;
+  };
 
   // Add all primitive dynamic fields from data, including fb_ fields from Facebook.
   for (const [key, value] of Object.entries(data || {})) {
-    if (['string', 'number', 'boolean'].includes(typeof value)) {
-      registerVariable(key, value)
+    if (["string", "number", "boolean"].includes(typeof value)) {
+      registerVariable(key, value);
     }
   }
 
   // Backward-compatible aliases for older Facebook templates that used Hebrew labels
   // instead of the real Facebook field keys (for example {{fb_שם_מלא}}).
-  const fbFullName = data?.fb_full_name || data?.fb_name || data?.['fb_full name'] || data?.contact_name || data?.company_name
-  const fbPhone = data?.fb_phone_number || data?.fb_phone || data?.['fb_phone number'] || data?.phone || data?.sender_phone
-  const fbEmail = data?.fb_email || data?.email
-  registerVariable('fb_שם_מלא', fbFullName)
-  registerVariable('fb_שם מלא', fbFullName)
-  registerVariable('fb_שם', fbFullName)
-  registerVariable('fb_מספר_טלפון', fbPhone)
-  registerVariable('fb_מספר טלפון', fbPhone)
-  registerVariable('fb_טלפון', fbPhone)
-  registerVariable('fb_אימייל', fbEmail)
-  registerVariable('fb_מייל', fbEmail)
+  const fbFullName =
+    data?.fb_full_name ||
+    data?.fb_name ||
+    data?.["fb_full name"] ||
+    data?.contact_name ||
+    data?.company_name;
+  const fbPhone =
+    data?.fb_phone_number ||
+    data?.fb_phone ||
+    data?.["fb_phone number"] ||
+    data?.phone ||
+    data?.sender_phone;
+  const fbEmail = data?.fb_email || data?.email;
+  registerVariable("fb_שם_מלא", fbFullName);
+  registerVariable("fb_שם מלא", fbFullName);
+  registerVariable("fb_שם", fbFullName);
+  registerVariable("fb_מספר_טלפון", fbPhone);
+  registerVariable("fb_מספר טלפון", fbPhone);
+  registerVariable("fb_טלפון", fbPhone);
+  registerVariable("fb_אימייל", fbEmail);
+  registerVariable("fb_מייל", fbEmail);
 
   const normalizeTemplateKey = (key: string) =>
-    key.trim().toLowerCase().replace(/[\s_\-־״"'`.,:;!?؟،()[\]{}<>/\\|]+/g, '')
-  const normalizedVariables = new Map<string, string>()
+    key
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_\-־״"'`.,:;!?؟،()[\]{}<>/\\|]+/g, "");
+  const normalizedVariables = new Map<string, string>();
   for (const [key, value] of Object.entries(variables)) {
-    normalizedVariables.set(normalizeTemplateKey(key), value)
+    normalizedVariables.set(normalizeTemplateKey(key), value);
   }
 
-  return template.replace(/\{\{([^}]+)\}\}/g, (match: string, rawKey: string) => {
-    const key = rawKey.trim()
-    if (variables[key] !== undefined) return variables[key]
-    const normalizedValue = normalizedVariables.get(normalizeTemplateKey(key))
-    if (normalizedValue !== undefined) return normalizedValue
-    return match
-  })
+  return template.replace(
+    /\{\{([^}]+)\}\}/g,
+    (match: string, rawKey: string) => {
+      const key = rawKey.trim();
+      if (variables[key] !== undefined) return variables[key];
+      const normalizedValue = normalizedVariables.get(
+        normalizeTemplateKey(key),
+      );
+      if (normalizedValue !== undefined) return normalizedValue;
+      return match;
+    },
+  );
 }
 
 // ---------- Multi-recipient helpers ----------
 function phoneToChatId(phone: string): string {
-  const clean = String(phone).replace(/\D/g, '')
-  const last9 = clean.slice(-9)
-  return `972${last9}@c.us`
+  const clean = String(phone).replace(/\D/g, "");
+  const last9 = clean.slice(-9);
+  return `972${last9}@c.us`;
 }
 
 function normalizeGroupId(raw: string): string {
-  const v = String(raw).trim()
-  return v.includes('@g.us') ? v : `${v}@g.us`
+  const v = String(raw).trim();
+  return v.includes("@g.us") ? v : `${v}@g.us`;
 }
 
 async function resolveRecipientsToChatIds(
@@ -4129,254 +5461,357 @@ async function resolveRecipientsToChatIds(
   data: any,
   tenantId: string,
 ): Promise<string[]> {
-  const out: string[] = []
+  const out: string[] = [];
   for (const r of recipients) {
     try {
-      if (!r || typeof r !== 'object') continue
+      if (!r || typeof r !== "object") continue;
       switch (r.type) {
-        case 'phone_field': {
-          const v = r.field ? data?.[r.field] : null
+        case "phone_field": {
+          const v = r.field ? data?.[r.field] : null;
           if (v) {
-            const s = String(v).trim()
-            const keyLower = String(r.field).toLowerCase()
-            const isGroup = data?.contact_type === 'group' || keyLower.includes('group') || s.includes('@g.us')
-            out.push(isGroup ? normalizeGroupId(s) : phoneToChatId(s))
+            const s = String(v).trim();
+            const keyLower = String(r.field).toLowerCase();
+            const isGroup =
+              data?.contact_type === "group" ||
+              keyLower.includes("group") ||
+              s.includes("@g.us");
+            out.push(isGroup ? normalizeGroupId(s) : phoneToChatId(s));
           }
-          break
+          break;
         }
-        case 'phone_manual': {
+        case "phone_manual": {
           if (r.phone) {
-            out.push(r.phone.includes('@g.us') ? r.phone : phoneToChatId(r.phone))
+            out.push(
+              r.phone.includes("@g.us") ? r.phone : phoneToChatId(r.phone),
+            );
           }
-          break
+          break;
         }
-        case 'group_field': {
-          const fieldKey = r.field || 'group_chat_id'
-          const raw = data?.[fieldKey]
-          const v = data?.contact_type === 'group' && data?.group_chat_id &&
-            (fieldKey === 'group_id' || !raw || !String(raw).includes('@g.us'))
-            ? data.group_chat_id
-            : raw
-          if (v) out.push(normalizeGroupId(v))
-          break
+        case "group_field": {
+          const fieldKey = r.field || "group_chat_id";
+          const raw = data?.[fieldKey];
+          const v =
+            data?.contact_type === "group" &&
+            data?.group_chat_id &&
+            (fieldKey === "group_id" || !raw || !String(raw).includes("@g.us"))
+              ? data.group_chat_id
+              : raw;
+          if (v) out.push(normalizeGroupId(v));
+          break;
         }
-        case 'group_manual': {
-          if (r.group_id) out.push(normalizeGroupId(r.group_id))
-          break
+        case "group_manual": {
+          if (r.group_id) out.push(normalizeGroupId(r.group_id));
+          break;
         }
-        case 'contact_lookup': {
-          if (!r.id) break
-          const table = r.entity === 'client' ? 'clients' : 'leads'
+        case "contact_lookup": {
+          if (!r.id) break;
+          const table = r.entity === "client" ? "clients" : "leads";
           const { data: row } = await supabase
-            .from(table).select('phone').eq('id', r.id).eq('tenant_id', tenantId).maybeSingle()
-          if (row?.phone) out.push(phoneToChatId(row.phone))
-          break
+            .from(table)
+            .select("phone")
+            .eq("id", r.id)
+            .eq("tenant_id", tenantId)
+            .maybeSingle();
+          if (row?.phone) out.push(phoneToChatId(row.phone));
+          break;
         }
-        case 'group_lookup': {
-          if (r.group_id) out.push(normalizeGroupId(r.group_id))
-          break
+        case "group_lookup": {
+          if (r.group_id) out.push(normalizeGroupId(r.group_id));
+          break;
         }
       }
     } catch (e) {
-      console.error('[recipients] resolve error', r, e)
+      console.error("[recipients] resolve error", r, e);
     }
   }
   // Dedupe
-  return Array.from(new Set(out))
+  return Array.from(new Set(out));
 }
 
-async function resolveWaIntegration(supabase: any, config: any, tenantId: string) {
-  const integration_id = config.integration_id || config.green_api_integration_id
-  let providerType: 'green_api' | 'manus_wa' = 'green_api'
-  let integration: any = null
-  let idInstance = ''
-  let apiTokenInstance = ''
+async function resolveWaIntegration(
+  supabase: any,
+  config: any,
+  tenantId: string,
+) {
+  const integration_id =
+    config.integration_id || config.green_api_integration_id;
+  let providerType: "green_api" | "manus_wa" = "green_api";
+  let integration: any = null;
+  let idInstance = "";
+  let apiTokenInstance = "";
 
-  if (config.green_api_mode === 'external' && config.external_instance_id && config.external_api_token) {
-    return { idInstance: config.external_instance_id, apiTokenInstance: config.external_api_token, providerType: 'green_api' as const }
+  if (
+    config.green_api_mode === "external" &&
+    config.external_instance_id &&
+    config.external_api_token
+  ) {
+    return {
+      idInstance: config.external_instance_id,
+      apiTokenInstance: config.external_api_token,
+      providerType: "green_api" as const,
+    };
   }
 
   if (integration_id) {
     const { data: row } = await supabase
-      .from('tenant_integrations')
-      .select('id, api_key, settings, user_id, integration_type, instance_id')
-      .eq('id', integration_id).eq('is_active', true).maybeSingle()
+      .from("tenant_integrations")
+      .select("id, api_key, settings, user_id, integration_type, instance_id")
+      .eq("id", integration_id)
+      .eq("is_active", true)
+      .maybeSingle();
     if (row) {
-      integration = row
-      if (row.integration_type === 'manus_wa') providerType = 'manus_wa'
+      integration = row;
+      if (row.integration_type === "manus_wa") providerType = "manus_wa";
     }
   }
   if (!integration) {
     const { data: row } = await supabase
-      .from('tenant_integrations')
-      .select('id, api_key, settings, user_id, integration_type, instance_id')
-      .eq('tenant_id', tenantId).eq('integration_type', 'green_api').eq('is_active', true).limit(1).maybeSingle()
-    if (!row) throw new Error('לא נמצא חיבור WhatsApp פעיל')
-    integration = row
+      .from("tenant_integrations")
+      .select("id, api_key, settings, user_id, integration_type, instance_id")
+      .eq("tenant_id", tenantId)
+      .eq("integration_type", "green_api")
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+    if (!row) throw new Error("לא נמצא חיבור WhatsApp פעיל");
+    integration = row;
   }
-  if (providerType === 'manus_wa') {
-    idInstance = integration.settings?.instance_id || integration.instance_id
-    apiTokenInstance = integration.api_key
-    if (!idInstance || !apiTokenInstance) throw new Error('הגדרות Manus WhatsApp חסרות')
+  if (providerType === "manus_wa") {
+    idInstance = integration.settings?.instance_id || integration.instance_id;
+    apiTokenInstance = integration.api_key;
+    if (!idInstance || !apiTokenInstance)
+      throw new Error("הגדרות Manus WhatsApp חסרות");
   } else {
-    idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
-    apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
-    if (!idInstance || !apiTokenInstance) throw new Error('הגדרות Green API חסרות')
+    idInstance =
+      integration.settings?.idInstance ||
+      integration.settings?.instance_id ||
+      integration.instance_id;
+    apiTokenInstance =
+      integration.settings?.apiTokenInstance || integration.api_key;
+    if (!idInstance || !apiTokenInstance)
+      throw new Error("הגדרות Green API חסרות");
   }
-  return { idInstance, apiTokenInstance, providerType }
+  return { idInstance, apiTokenInstance, providerType };
 }
 
 async function sendWaMessage(opts: {
-  providerType: 'green_api' | 'manus_wa',
-  idInstance: string,
-  apiTokenInstance: string,
-  chatId: string,
-  message: string,
-  config: any,
-  data: any,
-  tenantSlug?: string,
-  supabase?: any,
-  tenantId?: string,
+  providerType: "green_api" | "manus_wa";
+  idInstance: string;
+  apiTokenInstance: string;
+  chatId: string;
+  message: string;
+  config: any;
+  data: any;
+  tenantSlug?: string;
+  supabase?: any;
+  tenantId?: string;
 }) {
-  const { providerType, idInstance, apiTokenInstance, chatId, message, config, data, tenantSlug, supabase, tenantId } = opts
+  const {
+    providerType,
+    idInstance,
+    apiTokenInstance,
+    chatId,
+    message,
+    config,
+    data,
+    tenantSlug,
+    supabase,
+    tenantId,
+  } = opts;
   if (supabase && tenantId) {
     const bodyClaim = await claimIdenticalWhatsAppSend(supabase, {
       tenantId,
       chatId,
       message,
       leadgenId: data?.facebook_leadgen_id,
-    })
+    });
     if (bodyClaim.duplicate) {
-      return { skipped: 'duplicate_identical_whatsapp' }
+      return { skipped: "duplicate_identical_whatsapp" };
     }
   }
-  const mediaType = config.media_type
-  const mediaUrl = config.media_url
+  const mediaType = config.media_type;
+  const mediaUrl = config.media_url;
 
-  if (providerType === 'manus_wa') {
-    const isGroup = chatId.includes('@g.us')
-    const manusRecipient = isGroup ? chatId : chatId.replace(/[^0-9]/g, '')
-    const manusBase = 'https://whatsappgw-pzpyrrww.manus.space'
-    const endpoint = isGroup ? 'send/group' : 'send/text'
+  if (providerType === "manus_wa") {
+    const isGroup = chatId.includes("@g.us");
+    const manusRecipient = isGroup ? chatId : chatId.replace(/[^0-9]/g, "");
+    const manusBase = "https://whatsappgw-pzpyrrww.manus.space";
+    const endpoint = isGroup ? "send/group" : "send/text";
     const payload: Record<string, unknown> = isGroup
       ? { groupId: manusRecipient, body: message }
-      : { to: manusRecipient, body: message }
-    const r = await fetch(`${manusBase}/api/v1/instances/${idInstance}/${endpoint}`, {
-      method: 'POST', headers: { 'X-Api-Key': apiTokenInstance, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    const j = await r.json().catch(() => ({}))
-    if (!r.ok || j?.success === false) throw new Error(`Manus error: ${JSON.stringify(j)}`)
-    return j
+      : { to: manusRecipient, body: message };
+    const r = await fetch(
+      `${manusBase}/api/v1/instances/${idInstance}/${endpoint}`,
+      {
+        method: "POST",
+        headers: {
+          "X-Api-Key": apiTokenInstance,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j?.success === false)
+      throw new Error(`Manus error: ${JSON.stringify(j)}`);
+    return j;
   } else {
-    const url = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
+    const url = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`;
     const r = await fetch(url, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatId, message, linkPreview: mediaType === 'link' }),
-    })
-    const j = await r.json()
-    if (!r.ok) throw new Error(`Green API error: ${JSON.stringify(j)}`)
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chatId,
+        message,
+        linkPreview: mediaType === "link",
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(`Green API error: ${JSON.stringify(j)}`);
 
-    if (mediaUrl && mediaType === 'file') {
-      const resolvedMediaUrl = replaceTemplateVariables(mediaUrl, { ...data }, tenantSlug)
-      const fileName = config.media_filename || resolvedMediaUrl.split('/').pop()?.split('?')[0] || 'file'
-      const fileUrl = `https://api.green-api.com/waInstance${idInstance}/sendFileByUrl/${apiTokenInstance}`
+    if (mediaUrl && mediaType === "file") {
+      const resolvedMediaUrl = replaceTemplateVariables(
+        mediaUrl,
+        { ...data },
+        tenantSlug,
+      );
+      const fileName =
+        config.media_filename ||
+        resolvedMediaUrl.split("/").pop()?.split("?")[0] ||
+        "file";
+      const fileUrl = `https://api.green-api.com/waInstance${idInstance}/sendFileByUrl/${apiTokenInstance}`;
       await fetch(fileUrl, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId, urlFile: resolvedMediaUrl, fileName, caption: message }),
-      })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatId,
+          urlFile: resolvedMediaUrl,
+          fileName,
+          caption: message,
+        }),
+      });
     }
-    return j
+    return j;
   }
 }
 
 /** Resolves a destination phone for Meta Cloud API (1:1 only — no groups). */
 function resolveMetaDestinationPhone(config: any, data: any): string {
-  const phoneMode = config.phone_mode || 'field'
-  let raw = ''
+  const phoneMode = config.phone_mode || "field";
+  let raw = "";
 
-  if (phoneMode === 'manual' && config.manual_phone) {
-    raw = String(config.manual_phone)
-  } else if ((phoneMode === 'field' || config.phone_field) && config.phone_field && data?.[config.phone_field]) {
-    raw = String(data[config.phone_field])
+  if (phoneMode === "manual" && config.manual_phone) {
+    raw = String(config.manual_phone);
+  } else if (
+    (phoneMode === "field" || config.phone_field) &&
+    config.phone_field &&
+    data?.[config.phone_field]
+  ) {
+    raw = String(data[config.phone_field]);
   } else if (data?.phone) {
-    raw = String(data.phone)
+    raw = String(data.phone);
   } else if (data?.contact_phone) {
-    raw = String(data.contact_phone)
+    raw = String(data.contact_phone);
   }
 
-  if (!raw) throw new Error('לא נמצא מספר טלפון לשליחה')
-  if (raw.includes('@g.us') || data?.contact_type === 'group') {
-    throw new Error('Meta WhatsApp Cloud API אינו תומך בקבוצות. השתמשו ב-Green API / Manus לקבוצות.')
+  if (!raw) throw new Error("לא נמצא מספר טלפון לשליחה");
+  if (raw.includes("@g.us") || data?.contact_type === "group") {
+    throw new Error(
+      "Meta WhatsApp Cloud API אינו תומך בקבוצות. השתמשו ב-Green API / Manus לקבוצות.",
+    );
   }
 
-  const digits = raw.replace(/\D/g, '').replace(/^00/, '')
-  if (!digits) throw new Error('מספר הטלפון אינו תקין')
-  if (digits.startsWith('972')) return digits
-  if (digits.startsWith('0')) return `972${digits.slice(1)}`
-  if (digits.length === 9) return `972${digits}`
-  return digits
+  const digits = raw.replace(/\D/g, "").replace(/^00/, "");
+  if (!digits) throw new Error("מספר הטלפון אינו תקין");
+  if (digits.startsWith("972")) return digits;
+  if (digits.startsWith("0")) return `972${digits.slice(1)}`;
+  if (digits.length === 9) return `972${digits}`;
+  return digits;
 }
 
-async function executeMetaWhatsappMessage(supabase: any, config: any, data: any, tenantId: string) {
-  const sendMode = config.send_mode === 'template' ? 'template' : 'text'
-  const integrationId = config.meta_whatsapp_integration_id || config.integration_id || null
+async function executeMetaWhatsappMessage(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const sendMode = config.send_mode === "template" ? "template" : "text";
+  const integrationId =
+    config.meta_whatsapp_integration_id || config.integration_id || null;
 
-  const { data: tenant } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
-  const tenantSlug = tenant?.slug
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("slug")
+    .eq("id", tenantId)
+    .maybeSingle();
+  const tenantSlug = tenant?.slug;
 
   let integrationQuery = supabase
-    .from('tenant_integrations')
-    .select('id, tenant_id, user_id, display_name, settings, instance_id')
-    .eq('integration_type', 'meta_whatsapp')
-    .eq('is_active', true)
-  if (integrationId) integrationQuery = integrationQuery.eq('id', integrationId)
-  else integrationQuery = integrationQuery.eq('tenant_id', tenantId)
-  const { data: integrations, error: integrationError } = await integrationQuery.order('created_at').limit(1)
-  if (integrationError) throw integrationError
-  const integration = integrations?.[0]
-  if (!integration) throw new Error('לא נמצא חיבור Meta WhatsApp פעיל')
+    .from("tenant_integrations")
+    .select("id, tenant_id, user_id, display_name, settings, instance_id")
+    .eq("integration_type", "meta_whatsapp")
+    .eq("is_active", true);
+  if (integrationId)
+    integrationQuery = integrationQuery.eq("id", integrationId);
+  else integrationQuery = integrationQuery.eq("tenant_id", tenantId);
+  const { data: integrations, error: integrationError } = await integrationQuery
+    .order("created_at")
+    .limit(1);
+  if (integrationError) throw integrationError;
+  const integration = integrations?.[0];
+  if (!integration) throw new Error("לא נמצא חיבור Meta WhatsApp פעיל");
   if (integration.tenant_id !== tenantId) {
-    const { data: canUse, error: accessError } = await supabase.rpc('tenant_can_use_integration', {
-      p_tenant_id: tenantId,
-      p_integration_id: integration.id,
-    })
-    if (accessError) throw accessError
-    if (canUse !== true) throw new Error('חיבור Meta WhatsApp לא שותף עם הארגון הזה')
+    const { data: canUse, error: accessError } = await supabase.rpc(
+      "tenant_can_use_integration",
+      {
+        p_tenant_id: tenantId,
+        p_integration_id: integration.id,
+      },
+    );
+    if (accessError) throw accessError;
+    if (canUse !== true)
+      throw new Error("חיבור Meta WhatsApp לא שותף עם הארגון הזה");
   }
 
-  let senderUserId = integration.tenant_id === tenantId ? integration.user_id as string | null : null
+  let senderUserId =
+    integration.tenant_id === tenantId
+      ? (integration.user_id as string | null)
+      : null;
   if (!senderUserId) {
     const { data: owner } = await supabase
-      .from('tenant_users')
-      .select('user_id')
-      .eq('tenant_id', tenantId)
+      .from("tenant_users")
+      .select("user_id")
+      .eq("tenant_id", tenantId)
       .limit(1)
-      .maybeSingle()
-    senderUserId = owner?.user_id ?? null
+      .maybeSingle();
+    senderUserId = owner?.user_id ?? null;
   }
-  if (!senderUserId) throw new Error('לא נמצא משתמש לשיוך שליחת Meta WhatsApp')
+  if (!senderUserId) throw new Error("לא נמצא משתמש לשיוך שליחת Meta WhatsApp");
 
-  const phoneNumber = resolveMetaDestinationPhone(config, data)
+  const phoneNumber = resolveMetaDestinationPhone(config, data);
   if (phoneNumber.length < 10 || phoneNumber.length > 15) {
     throw new Error(
       `מספר הטלפון של הנמען אינו תקין (${phoneNumber}). בדקו את client_phone ב-Make/Webhook.`,
-    )
+    );
   }
-  const clientName = String(data?.client_name ?? '').trim()
-  if (clientName === 'שם הלקוח' || clientName.toLowerCase() === 'test') {
-    console.warn('[meta-whatsapp] placeholder client_name in lead alert payload', {
-      tenantId,
-      clientName,
-      phoneNumber,
-    })
+  const clientName = String(data?.client_name ?? "").trim();
+  if (clientName === "שם הלקוח" || clientName.toLowerCase() === "test") {
+    console.warn(
+      "[meta-whatsapp] placeholder client_name in lead alert payload",
+      {
+        tenantId,
+        clientName,
+        phoneNumber,
+      },
+    );
   }
 
   // Prefer attaching the outbound chat row to the client when this is a
   // lead→client alert (phone_field=client_phone). Keep lead_id for context
   // when present — send-meta allows both once phoneNumber is set.
-  const phoneField = String(config.phone_field || 'phone')
-  const sendingToClient = phoneField === 'client_phone' || phoneField === 'recipient_phone'
+  const phoneField = String(config.phone_field || "phone");
+  const sendingToClient =
+    phoneField === "client_phone" || phoneField === "recipient_phone";
   const payload: Record<string, unknown> = {
     tenantId,
     integrationId: integration.id,
@@ -4384,19 +5819,26 @@ async function executeMetaWhatsappMessage(supabase: any, config: any, data: any,
     phoneNumber,
     clientId: data?.client_id || null,
     leadId: sendingToClient
-      ? (data?.lead_id || null)
-      : (data?.lead_id || data?.id || null),
-  }
+      ? data?.lead_id || null
+      : data?.lead_id || data?.id || null,
+  };
 
-  if (sendMode === 'template') {
-    const templateName = String(config.template_name || '').trim()
-    if (!templateName) throw new Error('יש לבחור תבנית WhatsApp מאושרת')
-    const language = String(config.template_language || 'he').trim() || 'he'
-    const variables = Array.isArray(config.template_variables) ? config.template_variables : []
-    const resolveLine = (line: string) => replaceTemplateVariables(line, { ...data }, tenantSlug)
+  if (sendMode === "template") {
+    const templateName = String(config.template_name || "").trim();
+    if (!templateName) throw new Error("יש לבחור תבנית WhatsApp מאושרת");
+    const language = String(config.template_language || "he").trim() || "he";
+    const variables = Array.isArray(config.template_variables)
+      ? config.template_variables
+      : [];
+    const resolveLine = (line: string) =>
+      replaceTemplateVariables(line, { ...data }, tenantSlug);
     const resolved = variables.map((value: unknown) =>
-      sanitizeTemplateParameter(resolveLine(dropUnresolvedTemplateLines(String(value ?? ''), resolveLine))),
-    )
+      sanitizeTemplateParameter(
+        resolveLine(
+          dropUnresolvedTemplateLines(String(value ?? ""), resolveLine),
+        ),
+      ),
+    );
     payload.template = {
       name: templateName,
       language,
@@ -4404,107 +5846,160 @@ async function executeMetaWhatsappMessage(supabase: any, config: any, data: any,
         ? {
             components: [
               {
-                type: 'body',
-                parameters: resolved.map((text: string) => ({ type: 'text', text })),
+                type: "body",
+                parameters: resolved.map((text: string) => ({
+                  type: "text",
+                  text,
+                })),
               },
             ],
           }
         : {}),
-    }
+    };
   } else {
-    if (!config.message_template) throw new Error('תבנית הודעה לא הוגדרה')
-    payload.message = replaceTemplateVariables(config.message_template, { ...data }, tenantSlug)
+    if (!config.message_template) throw new Error("תבנית הודעה לא הוגדרה");
+    payload.message = replaceTemplateVariables(
+      config.message_template,
+      { ...data },
+      tenantSlug,
+    );
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const response = await fetch(`${supabaseUrl}/functions/v1/send-meta-whatsapp-message`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${serviceKey}`,
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const response = await fetch(
+    `${supabaseUrl}/functions/v1/send-meta-whatsapp-message`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  })
-  const result = await response.json().catch(() => ({}))
+  );
+  const result = await response.json().catch(() => ({}));
   if (!response.ok || result?.error) {
     const parts = [
       result?.error || `Meta WhatsApp send failed (${response.status})`,
       result?.ops_hint ? `תפעול: ${result.ops_hint}` : null,
-    ].filter(Boolean)
-    throw new Error(parts.join(' — '))
+    ].filter(Boolean);
+    throw new Error(parts.join(" — "));
   }
 
   return {
     success: true,
-    provider: 'meta_whatsapp',
+    provider: "meta_whatsapp",
     integration_id: integration.id,
     phone_number: phoneNumber,
     send_mode: sendMode,
     result,
-  }
+  };
 }
 
 // Execute Green API message action
 
-async function executeGreenApiMessage(supabase: any, config: any, data: any, tenantId: string) {
-  
-  const { message_template, send_to_type, manual_phone, manual_group_id, phone_mode, green_api_mode, external_instance_id, external_api_token, phone_field, group_id_field } = config
-  const integration_id = config.integration_id || config.green_api_integration_id
-  
+async function executeGreenApiMessage(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const {
+    message_template,
+    send_to_type,
+    manual_phone,
+    manual_group_id,
+    phone_mode,
+    green_api_mode,
+    external_instance_id,
+    external_api_token,
+    phone_field,
+    group_id_field,
+  } = config;
+  const integration_id =
+    config.integration_id || config.green_api_integration_id;
+
   if (!message_template) {
-    throw new Error('תבנית הודעה לא הוגדרה')
+    throw new Error("תבנית הודעה לא הוגדרה");
   }
-  
+
   // Get tenant slug for links
   const { data: tenant } = await supabase
-    .from('tenants')
-    .select('slug')
-    .eq('id', tenantId)
-    .single()
-  const tenantSlug = tenant?.slug
-  
+    .from("tenants")
+    .select("slug")
+    .eq("id", tenantId)
+    .single();
+  const tenantSlug = tenant?.slug;
+
   // NEW: Multi-recipient support (recipients[] array)
   if (Array.isArray(config.recipients) && config.recipients.length > 0) {
-    const chatIds = await resolveRecipientsToChatIds(supabase, config.recipients, data, tenantId)
+    const chatIds = await resolveRecipientsToChatIds(
+      supabase,
+      config.recipients,
+      data,
+      tenantId,
+    );
     if (chatIds.length === 0) {
-      throw new Error('לא נמצאו יעדים תקפים לשליחה')
+      throw new Error("לא נמצאו יעדים תקפים לשליחה");
     }
 
     // Resolve integration once
-    const { idInstance, apiTokenInstance, providerType } = await resolveWaIntegration(supabase, config, tenantId)
+    const { idInstance, apiTokenInstance, providerType } =
+      await resolveWaIntegration(supabase, config, tenantId);
 
     // Build message once (using available data; no per-recipient contactRecord override)
-    let message = replaceTemplateVariables(message_template, { ...data }, tenantSlug)
-    if (config.media_type === 'link' && config.media_url) {
-      const resolvedLink = replaceTemplateVariables(config.media_url, { ...data }, tenantSlug)
-      message = `${message}\n\n${resolvedLink}`
+    let message = replaceTemplateVariables(
+      message_template,
+      { ...data },
+      tenantSlug,
+    );
+    if (config.media_type === "link" && config.media_url) {
+      const resolvedLink = replaceTemplateVariables(
+        config.media_url,
+        { ...data },
+        tenantSlug,
+      );
+      message = `${message}\n\n${resolvedLink}`;
     }
 
-    const results: any[] = []
+    const results: any[] = [];
     for (const chatId of chatIds) {
       try {
-        let sendClaimInserted = false
+        let sendClaimInserted = false;
         if (data?.facebook_leadgen_id) {
           const sendClaim = await claimFacebookLeadWhatsAppSend(supabase, {
             tenantId,
             chatId,
             leadgenId: data.facebook_leadgen_id,
-          })
+          });
           if (sendClaim.duplicate) {
-            results.push({ chatId, status: 'skipped', result: { skipped: 'duplicate_facebook_whatsapp_send' } })
-            continue
+            results.push({
+              chatId,
+              status: "skipped",
+              result: { skipped: "duplicate_facebook_whatsapp_send" },
+            });
+            continue;
           }
-          sendClaimInserted = sendClaim.inserted
+          sendClaimInserted = sendClaim.inserted;
         }
         try {
           const r = await sendWaMessage({
-            providerType, idInstance, apiTokenInstance, chatId, message, config, data, tenantSlug, supabase, tenantId,
-          })
+            providerType,
+            idInstance,
+            apiTokenInstance,
+            chatId,
+            message,
+            config,
+            data,
+            tenantSlug,
+            supabase,
+            tenantId,
+          });
           if (r?.skipped) {
-            results.push({ chatId, status: 'skipped', result: r })
+            results.push({ chatId, status: "skipped", result: r });
           } else {
-            results.push({ chatId, status: 'sent', result: r })
+            results.push({ chatId, status: "sent", result: r });
           }
         } catch (sendErr) {
           if (sendClaimInserted) {
@@ -4512,18 +6007,24 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
               tenantId,
               chatId,
               leadgenId: data.facebook_leadgen_id,
-            })
+            });
           }
-          throw sendErr
+          throw sendErr;
         }
       } catch (e) {
-        results.push({ chatId, status: 'failed', error: e instanceof Error ? e.message : String(e) })
+        results.push({
+          chatId,
+          status: "failed",
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     }
-    const sentCount = results.filter(r => r.status === 'sent').length
-    const skippedCount = results.filter(r => r.status === 'skipped').length
+    const sentCount = results.filter((r) => r.status === "sent").length;
+    const skippedCount = results.filter((r) => r.status === "skipped").length;
     if (sentCount === 0 && skippedCount === 0) {
-      throw new Error(`כל ${chatIds.length} היעדים נכשלו: ${JSON.stringify(results)}`)
+      throw new Error(
+        `כל ${chatIds.length} היעדים נכשלו: ${JSON.stringify(results)}`,
+      );
     }
     return {
       success: true,
@@ -4532,194 +6033,225 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
       sent_count: sentCount,
       skipped_count: skippedCount,
       results,
-    }
+    };
   }
 
   // Determine chatId based on phone_mode or legacy send_to_type
 
-  let chatId: string
-  let contactRecord: any = null
-  
+  let chatId: string;
+  let contactRecord: any = null;
+
   if (phone_mode === "group_manual" && manual_group_id) {
     // Send to a fixed group id (configured manually)
-    chatId = manual_group_id.includes("@g.us") ? manual_group_id : `${manual_group_id}@g.us`
+    chatId = manual_group_id.includes("@g.us")
+      ? manual_group_id
+      : `${manual_group_id}@g.us`;
   } else if (phone_mode === "group_field") {
     // Send to a group whose chat id is taken from the trigger payload
-    const fieldKey = group_id_field || "group_id"
-    const rawFieldValue = data?.[fieldKey]
+    const fieldKey = group_id_field || "group_id";
+    const rawFieldValue = data?.[fieldKey];
     const fieldValue =
-      data?.contact_type === 'group' && data?.group_chat_id &&
-      (fieldKey === 'group_id' || !rawFieldValue || !String(rawFieldValue).includes('@g.us'))
+      data?.contact_type === "group" &&
+      data?.group_chat_id &&
+      (fieldKey === "group_id" ||
+        !rawFieldValue ||
+        !String(rawFieldValue).includes("@g.us"))
         ? data.group_chat_id
-        : rawFieldValue
+        : rawFieldValue;
     if (!fieldValue) {
-      throw new Error(`לא נמצא מזהה קבוצה בשדה ${fieldKey}`)
+      throw new Error(`לא נמצא מזהה קבוצה בשדה ${fieldKey}`);
     }
-    const v = String(fieldValue).trim()
-    chatId = v.includes("@g.us") ? v : `${v}@g.us`
+    const v = String(fieldValue).trim();
+    chatId = v.includes("@g.us") ? v : `${v}@g.us`;
   } else if (phone_mode === "manual" && manual_phone) {
     // New: manual phone mode from flow editor
     // Check if it's a group chat ID (contains @g.us)
-    if (manual_phone.includes('@g.us')) {
-      chatId = manual_phone
+    if (manual_phone.includes("@g.us")) {
+      chatId = manual_phone;
     } else {
-      const cleanPhone = manual_phone.replace(/\D/g, '')
-      const last9 = cleanPhone.slice(-9)
-      chatId = `972${last9}@c.us`
+      const cleanPhone = manual_phone.replace(/\D/g, "");
+      const last9 = cleanPhone.slice(-9);
+      chatId = `972${last9}@c.us`;
     }
   } else if (send_to_type === "manual_group" && manual_group_id) {
     // Send to manual group
-    chatId = manual_group_id.includes("@g.us") ? manual_group_id : `${manual_group_id}@g.us`
+    chatId = manual_group_id.includes("@g.us")
+      ? manual_group_id
+      : `${manual_group_id}@g.us`;
   } else if (send_to_type === "manual_phone" && manual_phone) {
     // Legacy: Send to manual phone number
-    const cleanPhone = manual_phone.replace(/\D/g, '')
-    const last9 = cleanPhone.slice(-9)
-    chatId = `972${last9}@c.us`
-  } else if ((phone_mode === "field" || (!phone_mode && phone_field)) && phone_field && data?.[phone_field]) {
+    const cleanPhone = manual_phone.replace(/\D/g, "");
+    const last9 = cleanPhone.slice(-9);
+    chatId = `972${last9}@c.us`;
+  } else if (
+    (phone_mode === "field" || (!phone_mode && phone_field)) &&
+    phone_field &&
+    data?.[phone_field]
+  ) {
     // Dynamic field mode - resolve destination from data field (supports both phone and group chat id)
-    const fieldValue = String(data[phone_field]).trim()
-    const fieldKey = String(phone_field).toLowerCase()
+    const fieldValue = String(data[phone_field]).trim();
+    const fieldKey = String(phone_field).toLowerCase();
     const shouldTreatAsGroup =
-      data?.contact_type === 'group' ||
-      fieldKey.includes('group') ||
-      fieldValue.includes('@g.us')
+      data?.contact_type === "group" ||
+      fieldKey.includes("group") ||
+      fieldValue.includes("@g.us");
 
     if (shouldTreatAsGroup) {
-      chatId = fieldValue.includes('@g.us') ? fieldValue : `${fieldValue}@g.us`
+      chatId = fieldValue.includes("@g.us") ? fieldValue : `${fieldValue}@g.us`;
     } else {
-      const cleanPhone = fieldValue.replace(/\D/g, '')
-      const last9 = cleanPhone.slice(-9)
-      chatId = `972${last9}@c.us`
+      const cleanPhone = fieldValue.replace(/\D/g, "");
+      const last9 = cleanPhone.slice(-9);
+      chatId = `972${last9}@c.us`;
     }
   } else {
     // Default: send to contact (lead/client)
-    let contactPhone: string | null = null
-    
+    let contactPhone: string | null = null;
+
     if (data.lead_id || data.id) {
-      const leadId = data.lead_id || data.id
+      const leadId = data.lead_id || data.id;
       const { data: lead } = await supabase
-        .from('leads')
-        .select('id, phone, contact_name, company_name')
-        .eq('id', leadId)
-        .single()
-      contactRecord = lead
-      contactPhone = lead?.phone
+        .from("leads")
+        .select("id, phone, contact_name, company_name")
+        .eq("id", leadId)
+        .single();
+      contactRecord = lead;
+      contactPhone = lead?.phone;
     } else if (data.client_id) {
       const { data: client } = await supabase
-        .from('clients')
-        .select('id, phone, contact_name, name')
-        .eq('id', data.client_id)
-        .single()
-      contactRecord = client
-      contactPhone = client?.phone
+        .from("clients")
+        .select("id, phone, contact_name, name")
+        .eq("id", data.client_id)
+        .single();
+      contactRecord = client;
+      contactPhone = client?.phone;
     }
-    
+
     // Fallback: use phone directly from data (manual test / webhook)
     if (!contactPhone && data.phone) {
-      contactPhone = data.phone
+      contactPhone = data.phone;
     }
-    
+
     if (!contactPhone) {
-      throw new Error('לא נמצא מספר טלפון לשליחה')
+      throw new Error("לא נמצא מספר טלפון לשליחה");
     }
-    
+
     // Format phone for Green API
-    const cleanPhone = contactPhone.replace(/\D/g, '')
-    const last9 = cleanPhone.slice(-9)
-    chatId = `972${last9}@c.us`
+    const cleanPhone = contactPhone.replace(/\D/g, "");
+    const last9 = cleanPhone.slice(-9);
+    chatId = `972${last9}@c.us`;
   }
-  
+
   // Find Green API / Manus WA integration - use specified ID or fall back to first active
-  let idInstance: string
-  let apiTokenInstance: string
-  let integration: any = null
-  let providerType: 'green_api' | 'manus_wa' = 'green_api'
-  
-  if (green_api_mode === "external" && external_instance_id && external_api_token) {
+  let idInstance: string;
+  let apiTokenInstance: string;
+  let integration: any = null;
+  let providerType: "green_api" | "manus_wa" = "green_api";
+
+  if (
+    green_api_mode === "external" &&
+    external_instance_id &&
+    external_api_token
+  ) {
     // External mode: use manually provided credentials (Green API only)
-    idInstance = external_instance_id
-    apiTokenInstance = external_api_token
+    idInstance = external_instance_id;
+    apiTokenInstance = external_api_token;
   } else {
     // Tenant mode: look up from tenant_integrations
     if (integration_id) {
       const { data: specificIntegration, error } = await supabase
-        .from('tenant_integrations')
-        .select('id, api_key, settings, user_id, integration_type, instance_id')
-        .eq('id', integration_id)
-        .eq('is_active', true)
-        .maybeSingle()
-      
+        .from("tenant_integrations")
+        .select("id, api_key, settings, user_id, integration_type, instance_id")
+        .eq("id", integration_id)
+        .eq("is_active", true)
+        .maybeSingle();
+
       if (!error && specificIntegration) {
-        integration = specificIntegration
-        if (specificIntegration.integration_type === 'manus_wa') providerType = 'manus_wa'
+        integration = specificIntegration;
+        if (specificIntegration.integration_type === "manus_wa")
+          providerType = "manus_wa";
       }
     }
-    
+
     // Fallback to first active Green API integration
     if (!integration) {
-      const { data: fallbackIntegration, error: integrationError } = await supabase
-        .from('tenant_integrations')
-        .select('id, api_key, settings, user_id, integration_type, instance_id')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'green_api')
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle()
-      
+      const { data: fallbackIntegration, error: integrationError } =
+        await supabase
+          .from("tenant_integrations")
+          .select(
+            "id, api_key, settings, user_id, integration_type, instance_id",
+          )
+          .eq("tenant_id", tenantId)
+          .eq("integration_type", "green_api")
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+
       if (integrationError || !fallbackIntegration) {
-        throw new Error('לא נמצא חיבור WhatsApp פעיל')
+        throw new Error("לא נמצא חיבור WhatsApp פעיל");
       }
-      integration = fallbackIntegration
+      integration = fallbackIntegration;
     }
-    
-    if (providerType === 'manus_wa') {
-      idInstance = integration.settings?.instance_id || integration.instance_id
-      apiTokenInstance = integration.api_key
+
+    if (providerType === "manus_wa") {
+      idInstance = integration.settings?.instance_id || integration.instance_id;
+      apiTokenInstance = integration.api_key;
       if (!idInstance || !apiTokenInstance) {
-        throw new Error('הגדרות Manus WhatsApp חסרות')
+        throw new Error("הגדרות Manus WhatsApp חסרות");
       }
     } else {
       // Support both naming conventions
-      idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
-      apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
+      idInstance =
+        integration.settings?.idInstance ||
+        integration.settings?.instance_id ||
+        integration.instance_id;
+      apiTokenInstance =
+        integration.settings?.apiTokenInstance || integration.api_key;
       if (!idInstance || !apiTokenInstance) {
-        throw new Error('הגדרות Green API חסרות')
+        throw new Error("הגדרות Green API חסרות");
       }
     }
   }
-  
-  // Replace template variables
-  let message = replaceTemplateVariables(message_template, {
-    ...data,
-    ...contactRecord,
-  }, tenantSlug)
 
-  // If media_type is "link", append the URL to the message text for WhatsApp link preview
-  if (config.media_type === 'link' && config.media_url) {
-    const resolvedLink = replaceTemplateVariables(config.media_url, {
+  // Replace template variables
+  let message = replaceTemplateVariables(
+    message_template,
+    {
       ...data,
       ...contactRecord,
-    }, tenantSlug)
-    message = `${message}\n\n${resolvedLink}`
+    },
+    tenantSlug,
+  );
+
+  // If media_type is "link", append the URL to the message text for WhatsApp link preview
+  if (config.media_type === "link" && config.media_url) {
+    const resolvedLink = replaceTemplateVariables(
+      config.media_url,
+      {
+        ...data,
+        ...contactRecord,
+      },
+      tenantSlug,
+    );
+    message = `${message}\n\n${resolvedLink}`;
   }
-  
+
   // Send message via Green API OR Manus WhatsApp
-  let sendClaimInserted = false
+  let sendClaimInserted = false;
   if (data?.facebook_leadgen_id) {
     const sendClaim = await claimFacebookLeadWhatsAppSend(supabase, {
       tenantId,
       chatId,
       leadgenId: data.facebook_leadgen_id,
-    })
+    });
     if (sendClaim.duplicate) {
       return {
         success: true,
-        skipped: 'duplicate_facebook_whatsapp_send',
+        skipped: "duplicate_facebook_whatsapp_send",
         message_sent: message,
         chat_id: chatId,
-      }
+      };
     }
-    sendClaimInserted = sendClaim.inserted
+    sendClaimInserted = sendClaim.inserted;
   }
 
   const bodyClaim = await claimIdenticalWhatsAppSend(supabase, {
@@ -4727,444 +6259,521 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     chatId,
     message,
     leadgenId: data?.facebook_leadgen_id,
-  })
+  });
   if (bodyClaim.duplicate) {
     return {
       success: true,
-      skipped: 'duplicate_identical_whatsapp',
+      skipped: "duplicate_identical_whatsapp",
       message_sent: message,
       chat_id: chatId,
-    }
+    };
   }
 
-  let sendResult: any
-  let mediaResult = null
-  const mediaType = config.media_type
-  const mediaUrl = config.media_url
+  let sendResult: any;
+  let mediaResult = null;
+  const mediaType = config.media_type;
+  const mediaUrl = config.media_url;
 
   try {
-  if (providerType === 'manus_wa') {
-    const isGroup = chatId.includes('@g.us')
-    const manusRecipient = isGroup
-      ? chatId
-      : chatId.replace(/[^0-9]/g, '')
-    const manusBase = 'https://whatsappgw-pzpyrrww.manus.space'
-    const endpoint = isGroup ? 'send/group' : 'send/text'
-    const payload: Record<string, unknown> = isGroup
-      ? { groupId: manusRecipient, body: message }
-      : { to: manusRecipient, body: message }
-    const sendResponse = await fetch(`${manusBase}/api/v1/instances/${idInstance}/${endpoint}`, {
-      method: 'POST',
-      headers: { 'X-Api-Key': apiTokenInstance, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    sendResult = await sendResponse.json().catch(() => ({}))
-    if (!sendResponse.ok || sendResult?.success === false) {
-      throw new Error(`שגיאה בשליחת הודעה (Manus): ${JSON.stringify(sendResult)}`)
-    }
+    if (providerType === "manus_wa") {
+      const isGroup = chatId.includes("@g.us");
+      const manusRecipient = isGroup ? chatId : chatId.replace(/[^0-9]/g, "");
+      const manusBase = "https://whatsappgw-pzpyrrww.manus.space";
+      const endpoint = isGroup ? "send/group" : "send/text";
+      const payload: Record<string, unknown> = isGroup
+        ? { groupId: manusRecipient, body: message }
+        : { to: manusRecipient, body: message };
+      const sendResponse = await fetch(
+        `${manusBase}/api/v1/instances/${idInstance}/${endpoint}`,
+        {
+          method: "POST",
+          headers: {
+            "X-Api-Key": apiTokenInstance,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+      sendResult = await sendResponse.json().catch(() => ({}));
+      if (!sendResponse.ok || sendResult?.success === false) {
+        throw new Error(
+          `שגיאה בשליחת הודעה (Manus): ${JSON.stringify(sendResult)}`,
+        );
+      }
 
-    if (mediaUrl && (mediaType === 'file' || mediaType === 'image')) {
-      const resolvedMediaUrl = replaceTemplateVariables(mediaUrl, { ...data, ...contactRecord }, tenantSlug)
-      const isImage = mediaType === 'image'
-      const endpoint = isImage ? 'send/image' : 'send/file'
-      const payload: Record<string, unknown> = { to: manusRecipient, caption: message }
-      if (isImage) payload.imageUrl = resolvedMediaUrl
-      else { payload.fileUrl = resolvedMediaUrl; payload.mimeType = config.media_mime_type || 'application/octet-stream'; payload.filename = config.media_filename || resolvedMediaUrl.split('/').pop()?.split('?')[0] || 'file' }
-      const mr = await fetch(`${manusBase}/api/v1/instances/${idInstance}/${endpoint}`, {
-        method: 'POST',
-        headers: { 'X-Api-Key': apiTokenInstance, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      mediaResult = await mr.json().catch(() => ({}))
-    }
-  } else {
-    const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
-    const sendResponse = await fetch(greenApiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatId, message, linkPreview: config.media_type === 'link' }),
-    })
-    sendResult = await sendResponse.json()
-    if (!sendResponse.ok) {
-      throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
-    }
+      if (mediaUrl && (mediaType === "file" || mediaType === "image")) {
+        const resolvedMediaUrl = replaceTemplateVariables(
+          mediaUrl,
+          { ...data, ...contactRecord },
+          tenantSlug,
+        );
+        const isImage = mediaType === "image";
+        const endpoint = isImage ? "send/image" : "send/file";
+        const payload: Record<string, unknown> = {
+          to: manusRecipient,
+          caption: message,
+        };
+        if (isImage) payload.imageUrl = resolvedMediaUrl;
+        else {
+          payload.fileUrl = resolvedMediaUrl;
+          payload.mimeType =
+            config.media_mime_type || "application/octet-stream";
+          payload.filename =
+            config.media_filename ||
+            resolvedMediaUrl.split("/").pop()?.split("?")[0] ||
+            "file";
+        }
+        const mr = await fetch(
+          `${manusBase}/api/v1/instances/${idInstance}/${endpoint}`,
+          {
+            method: "POST",
+            headers: {
+              "X-Api-Key": apiTokenInstance,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          },
+        );
+        mediaResult = await mr.json().catch(() => ({}));
+      }
+    } else {
+      const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`;
+      const sendResponse = await fetch(greenApiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatId,
+          message,
+          linkPreview: config.media_type === "link",
+        }),
+      });
+      sendResult = await sendResponse.json();
+      if (!sendResponse.ok) {
+        throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`);
+      }
 
-    if (mediaUrl && mediaType === 'file') {
-      const resolvedMediaUrl = replaceTemplateVariables(mediaUrl, { ...data, ...contactRecord }, tenantSlug)
-      const fileName = config.media_filename || resolvedMediaUrl.split('/').pop()?.split('?')[0] || 'file'
-      const fileApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendFileByUrl/${apiTokenInstance}`
-      const fileResponse = await fetch(fileApiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId, urlFile: resolvedMediaUrl, fileName, caption: message }),
-      })
-      mediaResult = await fileResponse.json()
+      if (mediaUrl && mediaType === "file") {
+        const resolvedMediaUrl = replaceTemplateVariables(
+          mediaUrl,
+          { ...data, ...contactRecord },
+          tenantSlug,
+        );
+        const fileName =
+          config.media_filename ||
+          resolvedMediaUrl.split("/").pop()?.split("?")[0] ||
+          "file";
+        const fileApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendFileByUrl/${apiTokenInstance}`;
+        const fileResponse = await fetch(fileApiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chatId,
+            urlFile: resolvedMediaUrl,
+            fileName,
+            caption: message,
+          }),
+        });
+        mediaResult = await fileResponse.json();
+      }
     }
-  }
   } catch (sendErr) {
     if (sendClaimInserted) {
       await releaseFacebookLeadWhatsAppSend(supabase, {
         tenantId,
         chatId,
         leadgenId: data.facebook_leadgen_id,
-      })
+      });
     }
-    throw sendErr
+    throw sendErr;
   }
 
-  
   return {
     success: true,
     message_sent: message,
     chat_id: chatId,
     result: sendResult,
     media_result: mediaResult,
-  }
+  };
 }
 
 // Execute Green API message to campaigner action
-async function executeGreenApiToCampaigner(supabase: any, config: any, data: any, tenantId: string) {
-  
-  const { message_template, send_target, integration_id } = config
-  
+async function executeGreenApiToCampaigner(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const { message_template, send_target, integration_id } = config;
+
   if (!message_template) {
-    throw new Error('תבנית הודעה לא הוגדרה')
+    throw new Error("תבנית הודעה לא הוגדרה");
   }
-  
+
   // Get tenant slug for links
   const { data: tenant } = await supabase
-    .from('tenants')
-    .select('slug')
-    .eq('id', tenantId)
-    .single()
-  const tenantSlug = tenant?.slug
-  
+    .from("tenants")
+    .select("slug")
+    .eq("id", tenantId)
+    .single();
+  const tenantSlug = tenant?.slug;
+
   // Get campaigner data from the trigger data
-  let campaignerPhone = data.campaigner_phone
-  let campaignerGroupId = data.campaigner_whatsapp_group_id
-  let campaignerId = data.campaigner_id
-  
+  let campaignerPhone = data.campaigner_phone;
+  let campaignerGroupId = data.campaigner_whatsapp_group_id;
+  let campaignerId = data.campaigner_id;
+
   // If no data from trigger, try to fetch from database
   if (campaignerId && (!campaignerPhone || !campaignerGroupId)) {
     const { data: campaigner } = await supabase
-      .from('campaigners')
-      .select('phone, whatsapp_group_id, full_name')
-      .eq('id', campaignerId)
-      .single()
-    
+      .from("campaigners")
+      .select("phone, whatsapp_group_id, full_name")
+      .eq("id", campaignerId)
+      .single();
+
     if (campaigner) {
-      campaignerPhone = campaigner.phone || campaignerPhone
-      campaignerGroupId = campaigner.whatsapp_group_id || campaignerGroupId
+      campaignerPhone = campaigner.phone || campaignerPhone;
+      campaignerGroupId = campaigner.whatsapp_group_id || campaignerGroupId;
     }
   }
-  
+
   // Determine chat ID based on send target
-  let chatId: string | null = null
-  
-  if (send_target === 'group' && campaignerGroupId) {
-    chatId = campaignerGroupId.includes('@g.us') ? campaignerGroupId : `${campaignerGroupId}@g.us`
+  let chatId: string | null = null;
+
+  if (send_target === "group" && campaignerGroupId) {
+    chatId = campaignerGroupId.includes("@g.us")
+      ? campaignerGroupId
+      : `${campaignerGroupId}@g.us`;
   } else if (campaignerPhone) {
-    const cleanPhone = campaignerPhone.replace(/\D/g, '')
-    const last9 = cleanPhone.slice(-9)
-    chatId = `972${last9}@c.us`
+    const cleanPhone = campaignerPhone.replace(/\D/g, "");
+    const last9 = cleanPhone.slice(-9);
+    chatId = `972${last9}@c.us`;
   }
-  
+
   if (!chatId) {
-    if (send_target === 'group') {
-      throw new Error('לא נמצא מזהה קבוצת WhatsApp לקמפיינר. יש להגדיר מזהה קבוצה בכרטיס הקמפיינר')
+    if (send_target === "group") {
+      throw new Error(
+        "לא נמצא מזהה קבוצת WhatsApp לקמפיינר. יש להגדיר מזהה קבוצה בכרטיס הקמפיינר",
+      );
     }
-    throw new Error('לא נמצא מספר טלפון לקמפיינר')
+    throw new Error("לא נמצא מספר טלפון לקמפיינר");
   }
-  
+
   // Find Green API / Manus WA integration - use specified ID or fall back to first active
-  let integration: any = null
-  let providerType: 'green_api' | 'manus_wa' = 'green_api'
-  
+  let integration: any = null;
+  let providerType: "green_api" | "manus_wa" = "green_api";
+
   if (integration_id) {
     const { data: specificIntegration, error } = await supabase
-      .from('tenant_integrations')
-      .select('id, api_key, settings, user_id, integration_type, instance_id')
-      .eq('id', integration_id)
-      .eq('is_active', true)
-      .maybeSingle()
-    
+      .from("tenant_integrations")
+      .select("id, api_key, settings, user_id, integration_type, instance_id")
+      .eq("id", integration_id)
+      .eq("is_active", true)
+      .maybeSingle();
+
     if (!error && specificIntegration) {
-      integration = specificIntegration
-      if (specificIntegration.integration_type === 'manus_wa') providerType = 'manus_wa'
+      integration = specificIntegration;
+      if (specificIntegration.integration_type === "manus_wa")
+        providerType = "manus_wa";
     }
   }
-  
+
   // Fallback to first active Green API integration
   if (!integration) {
-    const { data: fallbackIntegration, error: integrationError } = await supabase
-      .from('tenant_integrations')
-      .select('id, api_key, settings, user_id, integration_type, instance_id')
-      .eq('tenant_id', tenantId)
-      .eq('integration_type', 'green_api')
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle()
-    
+    const { data: fallbackIntegration, error: integrationError } =
+      await supabase
+        .from("tenant_integrations")
+        .select("id, api_key, settings, user_id, integration_type, instance_id")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+
     if (integrationError || !fallbackIntegration) {
-      throw new Error('לא נמצא חיבור WhatsApp פעיל')
+      throw new Error("לא נמצא חיבור WhatsApp פעיל");
     }
-    integration = fallbackIntegration
+    integration = fallbackIntegration;
   }
-  
-  let idInstance: string
-  let apiTokenInstance: string
-  if (providerType === 'manus_wa') {
-    idInstance = integration.settings?.instance_id || integration.instance_id
-    apiTokenInstance = integration.api_key
+
+  let idInstance: string;
+  let apiTokenInstance: string;
+  if (providerType === "manus_wa") {
+    idInstance = integration.settings?.instance_id || integration.instance_id;
+    apiTokenInstance = integration.api_key;
     if (!idInstance || !apiTokenInstance) {
-      throw new Error('הגדרות Manus WhatsApp חסרות')
+      throw new Error("הגדרות Manus WhatsApp חסרות");
     }
   } else {
-    idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
-    apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
+    idInstance =
+      integration.settings?.idInstance ||
+      integration.settings?.instance_id ||
+      integration.instance_id;
+    apiTokenInstance =
+      integration.settings?.apiTokenInstance || integration.api_key;
     if (!idInstance || !apiTokenInstance) {
-      throw new Error('הגדרות Green API חסרות')
+      throw new Error("הגדרות Green API חסרות");
     }
   }
-  
+
   // Replace template variables
-  const message = replaceTemplateVariables(message_template, data, tenantSlug)
-  
-  let sendResult: any
-  if (providerType === 'manus_wa') {
-    const isGroup = chatId.includes('@g.us')
-    const manusBase = 'https://whatsappgw-pzpyrrww.manus.space'
-    const endpoint = isGroup ? 'send/group' : 'send/text'
+  const message = replaceTemplateVariables(message_template, data, tenantSlug);
+
+  let sendResult: any;
+  if (providerType === "manus_wa") {
+    const isGroup = chatId.includes("@g.us");
+    const manusBase = "https://whatsappgw-pzpyrrww.manus.space";
+    const endpoint = isGroup ? "send/group" : "send/text";
     const payload: Record<string, unknown> = isGroup
       ? { groupId: chatId, body: message }
-      : { to: chatId.replace(/[^0-9]/g, ''), body: message }
-    const sendResponse = await fetch(`${manusBase}/api/v1/instances/${idInstance}/${endpoint}`, {
-      method: 'POST',
-      headers: { 'X-Api-Key': apiTokenInstance, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    sendResult = await sendResponse.json().catch(() => ({}))
+      : { to: chatId.replace(/[^0-9]/g, ""), body: message };
+    const sendResponse = await fetch(
+      `${manusBase}/api/v1/instances/${idInstance}/${endpoint}`,
+      {
+        method: "POST",
+        headers: {
+          "X-Api-Key": apiTokenInstance,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+    sendResult = await sendResponse.json().catch(() => ({}));
     if (!sendResponse.ok || sendResult?.success === false) {
-      throw new Error(`שגיאה בשליחת הודעה (Manus): ${JSON.stringify(sendResult)}`)
+      throw new Error(
+        `שגיאה בשליחת הודעה (Manus): ${JSON.stringify(sendResult)}`,
+      );
     }
   } else {
-    const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
+    const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`;
     const sendResponse = await fetch(greenApiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chatId, message }),
-    })
-    sendResult = await sendResponse.json()
+    });
+    sendResult = await sendResponse.json();
     if (!sendResponse.ok) {
-      throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
+      throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`);
     }
   }
-  
+
   // Save message to chat_messages for chat history
   try {
     // Determine lead_id or client_id from the chatId (phone number)
-    const phoneFromChat = chatId.replace('@c.us', '').replace('@g.us', '')
-    const last9Digits = phoneFromChat.slice(-9)
-    
+    const phoneFromChat = chatId.replace("@c.us", "").replace("@g.us", "");
+    const last9Digits = phoneFromChat.slice(-9);
+
     // Try to find matching lead or client by phone
-    let leadId = null
-    let clientId = null
-    
+    let leadId = null;
+    let clientId = null;
+
     const { data: matchingLead } = await supabase
-      .from('leads')
-      .select('id')
-      .eq('tenant_id', tenantId)
-      .ilike('phone', `%${last9Digits}`)
+      .from("leads")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .ilike("phone", `%${last9Digits}`)
       .limit(1)
-      .maybeSingle()
-    
+      .maybeSingle();
+
     if (matchingLead) {
-      leadId = matchingLead.id
+      leadId = matchingLead.id;
     } else {
       const { data: matchingClient } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .ilike('phone', `%${last9Digits}`)
+        .from("clients")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .ilike("phone", `%${last9Digits}`)
         .limit(1)
-        .maybeSingle()
-      
+        .maybeSingle();
+
       if (matchingClient) {
-        clientId = matchingClient.id
+        clientId = matchingClient.id;
       }
     }
-    
+
     // Save to chat_messages
-    const { error: chatError } = await supabase
-      .from('chat_messages')
-      .insert({
-        tenant_id: tenantId,
-        connection_user_id: integration.user_id,
-        lead_id: leadId,
-        client_id: clientId,
-        sender_phone: phoneFromChat,
-        message_text: message,
-        direction: 'outbound',
-        channel: 'whatsapp',
-        provider: 'green_api',
-        raw_provider_data: { automation: true, send_target, sendResult },
-      })
-    
+    const { error: chatError } = await supabase.from("chat_messages").insert({
+      tenant_id: tenantId,
+      connection_user_id: integration.user_id,
+      lead_id: leadId,
+      client_id: clientId,
+      sender_phone: phoneFromChat,
+      message_text: message,
+      direction: "outbound",
+      channel: "whatsapp",
+      provider: "green_api",
+      raw_provider_data: { automation: true, send_target, sendResult },
+    });
+
     if (chatError) {
-      console.error('Error saving message to chat_messages:', chatError)
+      console.error("Error saving message to chat_messages:", chatError);
     } else {
     }
   } catch (saveError) {
-    console.error('Error saving to chat_messages:', saveError)
+    console.error("Error saving to chat_messages:", saveError);
     // Don't throw - message was sent successfully, just logging failed
   }
-  
+
   return {
     success: true,
     message_sent: message,
     chat_id: chatId,
     send_target: send_target,
     result: sendResult,
-  }
+  };
 }
 
 // Execute add lead update action
-async function executeAddLeadUpdate(supabase: any, config: any, data: any, tenantId: string) {
-  
-  const { update_template } = config
-  
+async function executeAddLeadUpdate(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const { update_template } = config;
+
   if (!update_template) {
-    throw new Error('תבנית עדכון לא הוגדרה')
+    throw new Error("תבנית עדכון לא הוגדרה");
   }
-  
+
   // Get tenant slug for links
   const { data: tenant } = await supabase
-    .from('tenants')
-    .select('slug')
-    .eq('id', tenantId)
-    .single()
-  const tenantSlug = tenant?.slug
-  
-  const leadId = data.lead_id || data.id
-  
+    .from("tenants")
+    .select("slug")
+    .eq("id", tenantId)
+    .single();
+  const tenantSlug = tenant?.slug;
+
+  const leadId = data.lead_id || data.id;
+
   if (!leadId) {
-    throw new Error('לא נמצא ליד לעדכון')
+    throw new Error("לא נמצא ליד לעדכון");
   }
-  
+
   // Get lead data for template
   const { data: lead } = await supabase
-    .from('leads')
-    .select('*')
-    .eq('id', leadId)
-    .single()
-  
+    .from("leads")
+    .select("*")
+    .eq("id", leadId)
+    .single();
+
   if (!lead) {
-    throw new Error('ליד לא נמצא')
+    throw new Error("ליד לא נמצא");
   }
-  
+
   // Replace template variables
-  const updateContent = replaceTemplateVariables(update_template, {
-    ...data,
-    ...lead,
-  }, tenantSlug)
-  
+  const updateContent = replaceTemplateVariables(
+    update_template,
+    {
+      ...data,
+      ...lead,
+    },
+    tenantSlug,
+  );
+
   // Get a system user ID for the update (we'll use the first owner in the tenant)
   const { data: ownerRole } = await supabase
-    .from('user_roles')
-    .select('user_id')
-    .eq('tenant_id', tenantId)
-    .eq('role', 'owner')
+    .from("user_roles")
+    .select("user_id")
+    .eq("tenant_id", tenantId)
+    .eq("role", "owner")
     .limit(1)
-    .maybeSingle()
-  
-  const userId = ownerRole?.user_id || data.user_id
-  
+    .maybeSingle();
+
+  const userId = ownerRole?.user_id || data.user_id;
+
   if (!userId) {
-    throw new Error('לא נמצא משתמש לשמירת העדכון')
+    throw new Error("לא נמצא משתמש לשמירת העדכון");
   }
-  
+
   // Insert update into lead_updates table
   const { data: insertedUpdate, error: insertError } = await supabase
-    .from('lead_updates')
+    .from("lead_updates")
     .insert({
       lead_id: leadId,
       user_id: userId,
       content: updateContent,
     })
     .select()
-    .single()
-  
+    .single();
+
   if (insertError) {
-    console.error('Error inserting lead update:', insertError)
-    throw new Error(`שגיאה בשמירת עדכון: ${insertError.message}`)
+    console.error("Error inserting lead update:", insertError);
+    throw new Error(`שגיאה בשמירת עדכון: ${insertError.message}`);
   }
-  
-  
+
   return {
     success: true,
     update_id: insertedUpdate.id,
     content: updateContent,
-  }
+  };
 }
 
 // Execute add client update action
-async function executeAddClientUpdate(supabase: any, config: any, data: any, tenantId: string) {
-  
-  const { update_template } = config
-  
+async function executeAddClientUpdate(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const { update_template } = config;
+
   if (!update_template) {
-    throw new Error('תבנית עדכון לא הוגדרה')
+    throw new Error("תבנית עדכון לא הוגדרה");
   }
-  
+
   // Get tenant slug for links
   const { data: tenant } = await supabase
-    .from('tenants')
-    .select('slug')
-    .eq('id', tenantId)
-    .single()
-  const tenantSlug = tenant?.slug
-  
-  const clientId = data.client_id
-  
+    .from("tenants")
+    .select("slug")
+    .eq("id", tenantId)
+    .single();
+  const tenantSlug = tenant?.slug;
+
+  const clientId = data.client_id;
+
   if (!clientId) {
-    throw new Error('לא נמצא לקוח לעדכון')
+    throw new Error("לא נמצא לקוח לעדכון");
   }
-  
+
   // Get client data for template
   const { data: client } = await supabase
-    .from('clients')
-    .select('*')
-    .eq('id', clientId)
-    .single()
-  
+    .from("clients")
+    .select("*")
+    .eq("id", clientId)
+    .single();
+
   if (!client) {
-    throw new Error('לקוח לא נמצא')
+    throw new Error("לקוח לא נמצא");
   }
-  
+
   // Replace template variables
-  const updateContent = replaceTemplateVariables(update_template, {
-    ...data,
-    ...client,
-  }, tenantSlug)
-  
+  const updateContent = replaceTemplateVariables(
+    update_template,
+    {
+      ...data,
+      ...client,
+    },
+    tenantSlug,
+  );
+
   // Get a system user ID for the update
   const { data: ownerRole } = await supabase
-    .from('user_roles')
-    .select('user_id')
-    .eq('tenant_id', tenantId)
-    .eq('role', 'owner')
+    .from("user_roles")
+    .select("user_id")
+    .eq("tenant_id", tenantId)
+    .eq("role", "owner")
     .limit(1)
-    .maybeSingle()
-  
-  const userId = ownerRole?.user_id || data.user_id
-  
+    .maybeSingle();
+
+  const userId = ownerRole?.user_id || data.user_id;
+
   if (!userId) {
-    throw new Error('לא נמצא משתמש לשמירת העדכון')
+    throw new Error("לא נמצא משתמש לשמירת העדכון");
   }
-  
+
   // Insert update into client_updates table
   const { data: insertedUpdate, error: insertError } = await supabase
-    .from('client_updates')
+    .from("client_updates")
     .insert({
       client_id: clientId,
       tenant_id: tenantId,
@@ -5172,135 +6781,151 @@ async function executeAddClientUpdate(supabase: any, config: any, data: any, ten
       content: updateContent,
     })
     .select()
-    .single()
-  
+    .single();
+
   if (insertError) {
-    console.error('Error inserting client update:', insertError)
-    throw new Error(`שגיאה בשמירת עדכון: ${insertError.message}`)
+    console.error("Error inserting client update:", insertError);
+    throw new Error(`שגיאה בשמירת עדכון: ${insertError.message}`);
   }
-  
-  
+
   return {
     success: true,
     update_id: insertedUpdate.id,
     content: updateContent,
-  }
+  };
 }
 
 // Execute create task action
-async function executeCreateTask(supabase: any, config: any, data: any, tenantId: string) {
-  const { task_title_template, task_notes_template, task_priority, task_due_days, default_campaigner_id, default_agency_id } = config
-  
-  
+async function executeCreateTask(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const {
+    task_title_template,
+    task_notes_template,
+    task_priority,
+    task_due_days,
+    default_campaigner_id,
+    default_agency_id,
+  } = config;
+
   // Get tenant slug for template variables
   const { data: tenant } = await supabase
-    .from('tenants')
-    .select('slug')
-    .eq('id', tenantId)
-    .single()
-  
-  const tenantSlug = tenant?.slug || ''
-  
+    .from("tenants")
+    .select("slug")
+    .eq("id", tenantId)
+    .single();
+
+  const tenantSlug = tenant?.slug || "";
+
   // Replace template variables
-  const title = replaceTemplateVariables(task_title_template || '{{company_name}} - משימה חדשה', data, tenantSlug)
-  const notes = task_notes_template ? replaceTemplateVariables(task_notes_template, data, tenantSlug) : null
-  
+  const title = replaceTemplateVariables(
+    task_title_template || "{{company_name}} - משימה חדשה",
+    data,
+    tenantSlug,
+  );
+  const notes = task_notes_template
+    ? replaceTemplateVariables(task_notes_template, data, tenantSlug)
+    : null;
+
   // Calculate due date
-  const dueDate = new Date()
-  dueDate.setDate(dueDate.getDate() + (task_due_days || 0))
-  const dueDateStr = dueDate.toISOString().split('T')[0]
-  
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + (task_due_days || 0));
+  const dueDateStr = dueDate.toISOString().split("T")[0];
+
   // Get agency - prefer from data, then from config default, then first tenant agency
-  let agencyId = data.agency_id || default_agency_id || null
-  
+  let agencyId = data.agency_id || default_agency_id || null;
+
   if (!agencyId) {
     const { data: agency } = await supabase
-      .from('agencies')
-      .select('id')
-      .eq('tenant_id', tenantId)
-      .eq('status', 'active')
+      .from("agencies")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("status", "active")
       .limit(1)
-      .maybeSingle()
-    
-    agencyId = agency?.id
+      .maybeSingle();
+
+    agencyId = agency?.id;
   }
-  
+
   if (!agencyId) {
-    throw new Error('לא נמצאה סוכנות בארגון')
+    throw new Error("לא נמצאה סוכנות בארגון");
   }
-  
+
   // Get campaigner - prefer from data, then from config default
-  let campaignerId = data.campaigner_id || default_campaigner_id || null
-  
+  let campaignerId = data.campaigner_id || default_campaigner_id || null;
+
   // If campaigner_name provided in data, try to resolve it
   if (!campaignerId && data.campaigner_name) {
     const { data: campaigner } = await supabase
-      .from('campaigners')
-      .select('id, full_name')
-      .eq('tenant_id', tenantId)
-      .ilike('full_name', `%${data.campaigner_name}%`)
+      .from("campaigners")
+      .select("id, full_name")
+      .eq("tenant_id", tenantId)
+      .ilike("full_name", `%${data.campaigner_name}%`)
       .limit(1)
-      .maybeSingle()
-    
+      .maybeSingle();
+
     if (campaigner) {
-      campaignerId = campaigner.id
+      campaignerId = campaigner.id;
     }
   }
-  
+
   // Get sales person from data
-  let salesPersonId = data.sales_person_id || null
-  
+  let salesPersonId = data.sales_person_id || null;
+
   // If sales_person_name provided in data, try to resolve it
   if (!salesPersonId && data.sales_person_name) {
     const { data: salesPerson } = await supabase
-      .from('sales_people')
-      .select('id, full_name')
-      .eq('tenant_id', tenantId)
-      .ilike('full_name', `%${data.sales_person_name}%`)
+      .from("sales_people")
+      .select("id, full_name")
+      .eq("tenant_id", tenantId)
+      .ilike("full_name", `%${data.sales_person_name}%`)
       .limit(1)
-      .maybeSingle()
-    
+      .maybeSingle();
+
     if (salesPerson) {
-      salesPersonId = salesPerson.id
+      salesPersonId = salesPerson.id;
     }
   }
-  
+
   // Resolve client by name if needed
-  let clientId = data.client_id || null
+  let clientId = data.client_id || null;
   if (!clientId && data.client_name) {
     const { data: client } = await supabase
-      .from('clients')
-      .select('id, name')
-      .eq('tenant_id', tenantId)
-      .ilike('name', `%${data.client_name}%`)
+      .from("clients")
+      .select("id, name")
+      .eq("tenant_id", tenantId)
+      .ilike("name", `%${data.client_name}%`)
       .limit(1)
-      .maybeSingle()
-    
+      .maybeSingle();
+
     if (client) {
-      clientId = client.id
+      clientId = client.id;
     }
   }
-  
+
   // Resolve lead by name if needed
-  let leadId = data.lead_id || null
+  let leadId = data.lead_id || null;
   if (!leadId && data.lead_name) {
     const { data: lead } = await supabase
-      .from('leads')
-      .select('id, company_name')
-      .eq('tenant_id', tenantId)
-      .ilike('company_name', `%${data.lead_name}%`)
+      .from("leads")
+      .select("id, company_name")
+      .eq("tenant_id", tenantId)
+      .ilike("company_name", `%${data.lead_name}%`)
       .limit(1)
-      .maybeSingle()
-    
+      .maybeSingle();
+
     if (lead) {
-      leadId = lead.id
+      leadId = lead.id;
     }
   }
-  
+
   const taskRecord = {
     title,
     notes,
-    status: 'open',
+    status: "open",
     priority: task_priority || 5,
     due_date: dueDateStr,
     tenant_id: tenantId,
@@ -5309,91 +6934,96 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
     sales_person_id: salesPersonId,
     lead_id: leadId,
     client_id: clientId,
-  }
-  
-  
+  };
+
   // Insert task
   const { data: newTask, error: insertError } = await supabase
-    .from('tasks')
+    .from("tasks")
     .insert(taskRecord)
     .select()
-    .single()
-  
+    .single();
+
   if (insertError) {
-    console.error('Error creating task:', insertError)
-    throw new Error(`שגיאה ביצירת משימה: ${insertError.message}`)
+    console.error("Error creating task:", insertError);
+    throw new Error(`שגיאה ביצירת משימה: ${insertError.message}`);
   }
-  
-  
+
   return {
     success: true,
     task_id: newTask.id,
     title,
-  }
+  };
 }
 
 // Execute create lead action
-async function executeCreateLead(supabase: any, config: any, data: any, tenantId: string) {
-  
+async function executeCreateLead(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
   // Extract lead data from payload
-  const companyName = data.company_name || data.name || data.full_name || data.phone || 'ליד חדש'
-  const contactName = data.contact_name || data.name || data.full_name || null
-  const phone = data.phone || null
-  const email = data.email || null
-  const source = data.source || 'website'
-  const notes = data.notes || null
-  
+  const companyName =
+    data.company_name || data.name || data.full_name || data.phone || "ליד חדש";
+  const contactName = data.contact_name || data.name || data.full_name || null;
+  const phone = data.phone || null;
+  const email = data.email || null;
+  const source = data.source || "website";
+  const notes = data.notes || null;
+
   // Find default / shared agency for this tenant
-  let agencyId = data.agency_id
-  
+  let agencyId = data.agency_id;
+
   if (!agencyId) {
-    agencyId = await resolveTenantHomeAgencyId(supabase, tenantId)
+    agencyId = await resolveTenantHomeAgencyId(supabase, tenantId);
   }
-  
+
   if (!agencyId) {
-    throw new Error('לא נמצאה סוכנות פעילה לארגון זה')
+    throw new Error("לא נמצאה סוכנות פעילה לארגון זה");
   }
-  
+
   // Check for duplicate by phone
   if (phone) {
-    const cleanPhone = phone.replace(/[\s\-\(\)\.+]/g, '').replace(/^0/, '972')
-    
+    const cleanPhone = phone.replace(/[\s\-\(\)\.+]/g, "").replace(/^0/, "972");
+
     const { data: existingLeads } = await supabase
-      .from('leads')
-      .select('id, company_name, phone')
-      .eq('tenant_id', tenantId)
-    
+      .from("leads")
+      .select("id, company_name, phone")
+      .eq("tenant_id", tenantId);
+
     const duplicateLead = existingLeads?.find((l: any) => {
-      if (!l.phone) return false
-      const existingClean = l.phone.replace(/[\s\-\(\)\.+]/g, '').replace(/^0/, '972')
-      return existingClean === cleanPhone
-    })
-    
+      if (!l.phone) return false;
+      const existingClean = l.phone
+        .replace(/[\s\-\(\)\.+]/g, "")
+        .replace(/^0/, "972");
+      return existingClean === cleanPhone;
+    });
+
     if (duplicateLead) {
       return {
         success: true,
         lead_id: duplicateLead.id,
-        message: 'ליד כבר קיים במערכת',
+        message: "ליד כבר קיים במערכת",
         duplicate: true,
-      }
+      };
     }
   }
-  
+
   // Get first pipeline stage for new lead
   const { data: firstStage } = await supabase
-    .from('lead_pipeline_stages')
-    .select('stage_key')
-    .eq('tenant_id', tenantId)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
+    .from("lead_pipeline_stages")
+    .select("stage_key")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
     .limit(1)
-    .maybeSingle()
-  
-  const status = firstStage?.stage_key || 'new'
-  
+    .maybeSingle();
+
+  const status = firstStage?.stage_key || "new";
+
   // Create the lead
   const { data: newLead, error: insertError } = await supabase
-    .from('leads')
+    .from("leads")
     .insert({
       company_name: companyName,
       contact_name: contactName,
@@ -5406,79 +7036,163 @@ async function executeCreateLead(supabase: any, config: any, data: any, tenantId
       status: status,
     })
     .select()
-    .single()
-  
+    .single();
+
   if (insertError) {
-    console.error('Error creating lead:', insertError)
-    throw new Error(`שגיאה ביצירת ליד: ${insertError.message}`)
+    console.error("Error creating lead:", insertError);
+    throw new Error(`שגיאה ביצירת ליד: ${insertError.message}`);
   }
-  
-  
+
   return {
     success: true,
     lead_id: newLead.id,
     company_name: companyName,
     phone: phone,
-  }
+  };
 }
 
 // ─── Manus AI Direct Communication ────────────────────────────────────────────
 
-async function executeRunManusTask(supabase: any, config: any, data: any, tenantId: string) {
-  const { data: tenant } = await supabase.from('tenants').select('slug').eq('id', tenantId).single()
-  const tenantSlug = tenant?.slug || ''
-  let prompt = replaceTemplateVariables(config.prompt_template || 'בצע משימה עבור הטננט', data, tenantSlug)
+async function executeRunManusTask(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("slug")
+    .eq("id", tenantId)
+    .single();
+  const tenantSlug = tenant?.slug || "";
+  let prompt = replaceTemplateVariables(
+    config.prompt_template || "בצע משימה עבור הטננט",
+    data,
+    tenantSlug,
+  );
   if (config.include_context) {
-    prompt += `\n\n--- נתוני הקשר ---\n${JSON.stringify(data, null, 2)}`
+    prompt += `\n\n--- נתוני הקשר ---\n${JSON.stringify(data, null, 2)}`;
   }
-  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-  const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const res = await fetch(`${SUPABASE_URL}/functions/v1/manus-api`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_KEY}` },
-    body: JSON.stringify({ action: 'create_task', tenantId, prompt, agentProfile: config.agent_profile || 'manus-1.6', taskMode: config.task_mode || undefined }),
-  })
-  if (!res.ok) { const err = await res.text(); throw new Error(`Manus task creation failed [${res.status}]: ${err}`) }
-  const result = await res.json()
-  return { success: true, task_id: result.task_id, task_url: result.task_url, share_url: result.share_url, message: `משימת Manus נוצרה: ${result.task_id}` }
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SERVICE_KEY}`,
+    },
+    body: JSON.stringify({
+      action: "create_task",
+      tenantId,
+      prompt,
+      agentProfile: config.agent_profile || "manus-1.6",
+      taskMode: config.task_mode || undefined,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Manus task creation failed [${res.status}]: ${err}`);
+  }
+  const result = await res.json();
+  return {
+    success: true,
+    task_id: result.task_id,
+    task_url: result.task_url,
+    share_url: result.share_url,
+    message: `משימת Manus נוצרה: ${result.task_id}`,
+  };
 }
 
-async function executeSendManusMessage(supabase: any, config: any, data: any, tenantId: string) {
-  const { data: tenant } = await supabase.from('tenants').select('slug').eq('id', tenantId).single()
-  const tenantSlug = tenant?.slug || ''
-  const message = replaceTemplateVariables(config.message_template || 'שלום Manus, יש לנו בקשה חדשה.', data, tenantSlug)
-  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-  const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+async function executeSendManusMessage(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("slug")
+    .eq("id", tenantId)
+    .single();
+  const tenantSlug = tenant?.slug || "";
+  const message = replaceTemplateVariables(
+    config.message_template || "שלום Manus, יש לנו בקשה חדשה.",
+    data,
+    tenantSlug,
+  );
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const res = await fetch(`${SUPABASE_URL}/functions/v1/manus-api`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_KEY}` },
-    body: JSON.stringify({ action: 'send_message', tenantId, taskId: config.task_id || 'agent-default-main_task', message, agentProfile: config.agent_profile || undefined }),
-  })
-  if (!res.ok) { const err = await res.text(); throw new Error(`Manus send_message failed [${res.status}]: ${err}`) }
-  return { success: true, task_id: config.task_id || 'agent-default-main_task', message: 'הודעה נשלחה ל-Manus בהצלחה' }
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SERVICE_KEY}`,
+    },
+    body: JSON.stringify({
+      action: "send_message",
+      tenantId,
+      taskId: config.task_id || "agent-default-main_task",
+      message,
+      agentProfile: config.agent_profile || undefined,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Manus send_message failed [${res.status}]: ${err}`);
+  }
+  return {
+    success: true,
+    task_id: config.task_id || "agent-default-main_task",
+    message: "הודעה נשלחה ל-Manus בהצלחה",
+  };
 }
 
-async function executeSendSignature(supabase: any, config: any, data: any, tenantId: string) {
-  const templateDocumentId = config?.template_document_id
-  if (!templateDocumentId) throw new Error('חסרה תבנית חתימה בהגדרות האוטומציה')
+async function executeSendSignature(
+  supabase: any,
+  config: any,
+  data: any,
+  tenantId: string,
+) {
+  const templateDocumentId = config?.template_document_id;
+  if (!templateDocumentId)
+    throw new Error("חסרה תבנית חתימה בהגדרות האוטומציה");
 
-  const { data: tenant } = await supabase.from('tenants').select('slug').eq('id', tenantId).single()
-  const tenantSlug = tenant?.slug || ''
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("slug")
+    .eq("id", tenantId)
+    .single();
+  const tenantSlug = tenant?.slug || "";
 
-  const recipientNameField = config?.recipient_name_field || 'contact_name'
-  const recipientEmailField = config?.recipient_email_field || 'email'
-  const recipientName = replaceTemplateVariables(`{{${recipientNameField}}}`, data, tenantSlug).trim()
-    || data.contact_name || data.name || 'לקוח'
-  const recipientEmail = replaceTemplateVariables(`{{${recipientEmailField}}}`, data, tenantSlug).trim()
-    || data.email
+  const recipientNameField = config?.recipient_name_field || "contact_name";
+  const recipientEmailField = config?.recipient_email_field || "email";
+  const recipientName =
+    replaceTemplateVariables(
+      `{{${recipientNameField}}}`,
+      data,
+      tenantSlug,
+    ).trim() ||
+    data.contact_name ||
+    data.name ||
+    "לקוח";
+  const recipientEmail =
+    replaceTemplateVariables(
+      `{{${recipientEmailField}}}`,
+      data,
+      tenantSlug,
+    ).trim() || data.email;
 
-  if (!recipientEmail) throw new Error('לא נמצאה כתובת אימייל לשליחת חתימה')
+  if (!recipientEmail) throw new Error("לא נמצאה כתובת אימייל לשליחת חתימה");
 
   const documentTitle = config?.document_title_template
-    ? replaceTemplateVariables(config.document_title_template, data, tenantSlug).trim()
-    : undefined
+    ? replaceTemplateVariables(
+        config.document_title_template,
+        data,
+        tenantSlug,
+      ).trim()
+    : undefined;
 
-  const createdBy = await resolveTenantOwnerId(supabase, tenantId)
+  const createdBy = await resolveTenantOwnerId(supabase, tenantId);
   const documentId = await cloneSignatureFromTemplate(supabase, {
     templateDocumentId,
     tenantId,
@@ -5486,20 +7200,21 @@ async function executeSendSignature(supabase: any, config: any, data: any, tenan
     recipientName,
     recipientEmail,
     documentTitle,
-  })
+  });
 
-  const baseUrl = config?.base_url || Deno.env.get('APP_BASE_URL') || 'https://aios.co.il'
+  const baseUrl =
+    config?.base_url || Deno.env.get("APP_BASE_URL") || "https://aios.co.il";
   const sendResult = await sendSignatureDocumentEmails(supabase, {
     documentId,
     tenantId,
     baseUrl,
     senderName: config?.sender_name || undefined,
-  })
+  });
 
   return {
     success: true,
     document_id: documentId,
     recipient_email: recipientEmail,
     emails_sent: sendResult.sent,
-  }
+  };
 }

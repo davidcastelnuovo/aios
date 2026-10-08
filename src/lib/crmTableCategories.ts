@@ -18,7 +18,10 @@ export function isEcommerceCrmTable(table: TableLike): boolean {
   const type = String(table.integration_type || "");
   if (type === "facebook_ecommerce") return true;
   if (type === "google_ads") {
-    return String(table.integration_settings?.campaign_type || "").toLowerCase() === "ecommerce";
+    return (
+      String(table.integration_settings?.campaign_type || "").toLowerCase() ===
+      "ecommerce"
+    );
   }
   return false;
 }

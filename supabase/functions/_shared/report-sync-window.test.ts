@@ -51,10 +51,22 @@ test("a window ending in the past is extended to today", () => {
 test("prune start follows provider rows dated before the requested window", () => {
   const window = { startDate: "2026-06-20", endDate: "2026-09-18" };
 
-  assert.equal(resolvePruneStart(window, ["2026-07-01", "2026-09-17"]), "2026-06-20");
-  assert.equal(resolvePruneStart(window, ["2026-06-19", "2026-09-17"]), "2026-06-19");
-  assert.equal(resolvePruneStart(window, ["", null, undefined, "not-a-date"]), "2026-06-20");
-  assert.equal(resolvePruneStart(window, ["2026-06-18T00:00:00Z"]), "2026-06-18");
+  assert.equal(
+    resolvePruneStart(window, ["2026-07-01", "2026-09-17"]),
+    "2026-06-20",
+  );
+  assert.equal(
+    resolvePruneStart(window, ["2026-06-19", "2026-09-17"]),
+    "2026-06-19",
+  );
+  assert.equal(
+    resolvePruneStart(window, ["", null, undefined, "not-a-date"]),
+    "2026-06-20",
+  );
+  assert.equal(
+    resolvePruneStart(window, ["2026-06-18T00:00:00Z"]),
+    "2026-06-18",
+  );
 });
 
 test("prune filter clears the rewritten window and undated rows but keeps older history", () => {
@@ -67,14 +79,27 @@ test("prune filter clears the rewritten window and undated rows but keeps older 
   ]);
 });
 
-const FULL_HISTORY = (today: string) => shiftDateString(today, -REPORT_MIN_SYNC_DAYS);
-const plan = (today: string, syncedThrough: string | null | undefined, lookbackOn: string | null | undefined = today) =>
-  planScheduledSyncWindows(today, FULL_HISTORY(today), syncedThrough, lookbackOn);
+const FULL_HISTORY = (today: string) =>
+  shiftDateString(today, -REPORT_MIN_SYNC_DAYS);
+const plan = (
+  today: string,
+  syncedThrough: string | null | undefined,
+  lookbackOn: string | null | undefined = today,
+) =>
+  planScheduledSyncWindows(
+    today,
+    FULL_HISTORY(today),
+    syncedThrough,
+    lookbackOn,
+  );
 
 test("the morning run fetches yesterday and today after yesterday's afternoon run", () => {
   const morning = plan("2026-10-06", "2026-10-05", "2026-10-05");
 
-  assert.deepEqual(morning.refresh, { startDate: "2026-10-05", endDate: "2026-10-06" });
+  assert.deepEqual(morning.refresh, {
+    startDate: "2026-10-05",
+    endDate: "2026-10-06",
+  });
   assert.equal(morning.catchup, null);
   assert.equal(morning.syncedThrough, "2026-10-06");
   assert.equal(morning.lookbackOn, "2026-10-05");
@@ -83,33 +108,55 @@ test("the morning run fetches yesterday and today after yesterday's afternoon ru
 test("the afternoon run fetches only today after this morning's run", () => {
   const afternoon = plan("2026-10-06", "2026-10-06");
 
-  assert.deepEqual(afternoon.refresh, { startDate: "2026-10-06", endDate: "2026-10-06" });
+  assert.deepEqual(afternoon.refresh, {
+    startDate: "2026-10-06",
+    endDate: "2026-10-06",
+  });
   assert.equal(afternoon.catchup, null);
 });
 
 test("missed runs are filled from the last successful day", () => {
-  assert.deepEqual(plan("2026-10-06", "2026-10-02").refresh, { startDate: "2026-10-02", endDate: "2026-10-06" });
+  assert.deepEqual(plan("2026-10-06", "2026-10-02").refresh, {
+    startDate: "2026-10-02",
+    endDate: "2026-10-06",
+  });
 });
 
 test("a gap never reaches past the 120-day floor", () => {
-  assert.equal(plan("2026-10-06", "2025-01-01").refresh.startDate, FULL_HISTORY("2026-10-06"));
+  assert.equal(
+    plan("2026-10-06", "2025-01-01").refresh.startDate,
+    FULL_HISTORY("2026-10-06"),
+  );
 });
 
 test("without a run marker the run covers yesterday and today", () => {
   for (const marker of [null, undefined, "not-a-date"]) {
-    assert.deepEqual(plan("2026-10-06", marker).refresh, { startDate: "2026-10-05", endDate: "2026-10-06" });
+    assert.deepEqual(plan("2026-10-06", marker).refresh, {
+      startDate: "2026-10-05",
+      endDate: "2026-10-06",
+    });
   }
 });
 
 test("a marker after today is clamped to today", () => {
-  assert.deepEqual(plan("2026-10-06", "2026-10-07").refresh, { startDate: "2026-10-06", endDate: "2026-10-06" });
+  assert.deepEqual(plan("2026-10-06", "2026-10-07").refresh, {
+    startDate: "2026-10-06",
+    endDate: "2026-10-06",
+  });
 });
 
 test("every third day the morning run re-fetches the last 7 days for late conversions", () => {
   const today = "2026-10-06";
-  const due = plan(today, "2026-10-05", shiftDateString(today, -SCHEDULED_LOOKBACK_EVERY_DAYS));
+  const due = plan(
+    today,
+    "2026-10-05",
+    shiftDateString(today, -SCHEDULED_LOOKBACK_EVERY_DAYS),
+  );
 
-  assert.deepEqual(due.refresh, { startDate: shiftDateString(today, -SCHEDULED_LOOKBACK_DAYS), endDate: today });
+  assert.deepEqual(due.refresh, {
+    startDate: shiftDateString(today, -SCHEDULED_LOOKBACK_DAYS),
+    endDate: today,
+  });
   assert.equal(due.lookbackOn, today);
 
   const afternoon = plan(today, today, due.lookbackOn);
@@ -124,8 +171,16 @@ test("every third day the morning run re-fetches the last 7 days for late conver
 
 test("a missing lookback marker runs the lookback now", () => {
   for (const marker of [null, undefined, "not-a-date"]) {
-    const run = planScheduledSyncWindows("2026-10-06", FULL_HISTORY("2026-10-06"), "2026-10-06", marker);
-    assert.equal(run.refresh.startDate, shiftDateString("2026-10-06", -SCHEDULED_LOOKBACK_DAYS));
+    const run = planScheduledSyncWindows(
+      "2026-10-06",
+      FULL_HISTORY("2026-10-06"),
+      "2026-10-06",
+      marker,
+    );
+    assert.equal(
+      run.refresh.startDate,
+      shiftDateString("2026-10-06", -SCHEDULED_LOOKBACK_DAYS),
+    );
     assert.equal(run.lookbackOn, "2026-10-06");
   }
 });
@@ -142,7 +197,10 @@ test("history is caught up one older slice per run until 120 days are covered", 
   assert.deepEqual(first.refresh, { startDate: today, endDate: today });
   assert.ok(first.catchup);
   assert.equal(first.catchup.endDate, shiftDateString(today, -1));
-  assert.equal(first.catchup.startDate, shiftDateString(today, -SCHEDULED_CATCHUP_DAYS));
+  assert.equal(
+    first.catchup.startDate,
+    shiftDateString(today, -SCHEDULED_CATCHUP_DAYS),
+  );
   assert.equal(first.historyFrom, first.catchup.startDate);
 
   const next = planScheduledSyncWindows(today, first.historyFrom, today, today);
@@ -158,7 +216,10 @@ test("history is caught up one older slice per run until 120 days are covered", 
     historyFrom = step.historyFrom;
   }
   assert.equal(historyFrom, FULL_HISTORY(today));
-  assert.equal(planScheduledSyncWindows(today, historyFrom, today, today).catchup, null);
+  assert.equal(
+    planScheduledSyncWindows(today, historyFrom, today, today).catchup,
+    null,
+  );
 });
 
 test("a garbage history marker is treated as uncovered", () => {

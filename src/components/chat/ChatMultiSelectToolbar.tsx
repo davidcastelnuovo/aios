@@ -1,14 +1,18 @@
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Tag, X, CheckCheck, MinusCircle, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 
 interface Contact {
   id: string;
-  contact_type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram';
+  contact_type: "client" | "lead" | "group" | "unknown" | "telegram";
   sender_phone?: string;
 }
 
@@ -20,8 +24,8 @@ interface ChatMultiSelectToolbarProps {
   totalCount?: number;
 }
 
-export function ChatMultiSelectToolbar({ 
-  selectedContacts, 
+export function ChatMultiSelectToolbar({
+  selectedContacts,
   onClearSelection,
   onSelectAll,
   tenantId,
@@ -32,15 +36,15 @@ export function ChatMultiSelectToolbar({
 
   // Fetch available tags
   const { data: allTags = [] } = useQuery({
-    queryKey: ['chat-tags', tenantId],
+    queryKey: ["chat-tags", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
-        .from('chat_tags')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('sort_order', { ascending: true });
-      
+        .from("chat_tags")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("sort_order", { ascending: true });
+
       if (error) throw error;
       return data;
     },
@@ -50,109 +54,134 @@ export function ChatMultiSelectToolbar({
   // Add tag to selected
   const addTagToSelectedMutation = useMutation({
     mutationFn: async (tagId: string) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !tenantId) throw new Error('No user or tenant');
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !tenantId) throw new Error("No user or tenant");
 
-      const inserts = selectedContacts.map(contact => {
-        const base: any = {
-          tag_id: tagId,
-          user_id: user.id,
-          tenant_id: tenantId,
-        };
+      const inserts = selectedContacts
+        .map((contact) => {
+          const base: any = {
+            tag_id: tagId,
+            user_id: user.id,
+            tenant_id: tenantId,
+          };
 
-        if (contact.contact_type === 'client') {
-          base.client_id = contact.id;
-        } else if (contact.contact_type === 'lead') {
-          base.lead_id = contact.id;
-        } else if (contact.contact_type === 'group') {
-          base.group_id = contact.id;
-        } else if (contact.contact_type === 'unknown' && contact.sender_phone) {
-          base.sender_phone = contact.sender_phone;
-        }
+          if (contact.contact_type === "client") {
+            base.client_id = contact.id;
+          } else if (contact.contact_type === "lead") {
+            base.lead_id = contact.id;
+          } else if (contact.contact_type === "group") {
+            base.group_id = contact.id;
+          } else if (
+            contact.contact_type === "unknown" &&
+            contact.sender_phone
+          ) {
+            base.sender_phone = contact.sender_phone;
+          }
 
-        return base;
-      }).filter(item => item.client_id || item.lead_id || item.group_id || item.sender_phone);
+          return base;
+        })
+        .filter(
+          (item) =>
+            item.client_id ||
+            item.lead_id ||
+            item.group_id ||
+            item.sender_phone,
+        );
 
       // Insert with upsert to handle existing tags
       for (const insert of inserts) {
         await supabase
-          .from('chat_contact_tags')
-          .upsert(insert, { onConflict: 'tag_id,client_id' })
+          .from("chat_contact_tags")
+          .upsert(insert, { onConflict: "tag_id,client_id" })
           .select();
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-contact-tags', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['contact-tags-for-list', tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["chat-contact-tags", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["contact-tags-for-list", tenantId],
+      });
       toast.success(`התג נוסף ל-${selectedContacts.length} צ'אטים`);
     },
     onError: () => {
-      toast.error('שגיאה בהוספת התג');
+      toast.error("שגיאה בהוספת התג");
     },
   });
 
   // Remove tag from selected
   const removeTagFromSelectedMutation = useMutation({
     mutationFn: async (tagId: string) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !tenantId) throw new Error('No user or tenant');
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !tenantId) throw new Error("No user or tenant");
 
       for (const contact of selectedContacts) {
         let query = supabase
-          .from('chat_contact_tags')
+          .from("chat_contact_tags")
           .delete()
-          .eq('tag_id', tagId)
-          .eq('user_id', user.id)
-          .eq('tenant_id', tenantId);
+          .eq("tag_id", tagId)
+          .eq("user_id", user.id)
+          .eq("tenant_id", tenantId);
 
-        if (contact.contact_type === 'client') {
-          query = query.eq('client_id', contact.id);
-        } else if (contact.contact_type === 'lead') {
-          query = query.eq('lead_id', contact.id);
-        } else if (contact.contact_type === 'group') {
-          query = query.eq('group_id', contact.id);
-        } else if (contact.contact_type === 'unknown' && contact.sender_phone) {
-          query = query.eq('sender_phone', contact.sender_phone);
+        if (contact.contact_type === "client") {
+          query = query.eq("client_id", contact.id);
+        } else if (contact.contact_type === "lead") {
+          query = query.eq("lead_id", contact.id);
+        } else if (contact.contact_type === "group") {
+          query = query.eq("group_id", contact.id);
+        } else if (contact.contact_type === "unknown" && contact.sender_phone) {
+          query = query.eq("sender_phone", contact.sender_phone);
         }
 
         await query;
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-contact-tags', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['contact-tags-for-list', tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["chat-contact-tags", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["contact-tags-for-list", tenantId],
+      });
       setRemoveTagOpen(false);
       toast.success(`התג הוסר מ-${selectedContacts.length} צ'אטים`);
     },
     onError: () => {
-      toast.error('שגיאה בהסרת התג');
+      toast.error("שגיאה בהסרת התג");
     },
   });
 
   // Mark as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !tenantId) throw new Error('No user or tenant');
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !tenantId) throw new Error("No user or tenant");
 
       const now = new Date().toISOString();
 
       for (const contact of selectedContacts) {
         let query = supabase
-          .from('chat_messages')
+          .from("chat_messages")
           .update({ read_at: now })
-          .eq('tenant_id', tenantId)
-          .eq('direction', 'inbound')
-          .is('read_at', null);
+          .eq("tenant_id", tenantId)
+          .eq("direction", "inbound")
+          .is("read_at", null);
 
-        if (contact.contact_type === 'client') {
-          query = query.eq('client_id', contact.id);
-        } else if (contact.contact_type === 'lead') {
-          query = query.eq('lead_id', contact.id);
-        } else if (contact.contact_type === 'group') {
-          query = query.eq('group_id', contact.id);
-        } else if (contact.contact_type === 'unknown' && contact.sender_phone) {
-          query = query.eq('sender_phone', contact.sender_phone);
+        if (contact.contact_type === "client") {
+          query = query.eq("client_id", contact.id);
+        } else if (contact.contact_type === "lead") {
+          query = query.eq("lead_id", contact.id);
+        } else if (contact.contact_type === "group") {
+          query = query.eq("group_id", contact.id);
+        } else if (contact.contact_type === "unknown" && contact.sender_phone) {
+          query = query.eq("sender_phone", contact.sender_phone);
         }
 
         await query;
@@ -166,29 +195,31 @@ export function ChatMultiSelectToolbar({
           marked_at: now,
         };
 
-        if (contact.contact_type === 'client') {
+        if (contact.contact_type === "client") {
           base.client_id = contact.id;
-        } else if (contact.contact_type === 'lead') {
+        } else if (contact.contact_type === "lead") {
           base.lead_id = contact.id;
-        } else if (contact.contact_type === 'group') {
+        } else if (contact.contact_type === "group") {
           base.group_id = contact.id;
-        } else if (contact.contact_type === 'unknown' && contact.sender_phone) {
+        } else if (contact.contact_type === "unknown" && contact.sender_phone) {
           base.sender_phone = contact.sender_phone;
         }
 
         await supabase
-          .from('manually_read_contacts')
-          .upsert(base, { onConflict: 'user_id,client_id' });
+          .from("manually_read_contacts")
+          .upsert(base, { onConflict: "user_id,client_id" });
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['active-chats', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['unknown-contacts', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["unknown-contacts", tenantId],
+      });
       toast.success(`${selectedContacts.length} צ'אטים סומנו כנקראו`);
       onClearSelection();
     },
     onError: () => {
-      toast.error('שגיאה בסימון כנקרא');
+      toast.error("שגיאה בסימון כנקרא");
     },
   });
 
@@ -197,7 +228,7 @@ export function ChatMultiSelectToolbar({
       <span className="text-sm font-medium">
         {selectedContacts.length} נבחרו{totalCount > 0 && ` מתוך ${totalCount}`}
       </span>
-      
+
       <div className="flex items-center gap-1 flex-wrap">
         {/* Select All button */}
         {onSelectAll && (
@@ -208,8 +239,8 @@ export function ChatMultiSelectToolbar({
         )}
 
         {/* Mark as read button */}
-        <Button 
-          size="sm" 
+        <Button
+          size="sm"
           variant="ghost"
           onClick={() => markAsReadMutation.mutate()}
           disabled={markAsReadMutation.isPending}
@@ -284,11 +315,7 @@ export function ChatMultiSelectToolbar({
           </PopoverContent>
         </Popover>
 
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onClearSelection}
-        >
+        <Button size="sm" variant="ghost" onClick={onClearSelection}>
           <X className="h-4 w-4" />
         </Button>
       </div>

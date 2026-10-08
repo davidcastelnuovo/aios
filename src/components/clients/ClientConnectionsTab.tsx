@@ -5,11 +5,28 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Megaphone, Share2, Link2, Loader2, LayoutDashboard, Wand2, CheckCircle2, FileSpreadsheet } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Megaphone,
+  Share2,
+  Link2,
+  Loader2,
+  LayoutDashboard,
+  Wand2,
+  CheckCircle2,
+  FileSpreadsheet,
+} from "lucide-react";
 import {
   CLIENT_CHANNELS,
   ALL_CHANNEL_FIELD_KEYS,
@@ -34,12 +51,18 @@ interface ResolvedPage {
   source: string;
 }
 
-export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Props) {
+export function ClientConnectionsTab({
+  clientId,
+  tenantId,
+  onProvisioned,
+}: Props) {
   const conns = useClientConnections(clientId);
   const { provision, provisioning } = useProvisionClientChannels();
 
   // Local edits keyed by client column; falls back to the saved value when untouched.
-  const [edits, setEdits] = useState<Partial<Record<ChannelFieldKey, string>>>({});
+  const [edits, setEdits] = useState<Partial<Record<ChannelFieldKey, string>>>(
+    {},
+  );
   const [saving, setSaving] = useState(false);
 
   // Meta auto-resolve state
@@ -50,14 +73,18 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
   const [newPageId, setNewPageId] = useState("");
   const [newPageName, setNewPageName] = useState("");
 
-  if (conns.isLoading || !conns.data) return <div className="p-4 text-sm text-muted-foreground">טוען חיבורים...</div>;
+  if (conns.isLoading || !conns.data)
+    return (
+      <div className="p-4 text-sm text-muted-foreground">טוען חיבורים...</div>
+    );
 
   const c = conns.data.client as Record<string, any> | null;
 
   // Show ALL channels regardless of the client's services configuration
   const allChannels = CLIENT_CHANNELS;
 
-  const fieldValue = (key: ChannelFieldKey): string => edits[key] ?? (c?.[key] ?? "") ?? "";
+  const fieldValue = (key: ChannelFieldKey): string =>
+    edits[key] ?? c?.[key] ?? "" ?? "";
   const setFieldValue = (key: ChannelFieldKey, value: string) => {
     setEdits((prev) => ({ ...prev, [key]: value }));
     // Clear resolved page preview when meta_ads_account_id changes
@@ -70,7 +97,10 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
       const val = fieldValue(key).trim();
       payload[key] = val || null;
     }
-    const { error } = await supabase.from("clients").update(payload as never).eq("id", clientId);
+    const { error } = await supabase
+      .from("clients")
+      .update(payload as never)
+      .eq("id", clientId);
     if (error) throw new Error(error.message);
     setEdits({});
     conns.invalidate();
@@ -101,14 +131,17 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
     setResolving(true);
     setResolvedPage(null);
     try {
-      const { data, error } = await supabase.functions.invoke("resolve-meta-page-from-ad-account", {
-        body: {
-          tenant_id: tenantId,
-          client_id: clientId,
-          ad_account_id: adAccountId,
-          auto_upsert: true,
+      const { data, error } = await supabase.functions.invoke(
+        "resolve-meta-page-from-ad-account",
+        {
+          body: {
+            tenant_id: tenantId,
+            client_id: clientId,
+            ad_account_id: adAccountId,
+            auto_upsert: true,
+          },
         },
-      });
+      );
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.message || data.error);
 
@@ -133,7 +166,10 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
 
   const services: string[] = Array.isArray(c?.services) ? c.services : [];
   const filledCount = countFilledConnections(currentFields(), services);
-  const createDashboard = shouldCreateDashboardForConnections(currentFields(), services);
+  const createDashboard = shouldCreateDashboardForConnections(
+    currentFields(),
+    services,
+  );
 
   const handleProvision = async () => {
     try {
@@ -143,13 +179,19 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
       }
       const summary = await provision(clientId, { createDashboard });
       const parts: string[] = [];
-      if (summary.resolved.length) parts.push(`זוהו: ${summary.resolved.join(", ")}`);
-      if (summary.created.length) parts.push(`נוצרו: ${summary.created.join(", ")}`);
-      if (summary.updated.length) parts.push(`עודכנו: ${summary.updated.join(", ")}`);
+      if (summary.resolved.length)
+        parts.push(`זוהו: ${summary.resolved.join(", ")}`);
+      if (summary.created.length)
+        parts.push(`נוצרו: ${summary.created.join(", ")}`);
+      if (summary.updated.length)
+        parts.push(`עודכנו: ${summary.updated.join(", ")}`);
       if (summary.dashboardCreated) parts.push("דשבורד נוצר");
       else if (!summary.createDashboard) parts.push("טבלה בלבד (בלי דשבורד)");
-      if (summary.skipped.length) parts.push(`דולגו: ${summary.skipped.join(", ")}`);
-      toast.success(parts.length ? parts.join(" · ") : "אין ערוצים עם מזהים להקמה");
+      if (summary.skipped.length)
+        parts.push(`דולגו: ${summary.skipped.join(", ")}`);
+      toast.success(
+        parts.length ? parts.join(" · ") : "אין ערוצים עם מזהים להקמה",
+      );
       conns.invalidate();
       onProvisioned?.();
     } catch (err: unknown) {
@@ -181,7 +223,10 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
   };
 
   const removeWp = async (id: string) => {
-    const { error } = await supabase.from("social_media_wordpress_sites").delete().eq("id", id);
+    const { error } = await supabase
+      .from("social_media_wordpress_sites")
+      .delete()
+      .eq("id", id);
     if (error) return toast.error(error.message);
     conns.invalidate();
   };
@@ -199,7 +244,12 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
                 <Link2 className="h-4 w-4" /> {ch.label}
               </div>
               {missing && (
-                <Badge variant="outline" className="text-amber-600 border-amber-300">חסר חיבור</Badge>
+                <Badge
+                  variant="outline"
+                  className="text-amber-600 border-amber-300"
+                >
+                  חסר חיבור
+                </Badge>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -222,13 +272,19 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
                   size="sm"
                   variant="outline"
                   onClick={resolveMetaPage}
-                  disabled={resolving || !fieldValue("meta_ads_account_id").trim()}
+                  disabled={
+                    resolving || !fieldValue("meta_ads_account_id").trim()
+                  }
                   className="gap-2"
                 >
+                  {resolving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3.5 w-3.5" />
+                  )}
                   {resolving
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <Wand2 className="h-3.5 w-3.5" />}
-                  {resolving ? "מאתר עמוד..." : "שייך עמוד אוטומטית מחשבון המודעות"}
+                    ? "מאתר עמוד..."
+                    : "שייך עמוד אוטומטית מחשבון המודעות"}
                 </Button>
 
                 {resolvedPage && (
@@ -240,7 +296,8 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Page ID: {resolvedPage.page_id}
-                        {resolvedPage.ig_username && ` · Instagram: @${resolvedPage.ig_username}`}
+                        {resolvedPage.ig_username &&
+                          ` · Instagram: @${resolvedPage.ig_username}`}
                       </p>
                     </div>
                   </div>
@@ -300,13 +357,24 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
         ) : (
           <div className="space-y-2">
             {conns.data.socialPages.map((p) => (
-              <div key={p.id} className="flex items-center justify-between rounded border p-2">
+              <div
+                key={p.id}
+                className="flex items-center justify-between rounded border p-2"
+              >
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{p.platform}</Badge>
-                  <span className="text-sm font-medium">{p.page_name || p.page_id}</span>
-                  <span className="text-xs text-muted-foreground">{p.page_id}</span>
+                  <span className="text-sm font-medium">
+                    {p.page_name || p.page_id}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {p.page_id}
+                  </span>
                 </div>
-                <Button size="icon" variant="ghost" onClick={() => removePage(p.id)}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => removePage(p.id)}
+                >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </div>
@@ -318,7 +386,9 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
           <div>
             <Label>פלטפורמה</Label>
             <Select value={newPagePlatform} onValueChange={setNewPagePlatform}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="facebook">Facebook</SelectItem>
                 <SelectItem value="instagram">Instagram</SelectItem>
@@ -330,13 +400,21 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
           </div>
           <div>
             <Label>Page ID</Label>
-            <Input value={newPageId} onChange={(e) => setNewPageId(e.target.value)} />
+            <Input
+              value={newPageId}
+              onChange={(e) => setNewPageId(e.target.value)}
+            />
           </div>
           <div>
             <Label>שם</Label>
-            <Input value={newPageName} onChange={(e) => setNewPageName(e.target.value)} />
+            <Input
+              value={newPageName}
+              onChange={(e) => setNewPageName(e.target.value)}
+            />
           </div>
-          <Button size="sm" onClick={addPage}><Plus className="ml-1 h-4 w-4" /> הוסף ידנית</Button>
+          <Button size="sm" onClick={addPage}>
+            <Plus className="ml-1 h-4 w-4" /> הוסף ידנית
+          </Button>
         </div>
       </Card>
 
@@ -350,9 +428,16 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
         ) : (
           <div className="space-y-2">
             {conns.data.wpSites.map((s) => (
-              <div key={s.id} className="flex items-center justify-between rounded border p-2">
+              <div
+                key={s.id}
+                className="flex items-center justify-between rounded border p-2"
+              >
                 <span className="text-sm">{s.site_name || s.site_url}</span>
-                <Button size="icon" variant="ghost" onClick={() => removeWp(s.id)}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => removeWp(s.id)}
+                >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </div>
@@ -360,7 +445,8 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          חיבור אתר WordPress חדש דורש פרטי גישה — בצע חיבור דרך מודול האינטגרציות.
+          חיבור אתר WordPress חדש דורש פרטי גישה — בצע חיבור דרך מודול
+          האינטגרציות.
         </p>
       </Card>
     </div>

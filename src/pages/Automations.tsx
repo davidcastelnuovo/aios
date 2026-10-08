@@ -3,12 +3,35 @@ import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2, Copy, Building2, ArrowRight, Cpu, BookOpen, FileText } from "lucide-react";
+import {
+  Plus,
+  Zap,
+  Activity,
+  Trash2,
+  Edit,
+  TestTube,
+  Workflow,
+  MessageCircle,
+  Bot,
+  Share2,
+  Copy,
+  Building2,
+  ArrowRight,
+  Cpu,
+  BookOpen,
+  FileText,
+} from "lucide-react";
 import { NodeIconDisplay } from "@/components/automations/nodeIcons";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
@@ -72,7 +95,9 @@ export default function Automations() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
-  const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
+  const [selectedAutomationId, setSelectedAutomationId] = useState<
+    string | null
+  >(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -119,7 +144,10 @@ export default function Automations() {
           .select("*")
           .in("id", sharedIds);
         if (sharedErr) throw sharedErr;
-        shared = (sharedAutos || []).map((a: any) => ({ ...a, _isSharedMirror: true }));
+        shared = (sharedAutos || []).map((a: any) => ({
+          ...a,
+          _isSharedMirror: true,
+        }));
       }
 
       return [...(own || []), ...shared];
@@ -132,14 +160,14 @@ export default function Automations() {
     queryKey: ["automation-logs", selectedAutomationId],
     queryFn: async () => {
       if (!selectedAutomationId) return [];
-      
+
       const { data, error } = await supabase
         .from("automation_logs")
         .select("*")
         .eq("automation_id", selectedAutomationId)
         .order("triggered_at", { ascending: false })
         .limit(50);
-      
+
       if (error) throw error;
       return data;
     },
@@ -155,7 +183,7 @@ export default function Automations() {
         .update({ active })
         .eq("id", id)
         .eq("tenant_id", tenantId);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -180,7 +208,7 @@ export default function Automations() {
         .from("automations")
         .delete()
         .eq("id", id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -212,7 +240,14 @@ export default function Automations() {
       if (srcErr) throw srcErr;
 
       // 2. Insert clone
-      const { id: _id, created_at, updated_at, source_automation_id, source_tenant_id, ...rest } = src as any;
+      const {
+        id: _id,
+        created_at,
+        updated_at,
+        source_automation_id,
+        source_tenant_id,
+        ...rest
+      } = src as any;
       const { data: clone, error: insErr } = await supabase
         .from("automations")
         .insert({
@@ -240,7 +275,9 @@ export default function Automations() {
           id: idMap.get(s.id)!,
           automation_id: clone.id,
           tenant_id: tenantId,
-          parent_step_id: s.parent_step_id ? idMap.get(s.parent_step_id) ?? null : null,
+          parent_step_id: s.parent_step_id
+            ? (idMap.get(s.parent_step_id) ?? null)
+            : null,
           step_type: s.step_type,
           action_type: s.action_type,
           condition_branch: s.condition_branch,
@@ -251,7 +288,9 @@ export default function Automations() {
           sort_order: s.sort_order,
         }));
 
-        const { error: stepInsErr } = await supabase.from("automation_flow_steps").insert(newSteps);
+        const { error: stepInsErr } = await supabase
+          .from("automation_flow_steps")
+          .insert(newSteps);
         if (stepInsErr) throw stepInsErr;
       }
 
@@ -259,10 +298,17 @@ export default function Automations() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
-      toast({ title: "האוטומציה שוכפלה", description: "נוצר עותק כבוי. הפעל אותו לאחר העריכה." });
+      toast({
+        title: "האוטומציה שוכפלה",
+        description: "נוצר עותק כבוי. הפעל אותו לאחר העריכה.",
+      });
     },
     onError: (error: any) => {
-      toast({ title: "שגיאה בשכפול", description: error.message, variant: "destructive" });
+      toast({
+        title: "שגיאה בשכפול",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -277,13 +323,18 @@ export default function Automations() {
         .eq("active", true);
       // Use Carmen as the routing agent — she has manus-mcp connected and will
       // forward the request to Manus via ask_manus / request_dev_task tools.
-      const carmenAgent = (agentsList as any[] || []).find((a) => /כרמן|carmen/i.test(a.name || "")) || (agentsList as any[] || [])[0];
-      if (!carmenAgent) throw new Error("לא נמצאה כרמן פעילה. ודא שסוכן כרמן קיים.");
+      const carmenAgent =
+        ((agentsList as any[]) || []).find((a) =>
+          /כרמן|carmen/i.test(a.name || ""),
+        ) || ((agentsList as any[]) || [])[0];
+      if (!carmenAgent)
+        throw new Error("לא נמצאה כרמן פעילה. ודא שסוכן כרמן קיים.");
       const { data, error } = await supabase
         .from("automations")
         .insert({
           name: "מנוס / ישיר",
-          description: "ערוץ ישיר לדוד עם Manus דרך WhatsApp — מילת הפעלה: מנוס",
+          description:
+            "ערוץ ישיר לדוד עם Manus דרך WhatsApp — מילת הפעלה: מנוס",
           tenant_id: tenantId,
           trigger_type: "carmen_whatsapp_session",
           action_type: "notification",
@@ -319,11 +370,53 @@ export default function Automations() {
       });
       const steps = [
         // Step 1: WhatsApp session — keyword "מנוס" triggers the channel
-        mk({ step_type: "action", action_type: "carmen_whatsapp_session", label: "סשן WhatsApp - מנוס ישיר", configuration: { agent_id: carmenAgent.id, trigger_keyword: "מנוס", trigger_keywords: ["מנוס", "manus", "Manus"], carmen_scope_mode: "specific_phone", carmen_allowed_phones: ["972507677613"], carmen_integration_id: waInt?.id || null, session_timeout_minutes: 60 }, position_x: 0, position_y: 0, sort_order: 0 }),
+        mk({
+          step_type: "action",
+          action_type: "carmen_whatsapp_session",
+          label: "סשן WhatsApp - מנוס ישיר",
+          configuration: {
+            agent_id: carmenAgent.id,
+            trigger_keyword: "מנוס",
+            trigger_keywords: ["מנוס", "manus", "Manus"],
+            carmen_scope_mode: "specific_phone",
+            carmen_allowed_phones: ["972507677613"],
+            carmen_integration_id: waInt?.id || null,
+            session_timeout_minutes: 60,
+          },
+          position_x: 0,
+          position_y: 0,
+          sort_order: 0,
+        }),
         // Step 2: Carmen routes to Manus via manus-mcp (ask_manus or request_dev_task)
-        mk({ step_type: "action", action_type: null, label: "כרמן מנתבת ל-Manus", configuration: { agent_id: carmenAgent.id, output_format: "single_reply", step_instruction: "המשתמש שלח בקשה לערוץ מנוס ישיר. השתמשי בכלי ask_manus או request_dev_task כדי להעביר את הבקשה הבאה ל-Manus AI. העברי את הבקשה כמו שהיא, ללא עיבוד. אם הבקשה עוסקת בקוד/פיתוח/גיטהאב — השתמשי ב-request_dev_task. אחרת — השתמשי ב-ask_manus. החזירי לדוד את ה-task URL שקיבלת מ-Manus (בדרך כלל: Manus עובד וישלח אישור בסיום בנפרד). הבקשה: {{message_text}}" }, position_x: 0, position_y: 150, sort_order: 1 }),
+        mk({
+          step_type: "action",
+          action_type: null,
+          label: "כרמן מנתבת ל-Manus",
+          configuration: {
+            agent_id: carmenAgent.id,
+            output_format: "single_reply",
+            step_instruction:
+              "המשתמש שלח בקשה לערוץ מנוס ישיר. השתמשי בכלי ask_manus או request_dev_task כדי להעביר את הבקשה הבאה ל-Manus AI. העברי את הבקשה כמו שהיא, ללא עיבוד. אם הבקשה עוסקת בקוד/פיתוח/גיטהאב — השתמשי ב-request_dev_task. אחרת — השתמשי ב-ask_manus. החזירי לדוד את ה-task URL שקיבלת מ-Manus (בדרך כלל: Manus עובד וישלח אישור בסיום בנפרד). הבקשה: {{message_text}}",
+          },
+          position_x: 0,
+          position_y: 150,
+          sort_order: 1,
+        }),
         // Step 3: Send the task URL confirmation back to WhatsApp
-        mk({ step_type: "action", action_type: "send_manus_message", label: "שלח אישור ל-WhatsApp", configuration: { recipients: [{ type: "phone_manual", phone: "972507677613" }], green_api_mode: "tenant", message_template: "{{agent_output}}", green_api_integration_id: gaInt?.id || null }, position_x: 0, position_y: 300, sort_order: 2 }),
+        mk({
+          step_type: "action",
+          action_type: "send_manus_message",
+          label: "שלח אישור ל-WhatsApp",
+          configuration: {
+            recipients: [{ type: "phone_manual", phone: "972507677613" }],
+            green_api_mode: "tenant",
+            message_template: "{{agent_output}}",
+            green_api_integration_id: gaInt?.id || null,
+          },
+          position_x: 0,
+          position_y: 300,
+          sort_order: 2,
+        }),
       ];
       await supabase.from("automation_flow_steps" as any).insert(steps);
       return data;
@@ -333,7 +426,11 @@ export default function Automations() {
       navigate(buildPath(`automations/flow/${data.id}`));
     },
     onError: (err: any) => {
-      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -345,7 +442,8 @@ export default function Automations() {
         .from("automations")
         .insert({
           name: "שיחת כרמן ב-WhatsApp",
-          description: "שיחה אינטראקטיבית עם כרמן ב-WhatsApp - מתחילה במילת \"כרמן\", מסתיימת ב\"סיימנו כרמן\"",
+          description:
+            'שיחה אינטראקטיבית עם כרמן ב-WhatsApp - מתחילה במילת "כרמן", מסתיימת ב"סיימנו כרמן"',
           tenant_id: tenantId,
           trigger_type: "whatsapp_message_received",
           action_type: "send_greenapi_message",
@@ -365,7 +463,11 @@ export default function Automations() {
       navigate(buildPath(`automations/flow/${data.id}`));
     },
     onError: (err: any) => {
-      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
   // Create the "Campaign Pulse" template — a daily skinned-agent chain.
@@ -383,15 +485,17 @@ export default function Automations() {
         .eq("tenant_id", tenantId)
         .eq("active", true);
       const carmen =
-        (agentsList as any[] || []).find((a) => /כרמן|carmen/i.test(a.name || "")) ||
-        (agentsList as any[] || [])[0];
+        ((agentsList as any[]) || []).find((a) =>
+          /כרמן|carmen/i.test(a.name || ""),
+        ) || ((agentsList as any[]) || [])[0];
       if (!carmen) throw new Error("לא נמצא סוכן פעיל (כרמן). צרי סוכן תחילה.");
 
       const { data: automation, error: autoErr } = await supabase
         .from("automations")
         .insert({
           name: "Campaign Pulse — בדיקת בוקר",
-          description: "סריקת בוקר יומית: קמפיינרית → SEO → אנליסטית → דוח. תבנית כבויה לעריכה.",
+          description:
+            "סריקת בוקר יומית: קמפיינרית → SEO → אנליסטית → דוח. תבנית כבויה לעריכה.",
           tenant_id: tenantId,
           trigger_type: "scheduled_daily",
           action_type: "notification",
@@ -412,21 +516,62 @@ export default function Automations() {
         label: over.label ?? null,
         ...over,
       });
-      const trigger = mk({ step_type: "trigger", action_type: "scheduled_daily", configuration: { hour: 8, minute: 0 }, position_x: 400, position_y: 60, sort_order: 0, parent_step_id: null, label: "כל בוקר 08:00" });
-      const agentNode = (skin: string, label: string, instruction: string, parent: string, y: number, sort: number) =>
+      const trigger = mk({
+        step_type: "trigger",
+        action_type: "scheduled_daily",
+        configuration: { hour: 8, minute: 0 },
+        position_x: 400,
+        position_y: 60,
+        sort_order: 0,
+        parent_step_id: null,
+        label: "כל בוקר 08:00",
+      });
+      const agentNode = (
+        skin: string,
+        label: string,
+        instruction: string,
+        parent: string,
+        y: number,
+        sort: number,
+      ) =>
         mk({
           step_type: "agent",
           action_type: "agent",
-          configuration: { agent_id: carmen.id, skin_slugs: [skin], step_instruction: instruction },
+          configuration: {
+            agent_id: carmen.id,
+            skin_slugs: [skin],
+            step_instruction: instruction,
+          },
           position_x: 400,
           position_y: y,
           sort_order: sort,
           parent_step_id: parent,
           label,
         });
-      const campaigner = agentNode("campaigner", "קמפיינרית", "נתחי ביצועי קמפיינים של 7 הימים האחרונים מול השבוע הקודם. זהי חריגות תקציב, anomalies וחשבונות לא תקינים. סכמי בקצרה.", trigger.id, 190, 1);
-      const seo = agentNode("seo", "SEO", "בדקי שינויי דירוג, backlinks חדשים ובעיות audit טכניות מהותיות. סכמי בקצרה.", campaigner.id, 320, 2);
-      const analyst = agentNode("analyst", "אנליסטית — סינתזה", "על סמך ממצאי הקמפיינים וה-SEO שנאספו בשלבים הקודמים ({{agent_output}}), הפיקי 3 תובנות מתועדפות + המלצה אחת לפעולה.", seo.id, 450, 3);
+      const campaigner = agentNode(
+        "campaigner",
+        "קמפיינרית",
+        "נתחי ביצועי קמפיינים של 7 הימים האחרונים מול השבוע הקודם. זהי חריגות תקציב, anomalies וחשבונות לא תקינים. סכמי בקצרה.",
+        trigger.id,
+        190,
+        1,
+      );
+      const seo = agentNode(
+        "seo",
+        "SEO",
+        "בדקי שינויי דירוג, backlinks חדשים ובעיות audit טכניות מהותיות. סכמי בקצרה.",
+        campaigner.id,
+        320,
+        2,
+      );
+      const analyst = agentNode(
+        "analyst",
+        "אנליסטית — סינתזה",
+        "על סמך ממצאי הקמפיינים וה-SEO שנאספו בשלבים הקודמים ({{agent_output}}), הפיקי 3 תובנות מתועדפות + המלצה אחת לפעולה.",
+        seo.id,
+        450,
+        3,
+      );
       const report = mk({
         step_type: "action",
         action_type: "notification",
@@ -445,11 +590,18 @@ export default function Automations() {
       return automation;
     },
     onSuccess: (data) => {
-      toast({ title: "התבנית נוצרה (כבויה)", description: "פתחי, בדקי ובחרי סקינז/הוראות לפני הפעלה." });
+      toast({
+        title: "התבנית נוצרה (כבויה)",
+        description: "פתחי, בדקי ובחרי סקינז/הוראות לפני הפעלה.",
+      });
       navigate(buildPath(`automations/flow/${data.id}`));
     },
     onError: (err: any) => {
-      toast({ title: "שגיאה ביצירת התבנית", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה ביצירת התבנית",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -463,13 +615,17 @@ export default function Automations() {
         .select("id,name,active")
         .eq("tenant_id", tenantId)
         .eq("active", true);
-      const carmenAgent = (agentsList as any[] || []).find((a) => /כרמן|carmen/i.test(a.name || "")) || (agentsList as any[] || [])[0];
+      const carmenAgent =
+        ((agentsList as any[]) || []).find((a) =>
+          /כרמן|carmen/i.test(a.name || ""),
+        ) || ((agentsList as any[]) || [])[0];
       // Create the automation header
       const { data, error } = await supabase
         .from("automations")
         .insert({
           name: "תקשורת ישירה עם Manus",
-          description: "שלח הודעה ישירה ל-Manus AI דרך פקודה ידנית — לשאלות, עדכונים ומשימות מהירות",
+          description:
+            "שלח הודעה ישירה ל-Manus AI דרך פקודה ידנית — לשאלות, עדכונים ומשימות מהירות",
           tenant_id: tenantId,
           trigger_type: "manual_command",
           action_type: "notification",
@@ -499,28 +655,43 @@ export default function Automations() {
           configuration: {
             command_description: "שלח הודעה ישירה ל-Manus AI",
             input_fields: [
-              { key: "message", label: "הודעה ל-Manus", type: "text", required: true },
-              { key: "task_id", label: "מזהה משימה קיימת (אופציונלי)", type: "text", required: false },
+              {
+                key: "message",
+                label: "הודעה ל-Manus",
+                type: "text",
+                required: true,
+              },
+              {
+                key: "task_id",
+                label: "מזהה משימה קיימת (אופציונלי)",
+                type: "text",
+                required: false,
+              },
             ],
           },
           position_x: 0,
           position_y: 0,
           sort_order: 0,
         }),
-        ...(carmenAgent ? [mk({
-          step_type: "agent",
-          action_type: "agent",
-          label: "עיבוד ע\"י כרמן (אופציונלי)",
-          configuration: {
-            agent_id: carmenAgent.id,
-            output_format: "single_reply",
-            step_instruction: "קבל את ההודעה הבאה ושלח אותה ל-Manus כפי שהיא, אלא אם המשתמש ביקש לעבד אותה: {{message}}",
-            skip_if_empty: true,
-          },
-          position_x: 0,
-          position_y: 160,
-          sort_order: 1,
-        })] : []),
+        ...(carmenAgent
+          ? [
+              mk({
+                step_type: "agent",
+                action_type: "agent",
+                label: 'עיבוד ע"י כרמן (אופציונלי)',
+                configuration: {
+                  agent_id: carmenAgent.id,
+                  output_format: "single_reply",
+                  step_instruction:
+                    "קבל את ההודעה הבאה ושלח אותה ל-Manus כפי שהיא, אלא אם המשתמש ביקש לעבד אותה: {{message}}",
+                  skip_if_empty: true,
+                },
+                position_x: 0,
+                position_y: 160,
+                sort_order: 1,
+              }),
+            ]
+          : []),
         mk({
           step_type: "action",
           action_type: "send_manus_direct",
@@ -543,7 +714,11 @@ export default function Automations() {
       navigate(buildPath(`automations/flow/${data.id}`));
     },
     onError: (err: any) => {
-      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -563,7 +738,8 @@ export default function Automations() {
         .from("automations")
         .insert({
           name: "WhatsApp Meta — ברוכים הבאים לליד",
-          description: "Webhook ליד → שליחת תבנית WhatsApp מאושרת לטלפון הליד (Meta Cloud API)",
+          description:
+            "Webhook ליד → שליחת תבנית WhatsApp מאושרת לטלפון הליד (Meta Cloud API)",
           tenant_id: tenantId,
           trigger_type: "inbound_webhook_lead",
           action_type: "send_meta_whatsapp_message",
@@ -619,12 +795,17 @@ export default function Automations() {
       queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       toast({
         title: "התבנית נוצרה (כבויה)",
-        description: "בחרו תבנית מאושרת, הפעילו webhook secret, והפעילו את ה-flow.",
+        description:
+          "בחרו תבנית מאושרת, הפעילו webhook secret, והפעילו את ה-flow.",
       });
       navigate(buildPath(`automations/flow/${data.id}`));
     },
     onError: (err: any) => {
-      toast({ title: "שגיאה ביצירת התבנית", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה ביצירת התבנית",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -671,7 +852,11 @@ export default function Automations() {
       navigate(buildPath(`automations/flow/${data.id}`));
     },
     onError: (err: any) => {
-      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -700,7 +885,10 @@ export default function Automations() {
 
   if (isError) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 p-12 text-center" dir="rtl">
+      <div
+        className="flex flex-col items-center justify-center gap-4 p-12 text-center"
+        dir="rtl"
+      >
         <p className="text-muted-foreground">לא הצלחנו לטעון את האוטומציות.</p>
         <p className="text-xs text-muted-foreground font-mono max-w-md break-all">
           {(error as Error)?.message || "שגיאה לא ידועה"}
@@ -730,11 +918,18 @@ export default function Automations() {
             <BookOpen className="h-4 w-4 ml-2" />
             מדריך Webhooks
           </Button>
-          <Button variant="outline" onClick={() => navigate(buildPath("meta-whatsapp-settings"))}>
+          <Button
+            variant="outline"
+            onClick={() => navigate(buildPath("meta-whatsapp-settings"))}
+          >
             <FileText className="h-4 w-4 ml-2" />
             תבניות WhatsApp
           </Button>
-          <Button onClick={() => createFlowMutation.mutate()} disabled={createFlowMutation.isPending} variant="outline">
+          <Button
+            onClick={() => createFlowMutation.mutate()}
+            disabled={createFlowMutation.isPending}
+            variant="outline"
+          >
             <Workflow className="h-4 w-4 ml-2" />
             פלוו חדש
           </Button>
@@ -743,7 +938,9 @@ export default function Automations() {
       </div>
 
       {/* Carmen WhatsApp Session Banner - shown when no carmen automation exists */}
-      {!automations?.some((a: any) => a.configuration?.carmen_session_mode === true) && (
+      {!automations?.some(
+        (a: any) => a.configuration?.carmen_session_mode === true,
+      ) && (
         <div className="rounded-xl border border-purple-500/30 bg-gradient-to-l from-purple-500/5 to-transparent p-4 flex flex-col md:flex-row items-start md:items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-purple-500/15 flex items-center justify-center shrink-0">
@@ -751,7 +948,10 @@ export default function Automations() {
             </div>
             <div>
               <p className="font-semibold text-sm">שיחת כרמן ב-WhatsApp</p>
-              <p className="text-xs text-muted-foreground">אפשר למשתמשים לשוחר עם כרמן ישירות ב-WhatsApp עם הקלדת מילת "כרמן"</p>
+              <p className="text-xs text-muted-foreground">
+                אפשר למשתמשים לשוחר עם כרמן ישירות ב-WhatsApp עם הקלדת מילת
+                "כרמן"
+              </p>
             </div>
           </div>
           <Button
@@ -767,15 +967,22 @@ export default function Automations() {
       )}
 
       {/* Manus Direct Channel Banner */}
-      {!automations?.some((a: any) => (a.name || "").includes("מנוס / ישיר")) && (
+      {!automations?.some((a: any) =>
+        (a.name || "").includes("מנוס / ישיר"),
+      ) && (
         <div className="rounded-xl border border-blue-500/30 bg-gradient-to-l from-blue-500/5 to-transparent p-4 flex flex-col md:flex-row items-start md:items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-blue-500/15 flex items-center justify-center shrink-0">
               <Cpu className="h-5 w-5 text-blue-400" />
             </div>
             <div>
-              <p className="font-semibold text-sm">ערוץ ישיר ל-Manus ב-WhatsApp</p>
-              <p className="text-xs text-muted-foreground">שלח "מנוס" ב-WhatsApp לשיחה ישירה עם Manus AI — מחקר, קוד, ניתוח ועוד</p>
+              <p className="font-semibold text-sm">
+                ערוץ ישיר ל-Manus ב-WhatsApp
+              </p>
+              <p className="text-xs text-muted-foreground">
+                שלח "מנוס" ב-WhatsApp לשיחה ישירה עם Manus AI — מחקר, קוד, ניתוח
+                ועוד
+              </p>
             </div>
           </div>
           <Button
@@ -797,7 +1004,10 @@ export default function Automations() {
         </div>
         <div className="flex-1">
           <p className="font-semibold text-sm">תבנית: Campaign Pulse</p>
-          <p className="text-xs text-muted-foreground">סריקת בוקר יומית עם סקינז — קמפיינרית ← SEO ← אנליסטית ← דוח. נוצרת כבויה לעריכה.</p>
+          <p className="text-xs text-muted-foreground">
+            סריקת בוקר יומית עם סקינז — קמפיינרית ← SEO ← אנליסטית ← דוח. נוצרת
+            כבויה לעריכה.
+          </p>
         </div>
         <Button
           size="sm"
@@ -817,9 +1027,12 @@ export default function Automations() {
           <MessageCircle className="h-5 w-5 text-emerald-600" />
         </div>
         <div className="flex-1">
-          <p className="font-semibold text-sm">תבנית: WhatsApp Meta — ברוכים הבאים לליד</p>
+          <p className="font-semibold text-sm">
+            תבנית: WhatsApp Meta — ברוכים הבאים לליד
+          </p>
           <p className="text-xs text-muted-foreground">
-            Webhook ליד (Make / Facebook) → שליחת תבנית מאושרת לטלפון הליד. נוצר כבוי — בחרו תבנית והפעילו.
+            Webhook ליד (Make / Facebook) → שליחת תבנית מאושרת לטלפון הליד. נוצר
+            כבוי — בחרו תבנית והפעילו.
           </p>
         </div>
         <Button
@@ -830,7 +1043,9 @@ export default function Automations() {
           disabled={createMetaWhatsappLeadFlowMutation.isPending}
         >
           <Plus className="h-4 w-4 ml-2" />
-          {createMetaWhatsappLeadFlowMutation.isPending ? "יוצר..." : "צור תבנית"}
+          {createMetaWhatsappLeadFlowMutation.isPending
+            ? "יוצר..."
+            : "צור תבנית"}
         </Button>
       </div>
 
@@ -841,7 +1056,10 @@ export default function Automations() {
         </div>
         <div className="flex-1">
           <p className="font-semibold text-sm">תבנית: תקשורת ישירה עם Manus</p>
-          <p className="text-xs text-muted-foreground">פקודה ידנית → עיבוד כרמן (אופציונלי) → שליחת הודעה ישירה ל-Manus AI. לשאלות, עדכונים ומשימות מהירות.</p>
+          <p className="text-xs text-muted-foreground">
+            פקודה ידנית → עיבוד כרמן (אופציונלי) → שליחת הודעה ישירה ל-Manus AI.
+            לשאלות, עדכונים ומשימות מהירות.
+          </p>
         </div>
         <Button
           size="sm"
@@ -859,199 +1077,230 @@ export default function Automations() {
       <div className="grid gap-3 md:gap-4 grid-cols-1 lg:grid-cols-2">
         {automations?.map((automation) => {
           const isMirror = (automation as any)._isSharedMirror === true;
-          const isCarmenMode = (automation as any).configuration?.carmen_session_mode === true;
+          const isCarmenMode =
+            (automation as any).configuration?.carmen_session_mode === true;
           const isFlow = (automation as any).is_flow;
           const triggerType = automation.trigger_type;
           const actionType = automation.action_type;
           return (
-          <Card
-            key={automation.id}
-            className={cn(
-              "group transition-all duration-200",
-              automation.active ? "" : "opacity-60",
-              isFlow && "cursor-pointer hover:border-primary/50 hover:shadow-md",
-              isCarmenMode && "border-purple-500/40 bg-purple-500/5",
-              isMirror && "border-dashed border-amber-500/40 bg-amber-500/5"
-            )}
-            onClick={() => isFlow && navigate(buildPath(`automations/flow/${automation.id}`))}
-          >
-            <CardHeader className="pb-2">
-              <div className="flex items-start justify-between gap-3">
-                {/* Trigger icon badge */}
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border"
-                  style={{ backgroundColor: "rgba(var(--muted), 0.5)" }}
-                >
-                  <NodeIconDisplay
-                    stepType="trigger"
-                    actionType={triggerType}
-                    size={20}
+            <Card
+              key={automation.id}
+              className={cn(
+                "group transition-all duration-200",
+                automation.active ? "" : "opacity-60",
+                isFlow &&
+                  "cursor-pointer hover:border-primary/50 hover:shadow-md",
+                isCarmenMode && "border-purple-500/40 bg-purple-500/5",
+                isMirror && "border-dashed border-amber-500/40 bg-amber-500/5",
+              )}
+              onClick={() =>
+                isFlow &&
+                navigate(buildPath(`automations/flow/${automation.id}`))
+              }
+            >
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-3">
+                  {/* Trigger icon badge */}
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border"
+                    style={{ backgroundColor: "rgba(var(--muted), 0.5)" }}
+                  >
+                    <NodeIconDisplay
+                      stepType="trigger"
+                      actionType={triggerType}
+                      size={20}
+                    />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <CardTitle className="text-sm font-semibold truncate">
+                        {automation.name}
+                      </CardTitle>
+                      {isMirror && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-amber-500/50 text-amber-600 dark:text-amber-400 shrink-0"
+                        >
+                          מראה
+                        </Badge>
+                      )}
+                      {isCarmenMode && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-purple-500/50 text-purple-600 dark:text-purple-400 shrink-0"
+                        >
+                          כרמן
+                        </Badge>
+                      )}
+                    </div>
+                    {/* Trigger → Action summary */}
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-[11px] text-muted-foreground">
+                        {TRIGGER_LABELS[triggerType] || triggerType}
+                      </span>
+                      {actionType && (
+                        <>
+                          <ArrowRight className="h-2.5 w-2.5 text-muted-foreground/50 shrink-0" />
+                          <span className="text-[11px] text-muted-foreground">
+                            {ACTION_LABELS[actionType] || actionType}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {automation.description && (
+                      <CardDescription className="text-xs mt-0.5 line-clamp-1">
+                        {automation.description}
+                      </CardDescription>
+                    )}
+                  </div>
+
+                  <Switch
+                    checked={automation.active}
+                    disabled={isMirror}
+                    onCheckedChange={(checked) =>
+                      !isMirror &&
+                      toggleActiveMutation.mutate({
+                        id: automation.id,
+                        active: checked,
+                      })
+                    }
+                    onClick={(e) => e.stopPropagation()}
                   />
                 </div>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-2">
+                {(automation.configuration as any)?.url && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    URL: {(automation.configuration as any).url}
+                  </p>
+                )}
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <CardTitle className="text-sm font-semibold truncate">
-                      {automation.name}
-                    </CardTitle>
-                    {isMirror && (
-                      <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 dark:text-amber-400 shrink-0">
-                        מראה
-                      </Badge>
-                    )}
-                    {isCarmenMode && (
-                      <Badge variant="outline" className="text-[10px] border-purple-500/50 text-purple-600 dark:text-purple-400 shrink-0">
-                        כרמן
-                      </Badge>
-                    )}
-                  </div>
-                  {/* Trigger → Action summary */}
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="text-[11px] text-muted-foreground">
-                      {TRIGGER_LABELS[triggerType] || triggerType}
-                    </span>
-                    {actionType && (
-                      <>
-                        <ArrowRight className="h-2.5 w-2.5 text-muted-foreground/50 shrink-0" />
-                        <span className="text-[11px] text-muted-foreground">
-                          {ACTION_LABELS[actionType] || actionType}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  {automation.description && (
-                    <CardDescription className="text-xs mt-0.5 line-clamp-1">
-                      {automation.description}
-                    </CardDescription>
+                {automation.action_type === "update_status" &&
+                  (automation.configuration as any)?.entity && (
+                    <p className="text-xs text-muted-foreground">
+                      עדכון סטטוס:{" "}
+                      {(automation.configuration as any).entity === "lead"
+                        ? "ליד"
+                        : "משימה"}{" "}
+                      → {(automation.configuration as any).status}
+                    </p>
                   )}
-                </div>
 
-                <Switch
-                  checked={automation.active}
-                  disabled={isMirror}
-                  onCheckedChange={(checked) =>
-                    !isMirror && toggleActiveMutation.mutate({ id: automation.id, active: checked })
-                  }
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-2">
+                {isMirror && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    אוטומציה זו שייכת לארגון אחר. היא רצה פעם אחת בלבד, ולא ניתן
+                    לערוך אותה כאן.
+                  </p>
+                )}
 
-              {(automation.configuration as any)?.url && (
-                <p className="text-xs text-muted-foreground truncate">
-                  URL: {(automation.configuration as any).url}
-                </p>
-              )}
-
-              {automation.action_type === "update_status" && (automation.configuration as any)?.entity && (
-                <p className="text-xs text-muted-foreground">
-                  עדכון סטטוס: {(automation.configuration as any).entity === "lead" ? "ליד" : "משימה"} → {(automation.configuration as any).status}
-                </p>
-              )}
-
-              {isMirror && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  אוטומציה זו שייכת לארגון אחר. היא רצה פעם אחת בלבד, ולא ניתן לערוך אותה כאן.
-                </p>
-              )}
-
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={(e) => { e.stopPropagation(); handleViewLogs(automation.id); }}
-                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <Activity className="h-3 w-3 ml-1" />
-                  לוגים
-                </Button>
-                {!isMirror && (
-                  <>
-                    {!isFlow && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleViewLogs(automation.id);
+                    }}
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <Activity className="h-3 w-3 ml-1" />
+                    לוגים
+                  </Button>
+                  {!isMirror && (
+                    <>
+                      {!isFlow && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTest(automation);
+                          }}
+                          className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          <TestTube className="h-3 w-3 ml-1" />
+                          בדיקה
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={(e) => { e.stopPropagation(); handleTest(automation); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isFlow) {
+                            navigate(
+                              buildPath(`automations/flow/${automation.id}`),
+                            );
+                          } else {
+                            handleEdit(automation);
+                          }
+                        }}
                         className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                       >
-                        <TestTube className="h-3 w-3 ml-1" />
-                        בדיקה
+                        <Edit className="h-3 w-3 ml-1" />
+                        {isFlow ? "עריכת Flow" : "עריכה"}
                       </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isFlow) {
-                          navigate(buildPath(`automations/flow/${automation.id}`));
-                        } else {
-                          handleEdit(automation);
-                        }
-                      }}
-                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <Edit className="h-3 w-3 ml-1" />
-                      {isFlow ? "עריכת Flow" : "עריכה"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedAutomation(automation);
-                        setShareDialogOpen(true);
-                      }}
-                      title="שתף כמראה (read-only) עם ארגון אחר"
-                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <Share2 className="h-3 w-3 ml-1" />
-                      שתף
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={(e) => { e.stopPropagation(); duplicateMutation.mutate(automation.id); }}
-                      disabled={duplicateMutation.isPending}
-                      title="שכפל אוטומציה בארגון הנוכחי"
-                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <Copy className="h-3 w-3 ml-1" />
-                      שכפל
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedAutomation(automation);
-                        setCloneOrgOpen(true);
-                      }}
-                      title="שכפל עותק עצמאי לארגון אחר"
-                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <Building2 className="h-3 w-3 ml-1" />
-                      שכפל לארגון
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm("האם למחוק אוטומציה זו?")) {
-                          deleteMutation.mutate(automation.id);
-                        }
-                      }}
-                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 mr-auto"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedAutomation(automation);
+                          setShareDialogOpen(true);
+                        }}
+                        title="שתף כמראה (read-only) עם ארגון אחר"
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <Share2 className="h-3 w-3 ml-1" />
+                        שתף
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          duplicateMutation.mutate(automation.id);
+                        }}
+                        disabled={duplicateMutation.isPending}
+                        title="שכפל אוטומציה בארגון הנוכחי"
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <Copy className="h-3 w-3 ml-1" />
+                        שכפל
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedAutomation(automation);
+                          setCloneOrgOpen(true);
+                        }}
+                        title="שכפל עותק עצמאי לארגון אחר"
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <Building2 className="h-3 w-3 ml-1" />
+                        שכפל לארגון
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm("האם למחוק אוטומציה זו?")) {
+                            deleteMutation.mutate(automation.id);
+                          }
+                        }}
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 mr-auto"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
@@ -1060,9 +1309,7 @@ export default function Automations() {
         <Card>
           <CardContent className="py-12 text-center">
             <Zap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">
-              אין עדיין אוטומציות במערכת
-            </p>
+            <p className="text-muted-foreground">אין עדיין אוטומציות במערכת</p>
           </CardContent>
         </Card>
       )}
@@ -1106,19 +1353,27 @@ export default function Automations() {
       )}
 
       <Dialog open={webhookDocsOpen} onOpenChange={setWebhookDocsOpen}>
-        <DialogContent dir="rtl" className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent
+          dir="rtl"
+          className="max-w-3xl max-h-[85vh] overflow-y-auto"
+        >
           <DialogHeader>
             <DialogTitle>מדריך Webhook להתראות לידים</DialogTitle>
             <DialogDescription>
-              הפעלת flow ישירות מ-Make, Zapier או מערכת חיצונית — ללא יצירת ליד ב-CRM.
+              הפעלת flow ישירות מ-Make, Zapier או מערכת חיצונית — ללא יצירת ליד
+              ב-CRM.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-5 text-sm">
             <ol className="list-decimal list-inside space-y-1">
               <li>צרו Flow חדש ובחרו טריגר „Webhook ליד (ללא יצירה ב-CRM)”.</li>
-              <li>צרו כתובת מאובטחת והעתיקו את ה-URL ואת `x-webhook-secret`.</li>
+              <li>
+                צרו כתובת מאובטחת והעתיקו את ה-URL ואת `x-webhook-secret`.
+              </li>
               <li>ב-Make השתמשו ב-HTTP → Make a request, בשיטת POST.</li>
-              <li>הוסיפו headers של `Content-Type: application/json` ושל הסוד.</li>
+              <li>
+                הוסיפו headers של `Content-Type: application/json` ושל הסוד.
+              </li>
               <li>הוסיפו פעולת Meta WhatsApp ובחרו יעד משדה `client_phone`.</li>
             </ol>
 
@@ -1130,31 +1385,41 @@ export default function Automations() {
                   size="sm"
                   variant="outline"
                   onClick={async () => {
-                    const example = JSON.stringify({
-                      external_id: "UNIQUE-LEAD-ID",
-                      client_name: "שם הלקוח המקבל",
-                      client_phone: "0500000000",
-                      lead_name: "שם הליד",
-                      lead_phone: "0501111111",
-                      lead_email: "lead@example.com",
-                      lead_company: "שם החברה",
-                      source: "Facebook / Google / Website",
-                      details: "פרטים נוספים",
-                      questions_and_answers: {
-                        "מה התקציב החודשי?": "5,000 ש״ח",
-                        "מתי תרצה להתחיל?": "השבוע",
+                    const example = JSON.stringify(
+                      {
+                        external_id: "UNIQUE-LEAD-ID",
+                        client_name: "שם הלקוח המקבל",
+                        client_phone: "0500000000",
+                        lead_name: "שם הליד",
+                        lead_phone: "0501111111",
+                        lead_email: "lead@example.com",
+                        lead_company: "שם החברה",
+                        source: "Facebook / Google / Website",
+                        details: "פרטים נוספים",
+                        questions_and_answers: {
+                          "מה התקציב החודשי?": "5,000 ש״ח",
+                          "מתי תרצה להתחיל?": "השבוע",
+                        },
                       },
-                    }, null, 2);
+                      null,
+                      2,
+                    );
                     await navigator.clipboard.writeText(example);
-                    toast({ title: "הועתק", description: "דוגמת ה-JSON הועתקה" });
+                    toast({
+                      title: "הועתק",
+                      description: "דוגמת ה-JSON הועתקה",
+                    });
                   }}
                 >
                   <Copy className="h-4 w-4 ml-1" />
                   העתק
                 </Button>
               </div>
-              <pre dir="ltr" className="overflow-x-auto rounded-lg bg-muted p-4 text-left text-xs">
-{`{
+              <pre
+                dir="ltr"
+                className="overflow-x-auto rounded-lg bg-muted p-4 text-left text-xs"
+              >
+                {`{
   "external_id": "UNIQUE-LEAD-ID",
   "client_name": "שם הלקוח המקבל",
   "client_phone": "0500000000",
@@ -1173,9 +1438,9 @@ export default function Automations() {
             </div>
 
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
-              `external_id` חייב להיות ייחודי וקבוע. שליחה חוזרת עם אותו מזהה תידלג,
-              כדי ש-Make retry לא ישלח ללקוח פעמיים. הסוד הוא סיסמה ואין לשמור אותו
-              בתוך ה-URL.
+              `external_id` חייב להיות ייחודי וקבוע. שליחה חוזרת עם אותו מזהה
+              תידלג, כדי ש-Make retry לא ישלח ללקוח פעמיים. הסוד הוא סיסמה ואין
+              לשמור אותו בתוך ה-URL.
             </div>
           </div>
         </DialogContent>
@@ -1183,12 +1448,13 @@ export default function Automations() {
 
       {/* Logs Dialog */}
       <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
-        <DialogContent dir="rtl" className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogContent
+          dir="rtl"
+          className="max-w-4xl max-h-[80vh] overflow-y-auto"
+        >
           <DialogHeader>
             <DialogTitle>לוגי הפעלה</DialogTitle>
-            <DialogDescription>
-              50 הרצות אחרונות של האוטומציה
-            </DialogDescription>
+            <DialogDescription>50 הרצות אחרונות של האוטומציה</DialogDescription>
           </DialogHeader>
           <div className="overflow-x-auto">
             <Table>
@@ -1215,13 +1481,18 @@ export default function Automations() {
                       {log.execution_time_ms}ms
                     </TableCell>
                     <TableCell className="text-xs truncate max-w-xs">
-                      {log.error_message || (log.response as any)?.statusText || "OK"}
+                      {log.error_message ||
+                        (log.response as any)?.statusText ||
+                        "OK"}
                     </TableCell>
                   </TableRow>
                 ))}
                 {logs?.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground">
+                    <TableCell
+                      colSpan={4}
+                      className="text-center text-muted-foreground"
+                    >
                       אין לוגים עדיין
                     </TableCell>
                   </TableRow>

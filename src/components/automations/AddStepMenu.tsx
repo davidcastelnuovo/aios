@@ -37,7 +37,6 @@ export function AddStepMenu({ onAdd, label }: AddStepMenuProps) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56" dir="rtl">
-
         {/* ── פעולות ── */}
         <DropdownMenuLabel className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider px-2 py-1">
           פעולות
@@ -150,7 +149,6 @@ export function AddStepMenu({ onAdd, label }: AddStepMenuProps) {
           </div>
           <span className="text-sm">קוד (Code)</span>
         </DropdownMenuItem>
-
       </DropdownMenuContent>
     </DropdownMenu>
   );

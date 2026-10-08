@@ -28,10 +28,18 @@ async function invokeCreativeDirect(
   body: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
-  const result = await supabase.functions.invoke("cursor-generate-creative", { body, signal });
+  const result = await supabase.functions.invoke("cursor-generate-creative", {
+    body,
+    signal,
+  });
   if (result.error || result.data?.error) {
     const message = result.error
-      ? await invokeErrorMessage(result.error, result.data, "קריאייטיב דיירקט לא זמין", result.response)
+      ? await invokeErrorMessage(
+          result.error,
+          result.data,
+          "קריאייטיב דיירקט לא זמין",
+          result.response,
+        )
       : String(result.data.error);
     throw new Error(message);
   }
@@ -64,7 +72,10 @@ export async function getCreativeDirectStatus({
   supabase: SupabaseClient;
   tenantId: string;
 }): Promise<CreativeDirectChat> {
-  const data = await invokeCreativeDirect(supabase, { action: "status", tenant_id: tenantId });
+  const data = await invokeCreativeDirect(supabase, {
+    action: "status",
+    tenant_id: tenantId,
+  });
   return parseChat(data);
 }
 
@@ -76,7 +87,10 @@ export async function ensureCreativeDirect({
   supabase: SupabaseClient;
   tenantId: string;
 }): Promise<CreativeDirectChat> {
-  const data = await invokeCreativeDirect(supabase, { action: "ensure", tenant_id: tenantId });
+  const data = await invokeCreativeDirect(supabase, {
+    action: "ensure",
+    tenant_id: tenantId,
+  });
   const chat = parseChat(data);
   if (!chat.agentUrl) throw new Error("קריאייטיב דיירקט לא החזיר כתובת סשן");
   return chat;
@@ -95,7 +109,18 @@ export async function dispatchCursorCreative({
   supabase: SupabaseClient;
   tenantId: string;
   itemId: string;
-  variation: Pick<CreativeVariation, "id" | "name" | "format" | "copyKey" | "copyLabel" | "copyText" | "parentId" | "conceptId" | "conceptName">;
+  variation: Pick<
+    CreativeVariation,
+    | "id"
+    | "name"
+    | "format"
+    | "copyKey"
+    | "copyLabel"
+    | "copyText"
+    | "parentId"
+    | "conceptId"
+    | "conceptName"
+  >;
   prompt: string;
   lesson?: string;
   jobMeta?: {
@@ -110,28 +135,33 @@ export async function dispatchCursorCreative({
   signal?: AbortSignal;
 }): Promise<{ agentUrl: string; jobId: string }> {
   if (signal?.aborted) throw new Error(GENERATION_ABORTED);
-  const data = await invokeCreativeDirect(supabase, {
-    action: "dispatch",
-    tenant_id: tenantId,
-    item_id: itemId,
-    prompt,
-    lesson: lesson?.trim() || undefined,
-    job_meta: jobMeta,
-    variation: {
-      id: variation.id,
-      name: variation.name,
-      format: variation.format,
-      copy_key: variation.copyKey,
-      copy_label: variation.copyLabel,
-      copy_text: variation.copyText,
-      parent_id: variation.parentId,
-      concept_id: variation.conceptId,
-      concept_name: variation.conceptName,
+  const data = await invokeCreativeDirect(
+    supabase,
+    {
+      action: "dispatch",
+      tenant_id: tenantId,
+      item_id: itemId,
+      prompt,
+      lesson: lesson?.trim() || undefined,
+      job_meta: jobMeta,
+      variation: {
+        id: variation.id,
+        name: variation.name,
+        format: variation.format,
+        copy_key: variation.copyKey,
+        copy_label: variation.copyLabel,
+        copy_text: variation.copyText,
+        parent_id: variation.parentId,
+        concept_id: variation.conceptId,
+        concept_name: variation.conceptName,
+      },
     },
-  }, signal);
+    signal,
+  );
   const agentUrl = String(data.agent_url ?? "");
   const jobId = String(data.job_id ?? "");
-  if (!agentUrl || !jobId) throw new Error("קריאייטיב דיירקט לא החזיר כתובת סשן");
+  if (!agentUrl || !jobId)
+    throw new Error("קריאייטיב דיירקט לא החזיר כתובת סשן");
   return { agentUrl, jobId };
 }
 
@@ -163,14 +193,24 @@ export async function waitForCursorCreative({
     const found = list.find((row) => {
       if (!row || typeof row !== "object") return false;
       const variation = row as CreativeVariation;
-      return variation.id === variationId && typeof variation.imageUrl === "string" && variation.imageUrl.length > 0;
+      return (
+        variation.id === variationId &&
+        typeof variation.imageUrl === "string" &&
+        variation.imageUrl.length > 0
+      );
     }) as CreativeVariation | undefined;
     if (found) return found;
-    const jobs = Array.isArray(payload.creative_jobs) ? payload.creative_jobs : [];
-    const job = jobs.find((row) => row && typeof row === "object" && (row as { variation_id?: string }).variation_id === variationId) as
-      | { status?: string; error?: string }
-      | undefined;
-    if (job?.status === "failed") throw new Error(job.error || "קריאייטיב דיירקט נכשל");
+    const jobs = Array.isArray(payload.creative_jobs)
+      ? payload.creative_jobs
+      : [];
+    const job = jobs.find(
+      (row) =>
+        row &&
+        typeof row === "object" &&
+        (row as { variation_id?: string }).variation_id === variationId,
+    ) as { status?: string; error?: string } | undefined;
+    if (job?.status === "failed")
+      throw new Error(job.error || "קריאייטיב דיירקט נכשל");
     if (job?.status === "cancelled") throw new Error(GENERATION_ABORTED);
     await sleep(POLL_MS, signal);
   }

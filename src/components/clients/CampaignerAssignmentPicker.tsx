@@ -36,7 +36,7 @@ export function CampaignerAssignmentPicker({
 
   const assignedIds = useMemo(
     () => new Set(assignedCampaignerIds),
-    [assignedCampaignerIds]
+    [assignedCampaignerIds],
   );
   const filteredCampaigners = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -45,7 +45,7 @@ export function CampaignerAssignmentPicker({
         !assignedIds.has(campaigner.id) &&
         (!term ||
           campaigner.full_name?.toLowerCase().includes(term) ||
-          campaigner.email?.toLowerCase().includes(term))
+          campaigner.email?.toLowerCase().includes(term)),
     );
   }, [campaigners, assignedIds, search]);
 
@@ -89,7 +89,9 @@ export function CampaignerAssignmentPicker({
         </div>
         <div className="max-h-72 overflow-y-auto rounded-md border">
           {isLoading ? (
-            <p className="p-4 text-center text-sm text-muted-foreground">טוען...</p>
+            <p className="p-4 text-center text-sm text-muted-foreground">
+              טוען...
+            </p>
           ) : filteredCampaigners.length === 0 ? (
             <p className="p-4 text-center text-sm text-muted-foreground">
               לא נמצאו קמפיינרים נוספים לשיוך
@@ -104,7 +106,9 @@ export function CampaignerAssignmentPicker({
                 className="flex w-full items-center justify-between border-b p-3 text-right last:border-b-0 hover:bg-muted/50 disabled:opacity-50"
               >
                 <span>
-                  <span className="block font-medium">{campaigner.full_name}</span>
+                  <span className="block font-medium">
+                    {campaigner.full_name}
+                  </span>
                   {campaigner.email && (
                     <span className="block text-xs text-muted-foreground">
                       {campaigner.email}

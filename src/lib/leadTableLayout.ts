@@ -17,7 +17,9 @@ export type LeadTableGroup<T> = {
   leads: T[];
 };
 
-export function parseLeadTableLayout(value: string | null | undefined): LeadTableLayout {
+export function parseLeadTableLayout(
+  value: string | null | undefined,
+): LeadTableLayout {
   return value === "by_date" ? "by_date" : "by_user";
 }
 
@@ -30,7 +32,9 @@ export function isSalesPersonOnSurface(
   return person.agencyIds?.includes(selectedAgency) ?? false;
 }
 
-export function sortLeadsByDate<T extends { created_at?: string | null }>(leads: T[]): T[] {
+export function sortLeadsByDate<T extends { created_at?: string | null }>(
+  leads: T[],
+): T[] {
   return [...leads].sort((a, b) => {
     const ta = a.created_at ? Date.parse(a.created_at) : 0;
     const tb = b.created_at ? Date.parse(b.created_at) : 0;
@@ -50,7 +54,9 @@ export function groupLeadsBySurfaceUsers<
   salesPeople: SurfaceSalesPerson[],
   selectedAgency?: string | null,
 ): LeadTableGroup<T>[] {
-  const nameById = new Map(salesPeople.map((person) => [person.id, person.full_name]));
+  const nameById = new Map(
+    salesPeople.map((person) => [person.id, person.full_name]),
+  );
   const surfacePeople = salesPeople.filter((person) =>
     isSalesPersonOnSurface(person, selectedAgency),
   );

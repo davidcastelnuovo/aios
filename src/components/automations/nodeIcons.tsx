@@ -53,7 +53,13 @@ import {
 // ─── Brand SVG components ────────────────────────────────────────────────────
 
 export const WhatsAppIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
     <path
       d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.978-1.413A9.953 9.953 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"
       fill="#25D366"
@@ -66,7 +72,13 @@ export const WhatsAppIcon = ({ size = 20 }: { size?: number }) => (
 );
 
 export const TelegramIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
     <circle cx="12" cy="12" r="10" fill="#2CA5E0" />
     <path
       d="M17.707 7.293l-2.828 9.9c-.2.7-.8.9-1.3.5l-3-2.3-1.4 1.4c-.2.2-.4.3-.7.3l.3-3.4 6.5-5.9c.3-.3-.1-.4-.4-.2l-8 5-3-1c-.7-.2-.7-.7.1-1l11.7-4.5c.6-.2 1.1.1.9.9z"
@@ -76,7 +88,13 @@ export const TelegramIcon = ({ size = 20 }: { size?: number }) => (
 );
 
 export const FacebookIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
     <circle cx="12" cy="12" r="10" fill="#1877F2" />
     <path
       d="M15.5 8H13.5C13.2 8 13 8.2 13 8.5V10H15.5L15.2 12.5H13V19H10.5V12.5H9V10H10.5V8.5C10.5 6.6 11.6 5.5 13.5 5.5H15.5V8Z"
@@ -86,7 +104,13 @@ export const FacebookIcon = ({ size = 20 }: { size?: number }) => (
 );
 
 export const InstagramIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
     <defs>
       <radialGradient id="ig-grad" cx="30%" cy="107%" r="150%">
         <stop offset="0%" stopColor="#fdf497" />
@@ -97,55 +121,164 @@ export const InstagramIcon = ({ size = 20 }: { size?: number }) => (
       </radialGradient>
     </defs>
     <rect x="2" y="2" width="20" height="20" rx="5" fill="url(#ig-grad)" />
-    <rect x="7" y="7" width="10" height="10" rx="3" stroke="white" strokeWidth="1.5" fill="none" />
-    <circle cx="12" cy="12" r="2.5" stroke="white" strokeWidth="1.5" fill="none" />
+    <rect
+      x="7"
+      y="7"
+      width="10"
+      height="10"
+      rx="3"
+      stroke="white"
+      strokeWidth="1.5"
+      fill="none"
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r="2.5"
+      stroke="white"
+      strokeWidth="1.5"
+      fill="none"
+    />
     <circle cx="16.5" cy="7.5" r="1" fill="white" />
   </svg>
 );
 
 export const GmailIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M2 6C2 4.9 2.9 4 4 4H20C21.1 4 22 4.9 22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6Z" fill="white" stroke="#E0E0E0" strokeWidth="0.5"/>
-    <path d="M2 6L12 13L22 6" stroke="#EA4335" strokeWidth="2" fill="none"/>
-    <path d="M2 6V18L8 12L2 6Z" fill="#34A853"/>
-    <path d="M22 6V18L16 12L22 6Z" fill="#FBBC04"/>
-    <path d="M8 12L2 18H22L16 12L12 15L8 12Z" fill="#4285F4"/>
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M2 6C2 4.9 2.9 4 4 4H20C21.1 4 22 4.9 22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6Z"
+      fill="white"
+      stroke="#E0E0E0"
+      strokeWidth="0.5"
+    />
+    <path d="M2 6L12 13L22 6" stroke="#EA4335" strokeWidth="2" fill="none" />
+    <path d="M2 6V18L8 12L2 6Z" fill="#34A853" />
+    <path d="M22 6V18L16 12L22 6Z" fill="#FBBC04" />
+    <path d="M8 12L2 18H22L16 12L12 15L8 12Z" fill="#4285F4" />
   </svg>
 );
 
 export const GoogleSheetsIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
     <rect x="3" y="2" width="14" height="18" rx="2" fill="#0F9D58" />
     <rect x="10" y="2" width="7" height="5" rx="0" fill="#0B8043" />
     <path d="M10 2L17 7H10V2Z" fill="#87CEAC" />
-    <rect x="5" y="9" width="10" height="1.5" rx="0.5" fill="white" fillOpacity="0.8" />
-    <rect x="5" y="12" width="10" height="1.5" rx="0.5" fill="white" fillOpacity="0.8" />
-    <rect x="5" y="15" width="7" height="1.5" rx="0.5" fill="white" fillOpacity="0.8" />
+    <rect
+      x="5"
+      y="9"
+      width="10"
+      height="1.5"
+      rx="0.5"
+      fill="white"
+      fillOpacity="0.8"
+    />
+    <rect
+      x="5"
+      y="12"
+      width="10"
+      height="1.5"
+      rx="0.5"
+      fill="white"
+      fillOpacity="0.8"
+    />
+    <rect
+      x="5"
+      y="15"
+      width="7"
+      height="1.5"
+      rx="0.5"
+      fill="white"
+      fillOpacity="0.8"
+    />
     <rect x="8" y="9" width="0.5" height="9" fill="white" fillOpacity="0.4" />
   </svg>
 );
 
 export const GoogleCalendarIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="2" y="4" width="20" height="18" rx="2" fill="white" stroke="#E0E0E0" strokeWidth="0.5"/>
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect
+      x="2"
+      y="4"
+      width="20"
+      height="18"
+      rx="2"
+      fill="white"
+      stroke="#E0E0E0"
+      strokeWidth="0.5"
+    />
     <rect x="2" y="4" width="20" height="5" rx="2" fill="#4285F4" />
     <rect x="2" y="7" width="20" height="2" fill="#4285F4" />
     <rect x="7" y="2" width="2" height="4" rx="1" fill="#4285F4" />
     <rect x="15" y="2" width="2" height="4" rx="1" fill="#4285F4" />
-    <text x="12" y="18" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#EA4335">
+    <text
+      x="12"
+      y="18"
+      textAnchor="middle"
+      fontSize="8"
+      fontWeight="bold"
+      fill="#EA4335"
+    >
       {new Date().getDate()}
     </text>
   </svg>
 );
 
 export const GoogleFormsIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
     <rect x="4" y="2" width="12" height="18" rx="2" fill="#673AB7" />
     <rect x="11" y="2" width="5" height="4" rx="0" fill="#512DA8" />
     <path d="M11 2L16 6H11V2Z" fill="#9C6FD6" />
-    <rect x="6" y="9" width="8" height="1" rx="0.5" fill="white" fillOpacity="0.8" />
-    <rect x="6" y="12" width="8" height="1" rx="0.5" fill="white" fillOpacity="0.8" />
-    <rect x="6" y="15" width="5" height="1" rx="0.5" fill="white" fillOpacity="0.8" />
+    <rect
+      x="6"
+      y="9"
+      width="8"
+      height="1"
+      rx="0.5"
+      fill="white"
+      fillOpacity="0.8"
+    />
+    <rect
+      x="6"
+      y="12"
+      width="8"
+      height="1"
+      rx="0.5"
+      fill="white"
+      fillOpacity="0.8"
+    />
+    <rect
+      x="6"
+      y="15"
+      width="5"
+      height="1"
+      rx="0.5"
+      fill="white"
+      fillOpacity="0.8"
+    />
     <circle cx="6.5" cy="9.5" r="0.5" fill="white" />
     <circle cx="6.5" cy="12.5" r="0.5" fill="white" />
     <circle cx="6.5" cy="15.5" r="0.5" fill="white" />
@@ -153,7 +286,13 @@ export const GoogleFormsIcon = ({ size = 20 }: { size?: number }) => (
 );
 
 export const StripeIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
     <rect x="2" y="2" width="20" height="20" rx="4" fill="#635BFF" />
     <path
       d="M11.5 9.5C11.5 8.7 12.1 8.3 13 8.3C14.2 8.3 15.5 8.8 16.5 9.5V6.8C15.4 6.3 14.2 6 13 6C10.5 6 8.8 7.3 8.8 9.7C8.8 13.5 14 12.9 14 14.6C14 15.5 13.3 15.9 12.3 15.9C11 15.9 9.5 15.3 8.5 14.5V17.2C9.6 17.7 10.9 18 12.3 18C14.9 18 16.7 16.8 16.7 14.3C16.7 10.3 11.5 11 11.5 9.5Z"
@@ -162,8 +301,15 @@ export const StripeIcon = ({ size = 20 }: { size?: number }) => (
   </svg>
 );
 
-export const CarmenIcon = ({ size = 20, src }: { size?: number; src?: string }) => {
-  const defaultSrc = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp";
+export const CarmenIcon = ({
+  size = 20,
+  src,
+}: {
+  size?: number;
+  src?: string;
+}) => {
+  const defaultSrc =
+    "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp";
   return (
     <img
       src={src || defaultSrc}
@@ -190,7 +336,20 @@ export interface NodeIconConfig {
   /** Optional brand image component */
   BrandIcon?: React.FC<{ size?: number }>;
   /** Category for grouping */
-  category: "trigger_lead" | "trigger_client" | "trigger_task" | "trigger_meeting" | "trigger_message" | "trigger_google" | "trigger_schedule" | "trigger_integration" | "trigger_chat" | "action_message" | "action_crm" | "action_system" | "flow_logic";
+  category:
+    | "trigger_lead"
+    | "trigger_client"
+    | "trigger_task"
+    | "trigger_meeting"
+    | "trigger_message"
+    | "trigger_google"
+    | "trigger_schedule"
+    | "trigger_integration"
+    | "trigger_chat"
+    | "action_message"
+    | "action_crm"
+    | "action_system"
+    | "flow_logic";
 }
 
 // ─── Master icon registry ─────────────────────────────────────────────────────
@@ -741,7 +900,7 @@ export const NODE_ICON_MAP: Record<string, NodeIconConfig> = {
  */
 export function getNodeIconConfig(
   stepType: string,
-  actionType?: string | null
+  actionType?: string | null,
 ): NodeIconConfig {
   if (actionType && NODE_ICON_MAP[actionType]) {
     return NODE_ICON_MAP[actionType];
@@ -800,5 +959,7 @@ export function NodeIconDisplay({
   }
 
   // Lucide icon
-  return <Icon size={size} style={{ color: config.color }} className={className} />;
+  return (
+    <Icon size={size} style={{ color: config.color }} className={className} />
+  );
 }

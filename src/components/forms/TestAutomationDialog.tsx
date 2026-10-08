@@ -38,7 +38,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, ChevronsUpDown, TestTube, Loader2, CheckCircle, XCircle, AlertCircle, User, ClipboardList, ArrowLeftRight } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  TestTube,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  User,
+  ClipboardList,
+  ArrowLeftRight,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TestAutomationDialogProps {
@@ -47,28 +58,36 @@ interface TestAutomationDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function TestAutomationDialog({ automation, open, onOpenChange }: TestAutomationDialogProps) {
+export function TestAutomationDialog({
+  automation,
+  open,
+  onOpenChange,
+}: TestAutomationDialogProps) {
   const { tenantId } = useCurrentTenant();
   const { toast } = useToast();
   const { statuses: leadStatuses } = useLeadStatuses();
-  
-  const [testMode, setTestMode] = useState<"contact" | "task" | "status">("contact");
+
+  const [testMode, setTestMode] = useState<"contact" | "task" | "status">(
+    "contact",
+  );
   const [selectedLeadId, setSelectedLeadId] = useState<string>("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [leadComboOpen, setLeadComboOpen] = useState(false);
   const [clientComboOpen, setClientComboOpen] = useState(false);
   const [taskComboOpen, setTaskComboOpen] = useState(false);
-  
+
   // Status change test
   const [oldStatus, setOldStatus] = useState<string>("");
   const [newStatus, setNewStatus] = useState<string>("");
-  
+
   // Meeting details for meeting_created trigger
-  const [meetingDate, setMeetingDate] = useState(new Date().toISOString().split('T')[0]);
+  const [meetingDate, setMeetingDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
   const [meetingTime, setMeetingTime] = useState("10:00");
   const [meetingLocation, setMeetingLocation] = useState("משרד ראשי");
-  
+
   const [testResult, setTestResult] = useState<any>(null);
 
   // Fetch leads
@@ -95,13 +114,19 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
     queryKey: ["clients-for-test", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      let query = supabase.from("clients").select("id, name, contact_name, phone");
+      let query = supabase
+        .from("clients")
+        .select("id, name, contact_name, phone");
       if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
         query = query.eq("tenant_id", tenantId);
       }
-      const { data, error } = await query.order("created_at", { ascending: false }).limit(100);
+      const { data, error } = await query
+        .order("created_at", { ascending: false })
+        .limit(100);
       if (error) throw error;
       return data || [];
     },
@@ -115,7 +140,9 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("tasks")
-        .select("id, title, status, priority, client:clients(name), lead:leads(company_name), campaigner:campaigners(full_name)")
+        .select(
+          "id, title, status, priority, client:clients(name), lead:leads(company_name), campaigner:campaigners(full_name)",
+        )
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -141,21 +168,28 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
         if (selectedLeadId) {
           testData.lead_id = selectedLeadId;
           const selectedLead = leads.find((l: any) => l.id === selectedLeadId);
-          testData.contact_name = selectedLead?.contact_name || selectedLead?.company_name;
+          testData.contact_name =
+            selectedLead?.contact_name || selectedLead?.company_name;
           testData.company_name = selectedLead?.company_name;
           testData.phone = selectedLead?.phone;
         }
         if (selectedClientId) {
           testData.client_id = selectedClientId;
-          const selectedClient = clients.find((c: any) => c.id === selectedClientId);
-          testData.contact_name = selectedClient?.contact_name || selectedClient?.name;
+          const selectedClient = clients.find(
+            (c: any) => c.id === selectedClientId,
+          );
+          testData.contact_name =
+            selectedClient?.contact_name || selectedClient?.name;
           testData.company_name = selectedClient?.name;
           testData.phone = selectedClient?.phone;
         }
-        
+
         // For lead_status_changed automations, include the new_status from conditions
         // so the automation's conditions will be met during test
-        if (automation.trigger_type === "lead_status_changed" && automation.conditions?.new_status) {
+        if (
+          automation.trigger_type === "lead_status_changed" &&
+          automation.conditions?.new_status
+        ) {
           testData.new_status = automation.conditions.new_status;
           testData.status = automation.conditions.new_status;
         }
@@ -180,10 +214,12 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
         }
         testData.lead_id = selectedLeadId;
         const selectedLead = leads.find((l: any) => l.id === selectedLeadId);
-        testData.contact_name = selectedLead?.contact_name || selectedLead?.company_name;
+        testData.contact_name =
+          selectedLead?.contact_name || selectedLead?.company_name;
         testData.company_name = selectedLead?.company_name;
         testData.phone = selectedLead?.phone;
-        testData.old_status = oldStatus || selectedLead?.response_status || "no_status";
+        testData.old_status =
+          oldStatus || selectedLead?.response_status || "no_status";
         testData.status = newStatus;
         testData.new_status = newStatus;
       }
@@ -203,7 +239,7 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
         triggerType = "task_created";
       }
 
-      const response = await supabase.functions.invoke('trigger-automation', {
+      const response = await supabase.functions.invoke("trigger-automation", {
         body: {
           trigger_type: triggerType,
           tenant_id: tenantId,
@@ -265,14 +301,16 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
             <TestTube className="h-5 w-5" />
             בדיקת אוטומציה: {automation?.name}
           </DialogTitle>
-          <DialogDescription>
-            בחר סוג בדיקה והרץ את האוטומציה
-          </DialogDescription>
+          <DialogDescription>בחר סוג בדיקה והרץ את האוטומציה</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Test Mode Tabs */}
-          <Tabs value={testMode} onValueChange={(v) => setTestMode(v as any)} className="w-full">
+          <Tabs
+            value={testMode}
+            onValueChange={(v) => setTestMode(v as any)}
+            className="w-full"
+          >
             <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="contact" className="flex items-center gap-1">
                 <User className="h-4 w-4" />
@@ -303,7 +341,7 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                       disabled={!!selectedClientId}
                     >
                       {selectedLead
-                        ? `${selectedLead.company_name} ${selectedLead.contact_name ? `(${selectedLead.contact_name})` : ''}`
+                        ? `${selectedLead.company_name} ${selectedLead.contact_name ? `(${selectedLead.contact_name})` : ""}`
                         : "חיפוש ליד..."}
                       <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -317,7 +355,7 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                           {leads.map((lead: any) => (
                             <CommandItem
                               key={lead.id}
-                              value={`${lead.company_name} ${lead.contact_name || ''}`}
+                              value={`${lead.company_name} ${lead.contact_name || ""}`}
                               onSelect={() => {
                                 setSelectedLeadId(lead.id);
                                 setSelectedClientId("");
@@ -327,13 +365,17 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                               <Check
                                 className={cn(
                                   "mr-2 h-4 w-4",
-                                  selectedLeadId === lead.id ? "opacity-100" : "opacity-0"
+                                  selectedLeadId === lead.id
+                                    ? "opacity-100"
+                                    : "opacity-0",
                                 )}
                               />
                               <div className="flex flex-col">
                                 <span>{lead.company_name}</span>
                                 {lead.contact_name && (
-                                  <span className="text-xs text-muted-foreground">{lead.contact_name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {lead.contact_name}
+                                  </span>
                                 )}
                               </div>
                             </CommandItem>
@@ -345,12 +387,17 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                 </Popover>
               </div>
 
-              <div className="text-center text-sm text-muted-foreground">── או ──</div>
+              <div className="text-center text-sm text-muted-foreground">
+                ── או ──
+              </div>
 
               {/* Client Selection */}
               <div className="space-y-2">
                 <Label>בחר לקוח לבדיקה:</Label>
-                <Popover open={clientComboOpen} onOpenChange={setClientComboOpen}>
+                <Popover
+                  open={clientComboOpen}
+                  onOpenChange={setClientComboOpen}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -360,7 +407,7 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                       disabled={!!selectedLeadId}
                     >
                       {selectedClient
-                        ? `${selectedClient.name} ${selectedClient.contact_name ? `(${selectedClient.contact_name})` : ''}`
+                        ? `${selectedClient.name} ${selectedClient.contact_name ? `(${selectedClient.contact_name})` : ""}`
                         : "חיפוש לקוח..."}
                       <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -374,7 +421,7 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                           {clients.map((client: any) => (
                             <CommandItem
                               key={client.id}
-                              value={`${client.name} ${client.contact_name || ''}`}
+                              value={`${client.name} ${client.contact_name || ""}`}
                               onSelect={() => {
                                 setSelectedClientId(client.id);
                                 setSelectedLeadId("");
@@ -384,13 +431,17 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                               <Check
                                 className={cn(
                                   "mr-2 h-4 w-4",
-                                  selectedClientId === client.id ? "opacity-100" : "opacity-0"
+                                  selectedClientId === client.id
+                                    ? "opacity-100"
+                                    : "opacity-0",
                                 )}
                               />
                               <div className="flex flex-col">
                                 <span>{client.name}</span>
                                 {client.contact_name && (
-                                  <span className="text-xs text-muted-foreground">{client.contact_name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {client.contact_name}
+                                  </span>
                                 )}
                               </div>
                             </CommandItem>
@@ -415,9 +466,7 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                       aria-expanded={taskComboOpen}
                       className="w-full justify-between"
                     >
-                      {selectedTask
-                        ? selectedTask.title
-                        : "חיפוש משימה..."}
+                      {selectedTask ? selectedTask.title : "חיפוש משימה..."}
                       <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -439,13 +488,18 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                               <Check
                                 className={cn(
                                   "mr-2 h-4 w-4",
-                                  selectedTaskId === task.id ? "opacity-100" : "opacity-0"
+                                  selectedTaskId === task.id
+                                    ? "opacity-100"
+                                    : "opacity-0",
                                 )}
                               />
                               <div className="flex flex-col">
                                 <span>{task.title}</span>
                                 <span className="text-xs text-muted-foreground">
-                                  {task.client?.name || task.lead?.company_name || "ללא לקוח"} • {task.campaigner?.full_name || "ללא אחראי"}
+                                  {task.client?.name ||
+                                    task.lead?.company_name ||
+                                    "ללא לקוח"}{" "}
+                                  • {task.campaigner?.full_name || "ללא אחראי"}
                                 </span>
                               </div>
                             </CommandItem>
@@ -472,7 +526,7 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                       className="w-full justify-between"
                     >
                       {selectedLead
-                        ? `${selectedLead.company_name} ${selectedLead.contact_name ? `(${selectedLead.contact_name})` : ''}`
+                        ? `${selectedLead.company_name} ${selectedLead.contact_name ? `(${selectedLead.contact_name})` : ""}`
                         : "חיפוש ליד..."}
                       <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -486,23 +540,29 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                           {leads.map((lead: any) => (
                             <CommandItem
                               key={lead.id}
-                              value={`${lead.company_name} ${lead.contact_name || ''}`}
+                              value={`${lead.company_name} ${lead.contact_name || ""}`}
                               onSelect={() => {
                                 setSelectedLeadId(lead.id);
-                                setOldStatus(lead.response_status || "no_status");
+                                setOldStatus(
+                                  lead.response_status || "no_status",
+                                );
                                 setLeadComboOpen(false);
                               }}
                             >
                               <Check
                                 className={cn(
                                   "mr-2 h-4 w-4",
-                                  selectedLeadId === lead.id ? "opacity-100" : "opacity-0"
+                                  selectedLeadId === lead.id
+                                    ? "opacity-100"
+                                    : "opacity-0",
                                 )}
                               />
                               <div className="flex flex-col">
                                 <span>{lead.company_name}</span>
                                 {lead.contact_name && (
-                                  <span className="text-xs text-muted-foreground">{lead.contact_name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {lead.contact_name}
+                                  </span>
                                 )}
                               </div>
                             </CommandItem>
@@ -524,7 +584,10 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                       </SelectTrigger>
                       <SelectContent>
                         {leadStatuses.map((status) => (
-                          <SelectItem key={status.status_key} value={status.status_key}>
+                          <SelectItem
+                            key={status.status_key}
+                            value={status.status_key}
+                          >
                             <div className="flex items-center gap-2">
                               <div
                                 className="w-3 h-3 rounded-full"
@@ -545,7 +608,10 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                       </SelectTrigger>
                       <SelectContent>
                         {leadStatuses.map((status) => (
-                          <SelectItem key={status.status_key} value={status.status_key}>
+                          <SelectItem
+                            key={status.status_key}
+                            value={status.status_key}
+                          >
                             <div className="flex items-center gap-2">
                               <div
                                 className="w-3 h-3 rounded-full"
@@ -564,37 +630,39 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
           </Tabs>
 
           {/* Meeting Details for meeting_created trigger */}
-          {isMeetingTrigger && (selectedLeadId || selectedClientId) && testMode === "contact" && (
-            <div className="space-y-3 border-t pt-4">
-              <Label className="font-medium">פרטי פגישה לדוגמה:</Label>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">תאריך</Label>
-                  <Input
-                    type="date"
-                    value={meetingDate}
-                    onChange={(e) => setMeetingDate(e.target.value)}
-                  />
+          {isMeetingTrigger &&
+            (selectedLeadId || selectedClientId) &&
+            testMode === "contact" && (
+              <div className="space-y-3 border-t pt-4">
+                <Label className="font-medium">פרטי פגישה לדוגמה:</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">תאריך</Label>
+                    <Input
+                      type="date"
+                      value={meetingDate}
+                      onChange={(e) => setMeetingDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">שעה</Label>
+                    <Input
+                      type="time"
+                      value={meetingTime}
+                      onChange={(e) => setMeetingTime(e.target.value)}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">שעה</Label>
+                  <Label className="text-xs">מיקום</Label>
                   <Input
-                    type="time"
-                    value={meetingTime}
-                    onChange={(e) => setMeetingTime(e.target.value)}
+                    value={meetingLocation}
+                    onChange={(e) => setMeetingLocation(e.target.value)}
+                    placeholder="משרד ראשי"
                   />
                 </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">מיקום</Label>
-                <Input
-                  value={meetingLocation}
-                  onChange={(e) => setMeetingLocation(e.target.value)}
-                  placeholder="משרד ראשי"
-                />
-              </div>
-            </div>
-          )}
+            )}
 
           {/* Test Results */}
           {testResult && (
@@ -608,31 +676,40 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                   </div>
                 ) : (
                   <>
-                    {testResult.results?.filter((result: any) => result !== null).map((result: any, idx: number) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        {result?.success ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-destructive" />
-                        )}
-                        <span>{result?.automation_name || 'אוטומציה'}</span>
-                        {result?.error && (
-                          <span className="text-xs text-destructive">({result.error})</span>
-                        )}
-                      </div>
-                    ))}
+                    {testResult.results
+                      ?.filter((result: any) => result !== null)
+                      .map((result: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          {result?.success ? (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-destructive" />
+                          )}
+                          <span>{result?.automation_name || "אוטומציה"}</span>
+                          {result?.error && (
+                            <span className="text-xs text-destructive">
+                              ({result.error})
+                            </span>
+                          )}
+                        </div>
+                      ))}
                     {testResult.automations_found !== undefined && (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <AlertCircle className="h-4 w-4" />
-                        <span>נמצאו {testResult.automations_found} אוטומציות מתאימות</span>
+                        <span>
+                          נמצאו {testResult.automations_found} אוטומציות מתאימות
+                        </span>
                       </div>
                     )}
-                    {testResult.results?.length > 0 && testResult.results.filter((r: any) => r !== null).every((r: any) => r?.success) && (
-                      <div className="flex items-center gap-2 text-green-600 font-medium pt-2 border-t">
-                        <CheckCircle className="h-5 w-5" />
-                        <span>האוטומציה הופעלה בהצלחה!</span>
-                      </div>
-                    )}
+                    {testResult.results?.length > 0 &&
+                      testResult.results
+                        .filter((r: any) => r !== null)
+                        .every((r: any) => r?.success) && (
+                        <div className="flex items-center gap-2 text-green-600 font-medium pt-2 border-t">
+                          <CheckCircle className="h-5 w-5" />
+                          <span>האוטומציה הופעלה בהצלחה!</span>
+                        </div>
+                      )}
                   </>
                 )}
               </div>

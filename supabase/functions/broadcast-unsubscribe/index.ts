@@ -5,10 +5,10 @@
 //
 // Deploy WITHOUT JWT verification (public link): supabase functions deploy
 //   broadcast-unsubscribe --no-verify-jwt
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-const SB_URL = Deno.env.get('SUPABASE_URL')!;
-const SB_SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SB_URL = Deno.env.get("SUPABASE_URL")!;
+const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const page = (msg: string) => `<!doctype html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -21,34 +21,47 @@ h1{font-size:20px;margin:0 0 8px}p{color:#555;margin:0}</style></head>
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
-  const recipientId = url.searchParams.get('r');
+  const recipientId = url.searchParams.get("r");
 
   const html = (body: string, status = 200) =>
-    new Response(body, { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    new Response(body, {
+      status,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
 
-  if (!recipientId) return html(page('קישור לא תקין'), 400);
+  if (!recipientId) return html(page("קישור לא תקין"), 400);
 
   try {
-    const db = createClient(SB_URL, SB_SERVICE, { auth: { persistSession: false } });
+    const db = createClient(SB_URL, SB_SERVICE, {
+      auth: { persistSession: false },
+    });
     const { data: r } = await db
-      .from('broadcast_recipients')
-      .select('id, tenant_id, email, phone')
-      .eq('id', recipientId)
+      .from("broadcast_recipients")
+      .select("id, tenant_id, email, phone")
+      .eq("id", recipientId)
       .maybeSingle();
 
-    if (!r) return html(page('הקישור פג או לא נמצא'), 404);
+    if (!r) return html(page("הקישור פג או לא נמצא"), 404);
 
     if (r.email) {
-      await db.from('broadcast_opt_outs').upsert(
-        { tenant_id: r.tenant_id, email: r.email, channel: 'email', source: 'email_unsubscribe' },
-        { onConflict: 'tenant_id,email,channel', ignoreDuplicates: true },
+      await db.from("broadcast_opt_outs").upsert(
+        {
+          tenant_id: r.tenant_id,
+          email: r.email,
+          channel: "email",
+          source: "email_unsubscribe",
+        },
+        { onConflict: "tenant_id,email,channel", ignoreDuplicates: true },
       );
     }
-    await db.from('broadcast_recipients').update({ status: 'opted_out' }).eq('id', r.id);
+    await db
+      .from("broadcast_recipients")
+      .update({ status: "opted_out" })
+      .eq("id", r.id);
 
-    return html(page('הוסרת בהצלחה ✓'));
+    return html(page("הוסרת בהצלחה ✓"));
   } catch (e) {
-    console.error('[broadcast-unsubscribe]', e);
-    return html(page('אירעה שגיאה, נסה/י שוב מאוחר יותר'), 500);
+    console.error("[broadcast-unsubscribe]", e);
+    return html(page("אירעה שגיאה, נסה/י שוב מאוחר יותר"), 500);
   }
 });

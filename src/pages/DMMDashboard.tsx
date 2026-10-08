@@ -34,8 +34,21 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, ChevronDown, Facebook, Filter, LayoutGrid, Link2, RefreshCw, Search, Table2 } from "lucide-react";
-import { isFacebookIntegration, type AgencyPlatformFilter } from "@/lib/agencyCampaignData";
+import {
+  AlertTriangle,
+  ChevronDown,
+  Facebook,
+  Filter,
+  LayoutGrid,
+  Link2,
+  RefreshCw,
+  Search,
+  Table2,
+} from "lucide-react";
+import {
+  isFacebookIntegration,
+  type AgencyPlatformFilter,
+} from "@/lib/agencyCampaignData";
 import { PulseClientRawCard } from "@/components/pulse/PulseClientRawCard";
 import { PulseAttentionTable } from "@/components/pulse/PulseAttentionTable";
 import {
@@ -89,22 +102,41 @@ export function CampaignPulseDashboard({
   const navigate = useNavigate();
   const { buildPath, tenantSlug } = useTenantPath();
   const { selectedAgency, setSelectedAgency } = useAgency();
-  const { isOwner, isTeamManager, isSuperAdmin, isCampaigner, isSeo, campaignerId } = useUserRole();
+  const {
+    isOwner,
+    isTeamManager,
+    isSuperAdmin,
+    isCampaigner,
+    isSeo,
+    campaignerId,
+  } = useUserRole();
   const { userAgencyIds } = useUserAgencies();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [search, setSearch] = useState("");
-  const [dashboardTab, setDashboardTab] = useState<"data" | "attention">("data");
-  const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "campaign">("campaign");
+  const [dashboardTab, setDashboardTab] = useState<"data" | "attention">(
+    "data",
+  );
+  const [filterService, setFilterService] = useState<
+    "all" | "ppc_google" | "ppc_meta" | "seo" | "campaign"
+  >("campaign");
   const [filterCampaigner, setFilterCampaigner] = useState("all");
-  const [platformFilter, setPlatformFilter] = useState<AgencyPlatformFilter>("all");
+  const [platformFilter, setPlatformFilter] =
+    useState<AgencyPlatformFilter>("all");
   const [period, setPeriod] = useState<PulsePeriod>("last_7_days");
-  const [callLogTarget, setCallLogTarget] = useState<PulseClientCallTarget | null>(null);
+  const [callLogTarget, setCallLogTarget] =
+    useState<PulseClientCallTarget | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [savingTargetTableId, setSavingTargetTableId] = useState<string | null>(null);
+  const [savingTargetTableId, setSavingTargetTableId] = useState<string | null>(
+    null,
+  );
   const periodBounds = useMemo(() => getPulsePeriodBounds(period), [period]);
-  const campaignTrendBounds = useMemo(() => pulseTrendWindows(jerusalemYmd()), []);
-  const effectiveAgencyId = fixedAgencyId || (selectedAgency !== "all" ? selectedAgency : null);
+  const campaignTrendBounds = useMemo(
+    () => pulseTrendWindows(jerusalemYmd()),
+    [],
+  );
+  const effectiveAgencyId =
+    fixedAgencyId || (selectedAgency !== "all" ? selectedAgency : null);
 
   useEffect(() => {
     if (fixedAgencyId && fixedAgencyId !== selectedAgency) {
@@ -176,21 +208,37 @@ export function CampaignPulseDashboard({
     staleTime: 300_000,
   });
 
-  const { data: rawClients = [], isLoading: clientsLoading, refetch: refetchClients } = useQuery({
-    queryKey: ["pulse-dash-clients", tenantId, selectedAgency, userAgencyIds, crossTenantAgencyIds, isSeo],
+  const {
+    data: rawClients = [],
+    isLoading: clientsLoading,
+    refetch: refetchClients,
+  } = useQuery({
+    queryKey: [
+      "pulse-dash-clients",
+      tenantId,
+      selectedAgency,
+      userAgencyIds,
+      crossTenantAgencyIds,
+      isSeo,
+    ],
     queryFn: async () => {
       if (!tenantId) return [];
-      const allAccessibleAgencyIds = [...(userAgencyIds ?? []), ...crossTenantAgencyIds];
+      const allAccessibleAgencyIds = [
+        ...(userAgencyIds ?? []),
+        ...crossTenantAgencyIds,
+      ];
       let query = supabase
         .from("clients")
-        .select(`
+        .select(
+          `
           id, name, status, agency_id, is_seo_client, services, mood_status,
           agencies ( name ),
           client_team (
             campaigner_id,
             campaigners ( full_name )
           )
-        `)
+        `,
+        )
         .in("status", ["active", "onboarding"])
         .order("name");
 
@@ -198,7 +246,9 @@ export function CampaignPulseDashboard({
         query = query.eq("agency_id", selectedAgency);
       } else if (isOwner || isSuperAdmin || isSeo) {
         if (crossTenantAgencyIds.length > 0) {
-          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+          query = query.or(
+            `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+          );
         } else {
           query = query.eq("tenant_id", tenantId);
         }
@@ -216,11 +266,16 @@ export function CampaignPulseDashboard({
     staleTime: 30_000,
   });
 
-  const needsCampaignerFilter = isCampaigner && !isSeo && !isOwner && !isTeamManager && !isSuperAdmin;
+  const needsCampaignerFilter =
+    isCampaigner && !isSeo && !isOwner && !isTeamManager && !isSuperAdmin;
   const showCampaignerPicker = !needsCampaignerFilter;
 
   const { data: campaigners = [] } = useQuery({
-    queryKey: ["pulse-dash-campaigners", tenantId, crossTenantAgencyIds.join(",")],
+    queryKey: [
+      "pulse-dash-campaigners",
+      tenantId,
+      crossTenantAgencyIds.join(","),
+    ],
     queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId && showCampaignerPicker,
     staleTime: 60_000,
@@ -241,7 +296,17 @@ export function CampaignPulseDashboard({
       );
     }
     return clients;
-  }, [rawClients, isSeo, isOwner, isTeamManager, isSuperAdmin, needsCampaignerFilter, campaignerId, showCampaignerPicker, filterCampaigner]);
+  }, [
+    rawClients,
+    isSeo,
+    isOwner,
+    isTeamManager,
+    isSuperAdmin,
+    needsCampaignerFilter,
+    campaignerId,
+    showCampaignerPicker,
+    filterCampaigner,
+  ]);
 
   const clientIds = filteredByRole.map((c: any) => c.id);
 
@@ -252,7 +317,12 @@ export function CampaignPulseDashboard({
     refetch: refetchPulse,
     dataUpdatedAt,
   } = useQuery({
-    queryKey: ["pulse-dash-snapshots", tenantId, clientIds.join(","), selectedAgency],
+    queryKey: [
+      "pulse-dash-snapshots",
+      tenantId,
+      clientIds.join(","),
+      selectedAgency,
+    ],
     queryFn: async () => {
       if (!tenantId || !clientIds.length) return [] as PulseSnapshotRow[];
       const baseColumns =
@@ -263,8 +333,13 @@ export function CampaignPulseDashboard({
           .from("campaign_pulse_snapshots")
           .select(columns)
           .in("client_id", clientIds);
-      let { data, error } = await load(`${baseColumns}, last_client_call_at, last_client_call_by`);
-      if (error && /last_client_call|campaign_breakdown/.test(error.message ?? "")) {
+      let { data, error } = await load(
+        `${baseColumns}, last_client_call_at, last_client_call_by`,
+      );
+      if (
+        error &&
+        /last_client_call|campaign_breakdown/.test(error.message ?? "")
+      ) {
         ({ data, error } = await load(legacyBaseColumns));
       }
       if (error) throw error;
@@ -274,26 +349,30 @@ export function CampaignPulseDashboard({
     staleTime: 30_000,
   });
 
-  const {
-    data: pulseCampaignTables = [],
-    refetch: refetchPulseTables,
-  } = useQuery({
-    queryKey: ["pulse-dash-tables", tenantId, clientIds.join(",")],
-    queryFn: async () => {
-      if (!tenantId || !clientIds.length) return [] as PulseCampaignTable[];
-      const { data: tables, error } = await supabase
-        .from("crm_tables")
-        .select("id, client_id, integration_type, category, campaign_active, last_sync_at, integration_settings")
-        .in("client_id", clientIds)
-        .in("integration_type", ["facebook_insights", "facebook_ecommerce", "google_ads"]);
-      if (error) throw error;
-      // Keep both Meta sources here. The campaign classifier deduplicates the
-      // same campaign/day after choosing the richer objective/outcome record.
-      return (tables ?? []) as PulseCampaignTable[];
-    },
-    enabled: !!tenantId && clientIds.length > 0,
-    staleTime: 60_000,
-  });
+  const { data: pulseCampaignTables = [], refetch: refetchPulseTables } =
+    useQuery({
+      queryKey: ["pulse-dash-tables", tenantId, clientIds.join(",")],
+      queryFn: async () => {
+        if (!tenantId || !clientIds.length) return [] as PulseCampaignTable[];
+        const { data: tables, error } = await supabase
+          .from("crm_tables")
+          .select(
+            "id, client_id, integration_type, category, campaign_active, last_sync_at, integration_settings",
+          )
+          .in("client_id", clientIds)
+          .in("integration_type", [
+            "facebook_insights",
+            "facebook_ecommerce",
+            "google_ads",
+          ]);
+        if (error) throw error;
+        // Keep both Meta sources here. The campaign classifier deduplicates the
+        // same campaign/day after choosing the richer objective/outcome record.
+        return (tables ?? []) as PulseCampaignTable[];
+      },
+      enabled: !!tenantId && clientIds.length > 0,
+      staleTime: 60_000,
+    });
 
   const pulseTableIds = useMemo(
     () => pulseCampaignTables.map((table) => table.id),
@@ -311,7 +390,11 @@ export function CampaignPulseDashboard({
   );
 
   const metaHintTableIds = useMemo(() => {
-    const primed = rehydrateCampaignBreakdownRows(snapshotCampaignRows, pulseCampaignTables, []);
+    const primed = rehydrateCampaignBreakdownRows(
+      snapshotCampaignRows,
+      pulseCampaignTables,
+      [],
+    );
     return pulseMetaTablesNeedingDeliveryHints(primed, pulseCampaignTables);
   }, [snapshotCampaignRows, pulseCampaignTables]);
 
@@ -321,23 +404,26 @@ export function CampaignPulseDashboard({
         pulseCampaignTables
           .filter(
             (table) =>
-              table.integration_type === "facebook_insights"
-              || table.integration_type === "facebook_ecommerce",
+              table.integration_type === "facebook_insights" ||
+              table.integration_type === "facebook_ecommerce",
           )
           .map((table) => table.id),
       ),
     [pulseCampaignTables],
   );
 
-  const {
-    data: deliveryHints = [],
-    isFetching: deliveryHintsFetching,
-  } = useQuery({
-    queryKey: ["pulse-dash-delivery-hints", metaHintTableIds.join(","), deliveryHintStart],
-    queryFn: () => fetchPulseCampaignDeliveryHints(metaHintTableIds, deliveryHintStart),
-    enabled: metaHintTableIds.length > 0,
-    staleTime: 120_000,
-  });
+  const { data: deliveryHints = [], isFetching: deliveryHintsFetching } =
+    useQuery({
+      queryKey: [
+        "pulse-dash-delivery-hints",
+        metaHintTableIds.join(","),
+        deliveryHintStart,
+      ],
+      queryFn: () =>
+        fetchPulseCampaignDeliveryHints(metaHintTableIds, deliveryHintStart),
+      enabled: metaHintTableIds.length > 0,
+      staleTime: 120_000,
+    });
 
   const {
     data: pulseCampaignRecords = [],
@@ -350,19 +436,27 @@ export function CampaignPulseDashboard({
       campaignTrendBounds.queryStart,
       campaignTrendBounds.queryEnd,
     ],
-    queryFn: () => fetchPulseCampaignRecords(pulseTableIds, {
-      ...periodBounds,
-      prevStartDate: campaignTrendBounds.queryStart,
-      endDate: campaignTrendBounds.queryEnd,
-    }),
+    queryFn: () =>
+      fetchPulseCampaignRecords(pulseTableIds, {
+        ...periodBounds,
+        prevStartDate: campaignTrendBounds.queryStart,
+        endDate: campaignTrendBounds.queryEnd,
+      }),
     enabled: pulseTableIds.length > 0,
     staleTime: 30_000,
     placeholderData: (previous) => previous,
   });
 
   const campaignData = useMemo(() => {
-    const tableToType = new Map(pulseCampaignTables.map((t) => [t.id, t.integration_type as string | null]));
-    const tableToClient = new Map(pulseCampaignTables.map((t) => [t.id, t.client_id as string]));
+    const tableToType = new Map(
+      pulseCampaignTables.map((t) => [
+        t.id,
+        t.integration_type as string | null,
+      ]),
+    );
+    const tableToClient = new Map(
+      pulseCampaignTables.map((t) => [t.id, t.client_id as string]),
+    );
     return {
       tables: pulseCampaignTables,
       records: pulseCampaignRecords,
@@ -392,13 +486,12 @@ export function CampaignPulseDashboard({
   ]);
 
   const pulseInitialLoading =
-    clientsLoading
-    || (pulseSnapshotsLoading && clientIds.length > 0)
-    || (pulseSnapshotsFetching && pulseRows.length === 0 && clientIds.length > 0);
+    clientsLoading ||
+    (pulseSnapshotsLoading && clientIds.length > 0) ||
+    (pulseSnapshotsFetching && pulseRows.length === 0 && clientIds.length > 0);
 
   const pulseRefining =
-    deliveryHintsFetching
-    || (pulseRecordsFetching && pulseTableIds.length > 0);
+    deliveryHintsFetching || (pulseRecordsFetching && pulseTableIds.length > 0);
 
   const refetchCampaignData = () => {
     refetchPulseTables();
@@ -419,7 +512,10 @@ export function CampaignPulseDashboard({
     const map = new Map<string, PulseSnapshotRow>();
     for (const row of pulseRows) {
       const prev = map.get(row.client_id);
-      if (!prev || String(row.calculated_at || "") > String(prev.calculated_at || "")) {
+      if (
+        !prev ||
+        String(row.calculated_at || "") > String(prev.calculated_at || "")
+      ) {
         map.set(row.client_id, row);
       }
     }
@@ -427,13 +523,16 @@ export function CampaignPulseDashboard({
   }, [pulseRows]);
 
   const clientMetaById = useMemo(() => {
-    const map = new Map<string, {
-      name: string;
-      campaignerName: string;
-      agencyName: string;
-      services: string[];
-      moodStatus: string | null;
-    }>();
+    const map = new Map<
+      string,
+      {
+        name: string;
+        campaignerName: string;
+        agencyName: string;
+        services: string[];
+        moodStatus: string | null;
+      }
+    >();
     for (const c of filteredByRole as Array<{
       id: string;
       name: string;
@@ -442,7 +541,9 @@ export function CampaignPulseDashboard({
       client_team?: Array<{ campaigners?: { full_name?: string } }>;
       agencies?: { name?: string };
     }>) {
-      const services: string[] = Array.isArray(c.services) ? [...c.services] : [];
+      const services: string[] = Array.isArray(c.services)
+        ? [...c.services]
+        : [];
       map.set(c.id, {
         name: c.name,
         campaignerName: c.client_team?.[0]?.campaigners?.full_name ?? "—",
@@ -499,21 +600,26 @@ export function CampaignPulseDashboard({
     return spendingCampaignRows.filter((row) => {
       const meta = clientMetaById.get(row.client_id);
       if (!meta) return false;
-      if (search && !meta.name.toLowerCase().includes(search.toLowerCase())) return false;
-      if (platformFilter === "facebook" && row.platform !== "meta") return false;
-      if (platformFilter === "google_ads" && row.platform !== "google") return false;
+      if (search && !meta.name.toLowerCase().includes(search.toLowerCase()))
+        return false;
+      if (platformFilter === "facebook" && row.platform !== "meta")
+        return false;
+      if (platformFilter === "google_ads" && row.platform !== "google")
+        return false;
       if (filterService === "campaign") {
         const clientTables = tablesByClient.get(row.client_id) ?? [];
-        if (!clientHasCampaignCoverage(meta.services, clientTables)) return false;
+        if (!clientHasCampaignCoverage(meta.services, clientTables))
+          return false;
       }
       if (filterService === "ppc_meta" && row.platform !== "meta") return false;
-      if (filterService === "ppc_google" && row.platform !== "google") return false;
+      if (filterService === "ppc_google" && row.platform !== "google")
+        return false;
       if (
-        filterService !== "all"
-        && filterService !== "campaign"
-        && filterService !== "ppc_meta"
-        && filterService !== "ppc_google"
-        && !meta.services.includes(filterService)
+        filterService !== "all" &&
+        filterService !== "campaign" &&
+        filterService !== "ppc_meta" &&
+        filterService !== "ppc_google" &&
+        !meta.services.includes(filterService)
       ) {
         return false;
       }
@@ -539,22 +645,26 @@ export function CampaignPulseDashboard({
     return filteredByRole
       .filter((client: { id: string; name: string; services?: string[] }) => {
         if (!byClient.has(client.id)) return false;
-        if (search && !client.name.toLowerCase().includes(search.toLowerCase())) return false;
+        if (search && !client.name.toLowerCase().includes(search.toLowerCase()))
+          return false;
         return true;
       })
       .map((client: { id: string }) => {
         const rowsForClient = byClient.get(client.id) ?? [];
-        const campaignsByGoal: Partial<Record<PulseCampaignGoal, PulseCampaignGoalRow[]>> = {};
+        const campaignsByGoal: Partial<
+          Record<PulseCampaignGoal, PulseCampaignGoalRow[]>
+        > = {};
         for (const row of rowsForClient) {
           const bucket = campaignsByGoal[row.goal] ?? [];
           bucket.push(row);
           campaignsByGoal[row.goal] = bucket;
         }
-        const lastCampaignTouchAt = rowsForClient
-          .map((row) => row.last_change_at)
-          .filter(Boolean)
-          .sort()
-          .reverse()[0] ?? null;
+        const lastCampaignTouchAt =
+          rowsForClient
+            .map((row) => row.last_change_at)
+            .filter(Boolean)
+            .sort()
+            .reverse()[0] ?? null;
         const meta = clientMetaById.get(client.id)!;
         return {
           clientId: client.id,
@@ -565,7 +675,13 @@ export function CampaignPulseDashboard({
         };
       })
       .sort((a, b) => a.meta.name.localeCompare(b.meta.name, "he"));
-  }, [visibleCampaignRows, filteredByRole, search, clientMetaById, pulseByClient]);
+  }, [
+    visibleCampaignRows,
+    filteredByRole,
+    search,
+    clientMetaById,
+    pulseByClient,
+  ]);
 
   const unclassifiedCampaignRows = useMemo(
     () => visibleCampaignRows.filter((row) => row.goal === "unknown"),
@@ -573,16 +689,33 @@ export function CampaignPulseDashboard({
   );
 
   const attentionClientContexts = useMemo(() => {
-    const logsByClient = new Map<string, Array<{ status: string; created_at: string }>>();
-    for (const log of communicationLogs as Array<{ client_id: string; status: string; created_at: string }>) {
+    const logsByClient = new Map<
+      string,
+      Array<{ status: string; created_at: string }>
+    >();
+    for (const log of communicationLogs as Array<{
+      client_id: string;
+      status: string;
+      created_at: string;
+    }>) {
       const list = logsByClient.get(log.client_id) ?? [];
       list.push({ status: log.status, created_at: log.created_at });
       logsByClient.set(log.client_id, list);
     }
-    const updatesByClient = new Map<string, Array<{ update_type: string | null; content: string }>>();
-    for (const update of recentClientUpdates as Array<{ client_id: string; update_type: string | null; content: string }>) {
+    const updatesByClient = new Map<
+      string,
+      Array<{ update_type: string | null; content: string }>
+    >();
+    for (const update of recentClientUpdates as Array<{
+      client_id: string;
+      update_type: string | null;
+      content: string;
+    }>) {
       const list = updatesByClient.get(update.client_id) ?? [];
-      list.push({ update_type: update.update_type, content: update.content ?? "" });
+      list.push({
+        update_type: update.update_type,
+        content: update.content ?? "",
+      });
       updatesByClient.set(update.client_id, list);
     }
 
@@ -592,9 +725,13 @@ export function CampaignPulseDashboard({
       const logs = logsByClient.get(clientId) ?? [];
       const latestLog = logs[0];
       const daysSinceLastCommunication = latestLog
-        ? Math.floor((Date.now() - new Date(latestLog.created_at).getTime()) / 86_400_000)
+        ? Math.floor(
+            (Date.now() - new Date(latestLog.created_at).getTime()) /
+              86_400_000,
+          )
         : null;
-      const recentStatus = latestLog?.status as PulseAttentionClientContext["recentCommunicationStatus"];
+      const recentStatus =
+        latestLog?.status as PulseAttentionClientContext["recentCommunicationStatus"];
       const updates = updatesByClient.get(clientId) ?? [];
       const hasRecentComplaintUpdate = updates.some((row) => {
         const text = `${row.update_type ?? ""} ${row.content}`.toLowerCase();
@@ -616,18 +753,22 @@ export function CampaignPulseDashboard({
   }, [clientMetaById, communicationLogs, recentClientUpdates, pulseByClient]);
 
   const attentionRows = useMemo(
-    () => buildPulseAttentionRows({
-      campaignRows: visibleCampaignRows,
-      tables: pulseCampaignTables,
-      clients: attentionClientContexts,
-    }),
+    () =>
+      buildPulseAttentionRows({
+        campaignRows: visibleCampaignRows,
+        tables: pulseCampaignTables,
+        clients: attentionClientContexts,
+      }),
     [visibleCampaignRows, pulseCampaignTables, attentionClientContexts],
   );
 
   const tableSettingsById = useMemo(() => {
     const map = new Map<string, Record<string, unknown>>();
     for (const table of pulseCampaignTables) {
-      map.set(table.id, (table.integration_settings ?? {}) as Record<string, unknown>);
+      map.set(
+        table.id,
+        (table.integration_settings ?? {}) as Record<string, unknown>,
+      );
     }
     return map;
   }, [pulseCampaignTables]);
@@ -661,22 +802,36 @@ export function CampaignPulseDashboard({
   }
 
   const availablePlatforms = useMemo(() => {
-    const types = new Set((campaignData?.tables ?? []).map((table) => table.integration_type));
+    const types = new Set(
+      (campaignData?.tables ?? []).map((table) => table.integration_type),
+    );
     return {
-      hasFacebook: Array.from(types).some((type) => isFacebookIntegration(type)),
+      hasFacebook: Array.from(types).some((type) =>
+        isFacebookIntegration(type),
+      ),
       hasGoogleAds: types.has("google_ads"),
     };
   }, [campaignData?.tables]);
 
-  const listSummary = useMemo(() => ({
-    clientCount: clientRawViews.length,
-    campaignCount: visibleCampaignRows.length,
-    unclassifiedCount: unclassifiedCampaignRows.length,
-    attentionCount: attentionRows.length,
-  }), [clientRawViews.length, visibleCampaignRows.length, unclassifiedCampaignRows.length, attentionRows.length]);
+  const listSummary = useMemo(
+    () => ({
+      clientCount: clientRawViews.length,
+      campaignCount: visibleCampaignRows.length,
+      unclassifiedCount: unclassifiedCampaignRows.length,
+      attentionCount: attentionRows.length,
+    }),
+    [
+      clientRawViews.length,
+      visibleCampaignRows.length,
+      unclassifiedCampaignRows.length,
+      attentionRows.length,
+    ],
+  );
 
   const freshness = useMemo(() => {
-    const times = pulseRows.map((r) => r.calculated_at).filter(Boolean) as string[];
+    const times = pulseRows
+      .map((r) => r.calculated_at)
+      .filter(Boolean) as string[];
     if (!times.length) return null;
     const latest = times.sort().reverse()[0];
     return new Date(latest).toLocaleString("he-IL", {
@@ -697,7 +852,9 @@ export function CampaignPulseDashboard({
   const mobileFilterSummary = useMemo(() => {
     const parts: string[] = [];
     if (period !== "last_7_days") {
-      parts.push(PULSE_PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? period);
+      parts.push(
+        PULSE_PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? period,
+      );
     }
     if (filterService !== "campaign") {
       const serviceLabels: Record<string, string> = {
@@ -709,7 +866,10 @@ export function CampaignPulseDashboard({
       parts.push(serviceLabels[filterService] ?? filterService);
     }
     if (showCampaignerPicker && filterCampaigner !== "all") {
-      parts.push(campaigners.find((c) => c.id === filterCampaigner)?.full_name ?? "קמפיינר");
+      parts.push(
+        campaigners.find((c) => c.id === filterCampaigner)?.full_name ??
+          "קמפיינר",
+      );
     }
     return parts.length ? parts.join(" · ") : "כל הסינונים";
   }, [
@@ -736,7 +896,10 @@ export function CampaignPulseDashboard({
   }
 
   return (
-    <div className="p-3 sm:p-4 space-y-3 sm:space-y-4 overflow-x-hidden max-w-full min-w-0" dir="rtl">
+    <div
+      className="p-3 sm:p-4 space-y-3 sm:space-y-4 overflow-x-hidden max-w-full min-w-0"
+      dir="rtl"
+    >
       {pulseRefining ? (
         <CarmenLoadingScreen
           variant="inline"
@@ -753,7 +916,8 @@ export function CampaignPulseDashboard({
             <h1 className="text-xl sm:text-2xl font-bold">דשבורד בדיקת דופק</h1>
           ) : null}
           <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 break-words">
-            {listSummary.clientCount} לקוחות · {listSummary.campaignCount} קמפיינים עם הוצאה
+            {listSummary.clientCount} לקוחות · {listSummary.campaignCount}{" "}
+            קמפיינים עם הוצאה
             {` · ${periodBounds.label}`}
             {period !== "last_7_days"
               ? ` (${periodBounds.startDate}–${periodBounds.endDate})`
@@ -769,9 +933,17 @@ export function CampaignPulseDashboard({
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => copyShareLink()}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 sm:flex-none"
+            onClick={() => copyShareLink()}
+          >
             <Link2 className="h-4 w-4 ml-1 shrink-0" />
-            <span className="truncate">העתק קישור{selectedAgency && selectedAgency !== "all" ? " לסוכנות" : ""}</span>
+            <span className="truncate">
+              העתק קישור
+              {selectedAgency && selectedAgency !== "all" ? " לסוכנות" : ""}
+            </span>
           </Button>
           <Button
             variant="outline"
@@ -811,7 +983,10 @@ export function CampaignPulseDashboard({
                 <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="truncate text-sm">{mobileFilterSummary}</span>
                 {mobileActiveFilterCount > 0 ? (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] px-1.5 py-0 shrink-0"
+                  >
                     {mobileActiveFilterCount}
                   </Badge>
                 ) : null}
@@ -819,32 +994,48 @@ export function CampaignPulseDashboard({
               <ChevronDown className="h-4 w-4 shrink-0 opacity-50 mr-1" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto" dir="rtl">
+          <SheetContent
+            side="bottom"
+            className="max-h-[85vh] overflow-y-auto"
+            dir="rtl"
+          >
             <SheetHeader>
               <SheetTitle>סינון</SheetTitle>
             </SheetHeader>
             <div className="mt-4 space-y-4">
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">טווח זמן</Label>
-                <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
+                <Label className="text-xs text-muted-foreground">
+                  טווח זמן
+                </Label>
+                <Select
+                  value={period}
+                  onValueChange={(v) => setPeriod(v as PulsePeriod)}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="טווח זמן" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-[200]">
                     {PULSE_PERIOD_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">שירות</Label>
-                <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
+                <Select
+                  value={filterService}
+                  onValueChange={(v) => setFilterService(v as any)}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="שירותים" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-[200]">
-                    <SelectItem value="campaign">קמפיין (Meta/Google)</SelectItem>
+                    <SelectItem value="campaign">
+                      קמפיין (Meta/Google)
+                    </SelectItem>
                     <SelectItem value="all">כל השירותים</SelectItem>
                     <SelectItem value="ppc_google">PPC Google</SelectItem>
                     <SelectItem value="ppc_meta">PPC Meta</SelectItem>
@@ -854,8 +1045,13 @@ export function CampaignPulseDashboard({
               </div>
               {showCampaignerPicker && (
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">קמפיינר</Label>
-                  <Select value={filterCampaigner} onValueChange={setFilterCampaigner}>
+                  <Label className="text-xs text-muted-foreground">
+                    קמפיינר
+                  </Label>
+                  <Select
+                    value={filterCampaigner}
+                    onValueChange={setFilterCampaigner}
+                  >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="קמפיינר" />
                     </SelectTrigger>
@@ -885,13 +1081,18 @@ export function CampaignPulseDashboard({
 
       {/* Desktop filters — inline row (agency filter lives in AppLayout header) */}
       <div className="hidden md:flex flex-wrap gap-2 items-center">
-        <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
+        <Select
+          value={period}
+          onValueChange={(v) => setPeriod(v as PulsePeriod)}
+        >
           <SelectTrigger className="w-[170px]">
             <SelectValue placeholder="טווח זמן" />
           </SelectTrigger>
           <SelectContent className="bg-background">
             {PULSE_PERIOD_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -904,7 +1105,10 @@ export function CampaignPulseDashboard({
             className="pr-9"
           />
         </div>
-        <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
+        <Select
+          value={filterService}
+          onValueChange={(v) => setFilterService(v as any)}
+        >
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="שירותים" />
           </SelectTrigger>
@@ -935,7 +1139,9 @@ export function CampaignPulseDashboard({
 
       <Tabs
         value={dashboardTab}
-        onValueChange={(value) => setDashboardTab(value as "data" | "attention")}
+        onValueChange={(value) =>
+          setDashboardTab(value as "data" | "attention")
+        }
         dir="rtl"
         className="space-y-3"
       >
@@ -948,7 +1154,10 @@ export function CampaignPulseDashboard({
             <AlertTriangle className="h-4 w-4" />
             תשומת לב
             {listSummary.attentionCount > 0 ? (
-              <Badge variant="secondary" className="mr-1 text-[10px] px-1.5 py-0">
+              <Badge
+                variant="secondary"
+                className="mr-1 text-[10px] px-1.5 py-0"
+              >
                 {listSummary.attentionCount}
               </Badge>
             ) : null}
@@ -956,10 +1165,12 @@ export function CampaignPulseDashboard({
         </TabsList>
 
         <TabsContent value="data" className="space-y-3 mt-0">
-          {(availablePlatforms.hasFacebook || availablePlatforms.hasGoogleAds) ? (
+          {availablePlatforms.hasFacebook || availablePlatforms.hasGoogleAds ? (
             <Tabs
               value={platformFilter}
-              onValueChange={(value) => setPlatformFilter(value as AgencyPlatformFilter)}
+              onValueChange={(value) =>
+                setPlatformFilter(value as AgencyPlatformFilter)
+              }
               dir="rtl"
             >
               <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
@@ -975,9 +1186,20 @@ export function CampaignPulseDashboard({
                 )}
                 {availablePlatforms.hasGoogleAds && (
                   <TabsTrigger value="google_ads" className="gap-2">
-                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
-                      <path d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z" fill="#FBBC04" />
-                      <path d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z" fill="#4285F4" />
+                    <svg
+                      className="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden
+                    >
+                      <path
+                        d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z"
+                        fill="#FBBC04"
+                      />
+                      <path
+                        d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z"
+                        fill="#4285F4"
+                      />
                       <circle cx="6" cy="18" r="3.5" fill="#34A853" />
                     </svg>
                     Google Ads
@@ -989,8 +1211,10 @@ export function CampaignPulseDashboard({
 
           {unclassifiedCampaignRows.length > 0 ? (
             <div className="rounded-md border p-3 text-sm text-muted-foreground">
-              <strong className="text-foreground">{unclassifiedCampaignRows.length} קמפיינים טעונים סיווג</strong>
-              {" "}— מוצגים תחת «טעון סיווג» בתוך כרטיס הלקוח.
+              <strong className="text-foreground">
+                {unclassifiedCampaignRows.length} קמפיינים טעונים סיווג
+              </strong>{" "}
+              — מוצגים תחת «טעון סיווג» בתוך כרטיס הלקוח.
             </div>
           ) : null}
 
@@ -1029,7 +1253,8 @@ export function CampaignPulseDashboard({
 
         <TabsContent value="attention" className="space-y-3 mt-0">
           <p className="text-sm text-muted-foreground">
-            שורה לכל לקוח × פלטפורמה — רק כשיש נושא רגיש. יעד מאושר → אחרת מגמת 7 ימים → אחרת בסיס 30 יום.
+            שורה לכל לקוח × פלטפורמה — רק כשיש נושא רגיש. יעד מאושר → אחרת מגמת
+            7 ימים → אחרת בסיס 30 יום.
           </p>
           <PulseAttentionTable
             rows={attentionRows}
@@ -1048,17 +1273,30 @@ export function CampaignPulseDashboard({
         }}
         target={callLogTarget}
         onSaved={({ clientId, lastClientCallAt, lastClientCallBy }) => {
-          const pulseQueryKey = ["pulse-dash-snapshots", tenantId, clientIds.join(","), selectedAgency] as const;
+          const pulseQueryKey = [
+            "pulse-dash-snapshots",
+            tenantId,
+            clientIds.join(","),
+            selectedAgency,
+          ] as const;
           queryClient.setQueryData<PulseSnapshotRow[]>(pulseQueryKey, (old) => {
             if (!old) return old;
             return old.map((row) =>
               row.client_id === clientId
-                ? applyClientCallToPulseSnapshot(row, lastClientCallAt, lastClientCallBy)
+                ? applyClientCallToPulseSnapshot(
+                    row,
+                    lastClientCallAt,
+                    lastClientCallBy,
+                  )
                 : row,
             );
           });
-          queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
-          queryClient.invalidateQueries({ queryKey: ["pulse-client-call-updates", clientId] });
+          queryClient.invalidateQueries({
+            queryKey: ["client-updates", clientId],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["pulse-client-call-updates", clientId],
+          });
         }}
       />
     </div>

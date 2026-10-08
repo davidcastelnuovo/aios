@@ -1,6 +1,7 @@
 # Manus WA Gateway — list groups for Carmen instance
 
 ## Context
+
 AIOS Carmen (phone ~972549696673) connects via Manus WhatsApp Gateway:
 `https://whatsappgw-pzpyrrww.manus.space`
 

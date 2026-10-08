@@ -3,10 +3,23 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Search, UserSearch } from "lucide-react";
-import { splitContactName, type SignatureContactDetails } from "./signatureContactUtils";
+import {
+  splitContactName,
+  type SignatureContactDetails,
+} from "./signatureContactUtils";
 
 type EntityType = "lead" | "client";
 
@@ -19,7 +32,10 @@ interface SignatureContactPickerProps {
   onSelect: (contact: SignatureContactDetails) => void;
 }
 
-export default function SignatureContactPicker({ tenantId, onSelect }: SignatureContactPickerProps) {
+export default function SignatureContactPicker({
+  tenantId,
+  onSelect,
+}: SignatureContactPickerProps) {
   const [open, setOpen] = useState(false);
   const [entity, setEntity] = useState<EntityType>("lead");
   const [search, setSearch] = useState("");
@@ -39,25 +55,25 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
           .limit(500);
         if (error) throw error;
 
-        return (data || [])
-          .map((r) => {
-            const displayName = r.contact_name || r.company_name || "ללא שם";
-            const { firstName, lastName } = splitContactName(displayName);
-            const label = r.company_name && r.contact_name
+        return (data || []).map((r) => {
+          const displayName = r.contact_name || r.company_name || "ללא שם";
+          const { firstName, lastName } = splitContactName(displayName);
+          const label =
+            r.company_name && r.contact_name
               ? `${r.contact_name} (${r.company_name})`
-              : (r.company_name || r.contact_name || "ללא שם");
-            return {
-              key: `lead:${r.id}`,
-              name: displayName,
-              email: r.email || "",
-              phone: r.phone || undefined,
-              firstName,
-              lastName: lastName || r.company_name || undefined,
-              sourceLabel: `ליד: ${label}`,
-              leadId: r.id,
-              companyName: r.company_name || undefined,
-            };
-          });
+              : r.company_name || r.contact_name || "ללא שם";
+          return {
+            key: `lead:${r.id}`,
+            name: displayName,
+            email: r.email || "",
+            phone: r.phone || undefined,
+            firstName,
+            lastName: lastName || r.company_name || undefined,
+            sourceLabel: `ליד: ${label}`,
+            leadId: r.id,
+            companyName: r.company_name || undefined,
+          };
+        });
       }
 
       const { data: clients, error: clientsError } = await supabase
@@ -69,7 +85,16 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
       if (clientsError) throw clientsError;
 
       const clientIds = (clients || []).map((c) => c.id);
-      let contactsByClient: Record<string, Array<{ id: string; contact_name: string; email: string | null; phone: string | null; role: string | null }>> = {};
+      let contactsByClient: Record<
+        string,
+        Array<{
+          id: string;
+          contact_name: string;
+          email: string | null;
+          phone: string | null;
+          role: string | null;
+        }>
+      > = {};
 
       if (clientIds.length > 0) {
         const { data: subContacts, error: subError } = await supabase
@@ -79,7 +104,8 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
           .in("client_id", clientIds);
         if (subError) throw subError;
         for (const sc of subContacts || []) {
-          if (!contactsByClient[sc.client_id]) contactsByClient[sc.client_id] = [];
+          if (!contactsByClient[sc.client_id])
+            contactsByClient[sc.client_id] = [];
           contactsByClient[sc.client_id].push(sc);
         }
       }
@@ -97,7 +123,8 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
             email: client.email || "",
             phone: client.phone || undefined,
             firstName,
-            lastName: lastName || (client.contact_name ? client.name : undefined),
+            lastName:
+              lastName || (client.contact_name ? client.name : undefined),
             sourceLabel: `לקוח: ${clientLabel}`,
             clientId: client.id,
             companyName: client.name,
@@ -153,7 +180,13 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
       </PopoverTrigger>
       <PopoverContent className="w-80 p-3" align="start" dir="rtl">
         <div className="space-y-3">
-          <Select value={entity} onValueChange={(v) => { setEntity(v as EntityType); setSearch(""); }}>
+          <Select
+            value={entity}
+            onValueChange={(v) => {
+              setEntity(v as EntityType);
+              setSearch("");
+            }}
+          >
             <SelectTrigger className="h-9">
               <SelectValue />
             </SelectTrigger>
@@ -175,7 +208,9 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
 
           <div className="max-h-56 overflow-y-auto space-y-1">
             {isLoading ? (
-              <p className="text-xs text-muted-foreground text-center py-4">טוען...</p>
+              <p className="text-xs text-muted-foreground text-center py-4">
+                טוען...
+              </p>
             ) : filtered.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-4">
                 {entity === "lead" ? "לא נמצאו לידים" : "לא נמצאו לקוחות"}
@@ -189,9 +224,16 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
                   onClick={() => handleSelect(option)}
                 >
                   <p className="text-sm font-medium truncate">{option.name}</p>
-                  <p className="text-xs text-muted-foreground truncate" dir="ltr">{option.email}</p>
+                  <p
+                    className="text-xs text-muted-foreground truncate"
+                    dir="ltr"
+                  >
+                    {option.email}
+                  </p>
                   {option.sourceLabel && (
-                    <p className="text-[10px] text-primary/80 truncate">{option.sourceLabel}</p>
+                    <p className="text-[10px] text-primary/80 truncate">
+                      {option.sourceLabel}
+                    </p>
                   )}
                 </button>
               ))

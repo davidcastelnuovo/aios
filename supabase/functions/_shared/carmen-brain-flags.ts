@@ -11,23 +11,37 @@ export function runtimeEnv(): Record<string, string | undefined> {
   }
 }
 
-export function flagEnabled(env: Record<string, string | undefined>, name: string): boolean {
-  const raw = String(env[name] ?? "").trim().toLowerCase();
+export function flagEnabled(
+  env: Record<string, string | undefined>,
+  name: string,
+): boolean {
+  const raw = String(env[name] ?? "")
+    .trim()
+    .toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
 /** Prefer fixed Cursor/Codex direct chat follow-ups over spawning new Cloud Agents. */
-export function lightweightBrainEnabled(env: Record<string, string | undefined> = runtimeEnv()): boolean {
+export function lightweightBrainEnabled(
+  env: Record<string, string | undefined> = runtimeEnv(),
+): boolean {
   return flagEnabled(env, "CARMEN_LIGHTWEIGHT_BRAIN");
 }
 
 /** Route Codex Direct through OpenAI Chat Completions instead of Cursor Cloud Agents. */
-export function codexOpenAiApiEnabled(env: Record<string, string | undefined> = runtimeEnv()): boolean {
+export function codexOpenAiApiEnabled(
+  env: Record<string, string | undefined> = runtimeEnv(),
+): boolean {
   return flagEnabled(env, "CODEX_USE_OPENAI_API");
 }
 
-export function codexApiModel(env: Record<string, string | undefined> = runtimeEnv()): string {
-  return String(env.CODEX_API_MODEL || env.CODEX_MODEL_ID || "gpt-4o-mini").trim() || "gpt-4o-mini";
+export function codexApiModel(
+  env: Record<string, string | undefined> = runtimeEnv(),
+): string {
+  return (
+    String(env.CODEX_API_MODEL || env.CODEX_MODEL_ID || "gpt-4o-mini").trim() ||
+    "gpt-4o-mini"
+  );
 }
 
 /** Loop guard window for Command Center / direct channels. */

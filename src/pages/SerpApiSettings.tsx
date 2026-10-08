@@ -5,10 +5,27 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, Check, X, RefreshCw, ExternalLink, Key, Zap, DollarSign, Mail, Lock } from "lucide-react";
+import {
+  Search,
+  Check,
+  X,
+  RefreshCw,
+  ExternalLink,
+  Key,
+  Zap,
+  DollarSign,
+  Mail,
+  Lock,
+} from "lucide-react";
 
 export default function SerpApiSettings() {
   const queryClient = useQueryClient();
@@ -20,7 +37,9 @@ export default function SerpApiSettings() {
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ["dataforseo-status"],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       const response = await fetch(
@@ -31,7 +50,7 @@ export default function SerpApiSettings() {
             Authorization: `Bearer ${session.access_token}`,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       if (!response.ok) return { connected: false };
@@ -43,7 +62,9 @@ export default function SerpApiSettings() {
   const { data: accountInfo, refetch: refetchAccount } = useQuery({
     queryKey: ["dataforseo-account"],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       const accountResponse = await fetch(
@@ -54,7 +75,7 @@ export default function SerpApiSettings() {
             Authorization: `Bearer ${session.access_token}`,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       if (!accountResponse.ok) return null;
@@ -65,8 +86,16 @@ export default function SerpApiSettings() {
 
   // Connect mutation
   const connectMutation = useMutation({
-    mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      const { data: { session } } = await supabase.auth.getSession();
+    mutationFn: async ({
+      email,
+      password,
+    }: {
+      email: string;
+      password: string;
+    }) => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       const response = await fetch(
@@ -78,7 +107,7 @@ export default function SerpApiSettings() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ email, password }),
-        }
+        },
       );
 
       const data = await response.json();
@@ -89,8 +118,12 @@ export default function SerpApiSettings() {
       toast.success(`DataForSEO מחובר בהצלחה! יתרה: $${data.balance}`);
       setEmail("");
       setPassword("");
-      queryClient.invalidateQueries({ queryKey: ["dataforseo-status", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["dataforseo-account", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["dataforseo-status", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["dataforseo-account", tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["serpapi-status", tenantId] });
     },
     onError: (error: Error) => {
@@ -101,7 +134,9 @@ export default function SerpApiSettings() {
   // Disconnect mutation
   const disconnectMutation = useMutation({
     mutationFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       const response = await fetch(
@@ -112,7 +147,7 @@ export default function SerpApiSettings() {
             Authorization: `Bearer ${session.access_token}`,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       const data = await response.json();
@@ -121,8 +156,12 @@ export default function SerpApiSettings() {
     },
     onSuccess: () => {
       toast.success("DataForSEO נותק");
-      queryClient.invalidateQueries({ queryKey: ["dataforseo-status", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["dataforseo-account", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["dataforseo-status", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["dataforseo-account", tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["serpapi-status", tenantId] });
     },
     onError: (error: Error) => {
@@ -144,7 +183,9 @@ export default function SerpApiSettings() {
         <Search className="h-8 w-8 text-primary" />
         <div>
           <h1 className="text-2xl font-bold">הגדרות DataForSEO</h1>
-          <p className="text-muted-foreground">חיבור ל-DataForSEO למעקב דירוגים בזמן אמת</p>
+          <p className="text-muted-foreground">
+            חיבור ל-DataForSEO למעקב דירוגים בזמן אמת
+          </p>
         </div>
       </div>
 
@@ -195,9 +236,12 @@ export default function SerpApiSettings() {
                           <span>{accountInfo.plan}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">חיפושים החודש:</span>
+                          <span className="text-muted-foreground">
+                            חיפושים החודש:
+                          </span>
                           <span>
-                            {accountInfo.this_month_searches} / {accountInfo.searches_per_month}
+                            {accountInfo.this_month_searches} /{" "}
+                            {accountInfo.searches_per_month}
                           </span>
                         </div>
                       </>
@@ -267,7 +311,11 @@ export default function SerpApiSettings() {
 
                 <Button
                   onClick={handleConnect}
-                  disabled={connectMutation.isPending || !email.trim() || !password.trim()}
+                  disabled={
+                    connectMutation.isPending ||
+                    !email.trim() ||
+                    !password.trim()
+                  }
                   className="w-full"
                 >
                   {connectMutation.isPending ? (
@@ -292,8 +340,9 @@ export default function SerpApiSettings() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              DataForSEO הוא שירות מעקב דירוגים מקצועי שמאפשר לך לקבל את המיקום המדויק 
-              של האתר שלך בגוגל בזמן אמת. המחיר נמוך משמעותית מ-SerpAPI ושירותים דומים.
+              DataForSEO הוא שירות מעקב דירוגים מקצועי שמאפשר לך לקבל את המיקום
+              המדויק של האתר שלך בגוגל בזמן אמת. המחיר נמוך משמעותית מ-SerpAPI
+              ושירותים דומים.
             </p>
 
             <div className="space-y-2">

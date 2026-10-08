@@ -3,7 +3,13 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Users, GripVertical, GripHorizontal, UserRound } from "lucide-react";
+import {
+  MessageSquare,
+  Users,
+  GripVertical,
+  GripHorizontal,
+  UserRound,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { embedCount } from "@/lib/embedCount";
 
@@ -28,15 +34,15 @@ interface ResizableTaskItemProps {
   totalTasksInSlot?: number;
 }
 
-export function ResizableTaskItem({ 
-  task, 
-  onToggleComplete, 
-  onClick, 
+export function ResizableTaskItem({
+  task,
+  onToggleComplete,
+  onClick,
   onDurationChange,
-  compact = false, 
+  compact = false,
   slotHeight = 40,
   taskIndex = 0,
-  totalTasksInSlot = 1
+  totalTasksInSlot = 1,
 }: ResizableTaskItemProps) {
   const {
     attributes,
@@ -60,7 +66,7 @@ export function ResizableTaskItem({
   const displayHeight = resizeHeight ?? baseHeight;
 
   // Calculate z-index: resizing gets highest, then longer tasks, then by index
-  const baseZIndex = isResizing ? 100 : (durationMinutes > 30 ? 20 : 10);
+  const baseZIndex = isResizing ? 100 : durationMinutes > 30 ? 20 : 10;
   const zIndex = baseZIndex - taskIndex;
 
   // Calculate width for side-by-side layout (max 4 per row)
@@ -71,62 +77,79 @@ export function ResizableTaskItem({
   const style = {
     transform: isResizing ? undefined : CSS.Transform.toString(transform),
     transition: isResizing ? undefined : transition,
-    ...(compact ? { 
-      position: "absolute" as const,
-      top: 0,
-      left: `${leftPercent}%`,
-      width: `${widthPercent}%`,
-      height: `${(displayHeight || slotHeight) - 4}px`,
-      zIndex,
-    } : {}),
+    ...(compact
+      ? {
+          position: "absolute" as const,
+          top: 0,
+          left: `${leftPercent}%`,
+          width: `${widthPercent}%`,
+          height: `${(displayHeight || slotHeight) - 4}px`,
+          zIndex,
+        }
+      : {}),
   };
 
   const isCompleted = task.status === "done";
   const updatesCount = embedCount(task.task_updates);
   const collaboratorsCount = embedCount(task.task_collaborators);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setIsResizing(true);
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    startYRef.current = clientY;
-    startHeightRef.current = baseHeight || slotHeight;
-    currentHeightRef.current = startHeightRef.current;
-    setResizeHeight(startHeightRef.current);
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
-      const currentY = 'touches' in moveEvent ? moveEvent.touches[0].clientY : moveEvent.clientY;
-      const delta = currentY - startYRef.current;
-      const newHeight = Math.max(slotHeight, startHeightRef.current + delta);
-      // Snap to slot increments (each slot = slotHeight), minimum 1 slot
-      const snappedHeight = Math.max(slotHeight, Math.round(newHeight / slotHeight) * slotHeight);
-      currentHeightRef.current = snappedHeight;
-      setResizeHeight(snappedHeight);
-    };
+      setIsResizing(true);
+      const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+      startYRef.current = clientY;
+      startHeightRef.current = baseHeight || slotHeight;
+      currentHeightRef.current = startHeightRef.current;
+      setResizeHeight(startHeightRef.current);
 
-    const handleEnd = () => {
-      setIsResizing(false);
-      if (currentHeightRef.current > 0 && onDurationChange) {
-        // Convert height back to minutes
-        const newDurationMinutes = Math.max(30, Math.round((currentHeightRef.current / slotHeight) * 30));
-        // Clamp to valid values
-        const clampedDuration = Math.min(180, Math.max(30, Math.round(newDurationMinutes / 30) * 30));
-        onDurationChange(task.id, clampedDuration);
-      }
-      setResizeHeight(null);
-      document.removeEventListener('mousemove', handleMove);
-      document.removeEventListener('mouseup', handleEnd);
-      document.removeEventListener('touchmove', handleMove);
-      document.removeEventListener('touchend', handleEnd);
-    };
+      const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
+        const currentY =
+          "touches" in moveEvent
+            ? moveEvent.touches[0].clientY
+            : moveEvent.clientY;
+        const delta = currentY - startYRef.current;
+        const newHeight = Math.max(slotHeight, startHeightRef.current + delta);
+        // Snap to slot increments (each slot = slotHeight), minimum 1 slot
+        const snappedHeight = Math.max(
+          slotHeight,
+          Math.round(newHeight / slotHeight) * slotHeight,
+        );
+        currentHeightRef.current = snappedHeight;
+        setResizeHeight(snappedHeight);
+      };
 
-    document.addEventListener('mousemove', handleMove);
-    document.addEventListener('mouseup', handleEnd);
-    document.addEventListener('touchmove', handleMove);
-    document.addEventListener('touchend', handleEnd);
-  }, [baseHeight, slotHeight, resizeHeight, onDurationChange, task.id]);
+      const handleEnd = () => {
+        setIsResizing(false);
+        if (currentHeightRef.current > 0 && onDurationChange) {
+          // Convert height back to minutes
+          const newDurationMinutes = Math.max(
+            30,
+            Math.round((currentHeightRef.current / slotHeight) * 30),
+          );
+          // Clamp to valid values
+          const clampedDuration = Math.min(
+            180,
+            Math.max(30, Math.round(newDurationMinutes / 30) * 30),
+          );
+          onDurationChange(task.id, clampedDuration);
+        }
+        setResizeHeight(null);
+        document.removeEventListener("mousemove", handleMove);
+        document.removeEventListener("mouseup", handleEnd);
+        document.removeEventListener("touchmove", handleMove);
+        document.removeEventListener("touchend", handleEnd);
+      };
+
+      document.addEventListener("mousemove", handleMove);
+      document.addEventListener("mouseup", handleEnd);
+      document.addEventListener("touchmove", handleMove);
+      document.addEventListener("touchend", handleEnd);
+    },
+    [baseHeight, slotHeight, resizeHeight, onDurationChange, task.id],
+  );
 
   if (compact) {
     return (
@@ -141,7 +164,7 @@ export function ResizableTaskItem({
           isDragging && "opacity-50 shadow-lg",
           isCompleted && "opacity-60",
           isResizing && "shadow-lg ring-2 ring-primary",
-          durationMinutes > 30 && "flex-col"
+          durationMinutes > 30 && "flex-col",
         )}
       >
         <div className="flex items-start gap-1 w-full">
@@ -152,7 +175,7 @@ export function ResizableTaskItem({
           >
             <GripVertical className="h-3 w-3 text-muted-foreground" />
           </button>
-          
+
           <Checkbox
             checked={isCompleted}
             onCheckedChange={(checked) => {
@@ -161,12 +184,15 @@ export function ResizableTaskItem({
             onClick={(e) => e.stopPropagation()}
             className="h-3 w-3 shrink-0"
           />
-          
-          <div className="flex-1 min-w-0 whitespace-normal break-words" onClick={onClick}>
+
+          <div
+            className="flex-1 min-w-0 whitespace-normal break-words"
+            onClick={onClick}
+          >
             <span
               className={cn(
                 "font-medium",
-                isCompleted && "line-through text-muted-foreground"
+                isCompleted && "line-through text-muted-foreground",
               )}
             >
               {task.title}
@@ -178,7 +204,10 @@ export function ResizableTaskItem({
               <span className="text-muted-foreground">{task.clients.name}</span>
             )}
             {task.creator_name && (
-              <span className="text-muted-foreground"> • מאת {task.creator_name}</span>
+              <span className="text-muted-foreground">
+                {" "}
+                • מאת {task.creator_name}
+              </span>
             )}
           </div>
 
@@ -201,7 +230,7 @@ export function ResizableTaskItem({
           className={cn(
             "absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize flex items-center justify-center",
             "opacity-0 group-hover:opacity-100 transition-opacity",
-            "hover:bg-primary/20 rounded-b"
+            "hover:bg-primary/20 rounded-b",
           )}
           onClick={(e) => e.stopPropagation()}
         >
@@ -222,7 +251,7 @@ export function ResizableTaskItem({
       className={cn(
         "group flex items-start gap-2 p-2 rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-all",
         isDragging && "opacity-50 shadow-lg z-50",
-        isCompleted && "opacity-60"
+        isCompleted && "opacity-60",
       )}
     >
       <button
@@ -232,7 +261,7 @@ export function ResizableTaskItem({
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </button>
-      
+
       <Checkbox
         checked={isCompleted}
         onCheckedChange={(checked) => {
@@ -241,17 +270,17 @@ export function ResizableTaskItem({
         onClick={(e) => e.stopPropagation()}
         className="mt-0.5"
       />
-      
+
       <div className="flex-1 min-w-0" onClick={onClick}>
         <p
           className={cn(
             "text-sm font-medium leading-tight break-words",
-            isCompleted && "line-through text-muted-foreground"
+            isCompleted && "line-through text-muted-foreground",
           )}
         >
           {task.title}
         </p>
-        
+
         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
           {task.clients?.name && (
             <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5">
@@ -259,21 +288,30 @@ export function ResizableTaskItem({
             </Badge>
           )}
           {task.creator_name && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
+            <Badge
+              variant="outline"
+              className="text-xs px-1.5 py-0 h-5 gap-0.5"
+            >
               <UserRound className="h-3 w-3" />
               מאת {task.creator_name}
             </Badge>
           )}
-          
+
           {updatesCount > 0 && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
+            <Badge
+              variant="outline"
+              className="text-xs px-1.5 py-0 h-5 gap-0.5"
+            >
               <MessageSquare className="h-3 w-3" />
               {updatesCount}
             </Badge>
           )}
-          
+
           {collaboratorsCount > 0 && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
+            <Badge
+              variant="outline"
+              className="text-xs px-1.5 py-0 h-5 gap-0.5"
+            >
               <Users className="h-3 w-3" />
               {collaboratorsCount}
             </Badge>

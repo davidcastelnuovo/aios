@@ -6,8 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Bot, Send, Plus, Loader2, Wrench, Menu, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -18,7 +33,7 @@ import ReactMarkdown from "react-markdown";
 import { invalidateAIEntityQueries } from "@/lib/aiInvalidation";
 
 interface Message {
-  role: 'user' | 'assistant' | 'tool_call';
+  role: "user" | "assistant" | "tool_call";
   content?: string;
   tool?: string;
   args?: any;
@@ -38,7 +53,9 @@ export default function AISupport() {
   const { tenantId } = useCurrentTenant();
 
   const [input, setInput] = useState("");
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<
+    string | null
+  >(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
@@ -50,25 +67,28 @@ export default function AISupport() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
-  const { data: conversations = [], isLoading: conversationsLoading } = useQuery({
-    queryKey: ['ai-conversations'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('ai_conversations')
-        .select('*')
-        .order('updated_at', { ascending: false });
+  const { data: conversations = [], isLoading: conversationsLoading } =
+    useQuery({
+      queryKey: ["ai-conversations"],
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from("ai_conversations")
+          .select("*")
+          .order("updated_at", { ascending: false });
 
-      if (error) throw error;
-      
-      return (data || []).map(conv => ({
-        id: conv.id,
-        title: conv.title || '',
-        created_at: conv.created_at,
-        messages: (Array.isArray(conv.messages) ? conv.messages : []) as unknown as Message[]
-      }));
-    },
-    enabled: !!userId,
-  });
+        if (error) throw error;
+
+        return (data || []).map((conv) => ({
+          id: conv.id,
+          title: conv.title || "",
+          created_at: conv.created_at,
+          messages: (Array.isArray(conv.messages)
+            ? conv.messages
+            : []) as unknown as Message[],
+        }));
+      },
+      enabled: !!userId,
+    });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -96,18 +116,24 @@ export default function AISupport() {
   const deleteConversation = async (convId: string) => {
     try {
       const { error } = await supabase
-        .from('ai_conversations')
+        .from("ai_conversations")
         .delete()
-        .eq('id', convId);
+        .eq("id", convId);
       if (error) throw error;
 
       if (currentConversationId === convId) {
         startNewConversation();
       }
-      queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["ai-conversations", tenantId],
+      });
       toast({ title: "השיחה נמחקה" });
     } catch (err: any) {
-      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה",
+        description: err.message,
+        variant: "destructive",
+      });
     }
     setDeleteConvId(null);
   };
@@ -116,120 +142,128 @@ export default function AISupport() {
     if (!input.trim() || isStreaming) return;
 
     const userMessage: Message = {
-      role: 'user',
+      role: "user",
       content: input,
       timestamp: new Date().toISOString(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsStreaming(true);
     setStreamingMessage("");
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
-        throw new Error('Not authenticated');
+        throw new Error("Not authenticated");
       }
 
       const conversationHistory = messages
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({ role: m.role, content: m.content || '' }));
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role, content: m.content || "" }));
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
             command_text: input,
             tenant_id: tenantId,
-            surface: 'aios',
+            surface: "aios",
             stream: true,
             conversation_history: conversationHistory,
           }),
-        }
+        },
       );
-
 
       if (!response.ok) {
         if (response.status === 429) {
-          throw new Error('חריגה ממגבלת הקצב. אנא נסה שוב מאוחר יותר.');
+          throw new Error("חריגה ממגבלת הקצב. אנא נסה שוב מאוחר יותר.");
         }
         if (response.status === 402) {
-          throw new Error('נדרש תשלום. אנא הוסף יתרה ל-workspace שלך.');
+          throw new Error("נדרש תשלום. אנא הוסף יתרה ל-workspace שלך.");
         }
-        throw new Error('שגיאה בתקשורת עם השרת');
+        throw new Error("שגיאה בתקשורת עם השרת");
       }
 
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
+      let buffer = "";
       let newConversationId = currentConversationId;
-      let assistantContent = '';
+      let assistantContent = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (!line.trim() || line.startsWith(':')) continue;
-          if (!line.startsWith('data: ')) continue;
+          if (!line.trim() || line.startsWith(":")) continue;
+          if (!line.startsWith("data: ")) continue;
 
           const data = line.slice(6);
-          if (data === '[DONE]') continue;
+          if (data === "[DONE]") continue;
 
           try {
             const parsed = JSON.parse(data);
 
-            if (parsed.type === 'token') {
+            if (parsed.type === "token") {
               assistantContent += parsed.content;
-              setStreamingMessage(prev => prev + parsed.content);
-            } else if (parsed.type === 'status' && parsed.content) {
+              setStreamingMessage((prev) => prev + parsed.content);
+            } else if (parsed.type === "status" && parsed.content) {
               setStreamingMessage(parsed.content);
-            } else if (parsed.type === 'tool_call') {
+            } else if (parsed.type === "tool_call") {
               const toolMessage: Message = {
-                role: 'tool_call',
+                role: "tool_call",
                 tool: parsed.tool,
                 args: parsed.args,
                 timestamp: new Date().toISOString(),
               };
-              setMessages(prev => [...prev, toolMessage]);
-            } else if (parsed.type === 'conversation_id') {
+              setMessages((prev) => [...prev, toolMessage]);
+            } else if (parsed.type === "conversation_id") {
               newConversationId = parsed.id;
               setCurrentConversationId(parsed.id);
-            } else if (parsed.type === 'title_update') {
+            } else if (parsed.type === "title_update") {
               // Title was auto-generated, refresh conversation list
-              queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
-            } else if (parsed.type === 'invalidate') {
+              queryClient.invalidateQueries({
+                queryKey: ["ai-conversations", tenantId],
+              });
+            } else if (parsed.type === "invalidate") {
               invalidateAIEntityQueries(queryClient, parsed.entity);
-            } else if (parsed.type === 'done') {
+            } else if (parsed.type === "done") {
               if (assistantContent) {
-                setMessages(prev => [...prev, {
-                  role: 'assistant',
-                  content: assistantContent,
-                  timestamp: new Date().toISOString(),
-                }]);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "assistant",
+                    content: assistantContent,
+                    timestamp: new Date().toISOString(),
+                  },
+                ]);
                 setStreamingMessage("");
               }
               setIsStreaming(false);
-              
-              queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
+
+              queryClient.invalidateQueries({
+                queryKey: ["ai-conversations", tenantId],
+              });
             }
           } catch (e) {
-            console.error('Parse error:', e);
+            console.error("Parse error:", e);
           }
         }
       }
     } catch (error: any) {
-      console.error('Error sending message:', error);
+      console.error("Error sending message:", error);
       toast({
         title: "שגיאה",
         description: error.message || "שגיאה בשליחת ההודעה",
@@ -240,7 +274,7 @@ export default function AISupport() {
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
@@ -250,7 +284,7 @@ export default function AISupport() {
   const SidebarContentComponent = () => (
     <>
       <div className="p-4 border-b border-border">
-        <Button 
+        <Button
           onClick={startNewConversation}
           className="w-full"
           variant="default"
@@ -276,8 +310,8 @@ export default function AISupport() {
                 key={conv.id}
                 className={`group relative flex items-center rounded-md transition-colors ${
                   currentConversationId === conv.id
-                    ? 'bg-primary/10 text-primary'
-                    : 'hover:bg-muted'
+                    ? "bg-primary/10 text-primary"
+                    : "hover:bg-muted"
                 }`}
               >
                 <button
@@ -285,10 +319,10 @@ export default function AISupport() {
                   className="flex-1 text-right p-3 min-w-0"
                 >
                   <div className="font-medium text-sm truncate">
-                    {conv.title || 'שיחה חדשה'}
+                    {conv.title || "שיחה חדשה"}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {new Date(conv.created_at).toLocaleDateString('he-IL')}
+                    {new Date(conv.created_at).toLocaleDateString("he-IL")}
                   </div>
                 </button>
                 <Button
@@ -313,7 +347,10 @@ export default function AISupport() {
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-background" dir="rtl">
       {/* Delete confirmation dialog */}
-      <AlertDialog open={!!deleteConvId} onOpenChange={(open) => !open && setDeleteConvId(null)}>
+      <AlertDialog
+        open={!!deleteConvId}
+        onOpenChange={(open) => !open && setDeleteConvId(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>מחיקת שיחה</AlertDialogTitle>
@@ -366,13 +403,20 @@ export default function AISupport() {
               <Bot className="h-6 w-6 text-primary" />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-base md:text-lg font-semibold truncate">עוזר AI תמיכה טכנית</h1>
+              <h1 className="text-base md:text-lg font-semibold truncate">
+                עוזר AI תמיכה טכנית
+              </h1>
               <p className="text-xs md:text-sm text-muted-foreground truncate">
                 אני כאן לעזור לך עם המערכת
               </p>
             </div>
             {isMobile && (
-              <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0" onClick={startNewConversation}>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 flex-shrink-0"
+                onClick={startNewConversation}
+              >
                 <Plus className="h-5 w-5" />
               </Button>
             )}
@@ -385,7 +429,9 @@ export default function AISupport() {
             <div className="h-full flex items-center justify-center px-4">
               <Card className="p-4 md:p-8 max-w-md text-center">
                 <Bot className="h-10 w-10 md:h-12 md:w-12 mx-auto mb-3 md:mb-4 text-primary" />
-                <h2 className="text-lg md:text-xl font-semibold mb-2">ברוכים הבאים!</h2>
+                <h2 className="text-lg md:text-xl font-semibold mb-2">
+                  ברוכים הבאים!
+                </h2>
                 <p className="text-sm md:text-base text-muted-foreground mb-3 md:mb-4">
                   אני עוזר AI שיכול לעזור לך עם:
                 </p>
@@ -405,13 +451,15 @@ export default function AISupport() {
             <div className="space-y-3 md:space-y-4 max-w-3xl mx-auto">
               {messages.map((msg, idx) => (
                 <div key={idx}>
-                  {msg.role === 'user' ? (
+                  {msg.role === "user" ? (
                     <div className="flex justify-end">
                       <Card className="p-2 md:p-3 max-w-[85%] md:max-w-[80%] bg-primary text-primary-foreground">
-                        <p className="whitespace-pre-wrap text-sm md:text-base">{msg.content}</p>
+                        <p className="whitespace-pre-wrap text-sm md:text-base">
+                          {msg.content}
+                        </p>
                       </Card>
                     </div>
-                  ) : msg.role === 'tool_call' ? (
+                  ) : msg.role === "tool_call" ? (
                     <div className="flex justify-start">
                       <Card className="p-2 md:p-3 max-w-[85%] md:max-w-[80%] bg-muted">
                         <div className="flex items-center gap-2 text-xs md:text-sm">
@@ -426,7 +474,7 @@ export default function AISupport() {
                     <div className="flex justify-start">
                       <Card className="p-2 md:p-3 max-w-[85%] md:max-w-[80%] bg-card border">
                         <div className="prose prose-sm dark:prose-invert max-w-none text-sm md:text-base">
-                          <ReactMarkdown>{msg.content || ''}</ReactMarkdown>
+                          <ReactMarkdown>{msg.content || ""}</ReactMarkdown>
                         </div>
                       </Card>
                     </div>
@@ -458,7 +506,11 @@ export default function AISupport() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyPress}
-                placeholder={isMobile ? "שאל משהו..." : "שאל משהו או בקש לבצע פעולה... (Enter לשליחה, Shift+Enter לשורה חדשה)"}
+                placeholder={
+                  isMobile
+                    ? "שאל משהו..."
+                    : "שאל משהו או בקש לבצע פעולה... (Enter לשליחה, Shift+Enter לשורה חדשה)"
+                }
                 className="min-h-[50px] md:min-h-[60px] max-h-[150px] md:max-h-[200px] resize-none text-sm md:text-base"
                 disabled={isStreaming}
               />
@@ -476,7 +528,8 @@ export default function AISupport() {
               </Button>
             </div>
             <p className="text-[10px] md:text-xs text-muted-foreground mt-1 md:mt-2 text-center px-2">
-              הבוט יכול לעזור בניהול המערכת אבל עלול לעשות טעויות. תמיד בדוק מידע חשוב.
+              הבוט יכול לעזור בניהול המערכת אבל עלול לעשות טעויות. תמיד בדוק
+              מידע חשוב.
             </p>
           </div>
         </div>

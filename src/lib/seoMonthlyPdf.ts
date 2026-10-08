@@ -4,7 +4,8 @@ async function readBlobAsDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error || new Error("Failed to read slide image"));
+    reader.onerror = () =>
+      reject(reader.error || new Error("Failed to read slide image"));
     reader.readAsDataURL(blob);
   });
 }
@@ -12,7 +13,8 @@ async function readBlobAsDataUrl(blob: Blob): Promise<string> {
 function normalizeHref(href: string | null | undefined): string | null {
   if (!href) return null;
   const trimmed = href.trim();
-  if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("javascript:")) return null;
+  if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("javascript:"))
+    return null;
   try {
     return new URL(trimmed, window.location.origin).toString();
   } catch {
@@ -21,7 +23,9 @@ function normalizeHref(href: string | null | undefined): string | null {
 }
 
 /** Build a portrait PDF from the continuous report, one landing-page section per page. */
-export async function createSeoMonthlyReportPdf(reportEl: HTMLElement): Promise<Blob> {
+export async function createSeoMonthlyReportPdf(
+  reportEl: HTMLElement,
+): Promise<Blob> {
   const sections = Array.from(
     reportEl.querySelectorAll<HTMLElement>(".seo-report-section"),
   );
@@ -72,14 +76,18 @@ export async function createSeoMonthlyReportPdf(reportEl: HTMLElement): Promise<
     // Map visible <a href> boxes onto the placed image so PDF links work.
     const sectionRect = node.getBoundingClientRect();
     if (sectionRect.width > 0 && sectionRect.height > 0) {
-      const anchors = Array.from(node.querySelectorAll<HTMLAnchorElement>("a[href]"));
+      const anchors = Array.from(
+        node.querySelectorAll<HTMLAnchorElement>("a[href]"),
+      );
       for (const anchor of anchors) {
         const href = normalizeHref(anchor.getAttribute("href") || anchor.href);
         if (!href) continue;
         const rect = anchor.getBoundingClientRect();
         if (rect.width < 2 || rect.height < 2) continue;
-        const linkX = x + ((rect.left - sectionRect.left) / sectionRect.width) * w;
-        const linkY = y + ((rect.top - sectionRect.top) / sectionRect.height) * h;
+        const linkX =
+          x + ((rect.left - sectionRect.left) / sectionRect.width) * w;
+        const linkY =
+          y + ((rect.top - sectionRect.top) / sectionRect.height) * h;
         const linkW = (rect.width / sectionRect.width) * w;
         const linkH = (rect.height / sectionRect.height) * h;
         pdf.link(linkX, linkY, linkW, linkH, { url: href });
@@ -91,7 +99,9 @@ export async function createSeoMonthlyReportPdf(reportEl: HTMLElement): Promise<
 }
 
 export function downloadPdfBlob(blob: Blob, filename: string): void {
-  const safe = filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`;
+  const safe = filename.toLowerCase().endsWith(".pdf")
+    ? filename
+    : `${filename}.pdf`;
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

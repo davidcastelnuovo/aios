@@ -1,4 +1,8 @@
-import { approvedCopyConcepts, parseCopyConceptsFromPayload, type CopyConcept } from "../../copyConcepts.ts";
+import {
+  approvedCopyConcepts,
+  parseCopyConceptsFromPayload,
+  type CopyConcept,
+} from "../../copyConcepts.ts";
 import { parseCreativeCopy, type CopyParts } from "./designedLayers.ts";
 
 export interface CopyVariationBlock {
@@ -38,23 +42,36 @@ const SPLIT_VARIATION = /(?:^|\n)(?=(?:וריאציה|variation)\s*\d+)/i;
 const SPLIT_HEADLINE = /(?:^|\n)(?=כותרת\s*:)/;
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 
-const asText = (value: unknown) => typeof value === "string" ? value.trim() : "";
+const asText = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
 
 const parseHeader = (chunk: string) => {
   const line = chunk.split("\n")[0]?.trim() ?? "";
-  const match = line.match(/^(?:וריאציה|variation)\s*(\d+)\s*(?:[—–\-|:•·]\s*(.*))?/i);
+  const match = line.match(
+    /^(?:וריאציה|variation)\s*(\d+)\s*(?:[—–\-|:•·]\s*(.*))?/i,
+  );
   if (!match) return {};
   const angle = (match[2] ?? "")
     .replace(/\b(AIDA|PAS|BAB|4Ps|4PS|framework)\b/gi, "")
     .replace(/[—–\-:]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return { n: match[1], label: `וריאציה ${match[1]}`, angle: angle || undefined };
+  return {
+    n: match[1],
+    label: `וריאציה ${match[1]}`,
+    angle: angle || undefined,
+  };
 };
 
-const toBlock = (chunk: string, index: number, fallbackKey?: string): CopyVariationBlock => {
+const toBlock = (
+  chunk: string,
+  index: number,
+  fallbackKey?: string,
+): CopyVariationBlock => {
   const header = parseHeader(chunk);
   const key = header.n ?? fallbackKey ?? String(index);
   const label = header.label ?? `וריאציה ${index}`;
@@ -72,21 +89,37 @@ export const splitCopyVariations = (copyText: string): CopyVariationBlock[] => {
   const raw = typeof copyText === "string" ? copyText.trim() : "";
   if (!raw) return [];
 
-  const variationChunks = raw.split(SPLIT_VARIATION).map((chunk) => chunk.trim()).filter(Boolean);
-  if (variationChunks.length > 1 || VARIATION_HEADER.test(variationChunks[0] ?? "")) {
+  const variationChunks = raw
+    .split(SPLIT_VARIATION)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  if (
+    variationChunks.length > 1 ||
+    VARIATION_HEADER.test(variationChunks[0] ?? "")
+  ) {
     return variationChunks.map((chunk, index) => toBlock(chunk, index + 1));
   }
 
-  const headlineChunks = raw.split(SPLIT_HEADLINE).map((chunk) => chunk.trim()).filter(Boolean);
+  const headlineChunks = raw
+    .split(SPLIT_HEADLINE)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
   if (headlineChunks.length > 1) {
-    return headlineChunks.map((chunk, index) => toBlock(chunk.startsWith("כותרת") ? chunk : `כותרת:\n${chunk}`, index + 1, String(index + 1)));
+    return headlineChunks.map((chunk, index) =>
+      toBlock(
+        chunk.startsWith("כותרת") ? chunk : `כותרת:\n${chunk}`,
+        index + 1,
+        String(index + 1),
+      ),
+    );
   }
 
   return [toBlock(raw, 1, "1")];
 };
 
-export const copyBlockLabel = (block: Pick<CopyVariationBlock, "label" | "angle">) =>
-  block.angle ? `${block.label} · ${block.angle}` : block.label;
+export const copyBlockLabel = (
+  block: Pick<CopyVariationBlock, "label" | "angle">,
+) => (block.angle ? `${block.label} · ${block.angle}` : block.label);
 
 export const parseCopyVariationsFromPayload = (
   payload: Record<string, unknown> | null | undefined,
@@ -100,19 +133,21 @@ export const parseCopyVariationsFromPayload = (
     const key = asText(rec.key);
     if (!text && !key) return [];
     const parts = text ? parseCreativeCopy(text) : {};
-    return [{
-      id: asText(rec.id) || crypto.randomUUID(),
-      key: key || "1",
-      label: asText(rec.label) || `וריאציה ${key || "1"}`,
-      angle: asText(rec.angle) || undefined,
-      text,
-      headline: asText(rec.headline) || parts.headline,
-      cta: asText(rec.cta) || parts.cta,
-      conceptId: asText(rec.conceptId) || undefined,
-      conceptName: asText(rec.conceptName) || undefined,
-      approved: rec.approved === true,
-      approvedAt: asText(rec.approvedAt) || null,
-    }];
+    return [
+      {
+        id: asText(rec.id) || crypto.randomUUID(),
+        key: key || "1",
+        label: asText(rec.label) || `וריאציה ${key || "1"}`,
+        angle: asText(rec.angle) || undefined,
+        text,
+        headline: asText(rec.headline) || parts.headline,
+        cta: asText(rec.cta) || parts.cta,
+        conceptId: asText(rec.conceptId) || undefined,
+        conceptName: asText(rec.conceptName) || undefined,
+        approved: rec.approved === true,
+        approvedAt: asText(rec.approvedAt) || null,
+      },
+    ];
   });
 };
 
@@ -143,7 +178,10 @@ export const hydrateCopyVariations = (
 };
 
 export const joinCopyVariations = (variations: StoredCopyVariation[]): string =>
-  variations.map((item) => item.text.trim()).filter(Boolean).join("\n\n");
+  variations
+    .map((item) => item.text.trim())
+    .filter(Boolean)
+    .join("\n\n");
 
 /** Body only — the `וריאציה N` header is rebuilt on save so sibling copy is never parsed in. */
 export const stripVariationHeader = (text: string) => {
@@ -155,13 +193,23 @@ export const stripVariationHeader = (text: string) => {
 };
 
 /** Replace one variation's body while keeping its id/key/approval. Sibling copy is ignored. */
-export const applyVariationText = (item: StoredCopyVariation, nextText: string): StoredCopyVariation => {
+export const applyVariationText = (
+  item: StoredCopyVariation,
+  nextText: string,
+): StoredCopyVariation => {
   const trimmed = typeof nextText === "string" ? nextText.trim() : "";
-  const firstChunk = trimmed.split(SPLIT_VARIATION).map((chunk) => chunk.trim()).filter(Boolean)[0] ?? "";
+  const firstChunk =
+    trimmed
+      .split(SPLIT_VARIATION)
+      .map((chunk) => chunk.trim())
+      .filter(Boolean)[0] ?? "";
   const header = parseHeader(firstChunk);
   const angle = header.angle || item.angle;
   const body = stripVariationHeader(firstChunk);
-  const text = [`וריאציה ${item.key}${angle ? ` — ${angle}` : ""}`, body].filter(Boolean).join("\n").trim();
+  const text = [`וריאציה ${item.key}${angle ? ` — ${angle}` : ""}`, body]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
   const parts = parseCreativeCopy(text);
   return {
     ...item,
@@ -178,24 +226,32 @@ export const replaceCopyVariationText = (
   id: string,
   nextText: string,
 ): StoredCopyVariation[] =>
-  variations.map((item) => item.id === id ? applyVariationText(item, nextText) : item);
+  variations.map((item) =>
+    item.id === id ? applyVariationText(item, nextText) : item,
+  );
 
 export const remapCopyVariationKeys = (
   incoming: StoredCopyVariation[],
   existing: StoredCopyVariation[],
 ): StoredCopyVariation[] => {
-  let nextKey = existing.reduce((max, item) => Math.max(max, Number.parseInt(item.key, 10) || 0), 0);
+  let nextKey = existing.reduce(
+    (max, item) => Math.max(max, Number.parseInt(item.key, 10) || 0),
+    0,
+  );
   return incoming.map((item) => {
     nextKey += 1;
     const key = String(nextKey);
-    return applyVariationText({
-      ...item,
-      id: crypto.randomUUID(),
-      key,
-      label: `וריאציה ${key}`,
-      approved: false,
-      approvedAt: null,
-    }, item.text);
+    return applyVariationText(
+      {
+        ...item,
+        id: crypto.randomUUID(),
+        key,
+        label: `וריאציה ${key}`,
+        approved: false,
+        approvedAt: null,
+      },
+      item.text,
+    );
   });
 };
 
@@ -209,12 +265,17 @@ export const stampCopiesWithConcept = (
   copies: StoredCopyVariation[],
   concept: Pick<CopyConcept, "id" | "name">,
 ): StoredCopyVariation[] =>
-  copies.map((item) => applyVariationText({
-    ...item,
-    conceptId: concept.id,
-    conceptName: concept.name,
-    angle: concept.name,
-  }, stripVariationHeader(item.text)));
+  copies.map((item) =>
+    applyVariationText(
+      {
+        ...item,
+        conceptId: concept.id,
+        conceptName: concept.name,
+        angle: concept.name,
+      },
+      stripVariationHeader(item.text),
+    ),
+  );
 
 export const linkConceptToGeneratedCopy = (
   concepts: CopyConcept[],
@@ -253,10 +314,15 @@ export const linkApprovedConceptsToCopy = (
   });
 };
 
-export const approvedCopyVariations = (variations: StoredCopyVariation[]): StoredCopyVariation[] =>
+export const approvedCopyVariations = (
+  variations: StoredCopyVariation[],
+): StoredCopyVariation[] =>
   variations.filter((item) => item.approved && item.text.trim());
 
-export const storedToCopyBlock = (item: StoredCopyVariation, index: number): CopyVariationBlock => ({
+export const storedToCopyBlock = (
+  item: StoredCopyVariation,
+  index: number,
+): CopyVariationBlock => ({
   key: item.key,
   index: index + 1,
   label: item.label,
@@ -269,7 +335,10 @@ export const storedCopiesForGeneration = (
   payload: Record<string, unknown> | null | undefined,
 ): StoredCopyVariation[] => {
   const text = asText(payload?.copy_text);
-  const hydrated = hydrateCopyVariations(text, parseCopyVariationsFromPayload(payload));
+  const hydrated = hydrateCopyVariations(
+    text,
+    parseCopyVariationsFromPayload(payload),
+  );
   const approved = approvedCopyVariations(hydrated);
   if (approved.length > 0) return approved;
   return hydrated.filter((item) => item.text.trim());
@@ -280,11 +349,15 @@ export const copyBlocksForGeneration = (
   payload: Record<string, unknown> | null | undefined,
 ): CopyVariationBlock[] => {
   const source = storedCopiesForGeneration(payload);
-  if (source.length === 0) return splitCopyVariations(asText(payload?.copy_text));
+  if (source.length === 0)
+    return splitCopyVariations(asText(payload?.copy_text));
   return source.map(storedToCopyBlock);
 };
 
-const asCopyBlock = (item: StoredCopyVariation | CopyVariationBlock, index: number): CopyVariationBlock =>
+const asCopyBlock = (
+  item: StoredCopyVariation | CopyVariationBlock,
+  index: number,
+): CopyVariationBlock =>
   "index" in item ? item : storedToCopyBlock(item, index);
 
 export const findCopyForConcept = (
@@ -304,12 +377,14 @@ export const findCopyForConcept = (
   if (angle) {
     const byAngle = copies.find((item) => {
       const label = copyBlockLabel(item);
-      return label === angle
-        || item.key === angle
-        || item.label === angle
-        || (item.angle && angle.includes(item.angle))
-        || angle.includes(item.key)
-        || angle.includes(item.label);
+      return (
+        label === angle ||
+        item.key === angle ||
+        item.label === angle ||
+        (item.angle && angle.includes(item.angle)) ||
+        angle.includes(item.key) ||
+        angle.includes(item.label)
+      );
     });
     if (byAngle) return byAngle;
   }
@@ -338,9 +413,14 @@ export const pairConceptsToCopyVariations = (
   });
 };
 
-const approvedConceptsFromPayload = (payload: Record<string, unknown> | null | undefined): CopyConcept[] => {
-  const storedApproved = parseCopyConceptsFromPayload({ copy_concepts: payload?.approved_concepts });
-  if (storedApproved.length > 0) return storedApproved.map((concept) => ({ ...concept, approved: true }));
+const approvedConceptsFromPayload = (
+  payload: Record<string, unknown> | null | undefined,
+): CopyConcept[] => {
+  const storedApproved = parseCopyConceptsFromPayload({
+    copy_concepts: payload?.approved_concepts,
+  });
+  if (storedApproved.length > 0)
+    return storedApproved.map((concept) => ({ ...concept, approved: true }));
   return approvedCopyConcepts(parseCopyConceptsFromPayload(payload));
 };
 
@@ -352,23 +432,41 @@ export const conceptCopyJobsForGeneration = (
   payload: Record<string, unknown> | null | undefined,
 ): ConceptCopyJob[] => {
   const stored = storedCopiesForGeneration(payload);
-  const blocks = stored.length > 0
-    ? stored.map(storedToCopyBlock)
-    : splitCopyVariations(asText(payload?.copy_text));
+  const blocks =
+    stored.length > 0
+      ? stored.map(storedToCopyBlock)
+      : splitCopyVariations(asText(payload?.copy_text));
   const concepts = approvedConceptsFromPayload(payload);
   if (concepts.length === 0) return blocks.map((copy) => ({ copy }));
-  if (blocks.length === 0) return concepts.map((concept) => ({ concept, copy: toBlock("", 1, concept.copyKey || "1") }));
+  if (blocks.length === 0)
+    return concepts.map((concept) => ({
+      concept,
+      copy: toBlock("", 1, concept.copyKey || "1"),
+    }));
   return concepts.map((concept, index) => {
-    const linked = findCopyForConcept(stored.length > 0 ? stored : blocks, concept);
-    const copy = linked ? asCopyBlock(linked, index) : (blocks[index] ?? blocks[0]);
+    const linked = findCopyForConcept(
+      stored.length > 0 ? stored : blocks,
+      concept,
+    );
+    const copy = linked
+      ? asCopyBlock(linked, index)
+      : (blocks[index] ?? blocks[0]);
     return { concept, copy };
   });
 };
 
-export const formatCopyVariationsForConcepts = (copies: StoredCopyVariation[]): string =>
-  copies.map((item) => [
-    `${item.key}. ${copyBlockLabel(item)}`,
-    item.headline && `כותרת: ${item.headline}`,
-    item.cta && `CTA: ${item.cta}`,
-    item.text,
-  ].filter(Boolean).join("\n")).join("\n\n");
+export const formatCopyVariationsForConcepts = (
+  copies: StoredCopyVariation[],
+): string =>
+  copies
+    .map((item) =>
+      [
+        `${item.key}. ${copyBlockLabel(item)}`,
+        item.headline && `כותרת: ${item.headline}`,
+        item.cta && `CTA: ${item.cta}`,
+        item.text,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    )
+    .join("\n\n");

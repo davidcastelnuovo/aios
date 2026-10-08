@@ -1,7 +1,15 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, TrendingUp, TrendingDown, CheckCircle, Ban, CreditCard, ShieldAlert } from "lucide-react";
+import {
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+  CheckCircle,
+  Ban,
+  CreditCard,
+  ShieldAlert,
+} from "lucide-react";
 import { format, subDays } from "date-fns";
 
 interface ActiveAlertsProps {
@@ -46,28 +54,32 @@ const METRIC_LABELS: Record<string, string> = {
 
 // Statuses that indicate a real block by Meta (not manually paused)
 const BLOCKED_STATUSES = [
-  'WITH_ISSUES',           // Campaign has issues
-  'DISAPPROVED',           // Policy violation
-  'PENDING_BILLING_INFO',  // Payment issues
-  'ADSET_PAUSED',          // Ad set has issues (could be budget/billing)
-  'CAMPAIGN_PAUSED',       // Could be due to issues
+  "WITH_ISSUES", // Campaign has issues
+  "DISAPPROVED", // Policy violation
+  "PENDING_BILLING_INFO", // Payment issues
+  "ADSET_PAUSED", // Ad set has issues (could be budget/billing)
+  "CAMPAIGN_PAUSED", // Could be due to issues
 ];
 
 // Statuses that indicate the campaign was manually paused (NOT a block)
 const PAUSED_STATUSES = [
-  'PAUSED',               // Manually paused
+  "PAUSED", // Manually paused
 ];
 
 // Account statuses that indicate issues
 const BLOCKED_ACCOUNT_STATUSES = [
-  'disabled',             // Account disabled
-  'unsettled',            // Payment issues
-  'pending_risk_review',  // Security review
-  'pending_settlement',   // Settlement issues
-  'closed',               // Account closed
+  "disabled", // Account disabled
+  "unsettled", // Payment issues
+  "pending_risk_review", // Security review
+  "pending_settlement", // Settlement issues
+  "closed", // Account closed
 ];
 
-export function ActiveAlerts({ tableId, records, integrationSettings }: ActiveAlertsProps) {
+export function ActiveAlerts({
+  tableId,
+  records,
+  integrationSettings,
+}: ActiveAlertsProps) {
   const { data: alerts = [] } = useQuery({
     queryKey: ["report-alerts", tableId],
     queryFn: async () => {
@@ -92,9 +104,14 @@ export function ActiveAlerts({ tableId, records, integrationSettings }: ActiveAl
     // Check account-level blocking first
     const accountStatus = integrationSettings?.account_status;
     if (accountStatus && BLOCKED_ACCOUNT_STATUSES.includes(accountStatus)) {
-      const blockingAlert = alerts.find(a => a.comparison_type === "no_data" || a.operator === "no_data_days");
+      const blockingAlert = alerts.find(
+        (a) => a.comparison_type === "no_data" || a.operator === "no_data_days",
+      );
       if (blockingAlert) {
-        const reason = getAccountBlockReason(accountStatus, integrationSettings?.account_disable_reason);
+        const reason = getAccountBlockReason(
+          accountStatus,
+          integrationSettings?.account_disable_reason,
+        );
         triggered.push({
           alert: blockingAlert,
           campaignId: undefined,
@@ -119,23 +136,28 @@ export function ActiveAlerts({ tableId, records, integrationSettings }: ActiveAl
 
     for (const alert of alerts) {
       // Handle blocking/no-data alerts - check campaign effective_status
-      if (alert.comparison_type === "no_data" || alert.operator === "no_data_days") {
+      if (
+        alert.comparison_type === "no_data" ||
+        alert.operator === "no_data_days"
+      ) {
         // Check each campaign for blocking status
-        for (const [campaignId, campaignRecords] of Object.entries(campaignGroups)) {
+        for (const [campaignId, campaignRecords] of Object.entries(
+          campaignGroups,
+        )) {
           const campaignName = getCampaignName(campaignRecords as any[]);
-          
+
           // Get the latest record's effective_status
           const latestRecord = getLatestRecord(campaignRecords as any[]);
           const effectiveStatus = latestRecord?.data?.effective_status;
           const configuredStatus = latestRecord?.data?.configured_status;
-          
+
           // Only show alert if the campaign is BLOCKED by Meta (not manually paused)
           if (effectiveStatus && BLOCKED_STATUSES.includes(effectiveStatus)) {
             // Skip if the user manually paused it (configured_status is PAUSED)
-            if (configuredStatus === 'PAUSED') {
+            if (configuredStatus === "PAUSED") {
               continue;
             }
-            
+
             const reason = getCampaignBlockReason(effectiveStatus);
             triggered.push({
               alert,
@@ -171,11 +193,18 @@ export function ActiveAlerts({ tableId, records, integrationSettings }: ActiveAl
         previousPeriodStart = subDays(today, 60);
       } else {
         // vs_target - compare current value to threshold per campaign
-        for (const [campaignId, campaignRecords] of Object.entries(campaignGroups)) {
+        for (const [campaignId, campaignRecords] of Object.entries(
+          campaignGroups,
+        )) {
           const campaignName = getCampaignName(campaignRecords as any[]);
-          const currentMetrics = calculateMetrics(campaignRecords as any[], subDays(today, 7), today, alert.metric);
+          const currentMetrics = calculateMetrics(
+            campaignRecords as any[],
+            subDays(today, 7),
+            today,
+            alert.metric,
+          );
           const currentValue = currentMetrics;
-          
+
           if (
             (alert.operator === "above" && currentValue > alert.threshold) ||
             (alert.operator === "below" && currentValue < alert.threshold)
@@ -186,10 +215,12 @@ export function ActiveAlerts({ tableId, records, integrationSettings }: ActiveAl
               campaignName,
               currentValue,
               previousValue: alert.threshold,
-              changePercent: ((currentValue - alert.threshold) / alert.threshold) * 100,
-              isNegative: alert.operator === "above" ? 
-                (alert.metric === "cost_per_lead" || alert.metric === "cpm") : 
-                (alert.metric !== "cost_per_lead" && alert.metric !== "cpm"),
+              changePercent:
+                ((currentValue - alert.threshold) / alert.threshold) * 100,
+              isNegative:
+                alert.operator === "above"
+                  ? alert.metric === "cost_per_lead" || alert.metric === "cpm"
+                  : alert.metric !== "cost_per_lead" && alert.metric !== "cpm",
               isBlocking: false,
             });
           }
@@ -198,41 +229,51 @@ export function ActiveAlerts({ tableId, records, integrationSettings }: ActiveAl
       }
 
       // Calculate metrics for each campaign separately
-      for (const [campaignId, campaignRecords] of Object.entries(campaignGroups)) {
+      for (const [campaignId, campaignRecords] of Object.entries(
+        campaignGroups,
+      )) {
         const campaignName = getCampaignName(campaignRecords as any[]);
-        
+
         const currentValue = calculateMetrics(
           campaignRecords as any[],
           currentPeriodStart,
           currentPeriodEnd,
-          alert.metric
+          alert.metric,
         );
         const previousValue = calculateMetrics(
           campaignRecords as any[],
           previousPeriodStart,
           previousPeriodEnd,
-          alert.metric
+          alert.metric,
         );
 
         if (previousValue === 0) continue;
 
-        const changePercent = ((currentValue - previousValue) / previousValue) * 100;
+        const changePercent =
+          ((currentValue - previousValue) / previousValue) * 100;
 
         // Check if alert should trigger
         let shouldTrigger = false;
         if (alert.operator === "increase" && changePercent > alert.threshold) {
           shouldTrigger = true;
-        } else if (alert.operator === "decrease" && changePercent < -alert.threshold) {
+        } else if (
+          alert.operator === "decrease" &&
+          changePercent < -alert.threshold
+        ) {
           shouldTrigger = true;
         }
 
         if (shouldTrigger) {
           // Determine if this is a negative change (bad for user)
           const isNegative =
-            (alert.metric === "cost_per_lead" || alert.metric === "cpm" || alert.metric === "spend") &&
+            (alert.metric === "cost_per_lead" ||
+              alert.metric === "cpm" ||
+              alert.metric === "spend") &&
             alert.operator === "increase"
               ? true
-              : (alert.metric !== "cost_per_lead" && alert.metric !== "cpm" && alert.metric !== "spend") &&
+              : alert.metric !== "cost_per_lead" &&
+                alert.metric !== "cpm" &&
+                alert.metric !== "spend" &&
                 alert.operator === "decrease";
 
           triggered.push({
@@ -257,7 +298,10 @@ export function ActiveAlerts({ tableId, records, integrationSettings }: ActiveAl
   return (
     <div className="space-y-2 mb-4">
       {triggeredAlerts.map((item, index) => (
-        <AlertCard key={`${item.alert.id}-${item.campaignId ?? index}`} {...item} />
+        <AlertCard
+          key={`${item.alert.id}-${item.campaignId ?? index}`}
+          {...item}
+        />
       ))}
     </div>
   );
@@ -273,10 +317,15 @@ function AlertCard({
   isBlocking,
   blockingReason,
 }: TriggeredAlert) {
-  const Icon = isBlocking 
-    ? (blockingReason?.includes('אשראי') || blockingReason?.includes('תשלום') ? CreditCard : 
-       blockingReason?.includes('מדיניות') || blockingReason?.includes('אבטחה') ? ShieldAlert : Ban)
-    : isNegative ? AlertTriangle : CheckCircle;
+  const Icon = isBlocking
+    ? blockingReason?.includes("אשראי") || blockingReason?.includes("תשלום")
+      ? CreditCard
+      : blockingReason?.includes("מדיניות") || blockingReason?.includes("אבטחה")
+        ? ShieldAlert
+        : Ban
+    : isNegative
+      ? AlertTriangle
+      : CheckCircle;
   const TrendIcon = changePercent > 0 ? TrendingUp : TrendingDown;
 
   if (isBlocking) {
@@ -285,14 +334,17 @@ function AlertCard({
         <Icon className="h-5 w-5 mt-0.5 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="font-medium">
-            {campaignName && <span className="text-xs bg-destructive/20 px-2 py-0.5 rounded ml-2">{campaignName}</span>}
+            {campaignName && (
+              <span className="text-xs bg-destructive/20 px-2 py-0.5 rounded ml-2">
+                {campaignName}
+              </span>
+            )}
             {blockingReason || alert.name}
           </div>
           <div className="text-sm opacity-80">
-            {blockingReason 
+            {blockingReason
               ? "יש לבדוק את החשבון בממשק הפרסום של מטא"
-              : "אין נתונים חדשים - ייתכן שיש חסימת חשבון או בעיית אשראי"
-            }
+              : "אין נתונים חדשים - ייתכן שיש חסימת חשבון או בעיית אשראי"}
           </div>
         </div>
       </div>
@@ -311,11 +363,11 @@ function AlertCard({
       <div className="flex-1 min-w-0">
         <div className="font-medium flex items-center gap-2 flex-wrap">
           {campaignName && (
-            <span className={`text-xs px-2 py-0.5 rounded ${
-              isNegative 
-                ? "bg-destructive/20" 
-                : "bg-green-500/20"
-            }`}>
+            <span
+              className={`text-xs px-2 py-0.5 rounded ${
+                isNegative ? "bg-destructive/20" : "bg-green-500/20"
+              }`}
+            >
               {campaignName}
             </span>
           )}
@@ -338,32 +390,34 @@ function AlertCard({
 
 function getAccountBlockReason(status: string, disableReason?: string): string {
   switch (status) {
-    case 'disabled':
-      return disableReason ? `חשבון מושבת - ${disableReason}` : 'חשבון פרסום מושבת - הפרת מדיניות';
-    case 'unsettled':
-      return 'בעיית תשלום - יש להסדיר את האשראי';
-    case 'pending_risk_review':
-      return 'החשבון בבדיקת אבטחה';
-    case 'pending_settlement':
-      return 'ממתין להסדר תשלום';
-    case 'closed':
-      return 'חשבון הפרסום נסגר';
+    case "disabled":
+      return disableReason
+        ? `חשבון מושבת - ${disableReason}`
+        : "חשבון פרסום מושבת - הפרת מדיניות";
+    case "unsettled":
+      return "בעיית תשלום - יש להסדיר את האשראי";
+    case "pending_risk_review":
+      return "החשבון בבדיקת אבטחה";
+    case "pending_settlement":
+      return "ממתין להסדר תשלום";
+    case "closed":
+      return "חשבון הפרסום נסגר";
     default:
-      return 'בעיה בחשבון הפרסום';
+      return "בעיה בחשבון הפרסום";
   }
 }
 
 function getCampaignBlockReason(effectiveStatus: string): string {
   switch (effectiveStatus) {
-    case 'WITH_ISSUES':
-      return 'קמפיין עם בעיות - יש לבדוק בממשק מטא';
-    case 'DISAPPROVED':
-      return 'קמפיין לא מאושר - הפרת מדיניות';
-    case 'PENDING_BILLING_INFO':
-      return 'בעיית אשראי - יש להזין פרטי תשלום';
-    case 'ADSET_PAUSED':
-      return 'מערך מודעות מושהה - ייתכן בעיית תקציב';
-    case 'CAMPAIGN_PAUSED':
+    case "WITH_ISSUES":
+      return "קמפיין עם בעיות - יש לבדוק בממשק מטא";
+    case "DISAPPROVED":
+      return "קמפיין לא מאושר - הפרת מדיניות";
+    case "PENDING_BILLING_INFO":
+      return "בעיית אשראי - יש להזין פרטי תשלום";
+    case "ADSET_PAUSED":
+      return "מערך מודעות מושהה - ייתכן בעיית תקציב";
+    case "CAMPAIGN_PAUSED":
       return 'קמפיין מושהה ע"י המערכת';
     default:
       return `קמפיין חסום (${effectiveStatus})`;
@@ -372,39 +426,48 @@ function getCampaignBlockReason(effectiveStatus: string): string {
 
 function getLatestRecord(records: any[]): any | null {
   if (records.length === 0) return null;
-  
+
   return records.reduce((latest, record) => {
-    const recordDate = record.data?.date || record.data?.Date || '';
-    const latestDate = latest?.data?.date || latest?.data?.Date || '';
+    const recordDate = record.data?.date || record.data?.Date || "";
+    const latestDate = latest?.data?.date || latest?.data?.Date || "";
     return recordDate > latestDate ? record : latest;
   }, records[0]);
 }
 
 function groupRecordsByCampaign(records: any[]): Record<string, any[]> {
   const groups: Record<string, any[]> = {};
-  
+
   for (const record of records) {
-    const campaignId = record.data?.campaign_id || record.data?.campaignId || record.data?.campaign_name || "unknown";
+    const campaignId =
+      record.data?.campaign_id ||
+      record.data?.campaignId ||
+      record.data?.campaign_name ||
+      "unknown";
     if (!groups[campaignId]) {
       groups[campaignId] = [];
     }
     groups[campaignId].push(record);
   }
-  
+
   return groups;
 }
 
 function getCampaignName(records: any[]): string {
   if (records.length === 0) return "";
   const firstRecord = records[0];
-  return firstRecord.data?.campaign_name || firstRecord.data?.campaignName || firstRecord.data?.campaign_id || "";
+  return (
+    firstRecord.data?.campaign_name ||
+    firstRecord.data?.campaignName ||
+    firstRecord.data?.campaign_id ||
+    ""
+  );
 }
 
 function calculateMetrics(
   records: any[],
   startDate: Date,
   endDate: Date,
-  metric: string
+  metric: string,
 ): number {
   const startStr = format(startDate, "yyyy-MM-dd");
   const endStr = format(endDate, "yyyy-MM-dd");
@@ -422,14 +485,22 @@ function calculateMetrics(
   if (metric === "cost_per_lead") {
     let totalSpend = 0;
     let totalLeads = 0;
-    
+
     for (const record of filtered) {
-      const spend = parseFloat(record.data?.spend) || parseFloat(record.data?.amount_spent) || parseFloat(record.data?.Spend) || 0;
-      const leads = parseFloat(record.data?.leads) || parseFloat(record.data?.results) || parseFloat(record.data?.Leads) || 0;
+      const spend =
+        parseFloat(record.data?.spend) ||
+        parseFloat(record.data?.amount_spent) ||
+        parseFloat(record.data?.Spend) ||
+        0;
+      const leads =
+        parseFloat(record.data?.leads) ||
+        parseFloat(record.data?.results) ||
+        parseFloat(record.data?.Leads) ||
+        0;
       totalSpend += spend;
       totalLeads += leads;
     }
-    
+
     if (totalLeads === 0) return 0;
     return totalSpend / totalLeads;
   }
@@ -438,14 +509,21 @@ function calculateMetrics(
   if (metric === "cpm") {
     let totalSpend = 0;
     let totalImpressions = 0;
-    
+
     for (const record of filtered) {
-      const spend = parseFloat(record.data?.spend) || parseFloat(record.data?.amount_spent) || parseFloat(record.data?.Spend) || 0;
-      const impressions = parseFloat(record.data?.impressions) || parseFloat(record.data?.Impressions) || 0;
+      const spend =
+        parseFloat(record.data?.spend) ||
+        parseFloat(record.data?.amount_spent) ||
+        parseFloat(record.data?.Spend) ||
+        0;
+      const impressions =
+        parseFloat(record.data?.impressions) ||
+        parseFloat(record.data?.Impressions) ||
+        0;
       totalSpend += spend;
       totalImpressions += impressions;
     }
-    
+
     if (totalImpressions === 0) return 0;
     return (totalSpend / totalImpressions) * 1000;
   }
@@ -454,14 +532,21 @@ function calculateMetrics(
   if (metric === "ctr") {
     let totalClicks = 0;
     let totalImpressions = 0;
-    
+
     for (const record of filtered) {
-      const clicks = parseFloat(record.data?.clicks) || parseFloat(record.data?.link_clicks) || parseFloat(record.data?.Clicks) || 0;
-      const impressions = parseFloat(record.data?.impressions) || parseFloat(record.data?.Impressions) || 0;
+      const clicks =
+        parseFloat(record.data?.clicks) ||
+        parseFloat(record.data?.link_clicks) ||
+        parseFloat(record.data?.Clicks) ||
+        0;
+      const impressions =
+        parseFloat(record.data?.impressions) ||
+        parseFloat(record.data?.Impressions) ||
+        0;
       totalClicks += clicks;
       totalImpressions += impressions;
     }
-    
+
     if (totalImpressions === 0) return 0;
     return (totalClicks / totalImpressions) * 100;
   }

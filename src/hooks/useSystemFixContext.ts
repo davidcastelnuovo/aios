@@ -2,7 +2,10 @@ import { useMemo } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { buildSystemFixContext, type SystemFixContextMetadata } from "@/lib/systemFixContext";
+import {
+  buildSystemFixContext,
+  type SystemFixContextMetadata,
+} from "@/lib/systemFixContext";
 
 /** Live screen context for Carmen system-fix sidecar messages. */
 export function useSystemFixContext(): SystemFixContextMetadata {
@@ -23,6 +26,14 @@ export function useSystemFixContext(): SystemFixContextMetadata {
         agencyId: selectedAgency !== "all" ? selectedAgency : null,
         pageTitle: typeof document !== "undefined" ? document.title : undefined,
       }),
-    [location.pathname, location.search, location.hash, params, tenantId, tenant?.slug, selectedAgency],
+    [
+      location.pathname,
+      location.search,
+      location.hash,
+      params,
+      tenantId,
+      tenant?.slug,
+      selectedAgency,
+    ],
   );
 }

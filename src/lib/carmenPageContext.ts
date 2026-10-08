@@ -62,9 +62,13 @@ export function formatUiContextForPrompt(ctx: CarmenUiContext): string {
     `מסלול: ${ctx.pathname}`,
     `מודול: ${moduleLabel(ctx.module)}`,
     ctx.page_title ? `כותרת: ${ctx.page_title}` : null,
-    ctx.command_center_view ? `מצב מרכז בקרה: ${ctx.command_center_view}` : null,
+    ctx.command_center_view
+      ? `מצב מרכז בקרה: ${ctx.command_center_view}`
+      : null,
   ];
-  const ids = Object.entries(ctx.route_params).filter(([k]) => !["tenantSlug"].includes(k));
+  const ids = Object.entries(ctx.route_params).filter(
+    ([k]) => !["tenantSlug"].includes(k),
+  );
   if (ids.length) {
     lines.push(`מזהים מהנתיב: ${ids.map(([k, v]) => `${k}=${v}`).join(", ")}`);
   }

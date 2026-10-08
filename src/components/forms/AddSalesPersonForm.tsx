@@ -5,13 +5,43 @@ import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Check, ChevronsUpDown } from "lucide-react";
@@ -46,7 +76,8 @@ export function AddSalesPersonForm() {
       email: "",
       phone: "",
       active: true,
-      agency_id: (selectedAgency && selectedAgency !== "all") ? selectedAgency : "",
+      agency_id:
+        selectedAgency && selectedAgency !== "all" ? selectedAgency : "",
       notes: "",
       folder_link: "",
     },
@@ -56,20 +87,21 @@ export function AddSalesPersonForm() {
     queryKey: ["agencies", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      
+
       // Get owned agencies
       const { data: ownedAgencies, error: ownedError } = await supabase
         .from("agencies")
         .select("*")
         .eq("tenant_id", tenantId)
         .order("name");
-      
+
       if (ownedError) throw ownedError;
-      
+
       // Get shared agencies via agency_tenant_access
       const { data: sharedAccess, error: sharedError } = await supabase
         .from("agency_tenant_access")
-        .select(`
+        .select(
+          `
           agency_id,
           agencies (
             id,
@@ -83,27 +115,28 @@ export function AddSalesPersonForm() {
             created_at,
             tenant_id
           )
-        `)
+        `,
+        )
         .eq("accessing_tenant_id", tenantId);
-      
+
       if (sharedError) throw sharedError;
-      
+
       // Extract shared agencies
       const shared = (sharedAccess || [])
-        .map(s => s.agencies)
+        .map((s) => s.agencies)
         .filter(Boolean);
-      
+
       // Combine and remove duplicates
       const combined = [...(ownedAgencies || []), ...shared];
       const uniqueMap = new Map();
-      combined.forEach(agency => {
+      combined.forEach((agency) => {
         if (agency && agency.id && !uniqueMap.has(agency.id)) {
           uniqueMap.set(agency.id, agency);
         }
       });
-      
-      return Array.from(uniqueMap.values()).sort((a: any, b: any) => 
-        a.name.localeCompare(b.name, 'he')
+
+      return Array.from(uniqueMap.values()).sort((a: any, b: any) =>
+        a.name.localeCompare(b.name, "he"),
       );
     },
     enabled: !!tenantId,
@@ -112,7 +145,7 @@ export function AddSalesPersonForm() {
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       if (!tenantId) throw new Error("לא נמצא tenant_id");
-      
+
       const submitData: any = {
         full_name: values.full_name,
         email: values.email || null,
@@ -188,24 +221,57 @@ export function AddSalesPersonForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>סוכנות *</FormLabel>
-                  <Popover open={agencyPopoverOpen} onOpenChange={setAgencyPopoverOpen}>
+                  <Popover
+                    open={agencyPopoverOpen}
+                    onOpenChange={setAgencyPopoverOpen}
+                  >
                     <PopoverTrigger asChild>
                       <FormControl>
-                        <Button variant="outline" role="combobox" className={cn("w-full justify-between h-10", !field.value && "text-muted-foreground")}>
-                          <span className="text-right flex-1">{field.value ? agencies?.find(a => a.id === field.value)?.name : "בחר סוכנות"}</span>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between h-10",
+                            !field.value && "text-muted-foreground",
+                          )}
+                        >
+                          <span className="text-right flex-1">
+                            {field.value
+                              ? agencies?.find((a) => a.id === field.value)
+                                  ?.name
+                              : "בחר סוכנות"}
+                          </span>
                           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-full p-0 bg-background" align="end" dir="rtl">
+                    <PopoverContent
+                      className="w-full p-0 bg-background"
+                      align="end"
+                      dir="rtl"
+                    >
                       <Command>
                         <CommandInput placeholder="חפש סוכנות..." />
                         <CommandList>
                           <CommandEmpty>לא נמצאו סוכנויות</CommandEmpty>
                           <CommandGroup>
                             {agencies?.map((agency) => (
-                              <CommandItem key={agency.id} value={agency.name} onSelect={() => { field.onChange(agency.id); setAgencyPopoverOpen(false); }}>
-                                <Check className={cn("mr-2 h-4 w-4", field.value === agency.id ? "opacity-100" : "opacity-0")} />
+                              <CommandItem
+                                key={agency.id}
+                                value={agency.name}
+                                onSelect={() => {
+                                  field.onChange(agency.id);
+                                  setAgencyPopoverOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    field.value === agency.id
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
                                 {agency.name}
                               </CommandItem>
                             ))}
@@ -295,7 +361,11 @@ export function AddSalesPersonForm() {
               )}
             />
 
-            <Button type="submit" disabled={createMutation.isPending} className="w-full">
+            <Button
+              type="submit"
+              disabled={createMutation.isPending}
+              className="w-full"
+            >
               {createMutation.isPending ? "מוסיף..." : "הוסף איש מכירות"}
             </Button>
           </form>

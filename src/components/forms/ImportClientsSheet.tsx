@@ -22,23 +22,34 @@ interface ImportClientsSheetProps {
   onExternalOpenChange?: (open: boolean) => void;
 }
 
-export function ImportClientsSheet({ externalOpen, onExternalOpenChange }: ImportClientsSheetProps = {}) {
+export function ImportClientsSheet({
+  externalOpen,
+  onExternalOpenChange,
+}: ImportClientsSheetProps = {}) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = externalOpen !== undefined;
   const open = isControlled ? externalOpen : internalOpen;
-  const setOpen = isControlled ? (v: boolean) => onExternalOpenChange?.(v) : setInternalOpen;
+  const setOpen = isControlled
+    ? (v: boolean) => onExternalOpenChange?.(v)
+    : setInternalOpen;
   const [sheetId, setSheetId] = useState("");
   const [range, setRange] = useState("Sheet1!A:I");
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
   const mutation = useMutation({
-    mutationFn: async ({ sheetId, range }: { sheetId: string; range: string }) => {
+    mutationFn: async ({
+      sheetId,
+      range,
+    }: {
+      sheetId: string;
+      range: string;
+    }) => {
       const { data, error } = await supabase.functions.invoke(
         "import-clients-from-sheets",
         {
           body: { sheetId, range },
-        }
+        },
       );
 
       if (error) throw error;
@@ -74,7 +85,7 @@ export function ImportClientsSheet({ externalOpen, onExternalOpenChange }: Impor
       toast.error("נא להזין URL או ID תקין של Google Sheet");
       return;
     }
-    const finalRange = (range || '').trim() || 'Sheet1!A:I';
+    const finalRange = (range || "").trim() || "Sheet1!A:I";
     mutation.mutateAsync({ sheetId: id, range: finalRange });
   };
 
@@ -99,12 +110,15 @@ export function ImportClientsSheet({ externalOpen, onExternalOpenChange }: Impor
         <div className="space-y-4">
           <Alert>
             <AlertDescription>
-              <strong>פורמט נדרש:</strong> הגיליון צריך לכלול עמודות עם הכותרות הבאות:
+              <strong>פורמט נדרש:</strong> הגיליון צריך לכלול עמודות עם הכותרות
+              הבאות:
               <br />
-              שם, מזהה סוכנות, טלפון, אימייל, קישור לתיקיה, תקציב חודשי, אתר, הערות
+              שם, מזהה סוכנות, טלפון, אימייל, קישור לתיקיה, תקציב חודשי, אתר,
+              הערות
               <br />
               <br />
-              <strong>חשוב:</strong> השתתף את הגיליון כ"כל מי שיש לו את הקישור יכול לצפות"
+              <strong>חשוב:</strong> השתתף את הגיליון כ"כל מי שיש לו את הקישור
+              יכול לצפות"
             </AlertDescription>
           </Alert>
 

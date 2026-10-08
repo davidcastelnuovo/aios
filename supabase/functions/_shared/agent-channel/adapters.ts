@@ -1,13 +1,24 @@
 import type { ChannelProvider, SendContext, SendResult } from "./types.ts";
-import { acceptedMessageFor, capabilitiesForProvider, statusForKind } from "./logic.ts";
-import { launchChatgpt, launchClaude, launchCloudDirect, launchWorkspaceAgent } from "./direct.ts";
+import {
+  acceptedMessageFor,
+  capabilitiesForProvider,
+  statusForKind,
+} from "./logic.ts";
+import {
+  launchChatgpt,
+  launchClaude,
+  launchCloudDirect,
+  launchWorkspaceAgent,
+} from "./direct.ts";
 import { startParliament } from "./parliament.ts";
 
 export async function dispatchSend(ctx: SendContext): Promise<SendResult> {
   const kind: ChannelProvider =
     ctx.route.route_type === "parliament"
       ? "parliament"
-      : ((ctx.route.provider || ctx.route.slug || "internal") as ChannelProvider);
+      : ((ctx.route.provider ||
+          ctx.route.slug ||
+          "internal") as ChannelProvider);
 
   if (kind === "internal") {
     return {

@@ -3,7 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenantPath } from "@/hooks/useTenantPath";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,11 +20,26 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  ArrowRight, Webhook, Key, CheckCircle2, AlertCircle, Copy, ExternalLink,
-  RefreshCw, Plus, Pencil, Trash2, Share2,
+  ArrowRight,
+  Webhook,
+  Key,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  ExternalLink,
+  RefreshCw,
+  Plus,
+  Pencil,
+  Trash2,
+  Share2,
 } from "lucide-react";
 import { ShareIntegrationTenantsDialog } from "@/components/forms/ShareIntegrationTenantsDialog";
 import { IntegrationVisibilitySelector } from "@/components/forms/IntegrationVisibilitySelector";
@@ -28,7 +49,9 @@ const PROJECT_REF = (import.meta.env.VITE_SUPABASE_PROJECT_ID as string) || "";
 function genSecret() {
   const arr = new Uint8Array(24);
   crypto.getRandomValues(arr);
-  return Array.from(arr).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(arr)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 type Integration = {
@@ -47,7 +70,8 @@ export default function ManusWhatsAppSettings() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [sharingIntegration, setSharingIntegration] = useState<Integration | null>(null);
+  const [sharingIntegration, setSharingIntegration] =
+    useState<Integration | null>(null);
 
   const webhookUrl = `https://${PROJECT_REF}.supabase.co/functions/v1/manus-wa-webhook`;
 
@@ -79,7 +103,9 @@ export default function ManusWhatsAppSettings() {
     enabled: !!tenantId && instanceIds.length > 0,
     refetchInterval: 60_000,
     queryFn: async () => {
-      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const since = new Date(
+        Date.now() - 7 * 24 * 60 * 60 * 1000,
+      ).toISOString();
       const entries = await Promise.all(
         instanceIds.map(async (instanceId) => {
           const { data } = await supabase
@@ -111,7 +137,13 @@ export default function ManusWhatsAppSettings() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm({ displayName: "", instanceId: "", apiKey: "", countryCode: "972", webhookSecret: genSecret() });
+    setForm({
+      displayName: "",
+      instanceId: "",
+      apiKey: "",
+      countryCode: "972",
+      webhookSecret: genSecret(),
+    });
     setDialogOpen(true);
   };
 
@@ -132,9 +164,12 @@ export default function ManusWhatsAppSettings() {
     mutationFn: async () => {
       if (!tenantId || !userId) throw new Error("משתמש לא מחובר");
       if (!form.displayName.trim()) throw new Error("נא לתת שם לחיבור");
-      if (!form.instanceId || !form.apiKey) throw new Error("נא למלא Instance ID ו-API Key");
+      if (!form.instanceId || !form.apiKey)
+        throw new Error("נא למלא Instance ID ו-API Key");
       const secret = form.webhookSecret || genSecret();
-      const existing = editingId ? integrations.find((i) => i.id === editingId) : null;
+      const existing = editingId
+        ? integrations.find((i) => i.id === editingId)
+        : null;
       const existingSettings = (existing?.settings as any) || {};
       const payload: any = {
         tenant_id: tenantId,
@@ -153,11 +188,18 @@ export default function ManusWhatsAppSettings() {
         },
       };
       if (editingId) {
-        const { error } = await supabase.from("tenant_integrations").update(payload).eq("id", editingId);
+        const { error } = await supabase
+          .from("tenant_integrations")
+          .update(payload)
+          .eq("id", editingId);
         if (error) throw error;
         return editingId;
       } else {
-        const { data, error } = await supabase.from("tenant_integrations").insert([payload]).select("id").single();
+        const { data, error } = await supabase
+          .from("tenant_integrations")
+          .insert([payload])
+          .select("id")
+          .single();
         if (error) throw error;
         return data.id as string;
       }
@@ -165,53 +207,87 @@ export default function ManusWhatsAppSettings() {
     onSuccess: async (id) => {
       toast({ title: "נשמר בהצלחה", description: "פרטי החיבור עודכנו" });
       setDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["manus-wa-integrations", tenantId, userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["manus-wa-integrations", tenantId, userId],
+      });
       try {
-        await supabase.functions.invoke("manus-wa-status", { body: { integrationId: id } });
-        queryClient.invalidateQueries({ queryKey: ["manus-wa-integrations", tenantId, userId] });
-      } catch { /* non-fatal */ }
+        await supabase.functions.invoke("manus-wa-status", {
+          body: { integrationId: id },
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["manus-wa-integrations", tenantId, userId],
+        });
+      } catch {
+        /* non-fatal */
+      }
     },
-    onError: (e: Error) => toast({ variant: "destructive", title: "שגיאה", description: e.message }),
+    onError: (e: Error) =>
+      toast({ variant: "destructive", title: "שגיאה", description: e.message }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("tenant_integrations").delete().eq("id", id);
+      const { error } = await supabase
+        .from("tenant_integrations")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       toast({ title: "החיבור נמחק" });
-      queryClient.invalidateQueries({ queryKey: ["manus-wa-integrations", tenantId, userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["manus-wa-integrations", tenantId, userId],
+      });
     },
-    onError: (e: Error) => toast({ variant: "destructive", title: "שגיאה", description: e.message }),
+    onError: (e: Error) =>
+      toast({ variant: "destructive", title: "שגיאה", description: e.message }),
   });
 
   const statusMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase.functions.invoke("manus-wa-status", { body: { integrationId: id } });
+      const { data, error } = await supabase.functions.invoke(
+        "manus-wa-status",
+        { body: { integrationId: id } },
+      );
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "שגיאה בבדיקת סטטוס");
       return data;
     },
     onSuccess: (data) => {
-      toast({ title: "סטטוס עודכן", description: `${data.status} · ${data.phoneNumber || ""}` });
-      queryClient.invalidateQueries({ queryKey: ["manus-wa-integrations", tenantId, userId] });
+      toast({
+        title: "סטטוס עודכן",
+        description: `${data.status} · ${data.phoneNumber || ""}`,
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["manus-wa-integrations", tenantId, userId],
+      });
     },
-    onError: (e: Error) => toast({ variant: "destructive", title: "שגיאה", description: e.message }),
+    onError: (e: Error) =>
+      toast({ variant: "destructive", title: "שגיאה", description: e.message }),
   });
 
   const resyncSecretMutation = useMutation({
     mutationFn: async (i: Integration) => {
       const cur = (i.settings as any) || {};
       const merged = { ...cur, webhook_secret: "" };
-      const { error } = await supabase.from("tenant_integrations").update({ settings: merged }).eq("id", i.id);
+      const { error } = await supabase
+        .from("tenant_integrations")
+        .update({ settings: merged })
+        .eq("id", i.id);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast({ title: "ממתין לסנכרון", description: "שלח הודעת בדיקה ב-WhatsApp — הסוד יילכד אוטומטית מה-webhook הבא" });
-      queryClient.invalidateQueries({ queryKey: ["manus-wa-integrations", tenantId, userId] });
+      toast({
+        title: "ממתין לסנכרון",
+        description:
+          "שלח הודעת בדיקה ב-WhatsApp — הסוד יילכד אוטומטית מה-webhook הבא",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["manus-wa-integrations", tenantId, userId],
+      });
     },
-    onError: (e: Error) => toast({ variant: "destructive", title: "שגיאה", description: e.message }),
+    onError: (e: Error) =>
+      toast({ variant: "destructive", title: "שגיאה", description: e.message }),
   });
 
   const copy = (text: string, label: string) => {
@@ -221,7 +297,11 @@ export default function ManusWhatsAppSettings() {
 
   return (
     <div className="container mx-auto p-6 max-w-4xl" dir="rtl">
-      <Button variant="ghost" onClick={() => navigate(buildPath("/chat-integrations"))} className="mb-6">
+      <Button
+        variant="ghost"
+        onClick={() => navigate(buildPath("/chat-integrations"))}
+        className="mb-6"
+      >
         <ArrowRight className="h-4 w-4 ml-2" />
         חזרה לאינטגרציות
       </Button>
@@ -235,7 +315,8 @@ export default function ManusWhatsAppSettings() {
             <h1 className="text-3xl font-bold">Manus WhatsApp Gateway</h1>
           </div>
           <p className="text-muted-foreground">
-            ניהול חיבורים שלך ל-Manus. כל חיבור = Instance נפרד ב-Manus (לדוגמה: כרמן, וואטסאפ לקוחות וכו׳).
+            ניהול חיבורים שלך ל-Manus. כל חיבור = Instance נפרד ב-Manus (לדוגמה:
+            כרמן, וואטסאפ לקוחות וכו׳).
           </p>
         </div>
         <Button onClick={openCreate}>
@@ -250,35 +331,72 @@ export default function ManusWhatsAppSettings() {
             <AlertCircle className="h-5 w-5 text-primary" />
             הוראות התקנה
           </CardTitle>
-          <CardDescription>שלוש פעולות בדשבורד של Manus עבור כל Instance</CardDescription>
+          <CardDescription>
+            שלוש פעולות בדשבורד של Manus עבור כל Instance
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <ol className="space-y-3 text-sm">
             <li className="flex gap-2">
-              <Badge variant="outline" className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0">1</Badge>
+              <Badge
+                variant="outline"
+                className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0"
+              >
+                1
+              </Badge>
               <span>
                 היכנס ל-{" "}
-                <a href="https://whatsappgw-pzpyrrww.manus.space" target="_blank" rel="noopener noreferrer"
-                  className="text-primary hover:underline inline-flex items-center gap-1">
+                <a
+                  href="https://whatsappgw-pzpyrrww.manus.space"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline inline-flex items-center gap-1"
+                >
                   Manus WhatsApp Gateway <ExternalLink className="h-3 w-3" />
-                </a>{" "}ובחר את ה-Instance שלך
+                </a>{" "}
+                ובחר את ה-Instance שלך
               </span>
             </li>
             <li className="flex gap-2">
-              <Badge variant="outline" className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0">2</Badge>
-              <span>העתק את <strong>Instance ID</strong> ואת ה-<strong>API Key</strong> והדבק בטופס החיבור</span>
+              <Badge
+                variant="outline"
+                className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0"
+              >
+                2
+              </Badge>
+              <span>
+                העתק את <strong>Instance ID</strong> ואת ה-
+                <strong>API Key</strong> והדבק בטופס החיבור
+              </span>
             </li>
             <li className="flex gap-2">
-              <Badge variant="outline" className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0">3</Badge>
-              <span>בטאב ה-Webhook של ה-Instance, הדבק את ה-Webhook URL ואת ה-Webhook Secret</span>
+              <Badge
+                variant="outline"
+                className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0"
+              >
+                3
+              </Badge>
+              <span>
+                בטאב ה-Webhook של ה-Instance, הדבק את ה-Webhook URL ואת
+                ה-Webhook Secret
+              </span>
             </li>
           </ol>
           <Separator className="my-4" />
           <div className="space-y-2">
             <Label>Webhook URL (משותף לכל החיבורים)</Label>
             <div className="flex gap-2">
-              <Input value={webhookUrl} readOnly dir="ltr" className="font-mono text-xs" />
-              <Button variant="outline" size="icon" onClick={() => copy(webhookUrl, "Webhook URL")}>
+              <Input
+                value={webhookUrl}
+                readOnly
+                dir="ltr"
+                className="font-mono text-xs"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => copy(webhookUrl, "Webhook URL")}
+              >
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
@@ -305,17 +423,34 @@ export default function ManusWhatsAppSettings() {
             const status = s.status as string | undefined;
             const phone = s.phone_number as string | undefined;
             const isConnected = status === "CONNECTED";
-            const lastInbound = s.instance_id ? lastInboundByInstance[s.instance_id] : null;
+            const lastInbound = s.instance_id
+              ? lastInboundByInstance[s.instance_id]
+              : null;
             const inboundOk = !!lastInbound;
             return (
-              <Card key={i.id} className={isConnected ? "border-emerald-500/20" : ""}>
+              <Card
+                key={i.id}
+                className={isConnected ? "border-emerald-500/20" : ""}
+              >
                 <CardHeader>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className={`h-5 w-5 ${isConnected ? "text-emerald-500" : "text-muted-foreground"}`} />
-                      <CardTitle className="text-xl">{i.display_name || "ללא שם"}</CardTitle>
-                      {status && <Badge variant={isConnected ? "default" : "secondary"}>{status}</Badge>}
-                      {phone && <Badge variant="outline" dir="ltr">{phone}</Badge>}
+                      <CheckCircle2
+                        className={`h-5 w-5 ${isConnected ? "text-emerald-500" : "text-muted-foreground"}`}
+                      />
+                      <CardTitle className="text-xl">
+                        {i.display_name || "ללא שם"}
+                      </CardTitle>
+                      {status && (
+                        <Badge variant={isConnected ? "default" : "secondary"}>
+                          {status}
+                        </Badge>
+                      )}
+                      {phone && (
+                        <Badge variant="outline" dir="ltr">
+                          {phone}
+                        </Badge>
+                      )}
                       {s.instance_id && (
                         <Badge variant={inboundOk ? "outline" : "destructive"}>
                           {inboundOk
@@ -325,25 +460,50 @@ export default function ManusWhatsAppSettings() {
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => statusMutation.mutate(i.id)} disabled={statusMutation.isPending}>
-                        <RefreshCw className={`h-4 w-4 ml-2 ${statusMutation.isPending ? "animate-spin" : ""}`} />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => statusMutation.mutate(i.id)}
+                        disabled={statusMutation.isPending}
+                      >
+                        <RefreshCw
+                          className={`h-4 w-4 ml-2 ${statusMutation.isPending ? "animate-spin" : ""}`}
+                        />
                         בדוק סטטוס
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => openEdit(i)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEdit(i)}
+                      >
                         <Pencil className="h-4 w-4 ml-2" />
                         ערוך
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => resyncSecretMutation.mutate(i)} disabled={resyncSecretMutation.isPending}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => resyncSecretMutation.mutate(i)}
+                        disabled={resyncSecretMutation.isPending}
+                      >
                         <RefreshCw className="h-4 w-4 ml-2" />
                         סנכרן סוד
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => setSharingIntegration(i)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSharingIntegration(i)}
+                      >
                         <Share2 className="h-4 w-4 ml-2" />
                         שתף עם ארגונים
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => {
-                        if (confirm(`למחוק את החיבור "${i.display_name}"?`)) deleteMutation.mutate(i.id);
-                      }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm(`למחוק את החיבור "${i.display_name}"?`))
+                            deleteMutation.mutate(i.id);
+                        }}
+                      >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -354,25 +514,45 @@ export default function ManusWhatsAppSettings() {
                     <Alert variant="destructive">
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>
-                        לא התקבלה אף הודעה נכנסת בשבוע האחרון. שליחה עובדת עם ה-Instance ID וה-API Key בלבד,
-                        אבל קבלה דורשת Webhook בצד Manus: בדשבורד של Manus → Instance{" "}
-                        <code dir="ltr">{s.instance_id}</code> → טאב Webhook, הזן את ה-Webhook URL מהכרטיס העליון ואת
-                        ה-Webhook Secret שבכרטיס הזה, וסמן{" "}
-                        <strong>message</strong> ו-<strong>message_ack</strong>.
+                        לא התקבלה אף הודעה נכנסת בשבוע האחרון. שליחה עובדת עם
+                        ה-Instance ID וה-API Key בלבד, אבל קבלה דורשת Webhook
+                        בצד Manus: בדשבורד של Manus → Instance{" "}
+                        <code dir="ltr">{s.instance_id}</code> → טאב Webhook,
+                        הזן את ה-Webhook URL מהכרטיס העליון ואת ה-Webhook Secret
+                        שבכרטיס הזה, וסמן <strong>message</strong> ו-
+                        <strong>message_ack</strong>.
                       </AlertDescription>
                     </Alert>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs text-muted-foreground">Instance ID</Label>
-                      <div className="font-mono text-xs" dir="ltr">{s.instance_id || "—"}</div>
+                      <Label className="text-xs text-muted-foreground">
+                        Instance ID
+                      </Label>
+                      <div className="font-mono text-xs" dir="ltr">
+                        {s.instance_id || "—"}
+                      </div>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Webhook Secret</Label>
+                      <Label className="text-xs text-muted-foreground">
+                        Webhook Secret
+                      </Label>
                       <div className="flex gap-2 items-center">
-                        <code className="font-mono text-xs truncate flex-1" dir="ltr">{s.webhook_secret || "(אין)"}</code>
+                        <code
+                          className="font-mono text-xs truncate flex-1"
+                          dir="ltr"
+                        >
+                          {s.webhook_secret || "(אין)"}
+                        </code>
                         {s.webhook_secret && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copy(s.webhook_secret, "Webhook Secret")}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() =>
+                              copy(s.webhook_secret, "Webhook Secret")
+                            }
+                          >
                             <Copy className="h-3 w-3" />
                           </Button>
                         )}
@@ -397,41 +577,90 @@ export default function ManusWhatsAppSettings() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent dir="rtl" className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingId ? "ערוך חיבור Manus" : "הוסף חיבור Manus"}</DialogTitle>
+            <DialogTitle>
+              {editingId ? "ערוך חיבור Manus" : "הוסף חיבור Manus"}
+            </DialogTitle>
             <DialogDescription>
-              כל חיבור מייצג Instance נפרד ב-Manus. תן לחיבור שם מזהה (למשל "Carmen" או "וואטסאפ לקוחות").
+              כל חיבור מייצג Instance נפרד ב-Manus. תן לחיבור שם מזהה (למשל
+              "Carmen" או "וואטסאפ לקוחות").
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="displayName">שם החיבור</Label>
-              <Input id="displayName" placeholder="לדוגמה: Carmen" value={form.displayName}
-                onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
+              <Input
+                id="displayName"
+                placeholder="לדוגמה: Carmen"
+                value={form.displayName}
+                onChange={(e) =>
+                  setForm({ ...form, displayName: e.target.value })
+                }
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="instanceId">Instance ID</Label>
-              <Input id="instanceId" placeholder="YwIn7GY3Ul3OAxXG" value={form.instanceId}
-                onChange={(e) => setForm({ ...form, instanceId: e.target.value })} dir="ltr" />
+              <Input
+                id="instanceId"
+                placeholder="YwIn7GY3Ul3OAxXG"
+                value={form.instanceId}
+                onChange={(e) =>
+                  setForm({ ...form, instanceId: e.target.value })
+                }
+                dir="ltr"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="apiKey">API Key</Label>
-              <Input id="apiKey" type="password" placeholder="wgk_..." value={form.apiKey}
-                onChange={(e) => setForm({ ...form, apiKey: e.target.value })} dir="ltr" />
+              <Input
+                id="apiKey"
+                type="password"
+                placeholder="wgk_..."
+                value={form.apiKey}
+                onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+                dir="ltr"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="cc">קידומת מדינת ברירת מחדל</Label>
-              <Input id="cc" placeholder="972" value={form.countryCode}
-                onChange={(e) => setForm({ ...form, countryCode: e.target.value.replace(/\D/g, "").slice(0, 3) })} dir="ltr" />
+              <Input
+                id="cc"
+                placeholder="972"
+                value={form.countryCode}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    countryCode: e.target.value.replace(/\D/g, "").slice(0, 3),
+                  })
+                }
+                dir="ltr"
+              />
             </div>
             <div className="space-y-2">
               <Label>Webhook Secret</Label>
               <div className="flex gap-2">
-                <Input value={form.webhookSecret} readOnly dir="ltr" className="font-mono text-xs" />
-                <Button variant="outline" size="icon" type="button" onClick={() => copy(form.webhookSecret, "Webhook Secret")}>
+                <Input
+                  value={form.webhookSecret}
+                  readOnly
+                  dir="ltr"
+                  className="font-mono text-xs"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  type="button"
+                  onClick={() => copy(form.webhookSecret, "Webhook Secret")}
+                >
                   <Copy className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="sm" type="button" onClick={() => setForm({ ...form, webhookSecret: genSecret() })}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() =>
+                    setForm({ ...form, webhookSecret: genSecret() })
+                  }
+                >
                   צור חדש
                 </Button>
               </div>
@@ -439,14 +668,21 @@ export default function ManusWhatsAppSettings() {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                בדשבורד של Manus → טאב Webhook של ה-Instance הזה: הזן את ה-URL וה-Secret מלמעלה. סמן <strong>message</strong> ו-<strong>message_ack</strong>.
+                בדשבורד של Manus → טאב Webhook של ה-Instance הזה: הזן את ה-URL
+                וה-Secret מלמעלה. סמן <strong>message</strong> ו-
+                <strong>message_ack</strong>.
               </AlertDescription>
             </Alert>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>ביטול</Button>
-            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              ביטול
+            </Button>
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+            >
               <Key className="h-4 w-4 ml-2" />
               {saveMutation.isPending ? "שומר..." : "שמור"}
             </Button>

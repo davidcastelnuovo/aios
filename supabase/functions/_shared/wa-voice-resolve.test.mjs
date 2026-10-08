@@ -38,19 +38,35 @@ test("paired green transcript must not lose the voice marker", () => {
 
 test("explicit failure statuses instead of silent media placeholder", () => {
   assert.equal(
-    formatVoiceMessageText({ transcript: null, status: VOICE_STATUSES.NO_AUDIO_URL, isVoice: true }),
+    formatVoiceMessageText({
+      transcript: null,
+      status: VOICE_STATUSES.NO_AUDIO_URL,
+      isVoice: true,
+    }),
     "[הודעת קול · no_audio_url]",
   );
   assert.equal(
-    formatVoiceMessageText({ transcript: null, status: VOICE_STATUSES.TRANSCRIPTION_FAILED, isVoice: true }),
+    formatVoiceMessageText({
+      transcript: null,
+      status: VOICE_STATUSES.TRANSCRIPTION_FAILED,
+      isVoice: true,
+    }),
     "[הודעת קול · transcription_failed]",
   );
   assert.equal(
-    formatVoiceMessageText({ transcript: null, status: VOICE_STATUSES.DOWNLOAD_FAILED, isVoice: true }),
+    formatVoiceMessageText({
+      transcript: null,
+      status: VOICE_STATUSES.DOWNLOAD_FAILED,
+      isVoice: true,
+    }),
     "[הודעת קול · download_failed]",
   );
   assert.equal(
-    formatVoiceMessageText({ transcript: null, status: VOICE_STATUSES.NOT_VOICE_MEDIA, isVoice: false }),
+    formatVoiceMessageText({
+      transcript: null,
+      status: VOICE_STATUSES.NOT_VOICE_MEDIA,
+      isVoice: false,
+    }),
     "[מדיה]",
   );
 });
@@ -74,7 +90,10 @@ test("buildVoiceMeta exposes transcript + message_id for storage", () => {
 test("looksLikeAudioPayload and pickAudioUrlFromContainers", () => {
   assert.equal(looksLikeAudioPayload({ hasAudioMessage: true }), true);
   assert.equal(looksLikeAudioPayload({ type: "ptt", url: null }), true);
-  assert.equal(looksLikeAudioPayload({ type: "image", url: "https://x/a.jpg" }), false);
+  assert.equal(
+    looksLikeAudioPayload({ type: "image", url: "https://x/a.jpg" }),
+    false,
+  );
   const url = pickAudioUrlFromContainers([
     { caption: "hi" },
     { downloadUrl: "https://cdn.example/voice.ogg" },

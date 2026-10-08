@@ -35,7 +35,10 @@ serve(async (req: Request) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user: requesterUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user: requesterUser },
+      error: authError,
+    } = await supabaseAdmin.auth.getUser(token);
     if (authError || !requesterUser) {
       throw new Error("Unauthorized");
     }
@@ -58,7 +61,6 @@ serve(async (req: Request) => {
       throw new Error("User ID is required");
     }
 
-
     // Get user profile to check if they have a campaigner
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
@@ -76,13 +78,14 @@ serve(async (req: Request) => {
     // Only update agencies if user has a campaigner_id
     if (!campaignerId) {
       return new Response(
-        JSON.stringify({ 
-          error: "User is not linked to a campaigner. Please link user to a campaigner first." 
+        JSON.stringify({
+          error:
+            "User is not linked to a campaigner. Please link user to a campaigner first.",
         }),
-        { 
+        {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
-        }
+        },
       );
     }
 
@@ -99,7 +102,7 @@ serve(async (req: Request) => {
 
     // Insert new agency links if any
     if (agencyIds && agencyIds.length > 0) {
-      const links = agencyIds.map(agencyId => ({
+      const links = agencyIds.map((agencyId) => ({
         campaigner_id: campaignerId,
         agency_id: agencyId,
       }));
@@ -122,7 +125,7 @@ serve(async (req: Request) => {
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error: any) {
     console.error("Error in update-user-agencies function:", error);
@@ -132,9 +135,14 @@ serve(async (req: Request) => {
         error: error.message,
       }),
       {
-        status: error.message === "Unauthorized" || error.message === "Only owners and agency owners can update user agencies" ? 403 : 500,
+        status:
+          error.message === "Unauthorized" ||
+          error.message ===
+            "Only owners and agency owners can update user agencies"
+            ? 403
+            : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

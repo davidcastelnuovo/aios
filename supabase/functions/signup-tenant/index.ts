@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface SignupTenantRequest {
@@ -30,15 +31,15 @@ serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    
+
     const payload: SignupTenantRequest = await req.json();
-    
+
     // Normalize input (emails are case-insensitive)
     payload.email = (payload.email || "").trim().toLowerCase();
     payload.fullName = (payload.fullName || "").trim();
     payload.phone = (payload.phone || "").trim();
     payload.organizationName = (payload.organizationName || "").trim();
-    
+
     // Auth context for conditional validation
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const authHeader = req.headers.get("authorization") ?? "";
@@ -47,29 +48,46 @@ serve(async (req: Request) => {
     if (authHeader && authHeader !== "" && authHeader !== "Bearer ") {
       // Use service role client to verify token (validates token is not revoked)
       const token = authHeader.replace(/^Bearer\s+/i, "");
-      const { data: authData, error: authCheckError } = await supabase.auth.getUser(token);
+      const { data: authData, error: authCheckError } =
+        await supabase.auth.getUser(token);
       if (!authCheckError && authData?.user) {
         authenticatedUser = authData.user;
       } else {
-        console.warn("⚠️ getUser did not return a valid user:", authCheckError?.message);
+        console.warn(
+          "⚠️ getUser did not return a valid user:",
+          authCheckError?.message,
+        );
       }
     }
-    
+
     // Validate input (password required only if not authenticated)
-    if (!payload.email || !payload.fullName || !payload.organizationName || (!authenticatedUser && !payload.password)) {
+    if (
+      !payload.email ||
+      !payload.fullName ||
+      !payload.organizationName ||
+      (!authenticatedUser && !payload.password)
+    ) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing required fields" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     if (!authenticatedUser && payload.password && payload.password.length < 6) {
       return new Response(
-        JSON.stringify({ success: false, error: "Password must be at least 6 characters" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          success: false,
+          error: "Password must be at least 6 characters",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
-
 
     // Step 1: Create or reuse the user account
     let userId: string;
@@ -84,40 +102,56 @@ serve(async (req: Request) => {
     } else {
       // Try to reuse existing account by verifying provided credentials
       const authClient = createClient(supabaseUrl, anonKey);
-      const { data: signInData, error: signInError } = await authClient.auth.signInWithPassword({
-        email: payload.email,
-        password: payload.password,
-      });
+      const { data: signInData, error: signInError } =
+        await authClient.auth.signInWithPassword({
+          email: payload.email,
+          password: payload.password,
+        });
       if (!signInError && signInData?.user) {
         userId = signInData.user.id;
       } else {
         // Otherwise, create a new user for the provided email
-        const { data: userData, error: userError }: any = await supabase.auth.admin.createUser({
-          email: payload.email,
-          password: payload.password,
-          email_confirm: true,
-          user_metadata: {
-            full_name: payload.fullName,
-            phone: payload.phone,
-          },
-        });
+        const { data: userData, error: userError }: any =
+          await supabase.auth.admin.createUser({
+            email: payload.email,
+            password: payload.password,
+            email_confirm: true,
+            user_metadata: {
+              full_name: payload.fullName,
+              phone: payload.phone,
+            },
+          });
 
         if (userError || !userData?.user) {
-          const isEmailExists = (userError as any)?.status === 422 || (userError as any)?.code === 'email_exists';
+          const isEmailExists =
+            (userError as any)?.status === 422 ||
+            (userError as any)?.code === "email_exists";
           if (isEmailExists) {
-            console.error("❌ Email exists and provided credentials didn't match (and no session)");
+            console.error(
+              "❌ Email exists and provided credentials didn't match (and no session)",
+            );
             return new Response(
-              JSON.stringify({ 
-                success: false, 
-                error: "האימייל כבר קיים. היכנס/י לחשבון או הזן/הזיני סיסמה תקינה ואז נסה/י שוב." 
+              JSON.stringify({
+                success: false,
+                error:
+                  "האימייל כבר קיים. היכנס/י לחשבון או הזן/הזיני סיסמה תקינה ואז נסה/י שוב.",
               }),
-              { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              {
+                status: 409,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              },
             );
           } else {
             console.error("Error creating user:", userError);
             return new Response(
-              JSON.stringify({ success: false, error: (userError as any)?.message || "Failed to create user" }),
-              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              JSON.stringify({
+                success: false,
+                error: (userError as any)?.message || "Failed to create user",
+              }),
+              {
+                status: 400,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              },
             );
           }
         } else {
@@ -128,7 +162,11 @@ serve(async (req: Request) => {
     }
 
     // Step 2: Update profile with full details
-    const effectiveEmail = (authenticatedUser?.email || payload.email || "").toLowerCase();
+    const effectiveEmail = (
+      authenticatedUser?.email ||
+      payload.email ||
+      ""
+    ).toLowerCase();
     const { error: profileError } = await supabase
       .from("profiles")
       .update({
@@ -149,24 +187,24 @@ serve(async (req: Request) => {
     const generateSlug = (name: string): string => {
       let slug = name
         .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
-        .replace(/\s+/g, '-') // Replace spaces with hyphens
-        .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-        .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
+        .replace(/[^a-z0-9\s-]/g, "") // Remove special characters
+        .replace(/\s+/g, "-") // Replace spaces with hyphens
+        .replace(/-+/g, "-") // Replace multiple hyphens with single hyphen
+        .replace(/^-+|-+$/g, "") // Remove leading/trailing hyphens
         .trim();
-      
+
       // If slug is empty or just dashes, generate a random one
-      if (!slug || slug === '-' || slug.length < 2) {
+      if (!slug || slug === "-" || slug.length < 2) {
         slug = `org-${Date.now().toString(36)}`;
       }
-      
+
       return slug;
     };
-    
+
     const baseSlug = generateSlug(payload.organizationName);
     let slug = baseSlug;
     let counter = 1;
-    
+
     // Ensure slug is unique
     while (true) {
       const { data: existing } = await supabase
@@ -174,12 +212,12 @@ serve(async (req: Request) => {
         .select("id")
         .eq("slug", slug)
         .maybeSingle();
-      
+
       if (!existing) break;
       slug = `${baseSlug}-${counter}`;
       counter++;
     }
-    
+
     const { data: newTenant, error: tenantError } = await supabase
       .from("tenants")
       .insert({
@@ -201,11 +239,16 @@ serve(async (req: Request) => {
         await supabase.auth.admin.deleteUser(userId);
       }
       return new Response(
-        JSON.stringify({ success: false, error: "Failed to create organization" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          success: false,
+          error: "Failed to create organization",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
-
 
     // Step 4: Add user to tenant_users with owner role
     const { error: tenantUserError } = await supabase
@@ -224,20 +267,23 @@ serve(async (req: Request) => {
         await supabase.auth.admin.deleteUser(userId);
       }
       return new Response(
-        JSON.stringify({ success: false, error: "Failed to assign user to organization" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          success: false,
+          error: "Failed to assign user to organization",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-
     // Step 5: Grant owner role (tenant-scoped — required for RLS)
-    const { error: roleError } = await supabase
-      .from("user_roles")
-      .insert({
-        user_id: userId,
-        role: "owner",
-        tenant_id: newTenant.id,
-      });
+    const { error: roleError } = await supabase.from("user_roles").insert({
+      user_id: userId,
+      role: "owner",
+      tenant_id: newTenant.id,
+    });
 
     if (roleError) {
       console.error("Error granting owner role:", roleError);
@@ -297,7 +343,6 @@ serve(async (req: Request) => {
     } else {
     }
 
-
     return new Response(
       JSON.stringify({
         success: true,
@@ -308,17 +353,19 @@ serve(async (req: Request) => {
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
-
   } catch (error: any) {
     console.error("Error in signup-tenant:", error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message || "Internal server error" }),
+      JSON.stringify({
+        success: false,
+        error: error.message || "Internal server error",
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

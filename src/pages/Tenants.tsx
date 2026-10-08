@@ -5,8 +5,29 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Building2, Building, Users, Settings, Link as LinkIcon, RefreshCw, Trash2, ArrowRightLeft, ChevronDown, ChevronLeft, Copy, Pencil } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Plus,
+  Building2,
+  Building,
+  Users,
+  Settings,
+  Link as LinkIcon,
+  RefreshCw,
+  Trash2,
+  ArrowRightLeft,
+  ChevronDown,
+  ChevronLeft,
+  Copy,
+  Pencil,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import EditTenantAgenciesDialog from "@/components/forms/EditTenantAgenciesDialog";
@@ -23,7 +44,9 @@ export default function Tenants() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [selectedTenant, setSelectedTenant] = useState<string | null>(null);
-  const [subTenantParentId, setSubTenantParentId] = useState<string | null>(null);
+  const [subTenantParentId, setSubTenantParentId] = useState<string | null>(
+    null,
+  );
   const [agenciesDialogOpen, setAgenciesDialogOpen] = useState(false);
   const [expandedOrgs, setExpandedOrgs] = useState<Record<string, boolean>>({});
   const [selectedTenantForAgencies, setSelectedTenantForAgencies] = useState<{
@@ -69,7 +92,10 @@ export default function Tenants() {
     (tenants || []).forEach((tenant: any) => {
       if (tenant.org_type === "organization" || tenant.org_type === "root") {
         orgs.push(tenant);
-      } else if (tenant.org_type === "sub_organization" && tenant.parent_tenant_id) {
+      } else if (
+        tenant.org_type === "sub_organization" &&
+        tenant.parent_tenant_id
+      ) {
         if (!subs[tenant.parent_tenant_id]) {
           subs[tenant.parent_tenant_id] = [];
         }
@@ -100,38 +126,36 @@ export default function Tenants() {
     mutationFn: async (tenantId: string) => {
       if (!userId) throw new Error("User not authenticated");
 
-      const { error } = await supabase
-        .from("user_active_tenant")
-        .upsert(
-          {
-            user_id: userId,
-            tenant_id: tenantId,
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "user_id",
-          }
-        );
+      const { error } = await supabase.from("user_active_tenant").upsert(
+        {
+          user_id: userId,
+          tenant_id: tenantId,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "user_id",
+        },
+      );
 
       if (error) throw error;
-      
+
       // Get the slug directly from database
       const { data: tenantData } = await supabase
         .from("tenants")
         .select("slug")
         .eq("id", tenantId)
         .single();
-      
+
       return { tenantId, slug: tenantData?.slug };
     },
     onSuccess: ({ tenantId, slug }) => {
       // CRITICAL: Use window.location.href for full page reload
-      // React Router's navigate() doesn't refresh the page, which can leave 
+      // React Router's navigate() doesn't refresh the page, which can leave
       // stale cached data and cause URL/state mismatch issues
       if (slug) {
         window.location.href = `/t/${slug}/tenants`;
       } else {
-        window.location.href = '/';
+        window.location.href = "/";
       }
     },
     onError: (error: any) => {
@@ -200,7 +224,7 @@ export default function Tenants() {
         {canManageTenants && org.org_type === "root" && (
           <AddTenantForm asDialog={true} />
         )}
-        
+
         {/* לארגון רגיל (organization) - כפתור "צור תת-ארגון" */}
         {canManageTenants && org.org_type === "organization" && (
           <Button
@@ -235,7 +259,7 @@ export default function Tenants() {
             <Pencil className="h-4 w-4" />
           </Button>
         )}
-        
+
         {/* שמירה כטמפלייט */}
         {canManageTenants && (
           <Button
@@ -254,7 +278,7 @@ export default function Tenants() {
             <Copy className="h-4 w-4" />
           </Button>
         )}
-        
+
         {canManageTenants && (
           <Button
             variant="ghost"
@@ -412,8 +436,15 @@ export default function Tenants() {
           )}
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => refetch()} variant="ghost" size="sm" disabled={isLoading}>
-            <RefreshCw className={`h-5 w-5 ${isLoading ? "animate-spin" : ""}`} />
+          <Button
+            onClick={() => refetch()}
+            variant="ghost"
+            size="sm"
+            disabled={isLoading}
+          >
+            <RefreshCw
+              className={`h-5 w-5 ${isLoading ? "animate-spin" : ""}`}
+            />
           </Button>
         </div>
       </div>
@@ -457,7 +488,10 @@ export default function Tenants() {
                             <div className="min-w-0">
                               <span className="font-medium">{org.name}</span>
                               {org.slug && (
-                                <p className="text-xs text-muted-foreground font-mono" dir="ltr">
+                                <p
+                                  className="text-xs text-muted-foreground font-mono"
+                                  dir="ltr"
+                                >
                                   /t/{org.slug}
                                 </p>
                               )}
@@ -487,26 +521,32 @@ export default function Tenants() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          {subOrganizations[org.id] && subOrganizations[org.id].length > 0 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleExpanded(org.id);
-                              }}
-                            >
-                              {expandedOrgs[org.id] ? (
-                                <ChevronDown className="h-4 w-4" />
-                              ) : (
-                                <ChevronLeft className="h-4 w-4" />
-                              )}
-                              <span className="mr-2">{subOrganizations[org.id].length}</span>
-                            </Button>
-                          )}
+                          {subOrganizations[org.id] &&
+                            subOrganizations[org.id].length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleExpanded(org.id);
+                                }}
+                              >
+                                {expandedOrgs[org.id] ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronLeft className="h-4 w-4" />
+                                )}
+                                <span className="mr-2">
+                                  {subOrganizations[org.id].length}
+                                </span>
+                              </Button>
+                            )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
+                          <div
+                            className="flex gap-2 justify-end"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             {renderOrgActions(org)}
                           </div>
                         </TableCell>
@@ -526,11 +566,18 @@ export default function Tenants() {
                             <TableCell className="text-right">
                               <div className="flex items-center gap-2 pr-8">
                                 <Building className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                                <span className="text-muted-foreground">└─</span>
+                                <span className="text-muted-foreground">
+                                  └─
+                                </span>
                                 <div className="min-w-0">
-                                  <span className="font-medium">{sub.name}</span>
+                                  <span className="font-medium">
+                                    {sub.name}
+                                  </span>
                                   {sub.slug && (
-                                    <p className="text-xs text-muted-foreground font-mono" dir="ltr">
+                                    <p
+                                      className="text-xs text-muted-foreground font-mono"
+                                      dir="ltr"
+                                    >
                                       /t/{sub.slug}
                                     </p>
                                   )}
@@ -561,7 +608,10 @@ export default function Tenants() {
                             </TableCell>
                             <TableCell className="text-right">-</TableCell>
                             <TableCell className="text-right">
-                              <div className="flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
+                              <div
+                                className="flex gap-2 justify-end"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 {renderSubOrgActions(sub)}
                               </div>
                             </TableCell>

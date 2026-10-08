@@ -51,20 +51,21 @@ export function AddCampaignerForm() {
     queryKey: ["agencies", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      
+
       // Get owned agencies
       const { data: ownedAgencies, error: ownedError } = await supabase
         .from("agencies")
         .select("*")
         .eq("tenant_id", tenantId)
         .order("name");
-      
+
       if (ownedError) throw ownedError;
-      
+
       // Get shared agencies via agency_tenant_access
       const { data: sharedAccess, error: sharedError } = await supabase
         .from("agency_tenant_access")
-        .select(`
+        .select(
+          `
           agency_id,
           agencies (
             id,
@@ -78,27 +79,28 @@ export function AddCampaignerForm() {
             created_at,
             tenant_id
           )
-        `)
+        `,
+        )
         .eq("accessing_tenant_id", tenantId);
-      
+
       if (sharedError) throw sharedError;
-      
+
       // Extract shared agencies
       const shared = (sharedAccess || [])
-        .map(s => s.agencies)
+        .map((s) => s.agencies)
         .filter(Boolean);
-      
+
       // Combine and remove duplicates
       const combined = [...(ownedAgencies || []), ...shared];
       const uniqueMap = new Map();
-      combined.forEach(agency => {
+      combined.forEach((agency) => {
         if (agency && agency.id && !uniqueMap.has(agency.id)) {
           uniqueMap.set(agency.id, agency);
         }
       });
-      
-      return Array.from(uniqueMap.values()).sort((a: any, b: any) => 
-        a.name.localeCompare(b.name, 'he')
+
+      return Array.from(uniqueMap.values()).sort((a: any, b: any) =>
+        a.name.localeCompare(b.name, "he"),
       );
     },
     enabled: !!tenantId,
@@ -121,7 +123,7 @@ export function AddCampaignerForm() {
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
       if (!tenantId) throw new Error("לא נמצא tenant_id");
-      
+
       // יצירת הקמפיינר
       const { data: campaigner, error: campaignerError } = await supabase
         .from("campaigners")
@@ -142,7 +144,7 @@ export function AddCampaignerForm() {
       if (campaignerError) throw campaignerError;
 
       // קישור הקמפיינר לסוכנויות
-      const agencyLinks = values.agency_ids.map(agencyId => ({
+      const agencyLinks = values.agency_ids.map((agencyId) => ({
         campaigner_id: campaigner.id,
         agency_id: agencyId,
       }));
@@ -157,7 +159,9 @@ export function AddCampaignerForm() {
       toast.success("איש הצוות נוסף בהצלחה");
       // Invalidate and refetch all related queries
       queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["campaigner_agencies", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["campaigner_agencies", tenantId],
+      });
       form.reset();
       setOpen(false);
     },
@@ -178,7 +182,10 @@ export function AddCampaignerForm() {
           הוסף איש צוות
         </Button>
       </DialogTrigger>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>הוסף איש צוות חדש</DialogTitle>
         </DialogHeader>
@@ -204,27 +211,46 @@ export function AddCampaignerForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>סוכנויות</FormLabel>
-                  <Input placeholder="חפש סוכנות..." value={agencySearch} onChange={e => setAgencySearch(e.target.value)} className="mb-2 h-9" />
+                  <Input
+                    placeholder="חפש סוכנות..."
+                    value={agencySearch}
+                    onChange={(e) => setAgencySearch(e.target.value)}
+                    className="mb-2 h-9"
+                  />
                   <div className="space-y-2 max-h-40 overflow-y-auto border rounded p-2">
-                    {agencies?.filter(a => a.name.toLowerCase().includes(agencySearch.toLowerCase())).map((agency) => (
-                      <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
-                        <input
-                          type="checkbox"
-                          id={agency.id}
-                          checked={field.value?.includes(agency.id)}
-                          onChange={(e) => {
-                            const newValue = e.target.checked
-                              ? [...(field.value || []), agency.id]
-                              : (field.value || []).filter(id => id !== agency.id);
-                            field.onChange(newValue);
-                          }}
-                          className="rounded border-gray-300"
-                        />
-                        <label htmlFor={agency.id} className="text-sm cursor-pointer">
-                          {agency.name}
-                        </label>
-                      </div>
-                    ))}
+                    {agencies
+                      ?.filter((a) =>
+                        a.name
+                          .toLowerCase()
+                          .includes(agencySearch.toLowerCase()),
+                      )
+                      .map((agency) => (
+                        <div
+                          key={agency.id}
+                          className="flex items-center space-x-2 space-x-reverse"
+                        >
+                          <input
+                            type="checkbox"
+                            id={agency.id}
+                            checked={field.value?.includes(agency.id)}
+                            onChange={(e) => {
+                              const newValue = e.target.checked
+                                ? [...(field.value || []), agency.id]
+                                : (field.value || []).filter(
+                                    (id) => id !== agency.id,
+                                  );
+                              field.onChange(newValue);
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <label
+                            htmlFor={agency.id}
+                            className="text-sm cursor-pointer"
+                          >
+                            {agency.name}
+                          </label>
+                        </div>
+                      ))}
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -239,10 +265,15 @@ export function AddCampaignerForm() {
                   <FormLabel>תפקידים</FormLabel>
                   <div className="space-y-2">
                     {rolesLoading ? (
-                      <p className="text-sm text-muted-foreground">טוען תפקידים...</p>
+                      <p className="text-sm text-muted-foreground">
+                        טוען תפקידים...
+                      </p>
                     ) : (
                       teamRoles.map((role) => (
-                        <div key={role.key} className="flex items-center space-x-2 space-x-reverse">
+                        <div
+                          key={role.key}
+                          className="flex items-center space-x-2 space-x-reverse"
+                        >
                           <input
                             type="checkbox"
                             id={`role-${role.key}`}
@@ -250,12 +281,17 @@ export function AddCampaignerForm() {
                             onChange={(e) => {
                               const newValue = e.target.checked
                                 ? [...(field.value || []), role.label]
-                                : (field.value || []).filter(r => r !== role.label);
+                                : (field.value || []).filter(
+                                    (r) => r !== role.label,
+                                  );
                               field.onChange(newValue);
                             }}
                             className="rounded border-gray-300"
                           />
-                          <label htmlFor={`role-${role.key}`} className="text-sm cursor-pointer">
+                          <label
+                            htmlFor={`role-${role.key}`}
+                            className="text-sm cursor-pointer"
+                          >
                             {role.label}
                           </label>
                         </div>
@@ -316,7 +352,10 @@ export function AddCampaignerForm() {
                 <FormItem>
                   <FormLabel>מזהה קבוצת WhatsApp</FormLabel>
                   <FormControl>
-                    <Input placeholder="לדוגמה: 972501234567-1234567890@g.us" {...field} />
+                    <Input
+                      placeholder="לדוגמה: 972501234567-1234567890@g.us"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -337,7 +376,11 @@ export function AddCampaignerForm() {
               )}
             />
 
-            <Button type="submit" className="w-full" disabled={mutation.isPending}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={mutation.isPending}
+            >
               {mutation.isPending ? "מוסיף..." : "הוסף איש צוות"}
             </Button>
           </form>

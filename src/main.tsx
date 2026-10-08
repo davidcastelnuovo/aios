@@ -32,7 +32,10 @@ const reportFrontendError = (errorMessage: string, errorStack?: string) => {
 
 window.addEventListener("vite:preloadError", (event) => {
   event.preventDefault();
-  reportFrontendError(`Vite preload error: ${event.payload?.message || "unknown"}`, event.payload?.stack);
+  reportFrontendError(
+    `Vite preload error: ${event.payload?.message || "unknown"}`,
+    event.payload?.stack,
+  );
   reloadOnceForStaleChunk();
 });
 
@@ -48,5 +51,5 @@ window.addEventListener("unhandledrejection", (event) => {
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
     <App />
-  </ErrorBoundary>
+  </ErrorBoundary>,
 );

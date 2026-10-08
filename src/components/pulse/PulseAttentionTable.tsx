@@ -61,13 +61,19 @@ function IssueCell({ issue }: { issue: PulseAttentionIssue | null }) {
         ? "secondary"
         : "outline";
   return (
-    <Badge variant={variant} className="whitespace-normal text-right leading-snug max-w-[220px]">
+    <Badge
+      variant={variant}
+      className="whitespace-normal text-right leading-snug max-w-[220px]"
+    >
       {issue.label}
     </Badge>
   );
 }
 
-function formatTargetValue(goal: PulseCampaignGoal, value: number | null | undefined) {
+function formatTargetValue(
+  goal: PulseCampaignGoal,
+  value: number | null | undefined,
+) {
   if (value === null || value === undefined) return "—";
   if (goal === "ecommerce") return value.toFixed(2);
   return formatPulseMoney(value);
@@ -84,14 +90,17 @@ export function PulseAttentionTable({
   const [draftValue, setDraftValue] = useState("");
 
   const openEdit = (row: PulseAttentionRow) => {
-    const approved = row.target?.source === "approved" ? row.target.value : null;
+    const approved =
+      row.target?.source === "approved" ? row.target.value : null;
     setDraftValue(approved ? String(approved) : "");
     setEditRow(row);
   };
 
   const handleSave = async () => {
     if (!editRow?.tableId) return;
-    const parsed = draftValue.trim() ? Number(draftValue.replace(",", ".")) : null;
+    const parsed = draftValue.trim()
+      ? Number(draftValue.replace(",", "."))
+      : null;
     if (parsed !== null && (!Number.isFinite(parsed) || parsed <= 0)) return;
     const existing = tableSettingsById.get(editRow.tableId) ?? {};
     await onSaveTarget({
@@ -118,13 +127,25 @@ export function PulseAttentionTable({
           <TableHeader>
             <TableRow>
               <TableHead className="text-right min-w-[140px]">לקוח</TableHead>
-              <TableHead className="text-right min-w-[100px]">פלטפורמה</TableHead>
+              <TableHead className="text-right min-w-[100px]">
+                פלטפורמה
+              </TableHead>
               <TableHead className="text-right min-w-[120px]">יעד</TableHead>
-              <TableHead className="text-right min-w-[140px]">מגע בקמפיין</TableHead>
-              <TableHead className="text-right min-w-[160px]">יעילות / CPL</TableHead>
-              <TableHead className="text-right min-w-[140px]">תקשורת אחרונה</TableHead>
-              <TableHead className="text-right min-w-[140px]">תלונה / עדכון</TableHead>
-              <TableHead className="text-right min-w-[140px]">שביעות רצון</TableHead>
+              <TableHead className="text-right min-w-[140px]">
+                מגע בקמפיין
+              </TableHead>
+              <TableHead className="text-right min-w-[160px]">
+                יעילות / CPL
+              </TableHead>
+              <TableHead className="text-right min-w-[140px]">
+                תקשורת אחרונה
+              </TableHead>
+              <TableHead className="text-right min-w-[140px]">
+                תלונה / עדכון
+              </TableHead>
+              <TableHead className="text-right min-w-[140px]">
+                שביעות רצון
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -142,14 +163,21 @@ export function PulseAttentionTable({
                     >
                       {row.clientName}
                     </button>
-                    <div className="text-xs text-muted-foreground mt-0.5">{row.campaignerName}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {row.campaignerName}
+                    </div>
                   </TableCell>
                   <TableCell className="align-top">
                     <div className="flex items-center gap-1.5">
                       {row.platform === "meta" ? (
                         <Facebook className="h-4 w-4 text-blue-600 shrink-0" />
                       ) : (
-                        <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden>
+                        <svg
+                          className="h-4 w-4 shrink-0"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden
+                        >
                           <circle cx="6" cy="18" r="3.5" fill="#34A853" />
                         </svg>
                       )}
@@ -208,20 +236,27 @@ export function PulseAttentionTable({
         </Table>
       </div>
 
-      <Dialog open={!!editRow} onOpenChange={(open) => !open && setEditRow(null)}>
+      <Dialog
+        open={!!editRow}
+        onOpenChange={(open) => !open && setEditRow(null)}
+      >
         <DialogContent dir="rtl" className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              יעד {editRow ? targetKindLabel(editRow.primaryGoal) : ""} — {editRow?.clientName}
+              יעד {editRow ? targetKindLabel(editRow.primaryGoal) : ""} —{" "}
+              {editRow?.clientName}
             </DialogTitle>
           </DialogHeader>
           {editRow ? (
             <div className="space-y-3 py-2">
               <p className="text-sm text-muted-foreground">
-                יעד מאושר ל{platformLabel(editRow.platform)}. אם ריק — נשתמש במגמת 7 ימים ובבסיס 30 יום.
+                יעד מאושר ל{platformLabel(editRow.platform)}. אם ריק — נשתמש
+                במגמת 7 ימים ובבסיס 30 יום.
               </p>
               <div className="space-y-1">
-                <Label htmlFor="pulse-target-value">{targetKindLabel(editRow.primaryGoal)}</Label>
+                <Label htmlFor="pulse-target-value">
+                  {targetKindLabel(editRow.primaryGoal)}
+                </Label>
                 <Input
                   id="pulse-target-value"
                   inputMode="decimal"

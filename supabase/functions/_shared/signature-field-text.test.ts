@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatSignatureDateValue, signatureFieldTextLayout } from "./signature-field-text.ts";
+import {
+  formatSignatureDateValue,
+  signatureFieldTextLayout,
+} from "./signature-field-text.ts";
 
 test("signature dates print as day/month/year", () => {
   assert.equal(formatSignatureDateValue("2026-09-24"), "24/09/2026");

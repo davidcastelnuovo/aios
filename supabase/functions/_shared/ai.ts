@@ -33,17 +33,24 @@ export async function resolveOpenAIKey(): Promise<string | null> {
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return _resolvedKey;
     // Pull the active llm integration(s) and use the first one that carries an
     // openai key. Single-org deployment: the key is shared across the project.
-    const url = `${SUPABASE_URL}/rest/v1/tenant_integrations` +
+    const url =
+      `${SUPABASE_URL}/rest/v1/tenant_integrations` +
       `?integration_type=eq.llm&is_active=eq.true&select=settings`;
     const r = await fetch(url, {
-      headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
     });
     if (!r.ok) return _resolvedKey;
     const rows = await r.json();
     if (Array.isArray(rows)) {
       for (const row of rows) {
         const k = row?.settings?.openai_api_key;
-        if (typeof k === "string" && k.trim()) { _resolvedKey = k.trim(); break; }
+        if (typeof k === "string" && k.trim()) {
+          _resolvedKey = k.trim();
+          break;
+        }
       }
     }
   } catch {
@@ -64,15 +71,27 @@ export async function aiEmbed(text: string): Promise<number[] | null> {
   try {
     const r = await fetch(`${OPENAI_BASE}/embeddings`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: AI_EMBED_MODEL, input: text.slice(0, 8000), dimensions: 1536 }),
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: AI_EMBED_MODEL,
+        input: text.slice(0, 8000),
+        dimensions: 1536,
+      }),
     });
     if (!r.ok) return null;
     const j = await r.json();
     logAiUsage({
-      source: "aiEmbed", model: AI_EMBED_MODEL,
+      source: "aiEmbed",
+      model: AI_EMBED_MODEL,
       tokens_in: j?.usage?.prompt_tokens ?? null,
-      cost_usd: estimateOpenAICostUSD(AI_EMBED_MODEL, j?.usage?.prompt_tokens ?? 0, 0),
+      cost_usd: estimateOpenAICostUSD(
+        AI_EMBED_MODEL,
+        j?.usage?.prompt_tokens ?? 0,
+        0,
+      ),
     });
     return j?.data?.[0]?.embedding ?? null;
   } catch {
@@ -82,13 +101,18 @@ export async function aiEmbed(text: string): Promise<number[] | null> {
 
 /** Embed many texts in one call (order preserved). Used by the tool router to
  *  populate tool embeddings cheaply. Returns null on any failure. */
-export async function aiEmbedBatch(texts: string[]): Promise<number[][] | null> {
+export async function aiEmbedBatch(
+  texts: string[],
+): Promise<number[][] | null> {
   const key = await resolveOpenAIKey();
   if (!key || !texts?.length) return null;
   try {
     const r = await fetch(`${OPENAI_BASE}/embeddings`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         model: AI_EMBED_MODEL,
         input: texts.map((t) => (t || "").slice(0, 8000)),
@@ -98,9 +122,14 @@ export async function aiEmbedBatch(texts: string[]): Promise<number[][] | null> 
     if (!r.ok) return null;
     const j = await r.json();
     logAiUsage({
-      source: "aiEmbedBatch", model: AI_EMBED_MODEL,
+      source: "aiEmbedBatch",
+      model: AI_EMBED_MODEL,
       tokens_in: j?.usage?.prompt_tokens ?? null,
-      cost_usd: estimateOpenAICostUSD(AI_EMBED_MODEL, j?.usage?.prompt_tokens ?? 0, 0),
+      cost_usd: estimateOpenAICostUSD(
+        AI_EMBED_MODEL,
+        j?.usage?.prompt_tokens ?? 0,
+        0,
+      ),
     });
     const out: number[][] = (j?.data ?? [])
       .sort((a: any, b: any) => (a.index ?? 0) - (b.index ?? 0))
@@ -125,7 +154,11 @@ const USD_PER_M: Record<string, [number, number]> = {
   "text-embedding-3-small": [0.02, 0],
 };
 
-export function estimateOpenAICostUSD(model: string, tokensIn: number, tokensOut: number): number | null {
+export function estimateOpenAICostUSD(
+  model: string,
+  tokensIn: number,
+  tokensOut: number,
+): number | null {
   const m = (model || "").toLowerCase();
   const price = Object.entries(USD_PER_M).find(([k]) => m.includes(k))?.[1];
   if (!price || (!tokensIn && !tokensOut)) return null;
@@ -153,10 +186,15 @@ export function logAiUsage(row: {
       },
       body: JSON.stringify(row),
     }).catch(() => {});
-  } catch { /* never break the caller */ }
+  } catch {
+    /* never break the caller */
+  }
 }
 
-export async function aiChat(prompt: string, opts?: { model?: string; jsonMode?: boolean }): Promise<string | null> {
+export async function aiChat(
+  prompt: string,
+  opts?: { model?: string; jsonMode?: boolean },
+): Promise<string | null> {
   const key = await resolveOpenAIKey();
   if (!key) return null;
   try {
@@ -167,17 +205,25 @@ export async function aiChat(prompt: string, opts?: { model?: string; jsonMode?:
     if (opts?.jsonMode) body.response_format = { type: "json_object" };
     const r = await fetch(`${OPENAI_BASE}/chat/completions`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(body),
     });
     if (!r.ok) return null;
     const j = await r.json();
     const model = opts?.model || AI_CHAT_MODEL;
     logAiUsage({
-      source: "aiChat", model,
+      source: "aiChat",
+      model,
       tokens_in: j?.usage?.prompt_tokens ?? null,
       tokens_out: j?.usage?.completion_tokens ?? null,
-      cost_usd: estimateOpenAICostUSD(model, j?.usage?.prompt_tokens ?? 0, j?.usage?.completion_tokens ?? 0),
+      cost_usd: estimateOpenAICostUSD(
+        model,
+        j?.usage?.prompt_tokens ?? 0,
+        j?.usage?.completion_tokens ?? 0,
+      ),
     });
     return j?.choices?.[0]?.message?.content ?? null;
   } catch {
@@ -186,7 +232,10 @@ export async function aiChat(prompt: string, opts?: { model?: string; jsonMode?:
 }
 
 /** Chat completion that returns parsed JSON (json_object mode), or null. */
-export async function aiChatJSON<T = any>(prompt: string, model?: string): Promise<T | null> {
+export async function aiChatJSON<T = any>(
+  prompt: string,
+  model?: string,
+): Promise<T | null> {
   const raw = await aiChat(prompt, { model, jsonMode: true });
   if (!raw) return null;
   try {
@@ -236,7 +285,7 @@ export async function aiTranscribe(
   audio: Blob,
   opts?: { language?: string; filename?: string; key?: string },
 ): Promise<string | null> {
-  const key = opts?.key || await resolveOpenAIKey();
+  const key = opts?.key || (await resolveOpenAIKey());
   if (!key) return null;
   try {
     const form = new FormData();
@@ -245,7 +294,7 @@ export async function aiTranscribe(
     form.append("language", opts?.language || "he");
     const r = await fetch(`${OPENAI_BASE}/audio/transcriptions`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${key}` }, // let fetch set the multipart boundary
+      headers: { Authorization: `Bearer ${key}` }, // let fetch set the multipart boundary
       body: form,
     });
     if (!r.ok) return null;
@@ -254,7 +303,8 @@ export async function aiTranscribe(
     // blob size (webm/ogg opus ≈ 12KB/s) since the simple response has none.
     const estMinutes = audio.size / (12 * 1024 * 60);
     logAiUsage({
-      source: "aiTranscribe", model: "whisper-1",
+      source: "aiTranscribe",
+      model: "whisper-1",
       cost_usd: +(estMinutes * 0.006).toFixed(6),
       meta: { bytes: audio.size, estimated: true },
     });
@@ -277,7 +327,11 @@ export interface TranscriptSegment {
 export async function aiTranscribeVerbose(
   audio: Blob,
   opts?: { language?: string; filename?: string },
-): Promise<{ text: string; segments: TranscriptSegment[]; duration: number } | null> {
+): Promise<{
+  text: string;
+  segments: TranscriptSegment[];
+  duration: number;
+} | null> {
   const key = await resolveOpenAIKey();
   if (!key) return null;
   try {
@@ -288,21 +342,31 @@ export async function aiTranscribeVerbose(
     form.append("response_format", "verbose_json");
     const r = await fetch(`${OPENAI_BASE}/audio/transcriptions`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${key}` }, // let fetch set the multipart boundary
+      headers: { Authorization: `Bearer ${key}` }, // let fetch set the multipart boundary
       body: form,
     });
     if (!r.ok) return null;
     const j = await r.json();
     // deno-lint-ignore no-explicit-any
-    const segments: TranscriptSegment[] = (Array.isArray(j?.segments) ? j.segments : [])
+    const segments: TranscriptSegment[] = (
+      Array.isArray(j?.segments) ? j.segments : []
+    )
       // deno-lint-ignore no-explicit-any
-      .filter((s: any) => (s?.no_speech_prob ?? 0) < 0.6 && (s?.text ?? "").trim())
+      .filter(
+        (s: any) => (s?.no_speech_prob ?? 0) < 0.6 && (s?.text ?? "").trim(),
+      )
       // deno-lint-ignore no-explicit-any
-      .map((s: any) => ({ start: Number(s.start) || 0, end: Number(s.end) || 0, text: String(s.text).trim() }));
+      .map((s: any) => ({
+        start: Number(s.start) || 0,
+        end: Number(s.end) || 0,
+        text: String(s.text).trim(),
+      }));
     return {
       text: (j?.text ?? "").toString().trim(),
       segments,
-      duration: Number(j?.duration) || (segments.length ? segments[segments.length - 1].end : 0),
+      duration:
+        Number(j?.duration) ||
+        (segments.length ? segments[segments.length - 1].end : 0),
     };
   } catch {
     return null;
@@ -336,7 +400,10 @@ export async function aiVisionJSON(
     }
     const r = await fetch(`${OPENAI_BASE}/chat/completions`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         model: opts?.model || "gpt-4o-mini",
         response_format: { type: "json_object" },
@@ -350,10 +417,15 @@ export async function aiVisionJSON(
     const j = await r.json();
     const visionModel = opts?.model || "gpt-4o-mini";
     logAiUsage({
-      source: "aiVisionJSON", model: visionModel,
+      source: "aiVisionJSON",
+      model: visionModel,
       tokens_in: j?.usage?.prompt_tokens ?? null,
       tokens_out: j?.usage?.completion_tokens ?? null,
-      cost_usd: estimateOpenAICostUSD(visionModel, j?.usage?.prompt_tokens ?? 0, j?.usage?.completion_tokens ?? 0),
+      cost_usd: estimateOpenAICostUSD(
+        visionModel,
+        j?.usage?.prompt_tokens ?? 0,
+        j?.usage?.completion_tokens ?? 0,
+      ),
     });
     return JSON.parse(j?.choices?.[0]?.message?.content ?? "null");
   } catch (e) {
@@ -430,20 +502,38 @@ export async function aiDiarizeTranscribe(
 }
 
 // OpenAI TTS voices usable for Carmen. 'shimmer'/'nova' read Hebrew well.
-export const AI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "coral", "sage"] as const;
+export const AI_VOICES = [
+  "alloy",
+  "echo",
+  "fable",
+  "onyx",
+  "nova",
+  "shimmer",
+  "coral",
+  "sage",
+] as const;
 
 // Text-to-speech (OpenAI). Returns raw audio bytes (default opus/ogg, ideal for
 // WhatsApp voice notes) or null.
 export async function aiSpeak(
   text: string,
-  opts?: { voice?: string; model?: string; format?: "opus" | "mp3" | "aac" | "flac" | "wav"; instructions?: string; key?: string },
+  opts?: {
+    voice?: string;
+    model?: string;
+    format?: "opus" | "mp3" | "aac" | "flac" | "wav";
+    instructions?: string;
+    key?: string;
+  },
 ): Promise<Uint8Array | null> {
-  const key = opts?.key || await resolveOpenAIKey();
+  const key = opts?.key || (await resolveOpenAIKey());
   if (!key || !text?.trim()) return null;
   try {
     const r = await fetch(`${OPENAI_BASE}/audio/speech`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         model: opts?.model || "gpt-4o-mini-tts",
         voice: opts?.voice || "shimmer",
@@ -456,7 +546,8 @@ export async function aiSpeak(
     if (!r.ok) return null;
     // gpt-4o-mini-tts ≈ $0.015/min of audio; ~1000 chars ≈ 1 spoken minute.
     logAiUsage({
-      source: "aiSpeak", model: opts?.model || "gpt-4o-mini-tts",
+      source: "aiSpeak",
+      model: opts?.model || "gpt-4o-mini-tts",
       cost_usd: +((Math.min(text.length, 4000) / 1000) * 0.015).toFixed(6),
       meta: { chars: Math.min(text.length, 4000), estimated: true },
     });

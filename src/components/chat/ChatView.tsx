@@ -53,21 +53,36 @@ interface ChatViewProps {
   onBack?: () => void;
 }
 
-export default function ChatView({ contactId, contactType, senderPhone, contactName, telegramChatId, activeChatProvider, onBack }: ChatViewProps) {
+export default function ChatView({
+  contactId,
+  contactType,
+  senderPhone,
+  contactName,
+  telegramChatId,
+  activeChatProvider,
+  onBack,
+}: ChatViewProps) {
   const queryClient = useQueryClient();
   const { tenant: currentTenant, tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
   const { buildPath } = useTenantPath();
   const isMobile = useIsMobile();
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
-  const [convertType, setConvertType] = useState<"client" | "lead" | "group">("client");
+  const [convertType, setConvertType] = useState<"client" | "lead" | "group">(
+    "client",
+  );
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkPhoneDialogOpen, setLinkPhoneDialogOpen] = useState(false);
-  const [linkCampaignerDialogOpen, setLinkCampaignerDialogOpen] = useState(false);
+  const [linkCampaignerDialogOpen, setLinkCampaignerDialogOpen] =
+    useState(false);
   const [changeAgencyDialogOpen, setChangeAgencyDialogOpen] = useState(false);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
-  const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null);
-  const [messagePeriod, setMessagePeriod] = useState<'week' | 'month' | 'all'>('week');
+  const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(
+    null,
+  );
+  const [messagePeriod, setMessagePeriod] = useState<"week" | "month" | "all">(
+    "week",
+  );
 
   // Fetch contact details
   const { data: contact, isLoading: isLoadingContact } = useQuery({
@@ -82,7 +97,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           agency_id: null,
           tenant_id: tenantId,
           manychat_subscriber_id: null,
-          active_chat_provider: 'telegram' as const,
+          active_chat_provider: "telegram" as const,
         };
       }
       if (contactType === "unknown") {
@@ -98,11 +113,13 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           active_chat_provider: activeChatProvider || null,
         };
       }
-      
+
       if (contactType === "client") {
         const { data, error } = await supabase
           .from("clients")
-          .select(`id, name, phone, email, agency_id, tenant_id, manychat_subscriber_id, active_chat_provider, agencies (name)`)
+          .select(
+            `id, name, phone, email, agency_id, tenant_id, manychat_subscriber_id, active_chat_provider, agencies (name)`,
+          )
           .eq("id", contactId)
           .single();
         if (error) throw error;
@@ -110,7 +127,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       } else if (contactType === "lead") {
         const { data, error } = await supabase
           .from("leads")
-          .select(`id, company_name, phone, email, agency_id, tenant_id, manychat_subscriber_id, active_chat_provider, agencies (name)`)
+          .select(
+            `id, company_name, phone, email, agency_id, tenant_id, manychat_subscriber_id, active_chat_provider, agencies (name)`,
+          )
           .eq("id", contactId)
           .single();
         if (error) throw error;
@@ -118,17 +137,19 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       } else if (contactType === "group") {
         const { data, error } = await supabase
           .from("whatsapp_groups")
-          .select(`id, group_name, group_chat_id, agency_id, tenant_id, agencies (name)`)
+          .select(
+            `id, group_name, group_chat_id, agency_id, tenant_id, agencies (name)`,
+          )
           .eq("id", contactId)
           .single();
         if (error) throw error;
-        return { 
-          ...data, 
+        return {
+          ...data,
           name: data.group_name,
           phone: null,
           email: null,
           manychat_subscriber_id: null,
-          active_chat_provider: (activeChatProvider || 'green_api') as any
+          active_chat_provider: (activeChatProvider || "green_api") as any,
         };
       }
     },
@@ -136,8 +157,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   });
 
   // Fetch active chat provider - use currentTenant for unknown contacts
-  const tenantIdForProvider = contactType === "unknown" ? currentTenant?.id : contact?.tenant_id;
-  
+  const tenantIdForProvider =
+    contactType === "unknown" ? currentTenant?.id : contact?.tenant_id;
+
   const { data: chatIntegrations } = useQuery({
     queryKey: ["chat-integrations", tenantIdForProvider, userId],
     queryFn: async () => {
@@ -145,10 +167,17 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       // Fetch all WA/manychat integrations for the tenant
       const { data, error } = await supabase
         .from("tenant_integrations")
-        .select("id, integration_type, user_id, connection_visibility, display_name")
+        .select(
+          "id, integration_type, user_id, connection_visibility, display_name",
+        )
         .eq("tenant_id", tenantIdForProvider)
         .eq("is_active", true)
-        .in("integration_type", ["manychat", "green_api", "manus_wa", "meta_whatsapp"]);
+        .in("integration_type", [
+          "manychat",
+          "green_api",
+          "manus_wa",
+          "meta_whatsapp",
+        ]);
       if (error) return [];
 
       const { data: grants } = await supabase
@@ -160,10 +189,17 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       if (grantedIds.length > 0) {
         const { data: shared } = await supabase
           .from("tenant_integrations")
-          .select("id, integration_type, user_id, connection_visibility, display_name")
+          .select(
+            "id, integration_type, user_id, connection_visibility, display_name",
+          )
           .in("id", grantedIds)
           .eq("is_active", true)
-          .in("integration_type", ["manychat", "green_api", "manus_wa", "meta_whatsapp"]);
+          .in("integration_type", [
+            "manychat",
+            "green_api",
+            "manus_wa",
+            "meta_whatsapp",
+          ]);
         grantedIntegrations = (shared || []).map((integration) => ({
           ...integration,
           user_id: userId,
@@ -175,67 +211,94 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         .from("integration_user_permissions")
         .select("integration_id")
         .eq("user_id", userId);
-      const permittedIds = new Set((permData || []).map((p: any) => p.integration_id));
+      const permittedIds = new Set(
+        (permData || []).map((p: any) => p.integration_id),
+      );
 
       // Filter: manychat = tenant level; WA = own OR org-visible OR explicitly permitted
       const grantedIdSet = new Set(grantedIds);
-      return [...(data || []), ...(grantedIntegrations || [])].filter((i: any) => {
-        if (grantedIdSet.has(i.id)) return true;              // explicitly shared with tenant
-        if (i.integration_type === "manychat") return true;
-        if (i.user_id === userId) return true;               // own connection
-        if (i.connection_visibility === "org") return true;  // org-wide shared
-        if (permittedIds.has(i.id)) return true;             // explicitly shared
-        return false;
-      });
+      return [...(data || []), ...(grantedIntegrations || [])].filter(
+        (i: any) => {
+          if (grantedIdSet.has(i.id)) return true; // explicitly shared with tenant
+          if (i.integration_type === "manychat") return true;
+          if (i.user_id === userId) return true; // own connection
+          if (i.connection_visibility === "org") return true; // org-wide shared
+          if (permittedIds.has(i.id)) return true; // explicitly shared
+          return false;
+        },
+      );
     },
     enabled: !!tenantIdForProvider && !!userId,
   });
 
-
   // Persist provider selection per tenant
-  const providerStorageKey = tenantIdForProvider ? `chat_provider_${tenantIdForProvider}` : null;
-  const storedProvider = (typeof window !== 'undefined' && providerStorageKey)
-    ? (localStorage.getItem(providerStorageKey) as "manychat" | "green_api" | "manus_wa" | "meta_whatsapp" | null)
+  const providerStorageKey = tenantIdForProvider
+    ? `chat_provider_${tenantIdForProvider}`
     : null;
+  const storedProvider =
+    typeof window !== "undefined" && providerStorageKey
+      ? (localStorage.getItem(providerStorageKey) as
+          "manychat" | "green_api" | "manus_wa" | "meta_whatsapp" | null)
+      : null;
   const availableProviders = Array.from(
-    new Set((chatIntegrations || []).map(i => i.integration_type)),
+    new Set((chatIntegrations || []).map((i) => i.integration_type)),
   ) as Array<"manychat" | "green_api" | "manus_wa" | "meta_whatsapp">;
   // Prefer stored, fall back to first available; if contact has a known provider, prefer that.
-  const preferredProvider = (contact?.active_chat_provider && availableProviders.includes(contact.active_chat_provider as any))
-    ? contact.active_chat_provider as any
-    : (storedProvider && availableProviders.includes(storedProvider) ? storedProvider : availableProviders[0] || null);
+  const preferredProvider =
+    contact?.active_chat_provider &&
+    availableProviders.includes(contact.active_chat_provider as any)
+      ? (contact.active_chat_provider as any)
+      : storedProvider && availableProviders.includes(storedProvider)
+        ? storedProvider
+        : availableProviders[0] || null;
 
-  const [selectedProvider, setSelectedProvider] = useState<"manychat" | "green_api" | "manus_wa" | "meta_whatsapp" | null>(null);
-  const [selectedMetaIntegrationId, setSelectedMetaIntegrationId] = useState<string | null>(null);
-  const activeProvider = (selectedProvider && availableProviders.includes(selectedProvider))
-    ? selectedProvider
-    : preferredProvider;
-  const metaIntegrations = (chatIntegrations || []).filter(i => i.integration_type === "meta_whatsapp");
-  const chatIntegration = activeProvider === "meta_whatsapp"
-    ? metaIntegrations.find(i => i.id === selectedMetaIntegrationId) || metaIntegrations[0] || null
-    : (chatIntegrations || []).find(i => i.integration_type === activeProvider) || null;
+  const [selectedProvider, setSelectedProvider] = useState<
+    "manychat" | "green_api" | "manus_wa" | "meta_whatsapp" | null
+  >(null);
+  const [selectedMetaIntegrationId, setSelectedMetaIntegrationId] = useState<
+    string | null
+  >(null);
+  const activeProvider =
+    selectedProvider && availableProviders.includes(selectedProvider)
+      ? selectedProvider
+      : preferredProvider;
+  const metaIntegrations = (chatIntegrations || []).filter(
+    (i) => i.integration_type === "meta_whatsapp",
+  );
+  const chatIntegration =
+    activeProvider === "meta_whatsapp"
+      ? metaIntegrations.find((i) => i.id === selectedMetaIntegrationId) ||
+        metaIntegrations[0] ||
+        null
+      : (chatIntegrations || []).find(
+          (i) => i.integration_type === activeProvider,
+        ) || null;
   const connectionUserId = chatIntegration?.user_id;
-  const threadPhone = senderPhone || contact?.phone || (contactType === "unknown" ? contactId : null);
-  const effectiveTenantId = contactType === "unknown" ? tenantId : (contact?.tenant_id || tenantId);
+  const threadPhone =
+    senderPhone ||
+    contact?.phone ||
+    (contactType === "unknown" ? contactId : null);
+  const effectiveTenantId =
+    contactType === "unknown" ? tenantId : contact?.tenant_id || tenantId;
   const threadFilter = buildChatThreadFilter({
     contactId,
     contactType,
     phone: threadPhone,
   });
 
-  const switchProvider = (p: "manychat" | "green_api" | "manus_wa" | "meta_whatsapp") => {
+  const switchProvider = (
+    p: "manychat" | "green_api" | "manus_wa" | "meta_whatsapp",
+  ) => {
     setSelectedProvider(p);
     if (providerStorageKey) localStorage.setItem(providerStorageKey, p);
   };
-
-
 
   // Mark messages as read mutation + remove "unread" tag
   const markAsReadMutation = useMutation({
     mutationFn: async () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
-      
+
       // Mark messages as read
       if (!effectiveTenantId || !threadFilter) return;
       const { error } = await supabase
@@ -246,7 +309,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         .eq("direction", "inbound")
         .is("read_at", null);
       if (error) throw error;
-      
+
       // Remove "unread" tag (by name matching)
       if (tenantId) {
         // Find the "unread" tag by name patterns
@@ -256,7 +319,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           .eq("tenant_id", tenantId)
           .or("name.ilike.%לא נקרא%,name.ilike.%unread%")
           .maybeSingle();
-        
+
         if (unreadTag) {
           // Delete the tag association for this contact (for ANY user in this tenant)
           let deleteQuery = supabase
@@ -264,7 +327,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             .delete()
             .eq("tag_id", unreadTag.id)
             .eq("tenant_id", tenantId);
-          
+
           if (contactType === "client") {
             deleteQuery = deleteQuery.eq("client_id", contactId);
           } else if (contactType === "lead") {
@@ -274,7 +337,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           } else if (contactType === "unknown" && senderPhone) {
             deleteQuery = deleteQuery.eq("sender_phone", senderPhone);
           }
-          
+
           await deleteQuery;
         }
       }
@@ -283,9 +346,11 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       // Cancel and update both active-chats and unknown-contacts queries for instant UI update
       await queryClient.cancelQueries({ queryKey: ["active-chats"] });
       await queryClient.cancelQueries({ queryKey: ["unknown-contacts"] });
-      
+
       const previousActiveChats = queryClient.getQueryData(["active-chats"]);
-      const previousUnknownContacts = queryClient.getQueryData(["unknown-contacts"]);
+      const previousUnknownContacts = queryClient.getQueryData([
+        "unknown-contacts",
+      ]);
 
       // Optimistically update active-chats
       queryClient.setQueryData(["active-chats"], (old: any) => {
@@ -293,7 +358,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         return old.map((contact: any) =>
           contact.id === contactId && contact.contact_type === contactType
             ? { ...contact, unread_count: 0 }
-            : contact
+            : contact,
         );
       });
 
@@ -301,9 +366,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       queryClient.setQueryData(["unknown-contacts"], (old: any) => {
         if (!old) return old;
         return old.map((contact: any) =>
-          (contact.id === contactId || contact.sender_phone === senderPhone)
+          contact.id === contactId || contact.sender_phone === senderPhone
             ? { ...contact, unread_count: 0 }
-            : contact
+            : contact,
         );
       });
 
@@ -314,13 +379,20 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         queryClient.setQueryData(["active-chats"], context.previousActiveChats);
       }
       if (context?.previousUnknownContacts) {
-        queryClient.setQueryData(["unknown-contacts"], context.previousUnknownContacts);
+        queryClient.setQueryData(
+          ["unknown-contacts"],
+          context.previousUnknownContacts,
+        );
       }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["contact-tags-for-list", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["unknown-contacts", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["contact-tags-for-list", tenantId],
+      });
     },
   });
 
@@ -329,8 +401,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     mutationFn: async () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error("Missing user");
-      
-      const effectiveTenantId = contactType === "unknown" ? tenantId : contact?.tenant_id;
+
+      const effectiveTenantId =
+        contactType === "unknown" ? tenantId : contact?.tenant_id;
       if (!effectiveTenantId) throw new Error("Missing tenant");
 
       // 1. Save to blocked_contacts table for permanent blocking
@@ -352,7 +425,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
       const { error: blockedError } = await supabase
         .from("blocked_contacts")
-        .upsert(blockedContactData, { onConflict: 'id' });
+        .upsert(blockedContactData, { onConflict: "id" });
 
       if (blockedError) {
         console.error("Error saving to blocked_contacts:", blockedError);
@@ -393,9 +466,13 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     onSuccess: () => {
       toast.success("השיחה נחסמה בהצלחה - ההודעות לא יישמרו יותר");
       queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["unknown-contacts", tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["chat-messages", contactId, contactType, senderPhone] });
+      queryClient.invalidateQueries({
+        queryKey: ["chat-messages", contactId, contactType, senderPhone],
+      });
       onBack?.();
     },
     onError: (error) => {
@@ -410,15 +487,15 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   const prevContactKey = useRef(contactKey);
   if (prevContactKey.current !== contactKey) {
     prevContactKey.current = contactKey;
-    setMessagePeriod('week');
+    setMessagePeriod("week");
   }
 
   // Calculate date filter based on period
   const getDateFilter = () => {
     const now = new Date();
-    if (messagePeriod === 'week') {
+    if (messagePeriod === "week") {
       return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    } else if (messagePeriod === 'month') {
+    } else if (messagePeriod === "month") {
       return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
     }
     return null; // 'all' - no date filter
@@ -426,10 +503,21 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
   // Fetch chat messages
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", contactId, contactType, threadPhone, effectiveTenantId, connectionUserId, chatIntegration?.id, activeProvider, messagePeriod, telegramChatId],
+    queryKey: [
+      "chat-messages",
+      contactId,
+      contactType,
+      threadPhone,
+      effectiveTenantId,
+      connectionUserId,
+      chatIntegration?.id,
+      activeProvider,
+      messagePeriod,
+      telegramChatId,
+    ],
     queryFn: async () => {
       const dateFilter = getDateFilter();
-      
+
       // Telegram messages come from telegram_messages table
       if (contactType === "telegram" && telegramChatId) {
         // Don't filter by tenant_id - RLS allows viewing from all user's tenants
@@ -440,15 +528,17 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         if (dateFilter) {
           query = query.gte("created_at", dateFilter);
         }
-        
-        const { data, error } = await query.order("created_at", { ascending: false }).limit(2000);
+
+        const { data, error } = await query
+          .order("created_at", { ascending: false })
+          .limit(2000);
         if (error) throw error;
-        
+
         // Transform telegram messages to match chat_messages format
         return (data || []).reverse().map((msg: any) => ({
           id: msg.id || `tg-${msg.update_id}`,
-          direction: msg.direction || 'inbound',
-          message_text: msg.text || '',
+          direction: msg.direction || "inbound",
+          message_text: msg.text || "",
           created_at: msg.created_at,
           sender_name: msg.sender_name,
           raw_provider_data: msg.raw_update,
@@ -476,7 +566,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         query = query.gte("created_at", dateFilter);
       }
 
-      const { data, error } = await query.order("created_at", { ascending: false }).limit(2000);
+      const { data, error } = await query
+        .order("created_at", { ascending: false })
+        .limit(2000);
 
       if (error) throw error;
 
@@ -484,7 +576,10 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
       return data?.reverse() || [];
     },
-    enabled: !!contactId && !!effectiveTenantId && (contactType === "unknown" || !!contact),
+    enabled:
+      !!contactId &&
+      !!effectiveTenantId &&
+      (contactType === "unknown" || !!contact),
     refetchInterval: 5000,
   });
 
@@ -500,26 +595,33 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     })) || [];
 
   // Calculate anchor message for scroll
-  const firstUnreadIndex = messagesData?.findIndex(
-    (msg: any) => msg.direction === 'inbound' && !msg.read_at
-  ) ?? -1;
-  
-  const anchorMessageId = firstUnreadIndex >= 0 
-    ? messagesData?.[firstUnreadIndex]?.id 
-    : messagesData?.[messagesData.length - 1]?.id;
+  const firstUnreadIndex =
+    messagesData?.findIndex(
+      (msg: any) => msg.direction === "inbound" && !msg.read_at,
+    ) ?? -1;
 
-  const handleSendMessage = async (message: string, quotedMessageId?: string) => {
+  const anchorMessageId =
+    firstUnreadIndex >= 0
+      ? messagesData?.[firstUnreadIndex]?.id
+      : messagesData?.[messagesData.length - 1]?.id;
+
+  const handleSendMessage = async (
+    message: string,
+    quotedMessageId?: string,
+  ) => {
     if (!contact) return;
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         toast.error("נא להתחבר מחדש למערכת");
         return;
       }
 
       // Telegram send
-      if (contactType === 'telegram' && telegramChatId) {
+      if (contactType === "telegram" && telegramChatId) {
         const { error } = await supabase.functions.invoke("telegram-send", {
           body: {
             chat_id: telegramChatId,
@@ -528,7 +630,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           },
         });
         if (error) throw error;
-        queryClient.invalidateQueries({ queryKey: ["chat-messages", contactId] });
+        queryClient.invalidateQueries({
+          queryKey: ["chat-messages", contactId],
+        });
         toast.success("ההודעה נשלחה בהצלחה");
         return;
       }
@@ -538,13 +642,15 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         return;
       }
 
-      if (activeProvider === 'manychat') {
-        if (contactType === 'group') {
+      if (activeProvider === "manychat") {
+        if (contactType === "group") {
           toast.error("קבוצות לא נתמכות ב-ManyChat");
           return;
         }
         if (!contact.manychat_subscriber_id) {
-          toast.error("חסר Subscriber ID למניצ'אט. אנא הוסף ב-ManyChat Settings.");
+          toast.error(
+            "חסר Subscriber ID למניצ'אט. אנא הוסף ב-ManyChat Settings.",
+          );
           return;
         }
         const { error } = await supabase.functions.invoke("send-chat-message", {
@@ -556,8 +662,12 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           },
         });
         if (error) throw error;
-      } else if (activeProvider === 'green_api') {
-        if (!contact.phone && contactType !== 'group' && contactType !== 'unknown') {
+      } else if (activeProvider === "green_api") {
+        if (
+          !contact.phone &&
+          contactType !== "group" &&
+          contactType !== "unknown"
+        ) {
           toast.error("חסר מספר טלפון ל-Green API. אנא הוסף באיש הקשר.");
           return;
         }
@@ -572,10 +682,17 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         else if (contactType === "group") body.groupId = contactId;
         else if (contactType === "unknown") body.tenantId = tenantId;
 
-        const { error } = await supabase.functions.invoke("send-green-api-message", { body });
+        const { error } = await supabase.functions.invoke(
+          "send-green-api-message",
+          { body },
+        );
         if (error) throw error;
-      } else if (activeProvider === 'manus_wa') {
-        if (!contact.phone && contactType !== 'unknown' && contactType !== 'group') {
+      } else if (activeProvider === "manus_wa") {
+        if (
+          !contact.phone &&
+          contactType !== "unknown" &&
+          contactType !== "group"
+        ) {
           toast.error("חסר מספר טלפון. אנא הוסף באיש הקשר.");
           return;
         }
@@ -589,14 +706,17 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         else if (contactType === "group") body.groupId = contactId;
         else if (contactType === "unknown") body.tenantId = tenantId;
 
-        const { error } = await supabase.functions.invoke("send-manus-wa-message", { body });
+        const { error } = await supabase.functions.invoke(
+          "send-manus-wa-message",
+          { body },
+        );
         if (error) throw error;
-      } else if (activeProvider === 'meta_whatsapp') {
-        if (contactType === 'group') {
+      } else if (activeProvider === "meta_whatsapp") {
+        if (contactType === "group") {
           toast.error("Meta WhatsApp הרשמי אינו תומך בקבוצות");
           return;
         }
-        if (!contact.phone && contactType !== 'unknown') {
+        if (!contact.phone && contactType !== "unknown") {
           toast.error("חסר מספר טלפון. אנא הוסף באיש הקשר.");
           return;
         }
@@ -608,10 +728,12 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         if (contactType === "client") body.clientId = contactId;
         else if (contactType === "lead") body.leadId = contactId;
         else if (contactType === "unknown") body.tenantId = tenantId;
-        const { error } = await supabase.functions.invoke("send-meta-whatsapp-message", { body });
+        const { error } = await supabase.functions.invoke(
+          "send-meta-whatsapp-message",
+          { body },
+        );
         if (error) throw error;
       }
-
 
       queryClient.invalidateQueries({ queryKey: ["chat-messages", contactId] });
       toast.success("ההודעה נשלחה בהצלחה");
@@ -633,36 +755,38 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         return;
       }
 
-      if (activeProvider !== 'green_api') {
-        toast.error(activeProvider === 'manus_wa'
-          ? "שליחת קבצים ב-Manus WhatsApp עדיין לא נתמכת. עברו ל-Green API לשליחת קבצים."
-          : "שליחת קבצים נתמכת רק ב-Green API");
+      if (activeProvider !== "green_api") {
+        toast.error(
+          activeProvider === "manus_wa"
+            ? "שליחת קבצים ב-Manus WhatsApp עדיין לא נתמכת. עברו ל-Green API לשליחת קבצים."
+            : "שליחת קבצים נתמכת רק ב-Green API",
+        );
         return;
       }
 
       const formData = new FormData();
-      formData.append('file', file, file.name);
-      if (caption) formData.append('caption', caption);
-      if (tenantId) formData.append('tenantId', tenantId);
-      formData.append('phoneNumber', senderPhone || contact.phone || '');
-      
+      formData.append("file", file, file.name);
+      if (caption) formData.append("caption", caption);
+      if (tenantId) formData.append("tenantId", tenantId);
+      formData.append("phoneNumber", senderPhone || contact.phone || "");
+
       if (contactType === "client") {
-        formData.append('clientId', contactId);
+        formData.append("clientId", contactId);
       } else if (contactType === "lead") {
-        formData.append('leadId', contactId);
+        formData.append("leadId", contactId);
       } else if (contactType === "group") {
-        formData.append('groupId', contactId);
+        formData.append("groupId", contactId);
       }
 
       // Determine file type
-      if (file.type.startsWith('audio/')) {
-        formData.append('fileType', 'voice');
-      } else if (file.type.startsWith('image/')) {
-        formData.append('fileType', 'image');
-      } else if (file.type.startsWith('video/')) {
-        formData.append('fileType', 'video');
+      if (file.type.startsWith("audio/")) {
+        formData.append("fileType", "voice");
+      } else if (file.type.startsWith("image/")) {
+        formData.append("fileType", "image");
+      } else if (file.type.startsWith("video/")) {
+        formData.append("fileType", "video");
       } else {
-        formData.append('fileType', 'document');
+        formData.append("fileType", "document");
       }
 
       const { error } = await supabase.functions.invoke("send-green-api-file", {
@@ -687,23 +811,32 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     return <div className="p-4">איש קשר לא נמצא</div>;
   }
 
-
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header - קבוע וקומפקטי */}
-      <div className={`${isMobile ? 'p-1.5' : 'px-3 py-2'} border-b bg-card shadow-sm`}>
+      <div
+        className={`${isMobile ? "p-1.5" : "px-3 py-2"} border-b bg-card shadow-sm`}
+      >
         {/* שורה ראשונה - תמיד גלויה */}
         <div className="flex items-center gap-2">
           {onBack && (
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onBack}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={onBack}
+            >
               <ArrowLeft className="h-4 w-4" />
             </Button>
           )}
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-medium text-base">{contact.name}</h2>
-              <ChatProviderIndicator provider={contact.active_chat_provider} size="sm" />
-              {contactType === 'telegram' && telegramChatId && (
+              <ChatProviderIndicator
+                provider={contact.active_chat_provider}
+                size="sm"
+              />
+              {contactType === "telegram" && telegramChatId && (
                 <Badge
                   variant="secondary"
                   className="h-5 text-xs gap-1 cursor-pointer hover:bg-secondary/80"
@@ -720,32 +853,38 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             </div>
           </div>
           {isMobile && (
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="sm"
               className="h-7 w-7 p-0"
               onClick={() => setIsHeaderExpanded(!isHeaderExpanded)}
             >
-              {isHeaderExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {isHeaderExpanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
             </Button>
           )}
         </div>
-        
+
         {/* פרטים נוספים - מתקפל במובייל, תמיד פתוח בדסקטופ */}
         <Collapsible open={isMobile ? isHeaderExpanded : true}>
           <CollapsibleContent>
-            <div className={`space-y-1 ${isMobile ? 'mt-1' : 'mt-2'}`}>
+            <div className={`space-y-1 ${isMobile ? "mt-1" : "mt-2"}`}>
               {/* פרטי קשר */}
               <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5">
                 {(contact as any).agencies?.name && (
-                  <Badge variant="outline" className="text-xs h-5">{(contact as any).agencies.name}</Badge>
+                  <Badge variant="outline" className="text-xs h-5">
+                    {(contact as any).agencies.name}
+                  </Badge>
                 )}
                 {contact.phone && <span>טלפון: {contact.phone}</span>}
                 {contact.email && <span>אימייל: {contact.email}</span>}
               </div>
 
               {/* Alerts וכפתורים למשתמשים unknown */}
-              {contactType === 'unknown' && (
+              {contactType === "unknown" && (
                 <>
                   <Alert className="py-1.5">
                     <AlertCircle className="h-3 w-3" />
@@ -754,23 +893,62 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
                     </AlertDescription>
                   </Alert>
                   <div className="flex gap-1.5 flex-wrap">
-                    <Button onClick={() => { setConvertType("client"); setConvertDialogOpen(true); }} size="sm" className="h-7 text-xs">
+                    <Button
+                      onClick={() => {
+                        setConvertType("client");
+                        setConvertDialogOpen(true);
+                      }}
+                      size="sm"
+                      className="h-7 text-xs"
+                    >
                       המר ללקוח
                     </Button>
-                    <Button onClick={() => { setConvertType("lead"); setConvertDialogOpen(true); }} size="sm" variant="outline" className="h-7 text-xs">
+                    <Button
+                      onClick={() => {
+                        setConvertType("lead");
+                        setConvertDialogOpen(true);
+                      }}
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                    >
                       המר לליד
                     </Button>
-                    <Button onClick={() => { setConvertType("group"); setConvertDialogOpen(true); }} size="sm" variant="outline" className="h-7 text-xs">
+                    <Button
+                      onClick={() => {
+                        setConvertType("group");
+                        setConvertDialogOpen(true);
+                      }}
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                    >
                       המר לקבוצה
                     </Button>
-                    <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={() => blockMutation.mutate()} disabled={blockMutation.isPending}>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => blockMutation.mutate()}
+                      disabled={blockMutation.isPending}
+                    >
                       <Ban className="h-3 w-3 ml-1" />
                       חסום
                     </Button>
-                    <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setLinkDialogOpen(true)}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setLinkDialogOpen(true)}
+                    >
                       שייך לקיים
                     </Button>
-                    <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setLinkCampaignerDialogOpen(true)}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setLinkCampaignerDialogOpen(true)}
+                    >
                       שייך לקמפיינר
                     </Button>
                   </div>
@@ -778,14 +956,14 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
               )}
 
               {/* כפתורים לכל סוגי אנשי הקשר */}
-              {contactType !== 'unknown' && (
+              {contactType !== "unknown" && (
                 <div className="flex gap-1.5 flex-wrap items-center">
                   <Button
                     variant="destructive"
                     size="sm"
                     className="h-7 text-xs"
                     onClick={() => {
-                      if (confirm('האם אתה בטוח שברצונך לחסום את השיחה?')) {
+                      if (confirm("האם אתה בטוח שברצונך לחסום את השיחה?")) {
                         blockMutation.mutate();
                       }
                     }}
@@ -794,75 +972,120 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
                     <Ban className="h-3 w-3 ml-1" />
                     חסום שיחה
                   </Button>
-                  {contact.phone && contactType !== 'group' && (
-                    <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setLinkPhoneDialogOpen(true)}>
+                  {contact.phone && contactType !== "group" && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setLinkPhoneDialogOpen(true)}
+                    >
                       שייך טלפון לאחר
                     </Button>
                   )}
-                  {(contactType === 'client' || contactType === 'lead' || contactType === 'group') && (
-                    <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setChangeAgencyDialogOpen(true)}>
+                  {(contactType === "client" ||
+                    contactType === "lead" ||
+                    contactType === "group") && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setChangeAgencyDialogOpen(true)}
+                    >
                       <Building2 className="h-3 w-3 ml-1" />
                       שנה סוכנות
                     </Button>
                   )}
-                  
+
                   {/* Provider Controls - inline */}
-                  {activeProvider === 'green_api' && (
+                  {activeProvider === "green_api" && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
-                      <Badge variant="outline" className="h-5 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400">Green API</Badge>
-                      {contactType === 'group' && (contact as any).group_chat_id && (
-                        <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded cursor-pointer hover:bg-muted/80" 
-                          onClick={() => {
-                            navigator.clipboard.writeText((contact as any).group_chat_id);
-                            toast.success("מזהה הקבוצה הועתק");
-                          }}
-                          title="לחץ להעתקה"
-                        >
-                          {(contact as any).group_chat_id}
-                        </code>
-                      )}
-                      {contactType !== 'group' && contact.phone && (
+                      <Badge
+                        variant="outline"
+                        className="h-5 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400"
+                      >
+                        Green API
+                      </Badge>
+                      {contactType === "group" &&
+                        (contact as any).group_chat_id && (
+                          <code
+                            className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded cursor-pointer hover:bg-muted/80"
+                            onClick={() => {
+                              navigator.clipboard.writeText(
+                                (contact as any).group_chat_id,
+                              );
+                              toast.success("מזהה הקבוצה הועתק");
+                            }}
+                            title="לחץ להעתקה"
+                          >
+                            {(contact as any).group_chat_id}
+                          </code>
+                        )}
+                      {contactType !== "group" && contact.phone && (
                         <span className="font-mono">{contact.phone}</span>
                       )}
                     </div>
                   )}
-                  {activeProvider === 'manychat' && (
+                  {activeProvider === "manychat" && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
-                      <Badge variant="outline" className="h-5 text-xs bg-green-500/10 text-green-700 dark:text-green-400">ManyChat</Badge>
+                      <Badge
+                        variant="outline"
+                        className="h-5 text-xs bg-green-500/10 text-green-700 dark:text-green-400"
+                      >
+                        ManyChat
+                      </Badge>
                       {contact.manychat_subscriber_id && (
-                        <span className="font-mono text-xs">{contact.manychat_subscriber_id}</span>
+                        <span className="font-mono text-xs">
+                          {contact.manychat_subscriber_id}
+                        </span>
                       )}
                     </div>
                   )}
-                  {activeProvider === 'manus_wa' && (
+                  {activeProvider === "manus_wa" && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
-                      <Badge variant="outline" className="h-5 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">Manus WA</Badge>
-                      {contact.phone && <span className="font-mono">{contact.phone}</span>}
+                      <Badge
+                        variant="outline"
+                        className="h-5 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                      >
+                        Manus WA
+                      </Badge>
+                      {contact.phone && (
+                        <span className="font-mono">{contact.phone}</span>
+                      )}
                     </div>
                   )}
-                  {activeProvider === 'meta_whatsapp' && (
+                  {activeProvider === "meta_whatsapp" && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
-                      <Badge variant="outline" className="h-5 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">Meta WhatsApp</Badge>
+                      <Badge
+                        variant="outline"
+                        className="h-5 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                      >
+                        Meta WhatsApp
+                      </Badge>
                       {metaIntegrations.length > 1 && (
                         <select
                           className="h-7 rounded border bg-background px-2 text-xs"
                           value={chatIntegration?.id || ""}
-                          onChange={(event) => setSelectedMetaIntegrationId(event.target.value)}
+                          onChange={(event) =>
+                            setSelectedMetaIntegrationId(event.target.value)
+                          }
                           aria-label="בחר מספר Meta WhatsApp"
                         >
                           {metaIntegrations.map((integration) => (
                             <option key={integration.id} value={integration.id}>
-                              {integration.display_name || integration.id.slice(-6)}
+                              {integration.display_name ||
+                                integration.id.slice(-6)}
                             </option>
                           ))}
                         </select>
                       )}
-                      {contact.phone && <span className="font-mono">{contact.phone}</span>}
+                      {contact.phone && (
+                        <span className="font-mono">{contact.phone}</span>
+                      )}
                     </div>
                   )}
                   {availableProviders.length > 1 && (
                     <div className="flex items-center gap-1 mr-2">
-                      {availableProviders.map(p => (
+                      {availableProviders.map((p) => (
                         <Button
                           key={p}
                           size="sm"
@@ -870,7 +1093,13 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
                           className="h-6 text-[10px] px-2"
                           onClick={() => switchProvider(p)}
                         >
-                          {p === 'green_api' ? 'Green' : p === 'manus_wa' ? 'Manus' : p === 'meta_whatsapp' ? 'Meta' : 'ManyChat'}
+                          {p === "green_api"
+                            ? "Green"
+                            : p === "manus_wa"
+                              ? "Manus"
+                              : p === "meta_whatsapp"
+                                ? "Meta"
+                                : "ManyChat"}
                         </Button>
                       ))}
                     </div>
@@ -878,31 +1107,37 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
                 </div>
               )}
 
-              {contactType === 'unknown' && activeProvider === 'meta_whatsapp' && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="h-5 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
-                    Meta WhatsApp
-                  </Badge>
-                  {metaIntegrations.length > 1 && (
-                    <select
-                      className="h-7 rounded border bg-background px-2 text-xs"
-                      value={chatIntegration?.id || ""}
-                      onChange={(event) => setSelectedMetaIntegrationId(event.target.value)}
-                      aria-label="בחר מספר Meta WhatsApp"
+              {contactType === "unknown" &&
+                activeProvider === "meta_whatsapp" && (
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className="h-5 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                     >
-                      {metaIntegrations.map((integration) => (
-                        <option key={integration.id} value={integration.id}>
-                          {integration.display_name || integration.id.slice(-6)}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              )}
-
+                      Meta WhatsApp
+                    </Badge>
+                    {metaIntegrations.length > 1 && (
+                      <select
+                        className="h-7 rounded border bg-background px-2 text-xs"
+                        value={chatIntegration?.id || ""}
+                        onChange={(event) =>
+                          setSelectedMetaIntegrationId(event.target.value)
+                        }
+                        aria-label="בחר מספר Meta WhatsApp"
+                      >
+                        {metaIntegrations.map((integration) => (
+                          <option key={integration.id} value={integration.id}>
+                            {integration.display_name ||
+                              integration.id.slice(-6)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
 
               {/* Provider Controls - full for unknown */}
-              {!activeProvider && contactType !== 'unknown' && (
+              {!activeProvider && contactType !== "unknown" && (
                 <Alert className="py-1.5">
                   <AlertCircle className="h-3 w-3" />
                   <AlertDescription className="text-xs">
@@ -927,7 +1162,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             currentAgencyId={contact?.agency_id}
             contactName={contact?.name || ""}
             onSuccess={() => {
-              queryClient.invalidateQueries({ queryKey: ["contact", contactId, contactType] });
+              queryClient.invalidateQueries({
+                queryKey: ["contact", contactId, contactType],
+              });
             }}
           />
         </div>
@@ -936,27 +1173,29 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       {/* Messages area - גלילה פנימית */}
       <div className="flex-1 min-h-0 overflow-y-auto bg-[#e5ddd5]">
         <ChatMessageList
-          messages={messages} 
-          isLoading={isLoadingMessages} 
-          contactId={contactId} 
-          contactType={contactType} 
+          messages={messages}
+          isLoading={isLoadingMessages}
+          contactId={contactId}
+          contactType={contactType}
           agencyId={contact?.agency_id}
           anchorMessageId={anchorMessageId}
           currentPeriod={messagePeriod}
           onLoadMore={(period) => setMessagePeriod(period)}
-          onReplyToMessage={(msg) => setReplyToMessage({
-            id: msg.raw_provider_data?.idMessage || msg.id,
-            text: msg.message_text,
-            senderName: msg.sender_name || undefined,
-          })}
+          onReplyToMessage={(msg) =>
+            setReplyToMessage({
+              id: msg.raw_provider_data?.idMessage || msg.id,
+              text: msg.message_text,
+              senderName: msg.sender_name || undefined,
+            })
+          }
         />
       </div>
 
       {/* Input area - קבוע */}
       <div className="border-t bg-card shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
-        <ChatInput 
-          onSend={handleSendMessage} 
-          onSendFile={handleSendFile} 
+        <ChatInput
+          onSend={handleSendMessage}
+          onSendFile={handleSendFile}
           isLoading={false}
           replyToMessage={replyToMessage}
           onClearReply={() => setReplyToMessage(null)}
@@ -973,8 +1212,12 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             type={convertType}
             onSuccess={(id, type) => {
               setConvertDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
-              queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
+              queryClient.invalidateQueries({
+                queryKey: ["chat-contacts", tenantId],
+              });
+              queryClient.invalidateQueries({
+                queryKey: ["unknown-contacts", tenantId],
+              });
               if (onBack) onBack();
             }}
           />
@@ -985,8 +1228,12 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             senderName={contact?.name}
             onSuccess={(id, type) => {
               setLinkDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
-              queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
+              queryClient.invalidateQueries({
+                queryKey: ["chat-contacts", tenantId],
+              });
+              queryClient.invalidateQueries({
+                queryKey: ["unknown-contacts", tenantId],
+              });
               if (onBack) onBack();
             }}
           />
@@ -998,8 +1245,12 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             contactType={contactType as "client" | "lead"}
             onSuccess={() => {
               setLinkPhoneDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ["contact", contactId, contactType] });
-              queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
+              queryClient.invalidateQueries({
+                queryKey: ["contact", contactId, contactType],
+              });
+              queryClient.invalidateQueries({
+                queryKey: ["chat-contacts", tenantId],
+              });
             }}
           />
           <LinkCampaignerDialog
@@ -1009,14 +1260,17 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
             senderName={contact?.name}
             onSuccess={(campaignerId) => {
               setLinkCampaignerDialogOpen(false);
-              queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
-              queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
+              queryClient.invalidateQueries({
+                queryKey: ["chat-contacts", tenantId],
+              });
+              queryClient.invalidateQueries({
+                queryKey: ["unknown-contacts", tenantId],
+              });
               if (onBack) onBack();
             }}
           />
         </>
       )}
-
     </div>
   );
 }

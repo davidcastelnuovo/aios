@@ -20,9 +20,11 @@ import {
 
 /** React-query keys used by DashboardView + WooCommerceDashboard. */
 export const wooDashboardQueryKeys = {
-  hasWooCommerce: (clientId?: string | null) => ["has-woocommerce", clientId] as const,
+  hasWooCommerce: (clientId?: string | null) =>
+    ["has-woocommerce", clientId] as const,
   wooSummaryPrefix: ["woo-summary-for-totals"] as const,
-  wooSites: (clientId?: string | null) => ["woo-sites-for-client", clientId] as const,
+  wooSites: (clientId?: string | null) =>
+    ["woo-sites-for-client", clientId] as const,
   wooOrdersPrefix: ["woo-orders"] as const,
 };
 
@@ -60,7 +62,10 @@ export function getWooDashboardDateRangeIso(
 
   if (!startDate || !endDate) {
     const todayYmd = format(now, "yyyy-MM-dd");
-    const yesterday = subDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), 1);
+    const yesterday = subDays(
+      new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+      1,
+    );
     const start = format(subDays(yesterday, 6), "yyyy-MM-dd");
     const end = format(yesterday, "yyyy-MM-dd");
     return jerusalemDateRangeToIso(start, end);
@@ -81,20 +86,20 @@ export function getDynamicTableDateRangeIso(
   customFrom?: Date | null,
   customTo?: Date | null,
 ): { start: string; end: string } | null {
-  if (dateFilter === 'all') return null;
-  if (dateFilter === 'custom' && !(customFrom && customTo)) return null;
+  if (dateFilter === "all") return null;
+  if (dateFilter === "custom" && !(customFrom && customTo)) return null;
 
   const { startDate, endDate } = getDashboardDateRange(
     dateFilter,
     new Date(),
-    customFrom ? format(customFrom, 'yyyy-MM-dd') : null,
-    customTo ? format(customTo, 'yyyy-MM-dd') : null,
+    customFrom ? format(customFrom, "yyyy-MM-dd") : null,
+    customTo ? format(customTo, "yyyy-MM-dd") : null,
   );
 
   if (!startDate || !endDate) return null;
 
-  const [sy, sm, sd] = startDate.split('-').map(Number);
-  const [ey, em, ed] = endDate.split('-').map(Number);
+  const [sy, sm, sd] = startDate.split("-").map(Number);
+  const [ey, em, ed] = endDate.split("-").map(Number);
   return {
     start: new Date(sy, sm - 1, sd, 0, 0, 0, 0).toISOString(),
     end: new Date(ey, em - 1, ed, 23, 59, 59, 999).toISOString(),
@@ -173,15 +178,17 @@ export async function fetchWooOrdersInRange(
   return filterWooOrdersForRevenue(merged as WooOrderRevenueRow[], range);
 }
 
-export async function fetchWooSiteIdsForClient(clientId: string): Promise<string[]> {
+export async function fetchWooSiteIdsForClient(
+  clientId: string,
+): Promise<string[]> {
   const { data: sites, error } = await supabase
-    .from('social_media_wordpress_sites' as any)
-    .select('id')
-    .eq('client_id', clientId)
-    .eq('woocommerce_enabled', true)
-    .eq('is_active', true);
+    .from("social_media_wordpress_sites" as any)
+    .select("id")
+    .eq("client_id", clientId)
+    .eq("woocommerce_enabled", true)
+    .eq("is_active", true);
   if (error) {
-    console.error('[fetchWooSiteIdsForClient] query failed:', error);
+    console.error("[fetchWooSiteIdsForClient] query failed:", error);
     throw error;
   }
   return ((sites as any[]) || []).map((s: any) => s.id);
@@ -194,7 +201,12 @@ export async function fetchWooReportAttribution(
 ): Promise<WooReportAttributionData> {
   const empty: WooReportAttributionData = {
     orders: [],
-    googlePaid: { paidOrders: 0, paidRevenue: 0, organicOrders: 0, organicRevenue: 0 },
+    googlePaid: {
+      paidOrders: 0,
+      paidRevenue: 0,
+      organicOrders: 0,
+      organicRevenue: 0,
+    },
     bySource: [],
   };
   if (!clientId) return empty;
@@ -224,14 +236,23 @@ export async function fetchWooDashboardSummary(
   const empty = {
     revenue: 0,
     orders: 0,
-    googlePaid: { paidOrders: 0, paidRevenue: 0, organicOrders: 0, organicRevenue: 0 },
+    googlePaid: {
+      paidOrders: 0,
+      paidRevenue: 0,
+      organicOrders: 0,
+      organicRevenue: 0,
+    },
   };
   if (!clientId) return empty;
 
   const siteIds = await fetchWooSiteIdsForClient(clientId);
   if (siteIds.length === 0) return empty;
 
-  const list = await fetchWooOrdersInRange(siteIds, range, "id, total, status, attribution, date_created, date_completed, date_paid");
+  const list = await fetchWooOrdersInRange(
+    siteIds,
+    range,
+    "id, total, status, attribution, date_created, date_completed, date_paid",
+  );
   const valid = list as WooOrderRevenueRow[];
   return {
     revenue: sumWooRevenue(valid),
@@ -245,12 +266,20 @@ export function invalidateWooDashboardQueries(
   queryClient: QueryClient,
   clientId?: string | null,
 ) {
-  queryClient.invalidateQueries({ queryKey: wooDashboardQueryKeys.hasWooCommerce(clientId) });
-  queryClient.invalidateQueries({ queryKey: wooDashboardQueryKeys.wooSummaryPrefix });
+  queryClient.invalidateQueries({
+    queryKey: wooDashboardQueryKeys.hasWooCommerce(clientId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: wooDashboardQueryKeys.wooSummaryPrefix,
+  });
   if (clientId) {
-    queryClient.invalidateQueries({ queryKey: wooDashboardQueryKeys.wooSites(clientId) });
+    queryClient.invalidateQueries({
+      queryKey: wooDashboardQueryKeys.wooSites(clientId),
+    });
   }
-  queryClient.invalidateQueries({ queryKey: wooDashboardQueryKeys.wooOrdersPrefix });
+  queryClient.invalidateQueries({
+    queryKey: wooDashboardQueryKeys.wooOrdersPrefix,
+  });
 }
 
 /**
@@ -282,7 +311,10 @@ export async function shareWordpressSiteWithAgencyTenants(
 
   if (tenantIds.size === 0) return;
 
-  const rows = Array.from(tenantIds).map((tenant_id) => ({ site_id: siteId, tenant_id }));
+  const rows = Array.from(tenantIds).map((tenant_id) => ({
+    site_id: siteId,
+    tenant_id,
+  }));
   await supabase
     .from("wordpress_sites_shared_tenants")
     .upsert(rows, { onConflict: "site_id,tenant_id", ignoreDuplicates: true });

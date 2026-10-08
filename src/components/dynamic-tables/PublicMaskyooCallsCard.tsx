@@ -50,7 +50,10 @@ export function PublicMaskyooCallsCard({ snapshots, periodLabel }: Props) {
               ? "text-emerald-800 dark:text-emerald-200"
               : "text-blue-800 dark:text-blue-200";
             return (
-              <div key={cat.key} className={cn("rounded-lg border p-4", accent)}>
+              <div
+                key={cat.key}
+                className={cn("rounded-lg border p-4", accent)}
+              >
                 <div className={cn("text-sm font-semibold mb-2", titleColor)}>
                   {cat.label}
                 </div>

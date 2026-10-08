@@ -29,7 +29,16 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Shield, UserPlus, Trash2, Settings, Lock, Mail, Building2, Eye } from "lucide-react";
+import {
+  Shield,
+  UserPlus,
+  Trash2,
+  Settings,
+  Lock,
+  Mail,
+  Building2,
+  Eye,
+} from "lucide-react";
 import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
@@ -51,12 +60,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Role labels are now dynamic via useTerminology hook
 // Mapping from role key to terminology key
@@ -92,15 +96,15 @@ export default function Users() {
     const key = roleTerminologyKeys[role];
     return key ? t(key) : role;
   };
-  
+
   // Generate role labels object dynamically for dropdown usage
   const roleLabels: Record<UserRole, string> = {
-    owner: getRoleLabel('owner'),
-    team_manager: getRoleLabel('team_manager'),
-    campaigner: getRoleLabel('campaigner'),
-    sales_person: getRoleLabel('sales_person'),
-    super_admin: getRoleLabel('super_admin'),
-    seo: getRoleLabel('seo'),
+    owner: getRoleLabel("owner"),
+    team_manager: getRoleLabel("team_manager"),
+    campaigner: getRoleLabel("campaigner"),
+    sales_person: getRoleLabel("sales_person"),
+    super_admin: getRoleLabel("super_admin"),
+    seo: getRoleLabel("seo"),
   };
   const [isTenantDialogOpen, setIsTenantDialogOpen] = useState(false);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -108,13 +112,26 @@ export default function Users() {
   const [inviteFullName, setInviteFullName] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("campaigner");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
-  const [selectedModules, setSelectedModules] = useState<string[]>(['dashboard', 'clients', 'tasks', 'chat', 'time_tracking']); // Default modules for campaigner
+  const [selectedModules, setSelectedModules] = useState<string[]>([
+    "dashboard",
+    "clients",
+    "tasks",
+    "chat",
+    "time_tracking",
+  ]); // Default modules for campaigner
   const [selectedCampaignerId, setSelectedCampaignerId] = useState<string>("");
-  const [selectedSalesPersonId, setSelectedSalesPersonId] = useState<string>("");
-  const [editAgenciesUserId, setEditAgenciesUserId] = useState<string | null>(null);
-  const [editAgenciesUserEmail, setEditAgenciesUserEmail] = useState<string>("");
-  const [editPermissionsUserId, setEditPermissionsUserId] = useState<string | null>(null);
-  const [editPermissionsUserEmail, setEditPermissionsUserEmail] = useState<string>("");
+  const [selectedSalesPersonId, setSelectedSalesPersonId] =
+    useState<string>("");
+  const [editAgenciesUserId, setEditAgenciesUserId] = useState<string | null>(
+    null,
+  );
+  const [editAgenciesUserEmail, setEditAgenciesUserEmail] =
+    useState<string>("");
+  const [editPermissionsUserId, setEditPermissionsUserId] = useState<
+    string | null
+  >(null);
+  const [editPermissionsUserEmail, setEditPermissionsUserEmail] =
+    useState<string>("");
   const [editNameUserId, setEditNameUserId] = useState<string | null>(null);
   const [editNameUserEmail, setEditNameUserEmail] = useState<string>("");
   const [editNameUserFullName, setEditNameUserFullName] = useState<string>("");
@@ -128,31 +145,37 @@ export default function Users() {
     full_name: string;
     managed_agencies: Array<{ id: string; name: string }>;
   } | null>(null);
-  const [selectedInviteTenantIds, setSelectedInviteTenantIds] = useState<string[]>([]);
+  const [selectedInviteTenantIds, setSelectedInviteTenantIds] = useState<
+    string[]
+  >([]);
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
   const [userSearchTerm, setUserSearchTerm] = useState("");
-  const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
-  const [resetPasswordUserEmail, setResetPasswordUserEmail] = useState<string>("");
+  const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(
+    null,
+  );
+  const [resetPasswordUserEmail, setResetPasswordUserEmail] =
+    useState<string>("");
   const { tenantId, tenant: currentTenant } = useCurrentTenant();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", tenantId, currentUserId],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      
+
       // Get owned agencies
       const { data: ownedAgencies, error: ownedError } = await supabase
         .from("agencies")
         .select("*")
         .eq("tenant_id", tenantId)
         .order("name");
-      
+
       if (ownedError) throw ownedError;
-      
+
       // Get shared agencies via agency_tenant_access
       const { data: sharedAccess, error: sharedError } = await supabase
         .from("agency_tenant_access")
-        .select(`
+        .select(
+          `
           agency_id,
           agencies (
             id,
@@ -166,27 +189,28 @@ export default function Users() {
             created_at,
             tenant_id
           )
-        `)
+        `,
+        )
         .eq("accessing_tenant_id", tenantId);
-      
+
       if (sharedError) throw sharedError;
-      
+
       // Extract shared agencies
       const shared = (sharedAccess || [])
-        .map(s => s.agencies)
+        .map((s) => s.agencies)
         .filter(Boolean);
-      
+
       // Combine and remove duplicates
       const combined = [...(ownedAgencies || []), ...shared];
       const uniqueMap = new Map();
-      combined.forEach(agency => {
+      combined.forEach((agency) => {
         if (agency && agency.id && !uniqueMap.has(agency.id)) {
           uniqueMap.set(agency.id, agency);
         }
       });
-      
-      return Array.from(uniqueMap.values()).sort((a: any, b: any) => 
-        a.name.localeCompare(b.name, 'he')
+
+      return Array.from(uniqueMap.values()).sort((a: any, b: any) =>
+        a.name.localeCompare(b.name, "he"),
       );
     },
     enabled: !!tenantId,
@@ -230,22 +254,26 @@ export default function Users() {
       if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("sales_people")
-        .select(`
+        .select(
+          `
           id,
           full_name,
           sales_person_agencies(
             agency_id,
             agencies(id, name)
           )
-        `)
+        `,
+        )
         .eq("tenant_id", tenantId);
-      
+
       if (error) throw error;
-      
+
       return data.map((sp: any) => ({
         id: sp.id,
         full_name: sp.full_name,
-        agencies: sp.sales_person_agencies.map((spa: any) => spa.agencies).filter(Boolean),
+        agencies: sp.sales_person_agencies
+          .map((spa: any) => spa.agencies)
+          .filter(Boolean),
       }));
     },
     enabled: !!tenantId,
@@ -256,14 +284,13 @@ export default function Users() {
     queryKey: ["user-managed-agencies", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from("user_managed_agencies")
+      const { data, error } = await supabase.from("user_managed_agencies")
         .select(`
           user_id,
           agency_id,
           agencies (id, name)
         `);
-      
+
       if (error) throw error;
       return data || [];
     },
@@ -277,7 +304,7 @@ export default function Users() {
         .from("tenants")
         .select("*")
         .order("created_at", { ascending: false });
-      
+
       if (error) throw error;
       return data;
     },
@@ -293,9 +320,7 @@ export default function Users() {
         .select("tenant_id, tenants(id, name)")
         .eq("user_id", currentUserId);
       if (error) throw error;
-      return (data || [])
-        .map((row: any) => row.tenants)
-        .filter(Boolean);
+      return (data || []).map((row: any) => row.tenants).filter(Boolean);
     },
     enabled: !!currentUserId && !isSuperAdmin,
   });
@@ -331,7 +356,8 @@ export default function Users() {
 
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select(`
+        .select(
+          `
           id, 
           email, 
           full_name, 
@@ -340,7 +366,8 @@ export default function Users() {
           sales_person_id, 
           campaigners!profiles_campaigner_id_fkey(full_name), 
           sales_people!profiles_sales_person_id_fkey(full_name)
-        `)
+        `,
+        )
         .in("id", tenantUserIdsArr);
 
       if (profilesError) throw profilesError;
@@ -363,21 +390,27 @@ export default function Users() {
         .select("sales_person_id, agency_id");
 
       return profiles.map((profile: any) => {
-        const userRoleRecords = (userRoles || []).filter((r) => r.user_id === profile.id);
-        const roles = [...new Set(userRoleRecords.map((r) => r.role as UserRole))];
-        
+        const userRoleRecords = (userRoles || []).filter(
+          (r) => r.user_id === profile.id,
+        );
+        const roles = [
+          ...new Set(userRoleRecords.map((r) => r.role as UserRole)),
+        ];
+
         // Get agencies for this user
         const userAgencyIds: string[] = [];
         if (profile.campaigner_id) {
-          const campaignerAgencyIds = campaignerAgencies
-            ?.filter(ca => ca.campaigner_id === profile.campaigner_id)
-            .map(ca => ca.agency_id) || [];
+          const campaignerAgencyIds =
+            campaignerAgencies
+              ?.filter((ca) => ca.campaigner_id === profile.campaigner_id)
+              .map((ca) => ca.agency_id) || [];
           userAgencyIds.push(...campaignerAgencyIds);
         }
         if (profile.sales_person_id) {
-          const salesAgencyIds = salesPersonAgencies
-            ?.filter(spa => spa.sales_person_id === profile.sales_person_id)
-            .map(spa => spa.agency_id) || [];
+          const salesAgencyIds =
+            salesPersonAgencies
+              ?.filter((spa) => spa.sales_person_id === profile.sales_person_id)
+              .map((spa) => spa.agency_id) || [];
           userAgencyIds.push(...salesAgencyIds);
         }
 
@@ -397,14 +430,17 @@ export default function Users() {
 
   const organizationUsers = (users || []).map((user) => ({
     ...user,
-    agency_ids: (user.agency_ids || []).filter((id: string) => tenantAgencyIdSet.has(id)),
+    agency_ids: (user.agency_ids || []).filter((id: string) =>
+      tenantAgencyIdSet.has(id),
+    ),
   }));
 
   const filteredUsers = (() => {
     const seen = new Set<string>();
     const term = userSearchTerm.trim().toLowerCase();
-    return (organizationUsers.filter((user) => {
-      if (agencyFilter !== "all" && !user.agency_ids?.includes(agencyFilter)) return false;
+    return organizationUsers.filter((user) => {
+      if (agencyFilter !== "all" && !user.agency_ids?.includes(agencyFilter))
+        return false;
       if (term) {
         const hay = `${user.full_name || ""} ${user.email || ""}`.toLowerCase();
         if (!hay.includes(term)) return false;
@@ -412,7 +448,7 @@ export default function Users() {
       if (seen.has(user.id)) return false;
       seen.add(user.id);
       return true;
-    }));
+    });
   })();
 
   const userListFilters = (
@@ -457,24 +493,33 @@ export default function Users() {
       role: UserRole;
     }) => {
       if (!tenantId) throw new Error("No tenant selected");
-      
-      const { data: { session } } = await supabase.auth.getSession();
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session");
 
-      const { data, error } = await supabase.functions.invoke("manage-user-roles", {
-        body: { userId, role, tenantId, action: "add" },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
+      const { data, error } = await supabase.functions.invoke(
+        "manage-user-roles",
+        {
+          body: { userId, role, tenantId, action: "add" },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
         },
-      });
-      
+      );
+
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       return data;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+      await queryClient.refetchQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
       toast.success("התפקיד נוסף בהצלחה");
     },
     onError: (error: Error) => {
@@ -491,24 +536,33 @@ export default function Users() {
       role: UserRole;
     }) => {
       if (!tenantId) throw new Error("No tenant selected");
-      
-      const { data: { session } } = await supabase.auth.getSession();
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session");
 
-      const { data, error } = await supabase.functions.invoke("manage-user-roles", {
-        body: { userId, role, tenantId, action: "remove" },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
+      const { data, error } = await supabase.functions.invoke(
+        "manage-user-roles",
+        {
+          body: { userId, role, tenantId, action: "remove" },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
         },
-      });
-      
+      );
+
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       return data;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+      await queryClient.refetchQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
       toast.success("התפקיד הוסר בהצלחה");
     },
     onError: (error: Error) => {
@@ -528,7 +582,7 @@ export default function Users() {
         .from("profiles")
         .update({ campaigner_id: campaignerId })
         .eq("id", userId);
-      
+
       if (error) throw error;
 
       if (campaignerId) {
@@ -536,8 +590,12 @@ export default function Users() {
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+      await queryClient.refetchQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
       toast.success("קמפיינר עודכן בהצלחה");
     },
     onError: (error: Error) => {
@@ -557,7 +615,7 @@ export default function Users() {
         .from("profiles")
         .update({ sales_person_id: salesPersonId })
         .eq("id", userId);
-      
+
       if (error) throw error;
 
       if (salesPersonId) {
@@ -565,8 +623,12 @@ export default function Users() {
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+      await queryClient.refetchQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
       toast.success("איש מכירות עודכן בהצלחה");
     },
     onError: (error: Error) => {
@@ -574,18 +636,17 @@ export default function Users() {
     },
   });
 
-
   const { data: currentUserTenant } = useQuery({
     queryKey: ["current-user-tenant", currentUserId],
     queryFn: async () => {
       if (!currentUserId) return null;
-      
+
       const { data, error } = await supabase
         .from("tenant_users")
         .select("tenant_id, tenants(name, allow_super_admin_access)")
         .eq("user_id", currentUserId)
         .maybeSingle();
-      
+
       if (error) throw error;
       return data;
     },
@@ -594,26 +655,31 @@ export default function Users() {
 
   // Check if current user is owner (from user_roles table)
   const { data: canManageSuperAdminAccess } = useQuery({
-      queryKey: ["can-manage-super-admin-access", tenantId, currentUserId, isOwner],
-      queryFn: async () => {
-        if (!tenantId || !currentUserId) return false;
-        // Check membership in this tenant
-        const { data: membership, error } = await supabase
-          .from("tenant_users")
-          .select("role")
-          .eq("user_id", currentUserId)
-          .eq("tenant_id", tenantId)
-          .maybeSingle();
-        if (error) {
-          console.error("Error checking tenant membership:", error);
-          return false;
-        }
-        if (!membership) return false;
-        // Owner of tenant OR global owner with membership
-        return membership.role === "owner" || isOwner;
-      },
-      enabled: !!tenantId && !!currentUserId,
-    });
+    queryKey: [
+      "can-manage-super-admin-access",
+      tenantId,
+      currentUserId,
+      isOwner,
+    ],
+    queryFn: async () => {
+      if (!tenantId || !currentUserId) return false;
+      // Check membership in this tenant
+      const { data: membership, error } = await supabase
+        .from("tenant_users")
+        .select("role")
+        .eq("user_id", currentUserId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (error) {
+        console.error("Error checking tenant membership:", error);
+        return false;
+      }
+      if (!membership) return false;
+      // Owner of tenant OR global owner with membership
+      return membership.role === "owner" || isOwner;
+    },
+    enabled: !!tenantId && !!currentUserId,
+  });
 
   // Load current tenant details for the switch state
   const { data: currentTenantDetails } = useQuery({
@@ -634,7 +700,7 @@ export default function Users() {
   const updateSuperAdminAccessMutation = useMutation({
     mutationFn: async ({ allowAccess }: { allowAccess: boolean }) => {
       if (!tenantId) throw new Error("No tenant selected");
-      
+
       const { error } = await supabase
         .from("tenants")
         .update({ allow_super_admin_access: allowAccess })
@@ -652,25 +718,27 @@ export default function Users() {
   });
 
   const inviteUserMutation = useMutation({
-    mutationFn: async ({ 
-      email, 
+    mutationFn: async ({
+      email,
       fullName,
-      role, 
-      agencyIds, 
+      role,
+      agencyIds,
       modulePermissions,
       campaignerId,
-      salesPersonId 
-    }: { 
+      salesPersonId,
+    }: {
       email: string;
-      fullName?: string; 
-      role: UserRole; 
-      agencyIds: string[]; 
+      fullName?: string;
+      role: UserRole;
+      agencyIds: string[];
       modulePermissions: string[];
       campaignerId?: string;
       salesPersonId?: string;
     }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session) {
         throw new Error("No active session");
       }
@@ -682,7 +750,9 @@ export default function Users() {
           throw new Error("יש לבחור לפחות ארגון אחד");
         }
         inviteTenantIds = [
-          ...(tenantId && selectedInviteTenantIds.includes(tenantId) ? [tenantId] : []),
+          ...(tenantId && selectedInviteTenantIds.includes(tenantId)
+            ? [tenantId]
+            : []),
           ...selectedInviteTenantIds.filter((id) => id !== tenantId),
         ];
       } else {
@@ -691,7 +761,11 @@ export default function Users() {
         inviteTenantIds = [singleTenantId];
       }
 
-      const results: Array<{ tenantId: string; success: boolean; error?: string }> = [];
+      const results: Array<{
+        tenantId: string;
+        success: boolean;
+        error?: string;
+      }> = [];
       let emailSent = false;
       let addedCount = 0;
 
@@ -720,7 +794,11 @@ export default function Users() {
         if (error) throw error;
 
         if (data.error === "EMAIL_EXISTS_IN_TENANT") {
-          results.push({ tenantId: targetTenantId, success: false, error: data.error });
+          results.push({
+            tenantId: targetTenantId,
+            success: false,
+            error: data.error,
+          });
           continue;
         }
 
@@ -737,26 +815,43 @@ export default function Users() {
         throw new Error("EMAIL_EXISTS");
       }
 
-      return { results, emailSent, addedCount, invitationLink: "https://aios.co.il/auth" };
+      return {
+        results,
+        emailSent,
+        addedCount,
+        invitationLink: "https://aios.co.il/auth",
+      };
     },
     onSuccess: async (data) => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
-      
+      await queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+      await queryClient.refetchQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+
       if (data.addedCount > 1) {
-        toast.success(`המשתמש נוסף ל-${data.addedCount} ארגונים${data.emailSent ? " ומייל הזמנה נשלח" : ""}`);
+        toast.success(
+          `המשתמש נוסף ל-${data.addedCount} ארגונים${data.emailSent ? " ומייל הזמנה נשלח" : ""}`,
+        );
       } else if (data.emailSent) {
         toast.success("הזמנה נשלחה בהצלחה למייל המשתמש");
       } else {
         toast.success("המשתמש נוסף לארגון בהצלחה");
       }
-      
+
       setIsInviteDialogOpen(false);
       setInviteEmail("");
       setInviteFullName("");
       setInviteRole("campaigner");
       setSelectedAgencies([]);
-      setSelectedModules(['dashboard', 'clients', 'tasks', 'chat', 'time_tracking']);
+      setSelectedModules([
+        "dashboard",
+        "clients",
+        "tasks",
+        "chat",
+        "time_tracking",
+      ]);
       setSelectedCampaignerId("");
       setSelectedSalesPersonId("");
       if (tenantId) setSelectedInviteTenantIds([tenantId]);
@@ -779,45 +874,63 @@ export default function Users() {
     },
   });
 
-
   const deleteUserMutation = useMutation({
-      mutationFn: async ({ userId, email }: { userId?: string; email?: string }) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error("No active session");
+    mutationFn: async ({
+      userId,
+      email,
+    }: {
+      userId?: string;
+      email?: string;
+    }) => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("No active session");
 
-        const removeTenantId = tenantId || currentUserTenant?.tenant_id;
-        if (!removeTenantId) throw new Error("לא נמצא ארגון פעיל");
+      const removeTenantId = tenantId || currentUserTenant?.tenant_id;
+      if (!removeTenantId) throw new Error("לא נמצא ארגון פעיל");
 
-        const { data, error } = await supabase.functions.invoke("delete-user", {
-          body: { userId, email, tenantId: removeTenantId, removeFromTenantOnly: true },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-        if (error) throw error;
-        if (!data.success) throw new Error(data.error);
-        return data;
-      },
-      onSuccess: async () => {
-        await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-        await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
-        toast.success("המשתמש הוסר מהארגון בהצלחה");
-      },
-      onError: (error: Error) => {
-        toast.error("שגיאה במחיקת משתמש: " + error.message);
-      },
-    });
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: {
+          userId,
+          email,
+          tenantId: removeTenantId,
+          removeFromTenantOnly: true,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+      await queryClient.refetchQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+      toast.success("המשתמש הוסר מהארגון בהצלחה");
+    },
+    onError: (error: Error) => {
+      toast.error("שגיאה במחיקת משתמש: " + error.message);
+    },
+  });
 
   const resendInviteMutation = useMutation({
     mutationFn: async ({ email }: { email: string }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session) {
         throw new Error("No active session");
       }
 
       const { data, error } = await supabase.functions.invoke("invite-user", {
-        body: { 
+        body: {
           email,
           resend: true,
           tenantId: tenantId || currentUserTenant?.tenant_id,
@@ -827,10 +940,10 @@ export default function Users() {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
-      
+
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
-      
+
       return data;
     },
     onSuccess: (data) => {
@@ -863,7 +976,12 @@ export default function Users() {
   }
 
   // Block super admin when owner disabled access for this tenant
-  if (isSuperAdmin && currentTenantDetails && currentTenantDetails.allow_super_admin_access === false && !canManageSuperAdminAccess) {
+  if (
+    isSuperAdmin &&
+    currentTenantDetails &&
+    currentTenantDetails.allow_super_admin_access === false &&
+    !canManageSuperAdminAccess
+  ) {
     return (
       <div className="container mx-auto py-6">
         <Card className="p-6">
@@ -880,7 +998,10 @@ export default function Users() {
   }
 
   return (
-    <div className="container mx-auto py-4 md:py-6 px-4 md:px-6 space-y-4 md:space-y-6" dir="rtl">
+    <div
+      className="container mx-auto py-4 md:py-6 px-4 md:px-6 space-y-4 md:space-y-6"
+      dir="rtl"
+    >
       <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
         <div className="flex-1">
           <h1 className="text-2xl md:text-3xl font-bold">
@@ -888,13 +1009,13 @@ export default function Users() {
             {currentTenant?.name ? ` — ${currentTenant.name}` : ""}
           </h1>
           <p className="text-xs md:text-sm text-muted-foreground mt-1">
-            {isSuperAdmin 
-              ? "ניהול ארגונים ומשתמשים במערכת SaaS" 
-              : isMobile 
+            {isSuperAdmin
+              ? "ניהול ארגונים ומשתמשים במערכת SaaS"
+              : isMobile
                 ? `רק משתמשים רשומים ב-${currentTenant?.name || "ארגון שלך"}`
                 : `ניהול גישות והרשאות — רק משתמשים ששייכים ל"${currentTenant?.name || "ארגון שלך"}". צוות מסוכנות משותפות מופיע בלקוחות/משימות, לא כאן.`}
           </p>
-          
+
           {/* Super Admin Access Control */}
           {canManageSuperAdminAccess && (
             <Card className="mt-4 p-4 bg-muted/50">
@@ -902,7 +1023,10 @@ export default function Users() {
                 <div className="flex items-center gap-2 flex-1">
                   <Shield className="h-5 w-5 text-muted-foreground" />
                   <div className="flex-1">
-                    <Label htmlFor="super-admin-access" className="text-sm font-medium cursor-pointer">
+                    <Label
+                      htmlFor="super-admin-access"
+                      className="text-sm font-medium cursor-pointer"
+                    >
                       אפשר גישת Super Admin לארגון
                     </Label>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -912,9 +1036,13 @@ export default function Users() {
                 </div>
                 <Switch
                   id="super-admin-access"
-                  checked={currentTenantDetails?.allow_super_admin_access ?? true}
+                  checked={
+                    currentTenantDetails?.allow_super_admin_access ?? true
+                  }
                   onCheckedChange={(checked) => {
-                    updateSuperAdminAccessMutation.mutate({ allowAccess: !!checked });
+                    updateSuperAdminAccessMutation.mutate({
+                      allowAccess: !!checked,
+                    });
                   }}
                 />
               </div>
@@ -923,7 +1051,10 @@ export default function Users() {
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:flex-shrink-0">
           {isSuperAdmin && (
-            <Dialog open={isTenantDialogOpen} onOpenChange={setIsTenantDialogOpen}>
+            <Dialog
+              open={isTenantDialogOpen}
+              onOpenChange={setIsTenantDialogOpen}
+            >
               <DialogTrigger asChild>
                 <Button variant="outline" className="w-full sm:w-auto">
                   <Building2 className="h-4 w-4 ml-2" />
@@ -937,296 +1068,395 @@ export default function Users() {
                     צור ארגון חדש במערכת. יהיה צורך ליצור משתמשים עבורו בנפרד.
                   </DialogDescription>
                 </DialogHeader>
-                <AddTenantForm asDialog={false} onSuccess={() => setIsTenantDialogOpen(false)} />
+                <AddTenantForm
+                  asDialog={false}
+                  onSuccess={() => setIsTenantDialogOpen(false)}
+                />
               </DialogContent>
-          </Dialog>
+            </Dialog>
           )}
-          
-          <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto">
-              <UserPlus className="h-4 w-4 ml-2" />
-              הזמן משתמש חדש
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh]">
-            <DialogHeader>
-              <DialogTitle>הזמן משתמש חדש לארגון שלך</DialogTitle>
-              <DialogDescription>
-                המשתמש יקבל מייל מ-AIOS עם קישור ליצירת חשבון והצטרפות לארגון. אם בוחרים איש צוות קיים, המשתמש משויך אליו. בלי בחירה, כרטיס עם אותו אימייל משויך למשתמש, ואחרת נוצרת רשומה חדשה במודול אנשי צוות.
-              </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-[calc(90vh-180px)] pl-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pr-4" dir="rtl">
-                {showMultiTenantInvite && (
-                  <div className="md:col-span-2 p-3 border border-amber-500 bg-amber-50 dark:bg-amber-950 rounded-md">
-                    <Label className="text-amber-900 dark:text-amber-100 font-semibold">
-                      ארגונים להזמנה
-                    </Label>
-                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 mb-2">
-                      הארגון שאתה נמצא בו ({currentTenant?.name || "נוכחי"}) מסומן כברירת מחדל. סמן ארגונים נוספים להזמנה מרובה.
-                    </p>
-                    <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto bg-background">
-                      {inviteTenantOptions.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">אין ארגונים זמינים</p>
+
+          <Dialog
+            open={isInviteDialogOpen}
+            onOpenChange={setIsInviteDialogOpen}
+          >
+            <DialogTrigger asChild>
+              <Button className="w-full sm:w-auto">
+                <UserPlus className="h-4 w-4 ml-2" />
+                הזמן משתמש חדש
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh]">
+              <DialogHeader>
+                <DialogTitle>הזמן משתמש חדש לארגון שלך</DialogTitle>
+                <DialogDescription>
+                  המשתמש יקבל מייל מ-AIOS עם קישור ליצירת חשבון והצטרפות לארגון.
+                  אם בוחרים איש צוות קיים, המשתמש משויך אליו. בלי בחירה, כרטיס
+                  עם אותו אימייל משויך למשתמש, ואחרת נוצרת רשומה חדשה במודול
+                  אנשי צוות.
+                </DialogDescription>
+              </DialogHeader>
+              <ScrollArea className="max-h-[calc(90vh-180px)] pl-4">
+                <div
+                  className="grid grid-cols-1 md:grid-cols-2 gap-4 pr-4"
+                  dir="rtl"
+                >
+                  {showMultiTenantInvite && (
+                    <div className="md:col-span-2 p-3 border border-amber-500 bg-amber-50 dark:bg-amber-950 rounded-md">
+                      <Label className="text-amber-900 dark:text-amber-100 font-semibold">
+                        ארגונים להזמנה
+                      </Label>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 mb-2">
+                        הארגון שאתה נמצא בו ({currentTenant?.name || "נוכחי"})
+                        מסומן כברירת מחדל. סמן ארגונים נוספים להזמנה מרובה.
+                      </p>
+                      <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto bg-background">
+                        {inviteTenantOptions.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            אין ארגונים זמינים
+                          </p>
+                        ) : (
+                          inviteTenantOptions.map((org) => (
+                            <div
+                              key={org.id}
+                              className="flex items-center space-x-2 space-x-reverse"
+                            >
+                              <input
+                                type="checkbox"
+                                id={`invite-tenant-${org.id}`}
+                                checked={selectedInviteTenantIds.includes(
+                                  org.id,
+                                )}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedInviteTenantIds([
+                                      ...selectedInviteTenantIds,
+                                      org.id,
+                                    ]);
+                                  } else {
+                                    setSelectedInviteTenantIds(
+                                      selectedInviteTenantIds.filter(
+                                        (id) => id !== org.id,
+                                      ),
+                                    );
+                                  }
+                                }}
+                                className="rounded border-gray-300 text-primary focus:ring-primary"
+                              />
+                              <label
+                                htmlFor={`invite-tenant-${org.id}`}
+                                className="text-sm font-medium cursor-pointer flex items-center gap-2"
+                              >
+                                {org.name}
+                                {org.id === tenantId && (
+                                  <Badge variant="outline" className="text-xs">
+                                    נוכחי
+                                  </Badge>
+                                )}
+                              </label>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      {selectedInviteTenantIds.length > 0 && (
+                        <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                          נבחרו {selectedInviteTenantIds.length} ארגונים
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <div>
+                    <Label htmlFor="invite-email">אימייל משתמש</Label>
+                    <Input
+                      id="invite-email"
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="user@example.com"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="invite-full-name">שם מלא (אופציונלי)</Label>
+                    <Input
+                      id="invite-full-name"
+                      type="text"
+                      value={inviteFullName}
+                      onChange={(e) => setInviteFullName(e.target.value)}
+                      placeholder="שם מלא של המשתמש"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="invite-role">תפקיד</Label>
+                    <Select
+                      value={inviteRole}
+                      onValueChange={(value) => {
+                        const newRole = value as UserRole;
+                        setInviteRole(newRole);
+                        setSelectedAgencies([]);
+                        setSelectedCampaignerId("");
+                        setSelectedSalesPersonId("");
+
+                        // *** FIX: Set default modules based on role ***
+                        if (newRole === "campaigner") {
+                          // Campaigners get basic modules + dynamic tables for their clients
+                          setSelectedModules([
+                            "dashboard",
+                            "clients",
+                            "tasks",
+                            "chat",
+                            "time_tracking",
+                            "dynamic_tables",
+                          ]);
+                        } else if (newRole === "sales_person") {
+                          // Sales people get sales modules
+                          setSelectedModules([
+                            "dashboard",
+                            "leads",
+                            "sales_dashboard",
+                            "products",
+                            "chat",
+                          ]);
+                        } else if (newRole === "team_manager") {
+                          // Team managers get more access including dynamic tables & dashboards
+                          setSelectedModules([
+                            "dashboard",
+                            "clients",
+                            "tasks",
+                            "campaigners",
+                            "reports",
+                            "client_onboarding",
+                            "chat",
+                            "time_tracking",
+                            "dynamic_tables",
+                          ]);
+                        } else if (newRole === "seo") {
+                          // SEO gets specific modules
+                          setSelectedModules([
+                            "dashboard",
+                            "clients",
+                            "tasks",
+                            "time_tracking",
+                          ]);
+                        } else if (newRole === "owner") {
+                          // Owners get all modules
+                          setSelectedModules(getAllModules().map((m) => m.id));
+                        } else {
+                          // Other roles start with empty selection
+                          setSelectedModules([]);
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(roleLabels).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {inviteRole !== "campaigner" &&
+                    inviteRole !== "sales_person" && (
+                      <div>
+                        <Label htmlFor="campaigner">איש צוות (אופציונלי)</Label>
+                        <Select
+                          value={selectedCampaignerId || "none"}
+                          onValueChange={(value) =>
+                            setSelectedCampaignerId(
+                              value === "none" ? "" : value,
+                            )
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר קמפיינר" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">ללא שיוך</SelectItem>
+                            {campaigners?.map((campaigner) => (
+                              <SelectItem
+                                key={campaigner.id}
+                                value={campaigner.id}
+                              >
+                                {campaigner.full_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          בלי בחירה ידנית, משתמש חדש משויך לכרטיס שכבר נושא את
+                          האימייל שלו, או שנוצרת לו רשומה במודול אנשי צוות. שיוך
+                          ידני לאיש צוות קיים גובר.
+                        </p>
+                      </div>
+                    )}
+
+                  {(inviteRole === "campaigner" ||
+                    inviteRole === "sales_person") && (
+                    <div className="md:col-span-2 p-3 border rounded-md bg-muted/40">
+                      <p className="text-sm text-muted-foreground">
+                        {inviteRole === "campaigner"
+                          ? "אם כבר יש איש צוות עם האימייל הזה, המשתמש משויך אליו. אם אין, תיווצר רשומה חדשה במודול אנשי צוות."
+                          : "אם כבר יש איש מכירות עם האימייל הזה, המשתמש משויך אליו. אם אין, תיווצר רשומה חדשה."}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Sales Person Selection — only when role is not sales_person */}
+                  {inviteRole !== "sales_person" && (
+                    <div>
+                      <Label htmlFor="sales-person">
+                        איש מכירות משויך (אופציונלי)
+                      </Label>
+                      <Select
+                        value={selectedSalesPersonId || "none"}
+                        onValueChange={(value) =>
+                          setSelectedSalesPersonId(
+                            value === "none" ? "" : value,
+                          )
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר איש מכירות" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ללא שיוך</SelectItem>
+                          {salesPeople?.map((salesPerson) => (
+                            <SelectItem
+                              key={salesPerson.id}
+                              value={salesPerson.id}
+                            >
+                              {salesPerson.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <div className="md:col-span-2">
+                    <Label>סוכנויות</Label>
+                    <div className="border rounded-md p-3 space-y-2 max-h-32 overflow-y-auto">
+                      {agencies?.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          אין סוכנויות זמינות
+                        </p>
                       ) : (
-                        inviteTenantOptions.map((org) => (
-                          <div key={org.id} className="flex items-center space-x-2 space-x-reverse">
+                        agencies?.map((agency) => (
+                          <div
+                            key={agency.id}
+                            className="flex items-center space-x-2 space-x-reverse"
+                          >
                             <input
                               type="checkbox"
-                              id={`invite-tenant-${org.id}`}
-                              checked={selectedInviteTenantIds.includes(org.id)}
+                              id={`agency-${agency.id}`}
+                              checked={selectedAgencies.includes(agency.id)}
                               onChange={(e) => {
                                 if (e.target.checked) {
-                                  setSelectedInviteTenantIds([...selectedInviteTenantIds, org.id]);
+                                  setSelectedAgencies([
+                                    ...selectedAgencies,
+                                    agency.id,
+                                  ]);
                                 } else {
-                                  setSelectedInviteTenantIds(
-                                    selectedInviteTenantIds.filter((id) => id !== org.id),
+                                  setSelectedAgencies(
+                                    selectedAgencies.filter(
+                                      (id) => id !== agency.id,
+                                    ),
                                   );
                                 }
                               }}
                               className="rounded border-gray-300 text-primary focus:ring-primary"
                             />
                             <label
-                              htmlFor={`invite-tenant-${org.id}`}
-                              className="text-sm font-medium cursor-pointer flex items-center gap-2"
+                              htmlFor={`agency-${agency.id}`}
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                             >
-                              {org.name}
-                              {org.id === tenantId && (
-                                <Badge variant="outline" className="text-xs">נוכחי</Badge>
-                              )}
+                              {agency.name}
                             </label>
                           </div>
                         ))
                       )}
                     </div>
-                    {selectedInviteTenantIds.length > 0 && (
-                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                        נבחרו {selectedInviteTenantIds.length} ארגונים
+                    {selectedAgencies.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        נבחרו {selectedAgencies.length} סוכנויות
                       </p>
                     )}
                   </div>
-                )}
-                <div>
-                  <Label htmlFor="invite-email">אימייל משתמש</Label>
-                  <Input
-                    id="invite-email"
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="user@example.com"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="invite-full-name">שם מלא (אופציונלי)</Label>
-                  <Input
-                    id="invite-full-name"
-                    type="text"
-                    value={inviteFullName}
-                    onChange={(e) => setInviteFullName(e.target.value)}
-                    placeholder="שם מלא של המשתמש"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="invite-role">תפקיד</Label>
-                  <Select
-                    value={inviteRole}
-                    onValueChange={(value) => {
-                      const newRole = value as UserRole;
-                      setInviteRole(newRole);
-                      setSelectedAgencies([]);
-                      setSelectedCampaignerId("");
-                      setSelectedSalesPersonId("");
-                      
-                      // *** FIX: Set default modules based on role ***
-                      if (newRole === 'campaigner') {
-                        // Campaigners get basic modules + dynamic tables for their clients
-                        setSelectedModules(['dashboard', 'clients', 'tasks', 'chat', 'time_tracking', 'dynamic_tables']);
-                      } else if (newRole === 'sales_person') {
-                        // Sales people get sales modules
-                        setSelectedModules(['dashboard', 'leads', 'sales_dashboard', 'products', 'chat']);
-                      } else if (newRole === 'team_manager') {
-                        // Team managers get more access including dynamic tables & dashboards
-                        setSelectedModules(['dashboard', 'clients', 'tasks', 'campaigners', 'reports', 'client_onboarding', 'chat', 'time_tracking', 'dynamic_tables']);
-                      } else if (newRole === 'seo') {
-                        // SEO gets specific modules
-                        setSelectedModules(['dashboard', 'clients', 'tasks', 'time_tracking']);
-                      } else if (newRole === 'owner') {
-                        // Owners get all modules
-                        setSelectedModules(getAllModules().map(m => m.id));
-                      } else {
-                        // Other roles start with empty selection
-                        setSelectedModules([]);
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(roleLabels).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {inviteRole !== "campaigner" && inviteRole !== "sales_person" && (
-                  <div>
-                    <Label htmlFor="campaigner">איש צוות (אופציונלי)</Label>
-                    <Select
-                      value={selectedCampaignerId || "none"}
-                      onValueChange={(value) => setSelectedCampaignerId(value === "none" ? "" : value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="בחר קמפיינר" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">ללא שיוך</SelectItem>
-                        {campaigners?.map((campaigner) => (
-                          <SelectItem key={campaigner.id} value={campaigner.id}>
-                            {campaigner.full_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="md:col-span-2">
+                    <Label>הרשאות מודולים</Label>
+                    <div className="mt-2 max-h-[400px] overflow-y-auto pr-1">
+                      <PermissionsSelector
+                        value={Object.fromEntries(
+                          getAllModules().map((m) => [
+                            m.id,
+                            selectedModules.includes(m.id),
+                          ]),
+                        )}
+                        onChange={(next) => {
+                          setSelectedModules(
+                            Object.entries(next)
+                              .filter(([, v]) => v)
+                              .map(([k]) => k),
+                          );
+                        }}
+                        idPrefix="invite-perms"
+                      />
+                    </div>
+                    {selectedModules.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        נבחרו {selectedModules.length} מודולים
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground mt-1">
-                      בלי בחירה ידנית, משתמש חדש משויך לכרטיס שכבר נושא את האימייל שלו, או שנוצרת לו רשומה במודול אנשי צוות. שיוך ידני לאיש צוות קיים גובר.
+                      מודולים שלא נבחרו יהיו נעולים למשתמש
                     </p>
                   </div>
-                )}
-
-                {(inviteRole === "campaigner" || inviteRole === "sales_person") && (
-                  <div className="md:col-span-2 p-3 border rounded-md bg-muted/40">
-                    <p className="text-sm text-muted-foreground">
-                      {inviteRole === "campaigner"
-                        ? "אם כבר יש איש צוות עם האימייל הזה, המשתמש משויך אליו. אם אין, תיווצר רשומה חדשה במודול אנשי צוות."
-                        : "אם כבר יש איש מכירות עם האימייל הזה, המשתמש משויך אליו. אם אין, תיווצר רשומה חדשה."}
-                    </p>
-                  </div>
-                )}
-
-                {/* Sales Person Selection — only when role is not sales_person */}
-                {inviteRole !== "sales_person" && (
-                <div>
-                  <Label htmlFor="sales-person">איש מכירות משויך (אופציונלי)</Label>
-                  <Select
-                    value={selectedSalesPersonId || "none"}
-                    onValueChange={(value) => setSelectedSalesPersonId(value === "none" ? "" : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחר איש מכירות" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">ללא שיוך</SelectItem>
-                      {salesPeople?.map((salesPerson) => (
-                        <SelectItem key={salesPerson.id} value={salesPerson.id}>
-                          {salesPerson.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
-                )}
-
-                <div className="md:col-span-2">
-                  <Label>סוכנויות</Label>
-                  <div className="border rounded-md p-3 space-y-2 max-h-32 overflow-y-auto">
-                  {agencies?.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">אין סוכנויות זמינות</p>
-                  ) : (
-                    agencies?.map((agency) => (
-                      <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
-                        <input
-                          type="checkbox"
-                          id={`agency-${agency.id}`}
-                          checked={selectedAgencies.includes(agency.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedAgencies([...selectedAgencies, agency.id]);
-                            } else {
-                              setSelectedAgencies(selectedAgencies.filter((id) => id !== agency.id));
-                            }
-                          }}
-                          className="rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                        <label
-                          htmlFor={`agency-${agency.id}`}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                        >
-                          {agency.name}
-                        </label>
-                      </div>
-                    ))
-                  )}
-                  </div>
-                  {selectedAgencies.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      נבחרו {selectedAgencies.length} סוכנויות
-                    </p>
-                  )}
-                </div>
-                <div className="md:col-span-2">
-                  <Label>הרשאות מודולים</Label>
-                  <div className="mt-2 max-h-[400px] overflow-y-auto pr-1">
-                    <PermissionsSelector
-                      value={Object.fromEntries(
-                        getAllModules().map((m) => [m.id, selectedModules.includes(m.id)])
-                      )}
-                      onChange={(next) => {
-                        setSelectedModules(
-                          Object.entries(next)
-                            .filter(([, v]) => v)
-                            .map(([k]) => k)
-                        );
-                      }}
-                      idPrefix="invite-perms"
-                    />
-                  </div>
-                  {selectedModules.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      נבחרו {selectedModules.length} מודולים
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground mt-1">
-                    מודולים שלא נבחרו יהיו נעולים למשתמש
-                  </p>
-                </div>
+              </ScrollArea>
+              <div className="pt-4 border-t">
+                <Button
+                  onClick={() =>
+                    inviteUserMutation.mutate({
+                      email: inviteEmail,
+                      fullName: inviteFullName || undefined,
+                      role: inviteRole,
+                      agencyIds: selectedAgencies,
+                      modulePermissions: selectedModules,
+                      campaignerId: selectedCampaignerId || undefined,
+                      salesPersonId: selectedSalesPersonId || undefined,
+                    })
+                  }
+                  disabled={
+                    !inviteEmail ||
+                    inviteUserMutation.isPending ||
+                    (showMultiTenantInvite &&
+                      selectedInviteTenantIds.length === 0)
+                  }
+                  className="w-full"
+                >
+                  {inviteUserMutation.isPending ? "שולח..." : "שלח הזמנה"}
+                </Button>
               </div>
-            </ScrollArea>
-            <div className="pt-4 border-t">
-              <Button
-                onClick={() =>
-                  inviteUserMutation.mutate({
-                    email: inviteEmail,
-                    fullName: inviteFullName || undefined,
-                    role: inviteRole,
-                    agencyIds: selectedAgencies,
-                    modulePermissions: selectedModules,
-                    campaignerId: selectedCampaignerId || undefined,
-                    salesPersonId: selectedSalesPersonId || undefined,
-                  })
-                }
-                disabled={!inviteEmail || inviteUserMutation.isPending || (showMultiTenantInvite && selectedInviteTenantIds.length === 0)}
-                className="w-full"
-              >
-                {inviteUserMutation.isPending ? "שולח..." : "שלח הזמנה"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
       {isSuperAdmin ? (
         <Tabs defaultValue="users" dir="rtl">
           <TabsList className="grid w-full grid-cols-2 h-auto">
-            <TabsTrigger value="users" className="text-xs md:text-sm py-2">ניהול משתמשים</TabsTrigger>
-            <TabsTrigger value="tenants" className="text-xs md:text-sm py-2">ניהול ארגונים (SaaS)</TabsTrigger>
+            <TabsTrigger value="users" className="text-xs md:text-sm py-2">
+              ניהול משתמשים
+            </TabsTrigger>
+            <TabsTrigger value="tenants" className="text-xs md:text-sm py-2">
+              ניהול ארגונים (SaaS)
+            </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="users" className="mt-4 md:mt-6">
             {userListFilters}
             {isLoading ? (
@@ -1238,25 +1468,35 @@ export default function Users() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-start">
                         <div>
-                          <div className="font-medium">{user.full_name || "-"}</div>
-                          <div className="text-sm text-muted-foreground">{user.email}</div>
+                          <div className="font-medium">
+                            {user.full_name || "-"}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {user.email}
+                          </div>
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">תפקידים:</p>
+                          <p className="text-xs text-muted-foreground mb-1">
+                            תפקידים:
+                          </p>
                           <div className="flex flex-wrap gap-2">
                             {user.roles?.map((role: UserRole) => (
-                          <Badge 
+                              <Badge
                                 key={role}
-                                className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group text-xs`}
+                                className={`${roleBadgeColors[role] || "bg-gray-500"} relative group text-xs`}
                               >
                                 {roleLabels[role]}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (confirm(`האם להסיר את תפקיד ${roleLabels[role]}?`)) {
+                                    if (
+                                      confirm(
+                                        `האם להסיר את תפקיד ${roleLabels[role]}?`,
+                                      )
+                                    ) {
                                       removeRoleMutation.mutate({
                                         userId: user.id,
                                         role: role as UserRole,
@@ -1284,7 +1524,9 @@ export default function Users() {
                               </SelectTrigger>
                               <SelectContent className="bg-background z-50">
                                 {Object.entries(roleLabels)
-                                  .filter(([value]) => !user.roles?.includes(value))
+                                  .filter(
+                                    ([value]) => !user.roles?.includes(value),
+                                  )
                                   .map(([value, label]) => (
                                     <SelectItem key={value} value={value}>
                                       {label}
@@ -1294,9 +1536,11 @@ export default function Users() {
                             </Select>
                           </div>
                         </div>
-                        
+
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">איש צוות:</p>
+                          <p className="text-xs text-muted-foreground mb-1">
+                            איש צוות:
+                          </p>
                           <Select
                             value={user.campaigner_id || "none"}
                             onValueChange={(value) => {
@@ -1308,24 +1552,35 @@ export default function Users() {
                           >
                             <SelectTrigger className="h-8 text-sm">
                               <SelectValue>
-                                {user.campaigner_name || <span className="text-muted-foreground">-</span>}
+                                {user.campaigner_name || (
+                                  <span className="text-muted-foreground">
+                                    -
+                                  </span>
+                                )}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent className="bg-background z-50">
                               <SelectItem value="none">
-                                <span className="text-muted-foreground">ללא שיוך</span>
+                                <span className="text-muted-foreground">
+                                  ללא שיוך
+                                </span>
                               </SelectItem>
                               {campaigners?.map((campaigner) => (
-                                <SelectItem key={campaigner.id} value={campaigner.id}>
+                                <SelectItem
+                                  key={campaigner.id}
+                                  value={campaigner.id}
+                                >
                                   {campaigner.full_name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </div>
-                        
+
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">איש מכירות:</p>
+                          <p className="text-xs text-muted-foreground mb-1">
+                            איש מכירות:
+                          </p>
                           <Select
                             value={user.sales_person_id || "none"}
                             onValueChange={(value) => {
@@ -1337,15 +1592,24 @@ export default function Users() {
                           >
                             <SelectTrigger className="h-8 text-sm">
                               <SelectValue>
-                                {user.sales_person_name || <span className="text-muted-foreground">-</span>}
+                                {user.sales_person_name || (
+                                  <span className="text-muted-foreground">
+                                    -
+                                  </span>
+                                )}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent className="bg-background z-50">
                               <SelectItem value="none">
-                                <span className="text-muted-foreground">ללא שיוך</span>
+                                <span className="text-muted-foreground">
+                                  ללא שיוך
+                                </span>
                               </SelectItem>
                               {salesPeople?.map((salesPerson) => (
-                                <SelectItem key={salesPerson.id} value={salesPerson.id}>
+                                <SelectItem
+                                  key={salesPerson.id}
+                                  value={salesPerson.id}
+                                >
                                   {salesPerson.full_name}
                                 </SelectItem>
                               ))}
@@ -1353,7 +1617,7 @@ export default function Users() {
                           </Select>
                         </div>
                       </div>
-                      
+
                       <div className="flex flex-wrap gap-2 pt-2 border-t">
                         <Button
                           variant="outline"
@@ -1372,16 +1636,20 @@ export default function Users() {
                           size="sm"
                           onClick={() => {
                             // Determine which dialog to open based on user's roles
-                            if (user.roles?.includes('team_manager')) {
+                            if (user.roles?.includes("team_manager")) {
                               // Team manager - open managed agencies dialog
-                              const managedAgencies = userManagedAgencies
-                                ?.filter(uma => uma.user_id === user.id)
-                                .map(uma => uma.agencies)
-                                .filter(Boolean) || [];
+                              const managedAgencies =
+                                userManagedAgencies
+                                  ?.filter((uma) => uma.user_id === user.id)
+                                  .map((uma) => uma.agencies)
+                                  .filter(Boolean) || [];
                               setEditManagedAgenciesUser({
                                 id: user.id,
                                 full_name: user.full_name || user.email,
-                                managed_agencies: managedAgencies as Array<{ id: string; name: string }>,
+                                managed_agencies: managedAgencies as Array<{
+                                  id: string;
+                                  name: string;
+                                }>,
                               });
                             } else {
                               // Campaigner or other - open regular agencies dialog
@@ -1422,7 +1690,9 @@ export default function Users() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => resendInviteMutation.mutate({ email: user.email })}
+                            onClick={() =>
+                              resendInviteMutation.mutate({ email: user.email })
+                            }
                             disabled={resendInviteMutation.isPending}
                             className="flex-1"
                           >
@@ -1433,7 +1703,9 @@ export default function Users() {
                             variant="destructive"
                             size="sm"
                             onClick={() => {
-                              if (confirm(`האם להסיר את ${user.email} מהארגון?`)) {
+                              if (
+                                confirm(`האם להסיר את ${user.email} מהארגון?`)
+                              ) {
                                 deleteUserMutation.mutate({ userId: user.id });
                               }
                             }}
@@ -1461,368 +1733,475 @@ export default function Users() {
                         <TableHead className="text-right">תפקידים</TableHead>
                         <TableHead className="text-right">איש צוות</TableHead>
                         <TableHead className="text-right">איש מכירות</TableHead>
-                        <TableHead className="text-right">סוכנויות איש מכירות</TableHead>
+                        <TableHead className="text-right">
+                          סוכנויות איש מכירות
+                        </TableHead>
                         <TableHead className="text-right">פעולות</TableHead>
                       </TableRow>
                     </TableHeader>
-              <TableBody>
-                {filteredUsers?.map((user: any) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">{user.full_name || "-"}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditNameUserId(user.id);
-                            setEditNameUserEmail(user.email);
-                            setEditNameUserFullName(user.full_name || "");
-                          }}
-                          className="h-6 px-2 text-xs"
-                        >
-                          ערוך
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-2">
-                        {user.roles?.map((role: UserRole) => (
-                          <Badge 
-                            key={role}
-                            className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group`}
-                          >
-                            {roleLabels[role]}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm(`האם להסיר את תפקיד ${roleLabels[role]}?`)) {
-                                  removeRoleMutation.mutate({
+                    <TableBody>
+                      {filteredUsers?.map((user: any) => (
+                        <TableRow key={user.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">
+                                {user.full_name || "-"}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setEditNameUserId(user.id);
+                                  setEditNameUserEmail(user.email);
+                                  setEditNameUserFullName(user.full_name || "");
+                                }}
+                                className="h-6 px-2 text-xs"
+                              >
+                                ערוך
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-2">
+                              {user.roles?.map((role: UserRole) => (
+                                <Badge
+                                  key={role}
+                                  className={`${roleBadgeColors[role] || "bg-gray-500"} relative group`}
+                                >
+                                  {roleLabels[role]}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (
+                                        confirm(
+                                          `האם להסיר את תפקיד ${roleLabels[role]}?`,
+                                        )
+                                      ) {
+                                        removeRoleMutation.mutate({
+                                          userId: user.id,
+                                          role: role as UserRole,
+                                        });
+                                      }
+                                    }}
+                                    className="mr-1 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="הסר תפקיד"
+                                  >
+                                    ×
+                                  </button>
+                                </Badge>
+                              ))}
+                              <Select
+                                value=""
+                                onValueChange={(role) => {
+                                  addRoleMutation.mutate({
                                     userId: user.id,
                                     role: role as UserRole,
                                   });
-                                }
+                                }}
+                              >
+                                <SelectTrigger className="w-[40px] h-6 px-2">
+                                  <SelectValue>+</SelectValue>
+                                </SelectTrigger>
+                                <SelectContent className="bg-background z-50">
+                                  {Object.entries(roleLabels)
+                                    .filter(
+                                      ([value]) => !user.roles?.includes(value),
+                                    )
+                                    .map(([value, label]) => (
+                                      <SelectItem key={value} value={value}>
+                                        {label}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Select
+                              value={user.campaigner_id || "none"}
+                              onValueChange={(value) => {
+                                updateCampaignerMutation.mutate({
+                                  userId: user.id,
+                                  campaignerId: value === "none" ? null : value,
+                                });
                               }}
-                              className="mr-1 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="הסר תפקיד"
                             >
-                              ×
-                            </button>
-                          </Badge>
-                        ))}
-                        <Select
-                          value=""
-                          onValueChange={(role) => {
-                            addRoleMutation.mutate({
-                              userId: user.id,
-                              role: role as UserRole,
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="w-[40px] h-6 px-2">
-                            <SelectValue>+</SelectValue>
-                          </SelectTrigger>
-                          <SelectContent className="bg-background z-50">
-                            {Object.entries(roleLabels)
-                              .filter(([value]) => !user.roles?.includes(value))
-                              .map(([value, label]) => (
-                                <SelectItem key={value} value={value}>
-                                  {label}
+                              <SelectTrigger className="h-8 w-[140px]">
+                                <SelectValue>
+                                  {user.campaigner_name || (
+                                    <span className="text-muted-foreground">
+                                      -
+                                    </span>
+                                  )}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent className="bg-background z-50">
+                                <SelectItem value="none">
+                                  <span className="text-muted-foreground">
+                                    ללא שיוך
+                                  </span>
                                 </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Select
-                        value={user.campaigner_id || "none"}
-                        onValueChange={(value) => {
-                          updateCampaignerMutation.mutate({
-                            userId: user.id,
-                            campaignerId: value === "none" ? null : value,
-                          });
-                        }}
-                      >
-                        <SelectTrigger className="h-8 w-[140px]">
-                          <SelectValue>
-                            {user.campaigner_name || <span className="text-muted-foreground">-</span>}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent className="bg-background z-50">
-                          <SelectItem value="none">
-                            <span className="text-muted-foreground">ללא שיוך</span>
-                          </SelectItem>
-                          {campaigners?.map((campaigner) => (
-                            <SelectItem key={campaigner.id} value={campaigner.id}>
-                              {campaigner.full_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Select
-                        value={user.sales_person_id || "none"}
-                        onValueChange={(value) => {
-                          updateSalesPersonMutation.mutate({
-                            userId: user.id,
-                            salesPersonId: value === "none" ? null : value,
-                          });
-                        }}
-                      >
-                        <SelectTrigger className="h-8 w-[140px]">
-                          <SelectValue>
-                            {user.sales_person_name || <span className="text-muted-foreground">-</span>}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent className="bg-background z-50">
-                          <SelectItem value="none">
-                            <span className="text-muted-foreground">ללא שיוך</span>
-                          </SelectItem>
-                          {salesPeople?.map((salesPerson) => (
-                            <SelectItem key={salesPerson.id} value={salesPerson.id}>
-                              {salesPerson.full_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      {user.sales_person_id ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const salesPerson = salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id);
-                            if (salesPerson) {
-                              setEditSalesPersonAgencies(salesPerson);
-                            }
-                          }}
-                          className="h-8 text-sm w-full justify-start"
-                        >
-                          {salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id)?.agencies.map(a => a.name).join(", ") || "אין סוכנויות"}
-                        </Button>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            // Determine which dialog to open based on user's roles
-                            if (user.roles?.includes('team_manager')) {
-                              // Team manager - open managed agencies dialog
-                              const managedAgencies = userManagedAgencies
-                                ?.filter(uma => uma.user_id === user.id)
-                                .map(uma => uma.agencies)
-                                .filter(Boolean) || [];
-                              setEditManagedAgenciesUser({
-                                id: user.id,
-                                full_name: user.full_name || user.email,
-                                managed_agencies: managedAgencies as Array<{ id: string; name: string }>,
-                              });
-                            } else {
-                              // Campaigner or other - open regular agencies dialog
-                              setEditAgenciesUserId(user.id);
-                              setEditAgenciesUserEmail(user.email);
-                            }
-                          }}
-                          title="ערוך סוכנויות"
-                        >
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            setEditPermissionsUserId(user.id);
-                            setEditPermissionsUserEmail(user.email);
-                          }}
-                          title="ערוך הרשאות"
-                        >
-                          <Lock className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            setResetPasswordUserId(user.id);
-                            setResetPasswordUserEmail(user.email);
-                          }}
-                          title="הגדר סיסמה חדשה"
-                        >
-                          <Shield className="h-4 w-4" />
-                        </Button>
-                        {/* Super admins can preview the effective UI of any user.
+                                {campaigners?.map((campaigner) => (
+                                  <SelectItem
+                                    key={campaigner.id}
+                                    value={campaigner.id}
+                                  >
+                                    {campaigner.full_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Select
+                              value={user.sales_person_id || "none"}
+                              onValueChange={(value) => {
+                                updateSalesPersonMutation.mutate({
+                                  userId: user.id,
+                                  salesPersonId:
+                                    value === "none" ? null : value,
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="h-8 w-[140px]">
+                                <SelectValue>
+                                  {user.sales_person_name || (
+                                    <span className="text-muted-foreground">
+                                      -
+                                    </span>
+                                  )}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent className="bg-background z-50">
+                                <SelectItem value="none">
+                                  <span className="text-muted-foreground">
+                                    ללא שיוך
+                                  </span>
+                                </SelectItem>
+                                {salesPeople?.map((salesPerson) => (
+                                  <SelectItem
+                                    key={salesPerson.id}
+                                    value={salesPerson.id}
+                                  >
+                                    {salesPerson.full_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            {user.sales_person_id ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const salesPerson =
+                                    salesPeopleWithAgencies?.find(
+                                      (sp) => sp.id === user.sales_person_id,
+                                    );
+                                  if (salesPerson) {
+                                    setEditSalesPersonAgencies(salesPerson);
+                                  }
+                                }}
+                                className="h-8 text-sm w-full justify-start"
+                              >
+                                {salesPeopleWithAgencies
+                                  ?.find((sp) => sp.id === user.sales_person_id)
+                                  ?.agencies.map((a) => a.name)
+                                  .join(", ") || "אין סוכנויות"}
+                              </Button>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                -
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => {
+                                  // Determine which dialog to open based on user's roles
+                                  if (user.roles?.includes("team_manager")) {
+                                    // Team manager - open managed agencies dialog
+                                    const managedAgencies =
+                                      userManagedAgencies
+                                        ?.filter(
+                                          (uma) => uma.user_id === user.id,
+                                        )
+                                        .map((uma) => uma.agencies)
+                                        .filter(Boolean) || [];
+                                    setEditManagedAgenciesUser({
+                                      id: user.id,
+                                      full_name: user.full_name || user.email,
+                                      managed_agencies:
+                                        managedAgencies as Array<{
+                                          id: string;
+                                          name: string;
+                                        }>,
+                                    });
+                                  } else {
+                                    // Campaigner or other - open regular agencies dialog
+                                    setEditAgenciesUserId(user.id);
+                                    setEditAgenciesUserEmail(user.email);
+                                  }
+                                }}
+                                title="ערוך סוכנויות"
+                              >
+                                <Settings className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => {
+                                  setEditPermissionsUserId(user.id);
+                                  setEditPermissionsUserEmail(user.email);
+                                }}
+                                title="ערוך הרשאות"
+                              >
+                                <Lock className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => {
+                                  setResetPasswordUserId(user.id);
+                                  setResetPasswordUserEmail(user.email);
+                                }}
+                                title="הגדר סיסמה חדשה"
+                              >
+                                <Shield className="h-4 w-4" />
+                              </Button>
+                              {/* Super admins can preview the effective UI of any user.
                             Owners keep the legacy sales-person preview only. */}
-                        {(isSuperAdmin || (isOwner && user.sales_person_id)) && user.id !== currentUserId && (
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => {
-                              setViewAs(user.id, user.sales_person_id || null, user.full_name || user.email);
-                              setSelectedAgency("all");
-                              toast.success(`עובר למצב צפייה בתור ${user.full_name || user.email}`);
-                              navigate(buildPath(user.sales_person_id && !user.campaigner_id ? 'leads' : 'clients'));
-                            }}
-                            title="צפה בתור משתמש זה"
-                            className="border-warning text-warning hover:bg-warning/10"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            if (confirm(`האם לשלוח הזמנה מחדש ל-${user.email}?`)) {
-                              resendInviteMutation.mutate({ email: user.email });
-                            }
-                          }}
-                          disabled={resendInviteMutation.isPending}
-                          title="שלח הזמנה מחדש"
-                        >
-                          <Mail className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={() => {
-                            if (confirm(`האם להסיר את ${user.email} מהארגון?`)) {
-                              deleteUserMutation.mutate({ userId: user.id });
-                            }
-                          }}
-                          disabled={deleteUserMutation.isPending}
-                          title="הסר מהארגון"
-                          className="flex-shrink-0"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                              {(isSuperAdmin ||
+                                (isOwner && user.sales_person_id)) &&
+                                user.id !== currentUserId && (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => {
+                                      setViewAs(
+                                        user.id,
+                                        user.sales_person_id || null,
+                                        user.full_name || user.email,
+                                      );
+                                      setSelectedAgency("all");
+                                      toast.success(
+                                        `עובר למצב צפייה בתור ${user.full_name || user.email}`,
+                                      );
+                                      navigate(
+                                        buildPath(
+                                          user.sales_person_id &&
+                                            !user.campaigner_id
+                                            ? "leads"
+                                            : "clients",
+                                        ),
+                                      );
+                                    }}
+                                    title="צפה בתור משתמש זה"
+                                    className="border-warning text-warning hover:bg-warning/10"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      `האם לשלוח הזמנה מחדש ל-${user.email}?`,
+                                    )
+                                  ) {
+                                    resendInviteMutation.mutate({
+                                      email: user.email,
+                                    });
+                                  }
+                                }}
+                                disabled={resendInviteMutation.isPending}
+                                title="שלח הזמנה מחדש"
+                              >
+                                <Mail className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      `האם להסיר את ${user.email} מהארגון?`,
+                                    )
+                                  ) {
+                                    deleteUserMutation.mutate({
+                                      userId: user.id,
+                                    });
+                                  }
+                                }}
+                                disabled={deleteUserMutation.isPending}
+                                title="הסר מהארגון"
+                                className="flex-shrink-0"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </Card>
             )}
           </TabsContent>
 
-            <TabsContent value="tenants" className="mt-6">
-              <Card>
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold mb-4">ניהול ארגונים (Tenants)</h2>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    כל ארגון מייצג לקוח SaaS נפרד עם משתמשים ונתונים משלו
-                  </p>
-                  
-                  {!tenants || tenants.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      אין ארגונים במערכת. לחץ על "הוסף ארגון" כדי להתחיל.
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-right">שם הארגון</TableHead>
-                          <TableHead className="text-right">סטטוס</TableHead>
-                          <TableHead className="text-right">איש קשר</TableHead>
-                          <TableHead className="text-right">תאריך יצירה</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {tenants.map((tenant: any) => (
-                          <TableRow key={tenant.id}>
-                            <TableCell className="font-medium">{tenant.name}</TableCell>
-                            <TableCell>
-                              <Badge variant={tenant.status === 'active' ? 'default' : 'secondary'}>
-                                {tenant.status === 'active' ? 'פעיל' : tenant.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{tenant.contact_name || '-'}</TableCell>
-                            <TableCell>{new Date(tenant.created_at).toLocaleDateString('he-IL')}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        ) : isLoading ? (
-          <Card className="p-6 text-center">טוען...</Card>
-        ) : (
-          <>
-            {userListFilters}
-            {isMobile ? (
-              <div className="space-y-4">
-                {filteredUsers?.map((user: any) => (
-              <Card key={user.id} className="p-4">
-                <div className="space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-medium">{user.full_name || "-"}</div>
-                      <div className="text-sm text-muted-foreground">{user.email}</div>
-                      <Badge 
-                        variant={user.status === 'active' ? 'default' : user.status === 'pending' ? 'secondary' : 'outline'}
-                        className={`mt-1 ${user.status === 'active' ? 'bg-green-500' : user.status === 'pending' ? 'bg-yellow-500' : ''}`}
-                      >
-                        {user.status === 'active' ? 'פעיל' : user.status === 'pending' ? 'ממתין' : user.status === 'inactive' ? 'לא פעיל' : user.status}
-                      </Badge>
-                    </div>
-                    {user.role && (
-                      <Badge className={roleBadgeColors[user.role]}>
-                        {roleLabels[user.role]}
-                      </Badge>
-                    )}
+          <TabsContent value="tenants" className="mt-6">
+            <Card>
+              <div className="p-6">
+                <h2 className="text-xl font-semibold mb-4">
+                  ניהול ארגונים (Tenants)
+                </h2>
+                <p className="text-sm text-muted-foreground mb-6">
+                  כל ארגון מייצג לקוח SaaS נפרד עם משתמשים ונתונים משלו
+                </p>
+
+                {!tenants || tenants.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    אין ארגונים במערכת. לחץ על "הוסף ארגון" כדי להתחיל.
                   </div>
-                  
-                  {user.campaigner_name && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">קמפיינר: </span>
-                      <span>{user.campaigner_name}</span>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">שם הארגון</TableHead>
+                        <TableHead className="text-right">סטטוס</TableHead>
+                        <TableHead className="text-right">איש קשר</TableHead>
+                        <TableHead className="text-right">
+                          תאריך יצירה
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tenants.map((tenant: any) => (
+                        <TableRow key={tenant.id}>
+                          <TableCell className="font-medium">
+                            {tenant.name}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                tenant.status === "active"
+                                  ? "default"
+                                  : "secondary"
+                              }
+                            >
+                              {tenant.status === "active"
+                                ? "פעיל"
+                                : tenant.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{tenant.contact_name || "-"}</TableCell>
+                          <TableCell>
+                            {new Date(tenant.created_at).toLocaleDateString(
+                              "he-IL",
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      ) : isLoading ? (
+        <Card className="p-6 text-center">טוען...</Card>
+      ) : (
+        <>
+          {userListFilters}
+          {isMobile ? (
+            <div className="space-y-4">
+              {filteredUsers?.map((user: any) => (
+                <Card key={user.id} className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-medium">
+                          {user.full_name || "-"}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {user.email}
+                        </div>
+                        <Badge
+                          variant={
+                            user.status === "active"
+                              ? "default"
+                              : user.status === "pending"
+                                ? "secondary"
+                                : "outline"
+                          }
+                          className={`mt-1 ${user.status === "active" ? "bg-green-500" : user.status === "pending" ? "bg-yellow-500" : ""}`}
+                        >
+                          {user.status === "active"
+                            ? "פעיל"
+                            : user.status === "pending"
+                              ? "ממתין"
+                              : user.status === "inactive"
+                                ? "לא פעיל"
+                                : user.status}
+                        </Badge>
+                      </div>
+                      {user.role && (
+                        <Badge className={roleBadgeColors[user.role]}>
+                          {roleLabels[user.role]}
+                        </Badge>
+                      )}
                     </div>
-                  )}
-                  
-                  {user.sales_person_name && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">איש מכירות: </span>
-                      <span>{user.sales_person_name}</span>
-                    </div>
-                  )}
-                  
-                  <div className="flex flex-wrap gap-2 pt-2 border-t">
-                     <Button
-                       variant="outline"
-                       size="sm"
-                       onClick={() => {
-                         setEditNameUserId(user.id);
-                         setEditNameUserEmail(user.email);
-                         setEditNameUserFullName(user.full_name || "");
-                       }}
-                       className="flex-1"
-                     >
-                       ערוך שם
-                     </Button>
-                     <Button
-                       variant="outline"
-                       size="sm"
-                       onClick={() => {
-                         setEditAgenciesUserId(user.id);
-                         setEditAgenciesUserEmail(user.email);
-                       }}
-                       className="flex-1"
-                     >
-                       <Settings className="h-3 w-3 ml-1" />
-                       סוכנויות
-                     </Button>
+
+                    {user.campaigner_name && (
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">קמפיינר: </span>
+                        <span>{user.campaigner_name}</span>
+                      </div>
+                    )}
+
+                    {user.sales_person_name && (
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">
+                          איש מכירות:{" "}
+                        </span>
+                        <span>{user.sales_person_name}</span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditNameUserId(user.id);
+                          setEditNameUserEmail(user.email);
+                          setEditNameUserFullName(user.full_name || "");
+                        }}
+                        className="flex-1"
+                      >
+                        ערוך שם
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditAgenciesUserId(user.id);
+                          setEditAgenciesUserEmail(user.email);
+                        }}
+                        className="flex-1"
+                      >
+                        <Settings className="h-3 w-3 ml-1" />
+                        סוכנויות
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -1847,17 +2226,21 @@ export default function Users() {
                         <Shield className="h-3 w-3 ml-1" />
                         סיסמה
                       </Button>
-                     <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1">
                         {user.roles?.map((role: UserRole) => (
-                          <Badge 
+                          <Badge
                             key={role}
-                            className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group text-xs`}
+                            className={`${roleBadgeColors[role] || "bg-gray-500"} relative group text-xs`}
                           >
                             {roleLabels[role]}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm(`האם להסיר את תפקיד ${roleLabels[role]}?`)) {
+                                if (
+                                  confirm(
+                                    `האם להסיר את תפקיד ${roleLabels[role]}?`,
+                                  )
+                                ) {
                                   removeRoleMutation.mutate({
                                     userId: user.id,
                                     role: role as UserRole,
@@ -1894,23 +2277,27 @@ export default function Users() {
                           </SelectContent>
                         </Select>
                       </div>
-                    <div className="flex gap-2 w-full">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => resendInviteMutation.mutate({ email: user.email })}
-                        disabled={resendInviteMutation.isPending}
-                        className="flex-1"
-                      >
-                        <Mail className="h-3 w-3 ml-1" />
-                        שלח מחדש
-                      </Button>
+                      <div className="flex gap-2 w-full">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            resendInviteMutation.mutate({ email: user.email })
+                          }
+                          disabled={resendInviteMutation.isPending}
+                          className="flex-1"
+                        >
+                          <Mail className="h-3 w-3 ml-1" />
+                          שלח מחדש
+                        </Button>
                         {user.id !== currentUserId && (
                           <Button
                             variant="destructive"
                             size="sm"
                             onClick={() => {
-                              if (confirm(`האם להסיר את ${user.email} מהארגון?`)) {
+                              if (
+                                confirm(`האם להסיר את ${user.email} מהארגון?`)
+                              ) {
                                 deleteUserMutation.mutate({ userId: user.id });
                               }
                             }}
@@ -1919,16 +2306,16 @@ export default function Users() {
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Card>
-            <div className="overflow-x-auto">
-              <Table className="min-w-[1200px] whitespace-nowrap">
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <div className="overflow-x-auto">
+                <Table className="min-w-[1200px] whitespace-nowrap">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">שם מלא</TableHead>
@@ -1936,7 +2323,9 @@ export default function Users() {
                       <TableHead className="text-right">תפקידים</TableHead>
                       <TableHead className="text-right">איש צוות</TableHead>
                       <TableHead className="text-right">איש מכירות</TableHead>
-                      <TableHead className="text-right">סוכנויות איש מכירות</TableHead>
+                      <TableHead className="text-right">
+                        סוכנויות איש מכירות
+                      </TableHead>
                       <TableHead className="text-right">סטטוס</TableHead>
                       <TableHead className="text-right">פעולות</TableHead>
                     </TableRow>
@@ -1946,7 +2335,9 @@ export default function Users() {
                       <TableRow key={user.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm">{user.full_name || "-"}</span>
+                            <span className="text-sm">
+                              {user.full_name || "-"}
+                            </span>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1965,15 +2356,19 @@ export default function Users() {
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {user.roles?.map((role: UserRole) => (
-                              <Badge 
+                              <Badge
                                 key={role}
-                                className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group text-xs`}
+                                className={`${roleBadgeColors[role] || "bg-gray-500"} relative group text-xs`}
                               >
                                 {roleLabels[role]}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (confirm(`האם להסיר את תפקיד ${roleLabels[role]}?`)) {
+                                    if (
+                                      confirm(
+                                        `האם להסיר את תפקיד ${roleLabels[role]}?`,
+                                      )
+                                    ) {
                                       removeRoleMutation.mutate({
                                         userId: user.id,
                                         role: role as UserRole,
@@ -2001,7 +2396,9 @@ export default function Users() {
                               </SelectTrigger>
                               <SelectContent className="bg-background z-50">
                                 {Object.entries(roleLabels)
-                                  .filter(([value]) => !user.roles?.includes(value))
+                                  .filter(
+                                    ([value]) => !user.roles?.includes(value),
+                                  )
                                   .map(([value, label]) => (
                                     <SelectItem key={value} value={value}>
                                       {label}
@@ -2023,15 +2420,24 @@ export default function Users() {
                           >
                             <SelectTrigger className="h-8 w-[140px]">
                               <SelectValue>
-                                {user.campaigner_name || <span className="text-muted-foreground">-</span>}
+                                {user.campaigner_name || (
+                                  <span className="text-muted-foreground">
+                                    -
+                                  </span>
+                                )}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent className="bg-background z-50">
                               <SelectItem value="none">
-                                <span className="text-muted-foreground">ללא שיוך</span>
+                                <span className="text-muted-foreground">
+                                  ללא שיוך
+                                </span>
                               </SelectItem>
                               {campaigners?.map((campaigner) => (
-                                <SelectItem key={campaigner.id} value={campaigner.id}>
+                                <SelectItem
+                                  key={campaigner.id}
+                                  value={campaigner.id}
+                                >
                                   {campaigner.full_name}
                                 </SelectItem>
                               ))}
@@ -2050,15 +2456,24 @@ export default function Users() {
                           >
                             <SelectTrigger className="h-8 w-[140px]">
                               <SelectValue>
-                                {user.sales_person_name || <span className="text-muted-foreground">-</span>}
+                                {user.sales_person_name || (
+                                  <span className="text-muted-foreground">
+                                    -
+                                  </span>
+                                )}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent className="bg-background z-50">
                               <SelectItem value="none">
-                                <span className="text-muted-foreground">ללא שיוך</span>
+                                <span className="text-muted-foreground">
+                                  ללא שיוך
+                                </span>
                               </SelectItem>
                               {salesPeople?.map((salesPerson) => (
-                                <SelectItem key={salesPerson.id} value={salesPerson.id}>
+                                <SelectItem
+                                  key={salesPerson.id}
+                                  value={salesPerson.id}
+                                >
                                   {salesPerson.full_name}
                                 </SelectItem>
                               ))}
@@ -2069,13 +2484,19 @@ export default function Users() {
                           {user.sales_person_id ? (
                             <div className="flex items-center gap-2">
                               <span className="text-sm">
-                                {salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id)?.agencies.map(a => a.name).join(", ") || "אין סוכנויות"}
+                                {salesPeopleWithAgencies
+                                  ?.find((sp) => sp.id === user.sales_person_id)
+                                  ?.agencies.map((a) => a.name)
+                                  .join(", ") || "אין סוכנויות"}
                               </span>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => {
-                                  const salesPerson = salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id);
+                                  const salesPerson =
+                                    salesPeopleWithAgencies?.find(
+                                      (sp) => sp.id === user.sales_person_id,
+                                    );
                                   if (salesPerson) {
                                     setEditSalesPersonAgencies(salesPerson);
                                   }
@@ -2086,15 +2507,35 @@ export default function Users() {
                               </Button>
                             </div>
                           ) : (
-                            <span className="text-sm text-muted-foreground">-</span>
+                            <span className="text-sm text-muted-foreground">
+                              -
+                            </span>
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge 
-                            variant={user.status === 'active' ? 'default' : user.status === 'pending' ? 'secondary' : 'outline'}
-                            className={user.status === 'active' ? 'bg-green-500' : user.status === 'pending' ? 'bg-yellow-500' : ''}
+                          <Badge
+                            variant={
+                              user.status === "active"
+                                ? "default"
+                                : user.status === "pending"
+                                  ? "secondary"
+                                  : "outline"
+                            }
+                            className={
+                              user.status === "active"
+                                ? "bg-green-500"
+                                : user.status === "pending"
+                                  ? "bg-yellow-500"
+                                  : ""
+                            }
                           >
-                            {user.status === 'active' ? 'פעיל' : user.status === 'pending' ? 'ממתין' : user.status === 'inactive' ? 'לא פעיל' : user.status}
+                            {user.status === "active"
+                              ? "פעיל"
+                              : user.status === "pending"
+                                ? "ממתין"
+                                : user.status === "inactive"
+                                  ? "לא פעיל"
+                                  : user.status}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -2125,15 +2566,19 @@ export default function Users() {
                             </Button>
                             <div className="flex flex-wrap gap-1">
                               {user.roles?.map((role: UserRole) => (
-                                <Badge 
+                                <Badge
                                   key={role}
-                                  className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group text-xs`}
+                                  className={`${roleBadgeColors[role] || "bg-gray-500"} relative group text-xs`}
                                 >
                                   {roleLabels[role]}
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      if (confirm(`האם להסיר את תפקיד ${roleLabels[role]}?`)) {
+                                      if (
+                                        confirm(
+                                          `האם להסיר את תפקיד ${roleLabels[role]}?`,
+                                        )
+                                      ) {
                                         removeRoleMutation.mutate({
                                           userId: user.id,
                                           role: role as UserRole,
@@ -2161,7 +2606,9 @@ export default function Users() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   {Object.entries(roleLabels)
-                                    .filter(([value]) => !user.roles?.includes(value))
+                                    .filter(
+                                      ([value]) => !user.roles?.includes(value),
+                                    )
                                     .map(([value, label]) => (
                                       <SelectItem key={value} value={value}>
                                         {label}
@@ -2173,7 +2620,11 @@ export default function Users() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => resendInviteMutation.mutate({ email: user.email })}
+                              onClick={() =>
+                                resendInviteMutation.mutate({
+                                  email: user.email,
+                                })
+                              }
                               disabled={resendInviteMutation.isPending}
                               className="h-8"
                             >
@@ -2185,8 +2636,14 @@ export default function Users() {
                                 variant="destructive"
                                 size="sm"
                                 onClick={() => {
-                                  if (confirm(`האם להסיר את ${user.email} מהארגון?`)) {
-                                    deleteUserMutation.mutate({ userId: user.id });
+                                  if (
+                                    confirm(
+                                      `האם להסיר את ${user.email} מהארגון?`,
+                                    )
+                                  ) {
+                                    deleteUserMutation.mutate({
+                                      userId: user.id,
+                                    });
                                   }
                                 }}
                                 className="h-8"
@@ -2212,21 +2669,29 @@ export default function Users() {
           הבנת מערכת הניהול
         </h2>
         <div className="mb-4 md:mb-6 p-3 md:p-4 bg-white dark:bg-gray-900 rounded-lg border">
-          <h3 className="font-semibold mb-2 text-sm md:text-base">ההבדל בין ניהול משתמשים לניהול ארגונים:</h3>
+          <h3 className="font-semibold mb-2 text-sm md:text-base">
+            ההבדל בין ניהול משתמשים לניהול ארגונים:
+          </h3>
           <ul className="text-xs md:text-sm space-y-2 mr-4">
-            <li><strong>• ניהול משתמשים (דף זה):</strong> הוספת עובדים/{t('role_campaigner', true)} לארגון שלך. הם לא מקבלים חשבון נפרד, אלא נכנסים למערכת שלך.</li>
-            <li><strong>• ניהול ארגונים (רק {t('role_super_admin')}):</strong> יצירת לקוחות SaaS חדשים שמקבלים חשבון נפרד לחלוטין.</li>
+            <li>
+              <strong>• ניהול משתמשים (דף זה):</strong> הוספת עובדים/
+              {t("role_campaigner", true)} לארגון שלך. הם לא מקבלים חשבון נפרד,
+              אלא נכנסים למערכת שלך.
+            </li>
+            <li>
+              <strong>• ניהול ארגונים (רק {t("role_super_admin")}):</strong>{" "}
+              יצירת לקוחות SaaS חדשים שמקבלים חשבון נפרד לחלוטין.
+            </li>
           </ul>
         </div>
-        
+
         <h3 className="text-lg font-semibold mb-3">תפקידים זמינים:</h3>
         <div className="space-y-3">
           <div className="flex items-start gap-3">
-            <Badge className={roleBadgeColors.owner}>
-              {roleLabels.owner}
-            </Badge>
+            <Badge className={roleBadgeColors.owner}>{roleLabels.owner}</Badge>
             <p className="text-sm text-muted-foreground">
-              גישה מלאה למערכת - רואה את כל הסוכנויות והלקוחות, יכול לנהל משתמשים ותפקידים
+              גישה מלאה למערכת - רואה את כל הסוכנויות והלקוחות, יכול לנהל
+              משתמשים ותפקידים
             </p>
           </div>
           <div className="flex items-start gap-3">
@@ -2234,7 +2699,9 @@ export default function Users() {
               {roleLabels.team_manager}
             </Badge>
             <p className="text-sm text-muted-foreground">
-              מנהל צוות - רואה רק סוכנויות שמשוייכות אליו דרך קישורים לקמפיינר או ניהול ישיר. חייב להיות משויך לקמפיינר פעיל או לסוכנויות ספציפיות.
+              מנהל צוות - רואה רק סוכנויות שמשוייכות אליו דרך קישורים לקמפיינר
+              או ניהול ישיר. חייב להיות משויך לקמפיינר פעיל או לסוכנויות
+              ספציפיות.
             </p>
           </div>
           <div className="flex items-start gap-3">
@@ -2242,7 +2709,8 @@ export default function Users() {
               {roleLabels.team_manager}
             </Badge>
             <p className="text-sm text-muted-foreground">
-              מנהל צוות - רואה רק סוכנויות שמשוייכות אליו. חייב להיות משויך לקמפיינר פעיל.
+              מנהל צוות - רואה רק סוכנויות שמשוייכות אליו. חייב להיות משויך
+              לקמפיינר פעיל.
             </p>
           </div>
           <div className="flex items-start gap-3">
@@ -2250,7 +2718,8 @@ export default function Users() {
               {roleLabels.campaigner}
             </Badge>
             <p className="text-sm text-muted-foreground">
-              קמפיינר - רואה רק סוכנויות ולקוחות שמשוייכים לקמפיינר שלו. חייב להיות משויך לקמפיינר פעיל.
+              קמפיינר - רואה רק סוכנויות ולקוחות שמשוייכים לקמפיינר שלו. חייב
+              להיות משויך לקמפיינר פעיל.
             </p>
           </div>
         </div>

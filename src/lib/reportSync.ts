@@ -31,7 +31,9 @@ async function invoke(functionName: string, body: Record<string, unknown>) {
   if (data?.error) throw new Error(String(data.error));
 }
 
-export async function syncReportTable(table: SyncableReportTable): Promise<ReportSyncResult> {
+export async function syncReportTable(
+  table: SyncableReportTable,
+): Promise<ReportSyncResult> {
   const type = table.integration_type;
   const settings = table.integration_settings || {};
   const range = dateRange();
@@ -39,37 +41,54 @@ export async function syncReportTable(table: SyncableReportTable): Promise<Repor
   try {
     switch (type) {
       case "facebook_insights":
-        await invoke("sync-facebook-insights", { table_id: table.id, tableId: table.id });
+        await invoke("sync-facebook-insights", {
+          table_id: table.id,
+          tableId: table.id,
+        });
         break;
       case "facebook_ecommerce":
-        await invoke("sync-facebook-ecommerce", { table_id: table.id, tableId: table.id });
+        await invoke("sync-facebook-ecommerce", {
+          table_id: table.id,
+          tableId: table.id,
+        });
         break;
       case "google_ads":
         await invoke("sync-google-ads-data", { table_id: table.id });
         break;
       case "google_analytics":
-        await invoke("sync-google-analytics-data", { tableId: table.id, ...range });
+        await invoke("sync-google-analytics-data", {
+          tableId: table.id,
+          ...range,
+        });
         break;
       case "google_search_console":
-        await invoke("sync-google-search-console-data", { tableId: table.id, ...range });
+        await invoke("sync-google-search-console-data", {
+          tableId: table.id,
+          ...range,
+        });
         break;
       case "ahrefs": {
         if (isSeoReportSource(settings.data_source)) {
-          const clientId = settings.clientId || settings.client_id || table.client_id;
+          const clientId =
+            settings.clientId || settings.client_id || table.client_id;
           if (!clientId) throw new Error("Missing client ID for SEO report");
           await invoke("fetch-ahrefs-snapshot", {
             clientId,
             domain: settings.targetDomain || settings.target || settings.domain,
             country: settings.country || "il",
-            ...(settings.ahrefs_project_id ? { projectId: settings.ahrefs_project_id } : {}),
+            ...(settings.ahrefs_project_id
+              ? { projectId: settings.ahrefs_project_id }
+              : {}),
           });
         } else {
           await invoke("sync-ahrefs-data", {
             tableId: table.id,
             table_id: table.id,
             config: {
-              target: settings.targetDomain || settings.target || settings.domain,
-              dataType: settings.reportType || settings.dataType || "site_explorer",
+              target:
+                settings.targetDomain || settings.target || settings.domain,
+              dataType:
+                settings.reportType || settings.dataType || "site_explorer",
               country: settings.country,
               limit: settings.limit,
             },
@@ -116,10 +135,10 @@ export async function waitForSnapshotReady(
 ): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    const errorNode = node.querySelector('[data-snapshot-error]');
+    const errorNode = node.querySelector("[data-snapshot-error]");
     if (errorNode) {
       const message = errorNode.textContent?.trim();
-      throw new Error(message || 'הדוח לא נטען');
+      throw new Error(message || "הדוח לא נטען");
     }
 
     const ready =

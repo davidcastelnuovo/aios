@@ -21,7 +21,10 @@ export function mergeCreativeVariations(
     merged.push({
       ...existing,
       ...row,
-      rejected: row.rejected === false ? false : Boolean(row.rejected || existing.rejected),
+      rejected:
+        row.rejected === false
+          ? false
+          : Boolean(row.rejected || existing.rejected),
       rejectNote: row.rejectNote || existing.rejectNote,
     });
   }

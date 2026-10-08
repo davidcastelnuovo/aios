@@ -6,7 +6,11 @@ import {
 } from "./recurringTaskAssignees.ts";
 
 test("collectTaskAssigneeIds dedupes primary and collaborators", () => {
-  assert.deepEqual(collectTaskAssigneeIds("a", ["b", "c", "a"]), ["a", "b", "c"]);
+  assert.deepEqual(collectTaskAssigneeIds("a", ["b", "c", "a"]), [
+    "a",
+    "b",
+    "c",
+  ]);
 });
 
 test("shouldFanOutRecurringTasks only when recurring and multiple assignees", () => {

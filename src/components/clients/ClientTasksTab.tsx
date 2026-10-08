@@ -32,12 +32,14 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
     queryFn: async () => {
       let query = supabase
         .from("tasks")
-        .select(`
+        .select(
+          `
           *,
           campaigners (full_name),
           agencies (name),
           clients (name)
-        `)
+        `,
+        )
         .eq("client_id", clientId)
         .order("due_date", { ascending: false });
 
@@ -60,7 +62,13 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ taskId, status }: { taskId: string; status: "open" | "in_progress" | "done" }) => {
+    mutationFn: async ({
+      taskId,
+      status,
+    }: {
+      taskId: string;
+      status: "open" | "in_progress" | "done";
+    }) => {
       const { error } = await supabase
         .from("tasks")
         .update({ status })
@@ -77,11 +85,17 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
     },
   });
 
-  const inProgressTasks = tasks?.filter(t => t.status === "open" || t.status === "in_progress") || [];
-  const completedTasks = tasks?.filter(t => t.status === "done") || [];
+  const inProgressTasks =
+    tasks?.filter((t) => t.status === "open" || t.status === "in_progress") ||
+    [];
+  const completedTasks = tasks?.filter((t) => t.status === "done") || [];
 
   if (isLoading) {
-    return <div className="text-center py-8 text-muted-foreground">טוען משימות...</div>;
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        טוען משימות...
+      </div>
+    );
   }
 
   return (
@@ -98,18 +112,28 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
           }
         />
 
-        <RadioGroup value={dateFilter} onValueChange={(value) => setDateFilter(value as DateFilter)} className="flex gap-4">
+        <RadioGroup
+          value={dateFilter}
+          onValueChange={(value) => setDateFilter(value as DateFilter)}
+          className="flex gap-4"
+        >
           <div className="flex items-center space-x-2 space-x-reverse">
             <RadioGroupItem value="week" id="week" />
-            <Label htmlFor="week" className="cursor-pointer">שבוע אחרון</Label>
+            <Label htmlFor="week" className="cursor-pointer">
+              שבוע אחרון
+            </Label>
           </div>
           <div className="flex items-center space-x-2 space-x-reverse">
             <RadioGroupItem value="month" id="month" />
-            <Label htmlFor="month" className="cursor-pointer">חודש אחרון</Label>
+            <Label htmlFor="month" className="cursor-pointer">
+              חודש אחרון
+            </Label>
           </div>
           <div className="flex items-center space-x-2 space-x-reverse">
             <RadioGroupItem value="all" id="all" />
-            <Label htmlFor="all" className="cursor-pointer">כל הזמן</Label>
+            <Label htmlFor="all" className="cursor-pointer">
+              כל הזמן
+            </Label>
           </div>
         </RadioGroup>
       </div>
@@ -127,10 +151,10 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
               </Badge>
             </h3>
           </div>
-          
+
           <div className="space-y-3 max-h-[500px] overflow-y-auto">
             {inProgressTasks.length > 0 ? (
-              inProgressTasks.map(task => (
+              inProgressTasks.map((task) => (
                 <EntityTaskCard
                   key={task.id}
                   task={task}
@@ -138,7 +162,12 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
                   clientName={clientName}
                   tintByPriority
                   onEdit={() => setEditingTask(task)}
-                  onToggleComplete={() => updateStatusMutation.mutate({ taskId: task.id, status: "done" })}
+                  onToggleComplete={() =>
+                    updateStatusMutation.mutate({
+                      taskId: task.id,
+                      status: "done",
+                    })
+                  }
                 />
               ))
             ) : (
@@ -163,10 +192,10 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
               </Badge>
             </h3>
           </div>
-          
+
           <div className="space-y-3 max-h-[500px] overflow-y-auto">
             {completedTasks.length > 0 ? (
-              completedTasks.map(task => (
+              completedTasks.map((task) => (
                 <EntityTaskCard
                   key={task.id}
                   task={task}
@@ -174,7 +203,12 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
                   clientName={clientName}
                   tintByPriority
                   onEdit={() => setEditingTask(task)}
-                  onToggleComplete={() => updateStatusMutation.mutate({ taskId: task.id, status: "open" })}
+                  onToggleComplete={() =>
+                    updateStatusMutation.mutate({
+                      taskId: task.id,
+                      status: "open",
+                    })
+                  }
                 />
               ))
             ) : (

@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface CreateTenantRequest {
@@ -36,21 +37,27 @@ serve(async (req: Request) => {
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    
+
     // Verify user is super_admin
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Check if user is super_admin or owner
@@ -62,17 +69,25 @@ serve(async (req: Request) => {
 
     if (!userRoles || userRoles.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Only super admins and owners can create tenants" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: "Only super admins and owners can create tenants",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     const payload: CreateTenantRequest = await req.json();
-    
+
     if (!payload.tenant_name || !payload.contact_email) {
       return new Response(
         JSON.stringify({ error: "tenant_name and contact_email are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -81,24 +96,24 @@ serve(async (req: Request) => {
     const generateSlug = (name: string): string => {
       let slug = name
         .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
-        .replace(/\s+/g, '-') // Replace spaces with hyphens
-        .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-        .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
+        .replace(/[^a-z0-9\s-]/g, "") // Remove special characters
+        .replace(/\s+/g, "-") // Replace spaces with hyphens
+        .replace(/-+/g, "-") // Replace multiple hyphens with single hyphen
+        .replace(/^-+|-+$/g, "") // Remove leading/trailing hyphens
         .trim();
-      
+
       // If slug is empty or just dashes, generate a random one
-      if (!slug || slug === '-' || slug.length < 2) {
+      if (!slug || slug === "-" || slug.length < 2) {
         slug = `org-${Date.now().toString(36)}`;
       }
-      
+
       return slug;
     };
-    
+
     const baseSlug = generateSlug(payload.tenant_name);
     let slug = baseSlug;
     let counter = 1;
-    
+
     // Ensure slug is unique
     while (true) {
       const { data: existing } = await supabase
@@ -106,15 +121,15 @@ serve(async (req: Request) => {
         .select("id")
         .eq("slug", slug)
         .maybeSingle();
-      
+
       if (!existing) break;
       slug = `${baseSlug}-${counter}`;
       counter++;
     }
-    
+
     // Determine org_type based on hierarchy rules
-    let orgType: 'root' | 'organization' | 'sub_organization' = 'organization';
-    
+    let orgType: "root" | "organization" | "sub_organization" = "organization";
+
     if (payload.parent_tenant_id) {
       // Get parent tenant org_type
       const { data: parentTenant, error: parentError } = await supabase
@@ -122,31 +137,30 @@ serve(async (req: Request) => {
         .select("org_type")
         .eq("id", payload.parent_tenant_id)
         .single();
-      
+
       if (parentError) {
         throw new Error("Parent tenant not found");
       }
-      
+
       // Validate hierarchy rules
-      if (parentTenant.org_type === 'sub_organization') {
-        throw new Error('תת-ארגון לא יכול ליצור ארגונים נוספים');
+      if (parentTenant.org_type === "sub_organization") {
+        throw new Error("תת-ארגון לא יכול ליצור ארגונים נוספים");
       }
-      
+
       // Determine child org_type based on parent
-      if (parentTenant.org_type === 'root') {
-        orgType = 'organization';
-      } else if (parentTenant.org_type === 'organization') {
-        orgType = 'sub_organization';
+      if (parentTenant.org_type === "root") {
+        orgType = "organization";
+      } else if (parentTenant.org_type === "organization") {
+        orgType = "sub_organization";
       }
     } else {
       // No parent - check if super_admin to create root
-      const isSuperAdmin = userRoles?.some(r => r.role === 'super_admin');
+      const isSuperAdmin = userRoles?.some((r) => r.role === "super_admin");
       if (isSuperAdmin) {
-        orgType = 'root';
+        orgType = "root";
       }
     }
-    
-    
+
     const { data: newTenant, error: tenantError } = await supabase
       .from("tenants")
       .insert({
@@ -168,14 +182,16 @@ serve(async (req: Request) => {
       throw new Error("Failed to create tenant: " + tenantError?.message);
     }
 
-
     // Step 1.5: Initialize configuration based on template or defaults
     if (payload.template_id) {
       // Use template - copy configuration from source tenant
-      const { error: templateError } = await supabase.rpc("copy_tenant_template", {
-        _source_tenant_id: payload.template_id,
-        _target_tenant_id: newTenant.id
-      });
+      const { error: templateError } = await supabase.rpc(
+        "copy_tenant_template",
+        {
+          _source_tenant_id: payload.template_id,
+          _target_tenant_id: newTenant.id,
+        },
+      );
 
       if (templateError) {
         console.error("Error applying template:", templateError);
@@ -184,18 +200,24 @@ serve(async (req: Request) => {
       }
     } else {
       // No template - use default initialization
-      const { error: menuItemsError } = await supabase.rpc("initialize_tenant_menu_items", {
-        _tenant_id: newTenant.id
-      });
+      const { error: menuItemsError } = await supabase.rpc(
+        "initialize_tenant_menu_items",
+        {
+          _tenant_id: newTenant.id,
+        },
+      );
 
       if (menuItemsError) {
         console.error("Error initializing menu items:", menuItemsError);
       } else {
       }
 
-      const { error: customFieldsError } = await supabase.rpc("initialize_default_custom_fields", {
-        _tenant_id: newTenant.id
-      });
+      const { error: customFieldsError } = await supabase.rpc(
+        "initialize_default_custom_fields",
+        {
+          _tenant_id: newTenant.id,
+        },
+      );
 
       if (customFieldsError) {
         console.error("Error initializing custom fields:", customFieldsError);
@@ -204,21 +226,30 @@ serve(async (req: Request) => {
 
       // Initialize terminology from preset if provided
       if (payload.terminology_preset_id) {
-        const { error: terminologyError } = await supabase.rpc("initialize_tenant_terminology_from_preset", {
-          _tenant_id: newTenant.id,
-          _preset_id: payload.terminology_preset_id
-        });
+        const { error: terminologyError } = await supabase.rpc(
+          "initialize_tenant_terminology_from_preset",
+          {
+            _tenant_id: newTenant.id,
+            _preset_id: payload.terminology_preset_id,
+          },
+        );
 
         if (terminologyError) {
-          console.error("Error initializing terminology from preset:", terminologyError);
+          console.error(
+            "Error initializing terminology from preset:",
+            terminologyError,
+          );
         } else {
         }
       } else {
         // Fallback to default marketing agency terminology
-        const { error: terminologyError } = await supabase.rpc("initialize_tenant_terminology", {
-          _tenant_id: newTenant.id,
-          _business_type: "marketing_agency"
-        });
+        const { error: terminologyError } = await supabase.rpc(
+          "initialize_tenant_terminology",
+          {
+            _tenant_id: newTenant.id,
+            _business_type: "marketing_agency",
+          },
+        );
 
         if (terminologyError) {
           console.error("Error initializing terminology:", terminologyError);
@@ -233,7 +264,7 @@ serve(async (req: Request) => {
       .insert({
         tenant_id: newTenant.id,
         user_id: user.id,
-        role: "owner"
+        role: "owner",
       });
 
     if (tenantUserError) {
@@ -243,13 +274,11 @@ serve(async (req: Request) => {
     }
 
     // Step 2.5: Add owner role to user_roles (tenant-specific)
-    const { error: roleError } = await supabase
-      .from("user_roles")
-      .insert({
-        user_id: user.id,
-        role: "owner",
-        tenant_id: newTenant.id,
-      });
+    const { error: roleError } = await supabase.from("user_roles").insert({
+      user_id: user.id,
+      role: "owner",
+      tenant_id: newTenant.id,
+    });
 
     if (roleError) {
       // Check if role already exists (conflict)
@@ -306,16 +335,18 @@ serve(async (req: Request) => {
 
     if (invitationError || !invitation) {
       console.error("Error creating invitation:", invitationError);
-      throw new Error("Failed to create invitation: " + invitationError?.message);
+      throw new Error(
+        "Failed to create invitation: " + invitationError?.message,
+      );
     }
-
 
     // Step 4: Send invitation email
     const invitationUrl = `${req.headers.get("origin") || supabaseUrl}/auth?token=${invitationToken}&type=invite`;
-    
 
     // TODO: Send actual email using your email service
-    console.log(`Invitation Details: Email=${payload.contact_email}, Name=${payload.contact_name}, Org=${payload.tenant_name}, URL=${invitationUrl}`);
+    console.log(
+      `Invitation Details: Email=${payload.contact_email}, Name=${payload.contact_name}, Org=${payload.tenant_name}, URL=${invitationUrl}`,
+    );
 
     return new Response(
       JSON.stringify({
@@ -332,9 +363,8 @@ serve(async (req: Request) => {
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
-
   } catch (error: any) {
     console.error("Error in create-tenant-with-owner:", error);
     return new Response(
@@ -342,7 +372,7 @@ serve(async (req: Request) => {
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

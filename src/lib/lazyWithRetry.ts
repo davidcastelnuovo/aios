@@ -36,7 +36,11 @@ export function lazyWithRetry<T extends ComponentType<any>>(
           // ignore
         }
         window.location.reload();
-        return { default: function ChunkReloadPlaceholder() { return null; } };
+        return {
+          default: function ChunkReloadPlaceholder() {
+            return null;
+          },
+        };
       }
 
       throw error;

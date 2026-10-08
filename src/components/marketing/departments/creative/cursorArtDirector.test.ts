@@ -12,7 +12,12 @@ import {
 const kit = {
   logoUrl: "https://example.com/logo.png",
   styleReferences: [{ url: "https://example.com/person.jpg", name: "talent" }],
-  brandBook: { name: "פרומו", colors: ["#c00000"], notes: "", source: "auto" as const },
+  brandBook: {
+    name: "פרומו",
+    colors: ["#c00000"],
+    notes: "",
+    source: "auto" as const,
+  },
 };
 
 test("talent lock fires on the Hebrew character instruction", () => {
@@ -51,7 +56,11 @@ test("revision target is first, then talent, then technique up to three refs", (
     instructions: "תשתמש בדמות מהרפרנס",
     editTargetUrl: "https://ad.png",
   });
-  assert.deepEqual(plan.urls, ["https://ad.png", "https://talent", "https://technique"]);
+  assert.deepEqual(plan.urls, [
+    "https://ad.png",
+    "https://talent",
+    "https://technique",
+  ]);
   assert.equal(plan.role, "revision");
 });
 
@@ -62,7 +71,11 @@ test("reject director references sit next to the edit target", () => {
     instructions: "",
     editTargetUrl: "https://ad.png",
   });
-  assert.deepEqual(plan.urls, ["https://ad.png", "https://want-this.png", "https://style"]);
+  assert.deepEqual(plan.urls, [
+    "https://ad.png",
+    "https://want-this.png",
+    "https://style",
+  ]);
   assert.equal(plan.role, "revision");
 });
 
@@ -73,7 +86,12 @@ test("logo is always attached even when three other refs already fill the slot",
     editTargetUrl: "https://ad.png",
     logoUrl: "https://logo.png",
   });
-  assert.equal(plan.refs.some((item) => item.kind === "logo" && item.url === "https://logo.png"), true);
+  assert.equal(
+    plan.refs.some(
+      (item) => item.kind === "logo" && item.url === "https://logo.png",
+    ),
+    true,
+  );
   assert.equal(plan.urls.includes("https://logo.png"), true);
   const labeled = labelStaticRef({ url: "https://logo.png", kind: "logo" }, 0);
   assert.match(labeled, /LOGO 1/);
@@ -114,11 +132,17 @@ test("approved-concept art director lock photographs the concept and types the c
 });
 
 test("project style refs are labeled as style, not talent", () => {
-  const style = labelStaticRef({ url: "https://example.com/style.jpg", kind: "style" }, 0);
+  const style = labelStaticRef(
+    { url: "https://example.com/style.jpg", kind: "style" },
+    0,
+  );
   assert.match(style, /STYLE REFERENCE 1 — PRIMARY DESIGN ANCHOR/);
   assert.match(style, /layout architecture/);
   assert.doesNotMatch(style, /keep this face/i);
-  const talent = labelStaticRef({ url: "https://example.com/face.jpg", kind: "talent" }, 0);
+  const talent = labelStaticRef(
+    { url: "https://example.com/face.jpg", kind: "talent" },
+    0,
+  );
   assert.match(talent, /Talent \/ spokesman 1/);
   assert.match(STATIC_CAST_LOCK, /not a storyboard beat/);
   assert.match(LOGO_PLACEMENT_LOCK, /does NOT overlay/i);

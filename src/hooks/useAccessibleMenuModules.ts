@@ -59,4 +59,3 @@ export function useAccessibleMenuModules() {
     isLoading: menuLoading || permissionsLoading,
   };
 }
-

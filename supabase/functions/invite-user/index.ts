@@ -29,7 +29,8 @@ interface InviteUserRequest {
 }
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
-const DEFAULT_FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@aios.co.il";
+const DEFAULT_FROM_EMAIL =
+  Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@aios.co.il";
 const DEFAULT_FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "AIOS";
 
 function safeOrigin(baseUrl?: string): string {
@@ -57,12 +58,17 @@ async function findUserIdByEmail(
   let page = 1;
   const perPage = 200;
   while (page <= 10) {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+      page,
+      perPage,
+    });
     if (error) {
       console.error("listUsers error:", error);
       break;
     }
-    const match = data?.users?.find((u) => u.email?.toLowerCase() === normalized);
+    const match = data?.users?.find(
+      (u) => u.email?.toLowerCase() === normalized,
+    );
     if (match?.id) return match.id;
     if (!data?.users?.length || data.users.length < perPage) break;
     page++;
@@ -164,9 +170,10 @@ async function linkStaffAgencies(
     [idColumn]: staffId,
     agency_id: agencyId,
   }));
-  const { error } = await supabaseAdmin
-    .from(table)
-    .upsert(rows, { onConflict: `${idColumn},agency_id`, ignoreDuplicates: true });
+  const { error } = await supabaseAdmin.from(table).upsert(rows, {
+    onConflict: `${idColumn},agency_id`,
+    ignoreDuplicates: true,
+  });
   if (error) console.error(`Error linking ${table}:`, error);
 }
 
@@ -190,10 +197,13 @@ async function findOrCreateStaff(
     .eq("tenant_id", options.tenantId);
   if (listError) console.error(`Error loading ${options.table}:`, listError);
 
-  const match = pickExistingTeamMember((existing || []) as TeamMemberCandidate[], {
-    email: options.email,
-    fullName: options.fullName,
-  });
+  const match = pickExistingTeamMember(
+    (existing || []) as TeamMemberCandidate[],
+    {
+      email: options.email,
+      fullName: options.fullName,
+    },
+  );
 
   if (match) {
     const patch: Record<string, unknown> = {};
@@ -201,7 +211,9 @@ async function findOrCreateStaff(
     const currentName = (match.full_name || "").trim();
     if (
       options.fullName?.trim() &&
-      (!currentName || currentName === "קמפיינר" || currentName === "איש מכירות")
+      (!currentName ||
+        currentName === "קמפיינר" ||
+        currentName === "איש מכירות")
     ) {
       patch.full_name = options.fullName.trim();
     }
@@ -221,7 +233,10 @@ async function findOrCreateStaff(
 
   if (!options.createIfMissing) return undefined;
 
-  const displayName = options.fullName?.trim() || options.email.split("@")[0] || options.fallbackName;
+  const displayName =
+    options.fullName?.trim() ||
+    options.email.split("@")[0] ||
+    options.fallbackName;
   const { data: created, error } = await supabaseAdmin
     .from(options.table)
     .insert({
@@ -267,11 +282,15 @@ async function absorbEmailCardIntoAssigned(
   for (const row of rows) {
     if (row.id === assignedCampaignerId) continue;
     if ((row.email || "").trim().toLowerCase() !== normalized) continue;
-    const { error: mergeError } = await supabaseAdmin.rpc("merge_assigned_campaigner_duplicate", {
-      p_canonical: assignedCampaignerId,
-      p_duplicate: row.id,
-    });
-    if (mergeError) console.error("Error merging assigned campaigner duplicate:", mergeError);
+    const { error: mergeError } = await supabaseAdmin.rpc(
+      "merge_assigned_campaigner_duplicate",
+      {
+        p_canonical: assignedCampaignerId,
+        p_duplicate: row.id,
+      },
+    );
+    if (mergeError)
+      console.error("Error merging assigned campaigner duplicate:", mergeError);
   }
 }
 
@@ -297,7 +316,10 @@ serve(async (req: Request) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user: requesterUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user: requesterUser },
+      error: authError,
+    } = await supabaseAdmin.auth.getUser(token);
     if (authError || !requesterUser) {
       throw new Error("Unauthorized");
     }
@@ -359,7 +381,15 @@ serve(async (req: Request) => {
       if (!role) {
         throw new Error("Role is required for new invites");
       }
-      const validRoles = ["owner", "agency_owner", "team_manager", "campaigner", "sales_person", "super_admin", "seo"];
+      const validRoles = [
+        "owner",
+        "agency_owner",
+        "team_manager",
+        "campaigner",
+        "sales_person",
+        "super_admin",
+        "seo",
+      ];
       if (!validRoles.includes(role)) {
         throw new Error("Invalid role");
       }
@@ -433,7 +463,9 @@ serve(async (req: Request) => {
     // that already has this email, otherwise create a card. Never match by name.
     // Secondary organizations pass updateProfileTeamLinks=false and must not
     // overwrite the single profile link or mint another team card.
-    let effectiveCampaignerId = updateProfileTeamLinks ? campaignerId : undefined;
+    let effectiveCampaignerId = updateProfileTeamLinks
+      ? campaignerId
+      : undefined;
     if (updateProfileTeamLinks && !effectiveCampaignerId) {
       effectiveCampaignerId = await findOrCreateStaff(supabaseAdmin, {
         table: "campaigners",
@@ -448,8 +480,14 @@ serve(async (req: Request) => {
       });
     }
 
-    let effectiveSalesPersonId = updateProfileTeamLinks ? salesPersonId : undefined;
-    if (updateProfileTeamLinks && role === "sales_person" && !effectiveSalesPersonId) {
+    let effectiveSalesPersonId = updateProfileTeamLinks
+      ? salesPersonId
+      : undefined;
+    if (
+      updateProfileTeamLinks &&
+      role === "sales_person" &&
+      !effectiveSalesPersonId
+    ) {
       effectiveSalesPersonId = await findOrCreateStaff(supabaseAdmin, {
         table: "sales_people",
         agencyTable: "sales_person_agencies",
@@ -474,7 +512,10 @@ serve(async (req: Request) => {
         );
 
       if (fullName) {
-        await supabaseAdmin.from("profiles").update({ full_name: fullName }).eq("id", userId);
+        await supabaseAdmin
+          .from("profiles")
+          .update({ full_name: fullName })
+          .eq("id", userId);
       }
 
       if (updateProfileTeamLinks && effectiveCampaignerId) {
@@ -510,13 +551,18 @@ serve(async (req: Request) => {
       }
 
       if (modulePermissions && modulePermissions.length > 0) {
-        await supabaseAdmin.from("user_permissions").delete().eq("user_id", userId);
+        await supabaseAdmin
+          .from("user_permissions")
+          .delete()
+          .eq("user_id", userId);
         const permissionsToInsert = modulePermissions.map((module) => ({
           user_id: userId,
           module,
           can_access: true,
         }));
-        await supabaseAdmin.from("user_permissions").insert(permissionsToInsert);
+        await supabaseAdmin
+          .from("user_permissions")
+          .insert(permissionsToInsert);
       }
 
       await linkStaffAgencies(
@@ -560,7 +606,12 @@ serve(async (req: Request) => {
             authRedirect,
             false,
           );
-          await sendInvitationEmailViaResend(email, actionLink, orgName, fullName);
+          await sendInvitationEmailViaResend(
+            email,
+            actionLink,
+            orgName,
+            fullName,
+          );
           emailSent = true;
         }
 
@@ -631,10 +682,14 @@ serve(async (req: Request) => {
 
     if (inviteLinkData.error) {
       console.error("generateLink invite error:", inviteLinkData.error);
-      throw new Error(inviteLinkData.error.message || "Failed to create invited user");
+      throw new Error(
+        inviteLinkData.error.message || "Failed to create invited user",
+      );
     }
 
-    const newUserId = inviteLinkData.data?.user?.id ?? await findUserIdByEmail(supabaseAdmin, email);
+    const newUserId =
+      inviteLinkData.data?.user?.id ??
+      (await findUserIdByEmail(supabaseAdmin, email));
     const actionLink = inviteLinkData.data?.properties?.action_link;
 
     if (!actionLink) {
@@ -642,12 +697,15 @@ serve(async (req: Request) => {
     }
 
     if (newUserId) {
-      await supabaseAdmin
-        .from("profiles")
-        .upsert(
-          { id: newUserId, email, full_name: fullName || null, status: "pending" },
-          { onConflict: "id" },
-        );
+      await supabaseAdmin.from("profiles").upsert(
+        {
+          id: newUserId,
+          email,
+          full_name: fullName || null,
+          status: "pending",
+        },
+        { onConflict: "id" },
+      );
 
       if (role) {
         await supabaseAdmin

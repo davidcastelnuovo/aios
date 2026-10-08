@@ -20,7 +20,8 @@ const cameraEnabled = params.get("camera") === "1";
 // runs in parallel the moment the meeting ends.
 const SEGMENT_MS = 10 * 60 * 1000;
 
-const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const el = <T extends HTMLElement>(id: string) =>
+  document.getElementById(id) as T;
 const startBtn = el<HTMLButtonElement>("start-btn");
 const stopBtn = el<HTMLButtonElement>("stop-btn");
 const timerEl = el<HTMLDivElement>("timer");
@@ -48,9 +49,10 @@ let pipWindow: Window | null = null;
 // frames — a perfect borderless circle, nothing floating on screen. Falls back
 // to the always-on-top PiP bubble on browsers without the API.
 // deno-lint-ignore no-explicit-any
-const supportsCompositing = typeof (window as any).MediaStreamTrackProcessor !== "undefined"
+const supportsCompositing =
+  typeof (window as any).MediaStreamTrackProcessor !== "undefined" &&
   // deno-lint-ignore no-explicit-any
-  && typeof (window as any).MediaStreamTrackGenerator !== "undefined";
+  typeof (window as any).MediaStreamTrackGenerator !== "undefined";
 
 const cameraSetup = el<HTMLDivElement>("camera-setup");
 const camPreview = el<HTMLVideoElement>("cam-preview");
@@ -60,12 +62,14 @@ let compositeWorker: Worker | null = null;
 if (mode === "screen" && cameraEnabled) {
   if (supportsCompositing) {
     cameraSetup.classList.remove("hidden");
-    screenHint.textContent = "💡 העיגול יוטמע בתוך ההקלטה עצמה — אפשר למזער את החלון הזה אחרי ההתחלה";
+    screenHint.textContent =
+      "💡 העיגול יוטמע בתוך ההקלטה עצמה — אפשר למזער את החלון הזה אחרי ההתחלה";
     screenHint.classList.remove("hidden");
     void initCameraPreview();
   } else {
     cameraBtn.classList.remove("hidden");
-    screenHint.textContent = "💡 כדי שהמצלמה תיכלל בהקלטה — בחר \"המסך כולו\" (Entire Screen)";
+    screenHint.textContent =
+      '💡 כדי שהמצלמה תיכלל בהקלטה — בחר "המסך כולו" (Entire Screen)';
     screenHint.classList.remove("hidden");
   }
 }
@@ -73,7 +77,11 @@ if (mode === "screen" && cameraEnabled) {
 async function initCameraPreview() {
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: "user" },
+      video: {
+        width: { ideal: 640 },
+        height: { ideal: 640 },
+        facingMode: "user",
+      },
     });
     camPreview.srcObject = cameraStream;
   } catch {
@@ -87,8 +95,14 @@ cornerSelect.addEventListener("change", () => {
 });
 
 // Returns a video track with the camera bubble burned in (or the raw track).
-function buildCompositedTrack(displayTrack: MediaStreamTrack): MediaStreamTrack {
-  if (!supportsCompositing || !cameraStream || cameraStream.getVideoTracks().length === 0) {
+function buildCompositedTrack(
+  displayTrack: MediaStreamTrack,
+): MediaStreamTrack {
+  if (
+    !supportsCompositing ||
+    !cameraStream ||
+    cameraStream.getVideoTracks().length === 0
+  ) {
     return displayTrack;
   }
   try {
@@ -97,11 +111,21 @@ function buildCompositedTrack(displayTrack: MediaStreamTrack): MediaStreamTrack 
     // deno-lint-ignore no-explicit-any
     const Generator = (window as any).MediaStreamTrackGenerator;
     const screenProc = new ScreenProcessor({ track: displayTrack });
-    const camProc = new ScreenProcessor({ track: cameraStream.getVideoTracks()[0] });
+    const camProc = new ScreenProcessor({
+      track: cameraStream.getVideoTracks()[0],
+    });
     const generator = new Generator({ kind: "video" });
-    compositeWorker = new Worker(new URL("./compositeWorker.ts", import.meta.url), { type: "module" });
+    compositeWorker = new Worker(
+      new URL("./compositeWorker.ts", import.meta.url),
+      { type: "module" },
+    );
     compositeWorker.postMessage(
-      { screen: screenProc.readable, cam: camProc.readable, out: generator.writable, corner: cornerSelect.value },
+      {
+        screen: screenProc.readable,
+        cam: camProc.readable,
+        out: generator.writable,
+        corner: cornerSelect.value,
+      },
       [screenProc.readable, camProc.readable, generator.writable],
     );
     return generator as MediaStreamTrack;
@@ -117,7 +141,11 @@ async function startCameraBubble() {
   cameraBtn.disabled = true;
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: "user" },
+      video: {
+        width: { ideal: 640 },
+        height: { ideal: 640 },
+        facingMode: "user",
+      },
     });
   } catch {
     cameraBtn.disabled = false;
@@ -132,7 +160,8 @@ async function startCameraBubble() {
     const doc = pipWindow!.document;
     // The OS window itself is always rectangular — keep the corners pure black
     // and let a clean thin-bordered circle fill the entire window.
-    doc.body.style.cssText = "margin:0;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden;height:100vh;";
+    doc.body.style.cssText =
+      "margin:0;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden;height:100vh;";
     const video = doc.createElement("video");
     video.srcObject = cameraStream;
     video.autoplay = true;
@@ -162,7 +191,11 @@ async function startCameraBubble() {
 }
 
 function stopCameraBubble() {
-  try { pipWindow?.close(); } catch { /* already closed */ }
+  try {
+    pipWindow?.close();
+  } catch {
+    /* already closed */
+  }
   cameraStream?.getTracks().forEach((t) => t.stop());
   cameraStream = null;
   pipWindow = null;
@@ -247,19 +280,30 @@ function pickMimeType(candidates: string[]): string | undefined {
   return candidates.find((t) => MediaRecorder.isTypeSupported(t));
 }
 
-async function uploadWithRetry(path: string, blob: Blob, contentType: string, attempts = 3): Promise<void> {
+async function uploadWithRetry(
+  path: string,
+  blob: Blob,
+  contentType: string,
+  attempts = 3,
+): Promise<void> {
   let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
-    const { error } = await supabase.storage.from("recordings").upload(path, blob, {
-      contentType,
-      upsert: true,
-    });
+    const { error } = await supabase.storage
+      .from("recordings")
+      .upload(path, blob, {
+        contentType,
+        upsert: true,
+      });
     if (!error) return;
     lastError = error;
     console.error(`upload attempt ${i + 1} failed for ${path}:`, error);
     await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
   }
-  throw lastError instanceof Error ? lastError : new Error(String((lastError as { message?: string })?.message ?? lastError));
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(
+        String((lastError as { message?: string })?.message ?? lastError),
+      );
 }
 
 // Large files (a 2h meeting video can exceed 1GB) go through TUS resumable
@@ -275,7 +319,9 @@ function uploadLargeWithProgress(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         reject(new Error("פג תוקף ההתחברות — נא להתחבר מחדש בחלונית התוסף"));
         return;
@@ -320,7 +366,9 @@ async function uploadSmart(
   await uploadLargeWithProgress(path, blob, contentType, (sent, total) => {
     const pct = Math.round((sent / total) * 100);
     progressBar.style.width = `${Math.max(5, Math.round(pct * 0.9))}%`;
-    setWorking(`מעלה ${label} — ${(sent / 1024 / 1024).toFixed(0)}MB מתוך ${totalMB}MB (${pct}%)`);
+    setWorking(
+      `מעלה ${label} — ${(sent / 1024 / 1024).toFixed(0)}MB מתוך ${totalMB}MB (${pct}%)`,
+    );
   });
 }
 
@@ -339,7 +387,10 @@ function uploadPart(channel: "mic" | "sys", partNum: number, blob: Blob) {
           .eq("id", recordingId);
       }
       if (recording) {
-        setStatus(`☁️ ${uploadedPartPaths.length} קטעים נשמרו בענן — ההקלטה מוגנת`, true);
+        setStatus(
+          `☁️ ${uploadedPartPaths.length} קטעים נשמרו בענן — ההקלטה מוגנת`,
+          true,
+        );
       }
     } catch (err) {
       console.error(`part upload failed, will retry at stop: ${path}`, err);
@@ -350,7 +401,12 @@ function uploadPart(channel: "mic" | "sys", partNum: number, blob: Blob) {
 }
 
 function startFrameCapture() {
-  if (audioOnly || !displayStream || displayStream.getVideoTracks().length === 0) return;
+  if (
+    audioOnly ||
+    !displayStream ||
+    displayStream.getVideoTracks().length === 0
+  )
+    return;
   frameVideo = document.createElement("video");
   frameVideo.srcObject = new MediaStream(displayStream.getVideoTracks());
   frameVideo.muted = true;
@@ -369,14 +425,20 @@ async function captureFrame() {
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(w * scale);
   canvas.height = Math.round(h * scale);
-  canvas.getContext("2d")?.drawImage(frameVideo, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.7));
+  canvas
+    .getContext("2d")
+    ?.drawImage(frameVideo, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", 0.7),
+  );
   if (!blob) return;
   framesCaptured += 1;
   const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
   const path = `${tenantId}/${startedAt}_frame_${elapsedSec}.jpg`;
   // Fire-and-forget: a lost frame just means one fewer naming sample.
-  supabase.storage.from("recordings").upload(path, blob, { contentType: "image/jpeg", upsert: true })
+  supabase.storage
+    .from("recordings")
+    .upload(path, blob, { contentType: "image/jpeg", upsert: true })
     .then(async ({ error }) => {
       if (error) {
         console.error("frame upload failed:", error);
@@ -385,7 +447,10 @@ async function captureFrame() {
       if (!thumbnailPath) {
         thumbnailPath = path;
         if (recordingId) {
-          await supabase.from("zoom_recordings").update({ thumbnail_path: path }).eq("id", recordingId);
+          await supabase
+            .from("zoom_recordings")
+            .update({ thumbnail_path: path })
+            .eq("id", recordingId);
         }
       }
     });
@@ -405,12 +470,18 @@ function startChannelRecorder(channel: Channel) {
     mimeType: audioMime,
     audioBitsPerSecond: 32_000,
   });
-  channel.recorder.ondataavailable = (e) => { if (e.data.size > 0) channel.chunks.push(e.data); };
+  channel.recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) channel.chunks.push(e.data);
+  };
   // Fires on rotation and on final stop — ship the finished part right away.
   channel.recorder.onstop = () => {
     if (channel.chunks.length > 0) {
       channel.partNum += 1;
-      uploadPart(channel.name, channel.partNum, new Blob(channel.chunks, { type: "audio/webm" }));
+      uploadPart(
+        channel.name,
+        channel.partNum,
+        new Blob(channel.chunks, { type: "audio/webm" }),
+      );
     }
     channel.chunks = [];
   };
@@ -422,10 +493,16 @@ function startChannelRecorder(channel: Channel) {
 // clash mid-recording ("new row violates row-level security"). Re-assert our
 // tenant right before every DB write, and let callers retry once on RLS errors.
 async function ensureActiveTenant(): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return;
   await supabase.from("user_active_tenant").upsert(
-    { user_id: user.id, tenant_id: tenantId, updated_at: new Date().toISOString() },
+    {
+      user_id: user.id,
+      tenant_id: tenantId,
+      updated_at: new Date().toISOString(),
+    },
     { onConflict: "user_id" },
   );
 }
@@ -436,7 +513,9 @@ const isRlsError = (err: { message?: string } | null) =>
 // Register the recording in AIOS as soon as it starts, so segments uploaded
 // mid-meeting are attached to a row even if the browser crashes before "stop".
 async function createRecordingRow(): Promise<void> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session) return;
   await ensureActiveTenant();
   const { data, error } = await supabase
@@ -444,7 +523,9 @@ async function createRecordingRow(): Promise<void> {
     .insert({
       tenant_id: tenantId,
       meeting_id: `ext_${startedAt}`,
-      meeting_topic: topic || `הקלטת פגישה ${new Date(startedAt).toLocaleDateString("he-IL")}`,
+      meeting_topic:
+        topic ||
+        `הקלטת פגישה ${new Date(startedAt).toLocaleDateString("he-IL")}`,
       recording_type: audioOnly ? "audio_only" : "screen_capture",
       start_time: new Date(startedAt).toISOString(),
       source: "chrome_extension",
@@ -489,10 +570,14 @@ async function startRecording() {
   audioContext = new AudioContext();
   const destination = audioContext.createMediaStreamDestination();
   if (sysTracks.length > 0) {
-    audioContext.createMediaStreamSource(new MediaStream(sysTracks)).connect(destination);
+    audioContext
+      .createMediaStreamSource(new MediaStream(sysTracks))
+      .connect(destination);
   }
   if (micTracks.length > 0) {
-    audioContext.createMediaStreamSource(new MediaStream(micTracks)).connect(destination);
+    audioContext
+      .createMediaStreamSource(new MediaStream(micTracks))
+      .connect(destination);
   }
   const mixedTracks = destination.stream.getAudioTracks();
   if (mixedTracks.length === 0 && !audioOnly) {
@@ -504,41 +589,64 @@ async function startRecording() {
 
   // Playback recording: full video, or continuous mixed audio in audio-only mode.
   if (!audioOnly) {
-    const videoMime = pickMimeType(["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]);
+    const videoMime = pickMimeType([
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+    ]);
     const rawVideoTrack = displayStream.getVideoTracks()[0];
-    const videoTrack = mode === "screen" && cameraEnabled
-      ? buildCompositedTrack(rawVideoTrack)
-      : rawVideoTrack;
+    const videoTrack =
+      mode === "screen" && cameraEnabled
+        ? buildCompositedTrack(rawVideoTrack)
+        : rawVideoTrack;
     const archiveStream = new MediaStream([videoTrack, ...mixedTracks]);
     archiveRecorder = new MediaRecorder(archiveStream, {
       mimeType: videoMime,
       videoBitsPerSecond: 1_000_000,
       audioBitsPerSecond: 96_000,
     });
-    archiveRecorder.ondataavailable = (e) => { if (e.data.size > 0) archiveChunks.push(e.data); };
+    archiveRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) archiveChunks.push(e.data);
+    };
     archiveRecorder.start(1000);
   } else if (mixedTracks.length > 0) {
     archiveRecorder = new MediaRecorder(new MediaStream(mixedTracks), {
       mimeType: audioMime,
       audioBitsPerSecond: 32_000,
     });
-    archiveRecorder.ondataavailable = (e) => { if (e.data.size > 0) archiveChunks.push(e.data); };
+    archiveRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) archiveChunks.push(e.data);
+    };
     archiveRecorder.start(1000);
   }
 
   // Transcription channels — separate mic and system recorders, rotated together.
   if (micTracks.length > 0) {
-    channels.push({ name: "mic", stream: new MediaStream(micTracks), recorder: null, chunks: [], partNum: 0 });
+    channels.push({
+      name: "mic",
+      stream: new MediaStream(micTracks),
+      recorder: null,
+      chunks: [],
+      partNum: 0,
+    });
   }
   if (sysTracks.length > 0) {
-    channels.push({ name: "sys", stream: new MediaStream(sysTracks), recorder: null, chunks: [], partNum: 0 });
+    channels.push({
+      name: "sys",
+      stream: new MediaStream(sysTracks),
+      recorder: null,
+      chunks: [],
+      partNum: 0,
+    });
 
     // Full-length system channel for diarization (uploaded at stop).
     sysFullRecorder = new MediaRecorder(new MediaStream(sysTracks), {
       mimeType: audioMime,
       audioBitsPerSecond: 32_000,
     });
-    sysFullRecorder.ondataavailable = (e) => { if (e.data.size > 0) sysFullChunks.push(e.data); };
+    sysFullRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) sysFullChunks.push(e.data);
+    };
     sysFullRecorder.start(1000);
   }
   for (const channel of channels) startChannelRecorder(channel);
@@ -617,24 +725,38 @@ async function stopAndUpload() {
   ]);
   cleanupStreams();
 
-  const durationMinutes = Math.max(1, Math.round((Date.now() - startedAt) / 60000));
-  const archiveBlob = archiveChunks.length > 0
-    ? new Blob(archiveChunks, { type: audioOnly ? "audio/webm" : "video/webm" })
-    : null;
-  const sysFullBlob = sysFullChunks.length > 0
-    ? new Blob(sysFullChunks, { type: "audio/webm" })
-    : null;
+  const durationMinutes = Math.max(
+    1,
+    Math.round((Date.now() - startedAt) / 60000),
+  );
+  const archiveBlob =
+    archiveChunks.length > 0
+      ? new Blob(archiveChunks, {
+          type: audioOnly ? "audio/webm" : "video/webm",
+        })
+      : null;
+  const sysFullBlob =
+    sysFullChunks.length > 0
+      ? new Blob(sysFullChunks, { type: "audio/webm" })
+      : null;
 
   await finalizeUpload(archiveBlob, sysFullBlob, durationMinutes);
 }
 
-async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null, durationMinutes: number) {
+async function finalizeUpload(
+  archiveBlob: Blob | null,
+  sysFullBlob: Blob | null,
+  durationMinutes: number,
+) {
   progressEl.classList.remove("hidden");
   progressBar.style.width = "10%";
 
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error("פג תוקף ההתחברות — נא להתחבר מחדש בחלונית התוסף");
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session)
+      throw new Error("פג תוקף ההתחברות — נא להתחבר מחדש בחלונית התוסף");
 
     // Wait for in-flight segment uploads (incl. the final rotation parts).
     setWorking("ממתין לסיום שמירת הקטעים");
@@ -657,16 +779,26 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
     // Full system channel for diarization — one continuous file.
     if (sysFullBlob) {
       const sysFullPath = `${tenantId}/${startedAt}_sys_full.webm`;
-      setWorking(`מעלה ערוץ משתתפים לזיהוי דוברים (${(sysFullBlob.size / 1024 / 1024).toFixed(1)}MB) — אל תסגור את החלון`);
+      setWorking(
+        `מעלה ערוץ משתתפים לזיהוי דוברים (${(sysFullBlob.size / 1024 / 1024).toFixed(1)}MB) — אל תסגור את החלון`,
+      );
       await uploadSmart(sysFullPath, sysFullBlob, "audio/webm", "ערוץ משתתפים");
-      if (!uploadedPartPaths.includes(sysFullPath)) uploadedPartPaths.push(sysFullPath);
+      if (!uploadedPartPaths.includes(sysFullPath))
+        uploadedPartPaths.push(sysFullPath);
     }
 
     let filePath: string | null = null;
     if (archiveBlob) {
-      setWorking(`מעלה ${audioOnly ? "אודיו" : "וידאו"} (${(archiveBlob.size / 1024 / 1024).toFixed(1)}MB) — אל תסגור את החלון, זה יכול לקחת כמה דקות`);
+      setWorking(
+        `מעלה ${audioOnly ? "אודיו" : "וידאו"} (${(archiveBlob.size / 1024 / 1024).toFixed(1)}MB) — אל תסגור את החלון, זה יכול לקחת כמה דקות`,
+      );
       filePath = `${tenantId}/${startedAt}.webm`;
-      await uploadSmart(filePath, archiveBlob, archiveBlob.type, audioOnly ? "אודיו" : "וידאו");
+      await uploadSmart(
+        filePath,
+        archiveBlob,
+        archiveBlob.type,
+        audioOnly ? "אודיו" : "וידאו",
+      );
     } else if (uploadedPartPaths.length > 0) {
       filePath = [...uploadedPartPaths].sort()[0];
     }
@@ -678,7 +810,7 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
       duration: durationMinutes,
       file_path: filePath,
       audio_file_paths: finalPaths.length > 0 ? finalPaths : null,
-      file_size: (archiveBlob?.size ?? 0),
+      file_size: archiveBlob?.size ?? 0,
       ...(thumbnailPath ? { thumbnail_path: thumbnailPath } : {}),
     };
 
@@ -690,33 +822,42 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
         .eq("id", recordingId);
       if (updateError && isRlsError(updateError)) {
         await ensureActiveTenant();
-        ({ error: updateError } = await supabase.from("zoom_recordings").update(rowData).eq("id", recordingId));
+        ({ error: updateError } = await supabase
+          .from("zoom_recordings")
+          .update(rowData)
+          .eq("id", recordingId));
       }
-      if (updateError) throw new Error("שגיאה בעדכון ההקלטה: " + updateError.message);
+      if (updateError)
+        throw new Error("שגיאה בעדכון ההקלטה: " + updateError.message);
     } else {
       // Early insert failed at start — create the row now.
-      const insertRow = () => supabase
-        .from("zoom_recordings")
-        .insert({
-          tenant_id: tenantId,
-          meeting_id: `ext_${startedAt}`,
-          meeting_topic: topic || `הקלטת פגישה ${new Date(startedAt).toLocaleDateString("he-IL")}`,
-          recording_type: audioOnly ? "audio_only" : "screen_capture",
-          start_time: new Date(startedAt).toISOString(),
-          source: "chrome_extension",
-          client_id: clientId,
-          host_email: session.user.email ?? null,
-          ...rowData,
-        })
-        .select("id")
-        .single();
+      const insertRow = () =>
+        supabase
+          .from("zoom_recordings")
+          .insert({
+            tenant_id: tenantId,
+            meeting_id: `ext_${startedAt}`,
+            meeting_topic:
+              topic ||
+              `הקלטת פגישה ${new Date(startedAt).toLocaleDateString("he-IL")}`,
+            recording_type: audioOnly ? "audio_only" : "screen_capture",
+            start_time: new Date(startedAt).toISOString(),
+            source: "chrome_extension",
+            client_id: clientId,
+            host_email: session.user.email ?? null,
+            ...rowData,
+          })
+          .select("id")
+          .single();
       let { data: inserted, error: insertError } = await insertRow();
       if (insertError && isRlsError(insertError)) {
         await ensureActiveTenant();
         ({ data: inserted, error: insertError } = await insertRow());
       }
       if (insertError || !inserted) {
-        throw new Error("שגיאה ברישום ההקלטה: " + (insertError?.message ?? "unknown"));
+        throw new Error(
+          "שגיאה ברישום ההקלטה: " + (insertError?.message ?? "unknown"),
+        );
       }
       recordingId = inserted.id;
     }
@@ -724,17 +865,24 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
     setWorking("מפעיל תמלול וסיכום");
     progressBar.style.width = "90%";
 
-    const { error: fnError } = await supabase.functions.invoke("ingest-extension-recording", {
-      body: { recording_id: recordingId },
-    });
+    const { error: fnError } = await supabase.functions.invoke(
+      "ingest-extension-recording",
+      {
+        body: { recording_id: recordingId },
+      },
+    );
     if (fnError) {
       console.error("ingest-extension-recording:", fnError);
-      setStatus("ההקלטה הועלתה, אך הפעלת העיבוד נכשלה — ניתן לתמלל ידנית מעמוד ההקלטות");
+      setStatus(
+        "ההקלטה הועלתה, אך הפעלת העיבוד נכשלה — ניתן לתמלל ידנית מעמוד ההקלטות",
+      );
     }
 
     progressBar.style.width = "100%";
     stopWorking();
-    const recordingsUrl = tenantSlug ? `${APP_ORIGIN}/t/${tenantSlug}/recordings` : APP_ORIGIN;
+    const recordingsUrl = tenantSlug
+      ? `${APP_ORIGIN}/t/${tenantSlug}/recordings`
+      : APP_ORIGIN;
     statusEl.classList.add("ok");
     statusEl.innerHTML = `✅ ההקלטה הועלתה ומעובדת ברקע (תמלול עם דוברים${clientId ? " + סיכום + בריף" : ""}).<br/><a href="${recordingsUrl}" target="_blank" rel="noreferrer">פתח את ספריית ההקלטות</a>`;
   } catch (err) {

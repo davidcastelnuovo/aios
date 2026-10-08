@@ -3,13 +3,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 const jsonHeaders = { "Content-Type": "application/json" };
 
 const htmlEscape = (value: string) =>
-  value.replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;",
-  })[char] || char);
+  value.replace(
+    /[&<>"']/g,
+    (char) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;",
+      })[char] || char,
+  );
 
 Deno.serve(async (req) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -19,7 +23,10 @@ Deno.serve(async (req) => {
     (!!serviceRoleKey && bearer === `Bearer ${serviceRoleKey}`) ||
     (!!workerSecret && bearer === `Bearer ${workerSecret}`);
   if (!authorized) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: jsonHeaders });
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: jsonHeaders,
+    });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
@@ -39,7 +46,10 @@ Deno.serve(async (req) => {
     .limit(25);
 
   if (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: jsonHeaders });
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: jsonHeaders,
+    });
   }
 
   const results: Array<Record<string, unknown>> = [];
@@ -54,11 +64,16 @@ Deno.serve(async (req) => {
     if (!claimed) continue;
 
     const channelResults: Record<string, { ok: boolean; error?: string }> = {};
-    const targetId = schedule.target_type === "table" ? schedule.table_id : schedule.dashboard_id;
+    const targetId =
+      schedule.target_type === "table"
+        ? schedule.table_id
+        : schedule.dashboard_id;
 
     try {
-      const shareTable = schedule.target_type === "table" ? "table_shares" : "dashboard_shares";
-      const targetColumn = schedule.target_type === "table" ? "table_id" : "dashboard_id";
+      const shareTable =
+        schedule.target_type === "table" ? "table_shares" : "dashboard_shares";
+      const targetColumn =
+        schedule.target_type === "table" ? "table_id" : "dashboard_id";
       const route = schedule.target_type === "table" ? "table" : "dashboard";
 
       let { data: share } = await admin
@@ -70,7 +85,10 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (share && !share.is_active) {
-        await admin.from(shareTable).update({ is_active: true }).eq(targetColumn, targetId);
+        await admin
+          .from(shareTable)
+          .update({ is_active: true })
+          .eq(targetColumn, targetId);
       }
       if (!share) {
         const token = `report-${crypto.randomUUID().slice(0, 8)}`;
@@ -97,27 +115,35 @@ Deno.serve(async (req) => {
       if (channels.includes("whatsapp")) {
         try {
           if (!schedule.created_by) throw new Error("Missing schedule owner");
-          const response = await fetch(`${supabaseUrl}/functions/v1/send-green-api-message`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${serviceRoleKey}`,
-              "Content-Type": "application/json",
+          const response = await fetch(
+            `${supabaseUrl}/functions/v1/send-green-api-message`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${serviceRoleKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                clientId: schedule.client_id,
+                tenantId: schedule.tenant_id,
+                groupId:
+                  schedule.whatsapp_group_id ||
+                  schedule.clients?.whatsapp_group_id,
+                phoneNumber: schedule.phone || schedule.clients?.phone,
+                message,
+                senderUserId: schedule.created_by,
+              }),
             },
-            body: JSON.stringify({
-              clientId: schedule.client_id,
-              tenantId: schedule.tenant_id,
-              groupId: schedule.whatsapp_group_id || schedule.clients?.whatsapp_group_id,
-              phoneNumber: schedule.phone || schedule.clients?.phone,
-              message,
-              senderUserId: schedule.created_by,
-            }),
-          });
+          );
           if (!response.ok) throw new Error(await response.text());
           channelResults.whatsapp = { ok: true };
         } catch (channelError) {
           channelResults.whatsapp = {
             ok: false,
-            error: channelError instanceof Error ? channelError.message : String(channelError),
+            error:
+              channelError instanceof Error
+                ? channelError.message
+                : String(channelError),
           };
         }
       }
@@ -135,7 +161,10 @@ Deno.serve(async (req) => {
           if (!resendKey) throw new Error("RESEND_API_KEY is missing");
           const response = await fetch("https://api.resend.com/emails", {
             method: "POST",
-            headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+            headers: {
+              Authorization: `Bearer ${resendKey}`,
+              "Content-Type": "application/json",
+            },
             body: JSON.stringify({
               from: `${Deno.env.get("RESEND_FROM_NAME") || "AfterLead"} <${Deno.env.get("RESEND_FROM_EMAIL") || "noreply@aios.co.il"}>`,
               to: recipients,
@@ -148,14 +177,22 @@ Deno.serve(async (req) => {
         } catch (channelError) {
           channelResults.email = {
             ok: false,
-            error: channelError instanceof Error ? channelError.message : String(channelError),
+            error:
+              channelError instanceof Error
+                ? channelError.message
+                : String(channelError),
           };
         }
       }
 
       const values = Object.values(channelResults);
       const succeeded = values.filter((result) => result.ok).length;
-      const status = succeeded === values.length ? "sent" : succeeded > 0 ? "partial" : "failed";
+      const status =
+        succeeded === values.length
+          ? "sent"
+          : succeeded > 0
+            ? "partial"
+            : "failed";
       await admin.from("report_deliveries").insert({
         schedule_id: schedule.id,
         tenant_id: schedule.tenant_id,
@@ -170,9 +207,16 @@ Deno.serve(async (req) => {
         .from("report_schedules")
         .update({ last_run_at: new Date().toISOString(), locked_at: null })
         .eq("id", schedule.id);
-      results.push({ schedule_id: schedule.id, status, channels: channelResults });
+      results.push({
+        schedule_id: schedule.id,
+        status,
+        channels: channelResults,
+      });
     } catch (scheduleError) {
-      const message = scheduleError instanceof Error ? scheduleError.message : String(scheduleError);
+      const message =
+        scheduleError instanceof Error
+          ? scheduleError.message
+          : String(scheduleError);
       await admin.from("report_deliveries").insert({
         schedule_id: schedule.id,
         tenant_id: schedule.tenant_id,
@@ -188,7 +232,11 @@ Deno.serve(async (req) => {
         .from("report_schedules")
         .update({ last_run_at: new Date().toISOString(), locked_at: null })
         .eq("id", schedule.id);
-      results.push({ schedule_id: schedule.id, status: "failed", error: message });
+      results.push({
+        schedule_id: schedule.id,
+        status: "failed",
+        error: message,
+      });
     }
   }
 

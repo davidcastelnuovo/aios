@@ -1,5 +1,9 @@
 import type { CSSProperties } from "react";
-import type { BrainRoute, ChatLike, ParliamentSeatView } from "@/lib/agentChannelRouting";
+import type {
+  BrainRoute,
+  ChatLike,
+  ParliamentSeatView,
+} from "@/lib/agentChannelRouting";
 import {
   councilSeatFromSlug,
   slugForCouncilSeat,
@@ -10,11 +14,36 @@ import {
 
 export type { CouncilSeatId };
 
-const SEATS: Array<{ id: CouncilSeatId; label: string; role: string; sprite: string }> = [
-  { id: "carmen", label: "כרמן", role: "יו\"ר", sprite: "/command-center/ghost-carmen.png" },
-  { id: "cursor", label: "Cursor", role: "מוח", sprite: "/command-center/ghost-cursor.png" },
-  { id: "grok", label: "Grok", role: "Grok", sprite: "/command-center/ghost-grok.png" },
-  { id: "codex", label: "Codex", role: "Codex", sprite: "/command-center/ghost-codex.png" },
+const SEATS: Array<{
+  id: CouncilSeatId;
+  label: string;
+  role: string;
+  sprite: string;
+}> = [
+  {
+    id: "carmen",
+    label: "כרמן",
+    role: 'יו"ר',
+    sprite: "/command-center/ghost-carmen.png",
+  },
+  {
+    id: "cursor",
+    label: "Cursor",
+    role: "מוח",
+    sprite: "/command-center/ghost-cursor.png",
+  },
+  {
+    id: "grok",
+    label: "Grok",
+    role: "Grok",
+    sprite: "/command-center/ghost-grok.png",
+  },
+  {
+    id: "codex",
+    label: "Codex",
+    role: "Codex",
+    sprite: "/command-center/ghost-codex.png",
+  },
 ];
 
 /** Parliament agents orbit the council sphere at even thirds. */
@@ -50,49 +79,82 @@ interface RoundTableBoardProps {
 }
 
 function speakerOf(m: ChatLike): string {
-  return (m.speaker || m.channel || (m.role === "user" ? "user" : "")).toLowerCase();
+  return (
+    m.speaker ||
+    m.channel ||
+    (m.role === "user" ? "user" : "")
+  ).toLowerCase();
 }
 
-function lastLine(messages: ChatLike[] | undefined, who: CouncilSeatId, activeSlug: string): { text: string; from: string; to: string } | null {
+function lastLine(
+  messages: ChatLike[] | undefined,
+  who: CouncilSeatId,
+  activeSlug: string,
+): { text: string; from: string; to: string } | null {
   const list = messages || [];
   const seatSlug = slugForCouncilSeat(who);
   const own = [...list].reverse().find((m) => {
     if (m.role === "tool_call" || !m.content) return false;
     const speaker = speakerOf(m);
     if (who === "carmen") {
-      return m.role === "assistant" && (speaker === "carmen" || speaker === "internal" || speaker === "parliament" || !m.speaker);
+      return (
+        m.role === "assistant" &&
+        (speaker === "carmen" ||
+          speaker === "internal" ||
+          speaker === "parliament" ||
+          !m.speaker)
+      );
     }
     return speaker === who;
   });
-  const incoming = [...list].reverse().find((m) =>
-    m.role === "user" && m.content && (m.channel === seatSlug || m.channel === who || (!m.channel && activeSlug === seatSlug)),
-  );
+  const incoming = [...list]
+    .reverse()
+    .find(
+      (m) =>
+        m.role === "user" &&
+        m.content &&
+        (m.channel === seatSlug ||
+          m.channel === who ||
+          (!m.channel && activeSlug === seatSlug)),
+    );
   const ownAt = own ? list.lastIndexOf(own) : -1;
   const inAt = incoming ? list.lastIndexOf(incoming) : -1;
   if (inAt > ownAt && incoming?.content) {
-    return { text: incoming.content.slice(0, 220), from: "אתה", to: speakerLabel(who) };
+    return {
+      text: incoming.content.slice(0, 220),
+      from: "אתה",
+      to: speakerLabel(who),
+    };
   }
   if (own?.content) {
-    const to = own.channel && own.channel !== who && own.channel !== "parliament"
-      ? speakerLabel(own.channel)
-      : "השולחן";
+    const to =
+      own.channel && own.channel !== who && own.channel !== "parliament"
+        ? speakerLabel(own.channel)
+        : "השולחן";
     return { text: own.content.slice(0, 220), from: speakerLabel(who), to };
   }
   return null;
 }
 
-function seatState(seats: ParliamentSeatView[] | undefined, id: string): string {
+function seatState(
+  seats: ParliamentSeatView[] | undefined,
+  id: string,
+): string {
   if (id === "carmen") return "chair";
   return seats?.find((s) => s.provider === id)?.state || "idle";
 }
 
-function recentTalk(messages: ChatLike[] | undefined): Array<{ from: string; to: string; text: string }> {
+function recentTalk(
+  messages: ChatLike[] | undefined,
+): Array<{ from: string; to: string; text: string }> {
   return (messages || [])
     .filter((m) => m.role !== "tool_call" && m.content)
     .slice(-5)
     .map((m) => {
-      const from = m.role === "user" ? "אתה" : speakerLabel(m.speaker, m.channel);
-      const to = m.role === "user" ? speakerLabel(m.channel || m.speaker) : "השולחן";
+      const from =
+        m.role === "user" ? "אתה" : speakerLabel(m.speaker, m.channel);
+      const to =
+        m.role === "user" ? speakerLabel(m.channel || m.speaker) : "השולחן";
       return { from, to, text: (m.content || "").slice(0, 90) };
     })
     .reverse();
@@ -151,7 +213,10 @@ function GhostSeat({
         <span
           role="link"
           className="cc-ghost-clarify"
-          onClick={(e) => { e.stopPropagation(); onClarify(seat.id); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClarify(seat.id);
+          }}
         >
           בקש הבהרה
         </span>
@@ -187,11 +252,19 @@ export function RoundTableBoard({
       <div className="cc-direct-stage" dir="rtl">
         <div className="flex items-center justify-between gap-2 px-1">
           <p className="cc-panel-title">{solo.label}</p>
-          <button type="button" onClick={() => onBackToTable?.()} className="text-[10px] text-[var(--cc-accent)] hover:underline">
+          <button
+            type="button"
+            onClick={() => onBackToTable?.()}
+            className="text-[10px] text-[var(--cc-accent)] hover:underline"
+          >
             שולחן אבירים
           </button>
         </div>
-        <button type="button" className="cc-ghost cc-ghost-solo is-selected" tabIndex={-1}>
+        <button
+          type="button"
+          className="cc-ghost cc-ghost-solo is-selected"
+          tabIndex={-1}
+        >
           <span className="cc-ghost-aura" data-seat={solo.id} />
           <span
             className="cc-ghost-sprite"
@@ -221,18 +294,40 @@ export function RoundTableBoard({
         <p className="cc-panel-title">שולחן אבירים</p>
         <div className="flex flex-wrap gap-2">
           {onOpenCouncil && (
-            <button type="button" onClick={onOpenCouncil} className="text-[10px] text-[var(--cc-accent)] hover:underline">
+            <button
+              type="button"
+              onClick={onOpenCouncil}
+              className="text-[10px] text-[var(--cc-accent)] hover:underline"
+            >
               {parliament ? "מועצה" : "הפעל מועצה"}
             </button>
           )}
           {parliament && debating && onContinue && (
-            <button type="button" onClick={onContinue} className="text-[10px] text-[var(--cc-accent)] hover:underline">המשך סבב</button>
+            <button
+              type="button"
+              onClick={onContinue}
+              className="text-[10px] text-[var(--cc-accent)] hover:underline"
+            >
+              המשך סבב
+            </button>
           )}
           {parliament && debating && onSynthesize && (
-            <button type="button" onClick={onSynthesize} className="text-[10px] text-[var(--cc-ok)] hover:underline">סיים וסכם</button>
+            <button
+              type="button"
+              onClick={onSynthesize}
+              className="text-[10px] text-[var(--cc-ok)] hover:underline"
+            >
+              סיים וסכם
+            </button>
           )}
           {onCancel && debating && (
-            <button type="button" onClick={onCancel} className="text-[10px] text-[var(--cc-crit)] hover:underline">עצור</button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-[10px] text-[var(--cc-crit)] hover:underline"
+            >
+              עצור
+            </button>
           )}
         </div>
       </div>
@@ -261,7 +356,9 @@ export function RoundTableBoard({
           const pos = orbitPosition(angle);
           const line = parliament ? lastLine(messages, seat.id, active) : null;
           const state = seatState(seats, seat.id);
-          const selected = councilSeatFromSlug(selectedProvider) === seat.id || selectedProvider === seat.id;
+          const selected =
+            councilSeatFromSlug(selectedProvider) === seat.id ||
+            selectedProvider === seat.id;
           return (
             <GhostSeat
               key={seat.id}
@@ -283,7 +380,9 @@ export function RoundTableBoard({
         <ol className="cc-roundtable-log">
           {log.map((row, i) => (
             <li key={`${row.from}-${i}`}>
-              <span className="cc-roundtable-log-meta">{row.from} → {row.to}</span>
+              <span className="cc-roundtable-log-meta">
+                {row.from} → {row.to}
+              </span>
               {row.text}
             </li>
           ))}

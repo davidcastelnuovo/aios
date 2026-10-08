@@ -10,8 +10,11 @@
  * grid and showed "אין נתונים לתקופה זו". Treat both values as a SEO report
  * source everywhere the dashboard is gated.
  */
-export const SEO_REPORT_DATA_SOURCES = ['ahrefs_reports', 'seo_unified'] as const;
+export const SEO_REPORT_DATA_SOURCES = [
+  "ahrefs_reports",
+  "seo_unified",
+] as const;
 
 export function isSeoReportSource(dataSource: unknown): boolean {
-  return dataSource === 'ahrefs_reports' || dataSource === 'seo_unified';
+  return dataSource === "ahrefs_reports" || dataSource === "seo_unified";
 }

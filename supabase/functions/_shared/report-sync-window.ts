@@ -45,7 +45,7 @@ export type ScheduledSyncPlan = {
  * Blank or malformed `date` values sort below every real report date, so the prune
  * filter has to sweep them explicitly or they duplicate on every sync.
  */
-const EARLIEST_REAL_REPORT_DATE = '1900-01-01';
+const EARLIEST_REAL_REPORT_DATE = "1900-01-01";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -54,16 +54,16 @@ export type SyncWindow = { startDate: string; endDate: string };
 /** Calendar date of `date` in the runtime timezone, as `yyyy-mm-dd`. */
 export function toDateString(date: Date): string {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
 export function shiftDateString(dateString: string, days: number): string {
-  const [year, month, day] = dateString.split('-').map(Number);
+  const [year, month, day] = dateString.split("-").map(Number);
   const shifted = new Date(Date.UTC(year, month - 1, day));
   shifted.setUTCDate(shifted.getUTCDate() + days);
-  return shifted.toISOString().split('T')[0];
+  return shifted.toISOString().split("T")[0];
 }
 
 /**
@@ -78,7 +78,10 @@ export function resolveAdsSyncWindow(
 ): SyncWindow {
   const endDate = configured.endDate > today ? configured.endDate : today;
   const floor = shiftDateString(today, -minDays);
-  const startDate = configured.startDate && configured.startDate < floor ? configured.startDate : floor;
+  const startDate =
+    configured.startDate && configured.startDate < floor
+      ? configured.startDate
+      : floor;
   return { startDate, endDate };
 }
 
@@ -93,7 +96,7 @@ export function resolvePruneStart(
 ): string {
   let startDate = window.startDate;
   for (const raw of syncedDates) {
-    const date = typeof raw === 'string' ? raw.slice(0, 10) : '';
+    const date = typeof raw === "string" ? raw.slice(0, 10) : "";
     if (!ISO_DATE.test(date)) continue;
     if (date < startDate) startDate = date;
   }
@@ -102,16 +105,18 @@ export function resolvePruneStart(
 
 /** Calendar date in Asia/Jerusalem, `yyyy-mm-dd`. Morning crons are scheduled in UTC. */
 export function jerusalemToday(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Jerusalem',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).format(now);
 }
 
 function markerDate(value: string | null | undefined): string | null {
-  return typeof value === 'string' && ISO_DATE.test(value.slice(0, 10)) ? value.slice(0, 10) : null;
+  return typeof value === "string" && ISO_DATE.test(value.slice(0, 10))
+    ? value.slice(0, 10)
+    : null;
 }
 
 /**
@@ -144,8 +149,9 @@ export function planScheduledSyncWindows(
   if (refreshStart > today) refreshStart = today;
 
   const lastLookback = markerDate(lookbackOn);
-  const lookbackDue = !lastLookback
-    || lastLookback <= shiftDateString(today, -SCHEDULED_LOOKBACK_EVERY_DAYS);
+  const lookbackDue =
+    !lastLookback ||
+    lastLookback <= shiftDateString(today, -SCHEDULED_LOOKBACK_EVERY_DAYS);
   const lookbackStart = shiftDateString(today, -SCHEDULED_LOOKBACK_DAYS);
   if (lookbackDue && lookbackStart < refreshStart) refreshStart = lookbackStart;
   if (refreshStart < target) refreshStart = target;
@@ -160,7 +166,8 @@ export function planScheduledSyncWindows(
     return { refresh, catchup: null, historyFrom: covered, ...markers };
   }
 
-  const frontier = covered && covered < refresh.startDate ? covered : refresh.startDate;
+  const frontier =
+    covered && covered < refresh.startDate ? covered : refresh.startDate;
   let chunkStart = shiftDateString(frontier, -catchupDays);
   if (chunkStart < target) chunkStart = target;
   const chunkEnd = shiftDateString(frontier, -1);
@@ -168,7 +175,8 @@ export function planScheduledSyncWindows(
     return {
       refresh,
       catchup: null,
-      historyFrom: covered && covered < refresh.startDate ? covered : refresh.startDate,
+      historyFrom:
+        covered && covered < refresh.startDate ? covered : refresh.startDate,
       ...markers,
     };
   }
@@ -188,7 +196,7 @@ export function planScheduledSyncWindows(
 export function replacedRecordsFilter(pruneStart: string): string {
   return [
     `data->>date.gte.${pruneStart}`,
-    'data->>date.is.null',
+    "data->>date.is.null",
     `data->>date.lt.${EARLIEST_REAL_REPORT_DATE}`,
-  ].join(',');
+  ].join(",");
 }

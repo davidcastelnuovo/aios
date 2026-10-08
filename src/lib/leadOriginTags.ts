@@ -1,5 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
-import { leadOriginTagNames, leadSourceDisplay, type LeadSourceLike } from "@/lib/leadFields";
+import {
+  leadOriginTagNames,
+  leadSourceDisplay,
+  type LeadSourceLike,
+} from "@/lib/leadFields";
 
 const SOURCE_TAG_COLOR = "#3B82F6";
 const CAMPAIGN_TAG_COLOR = "#8B5CF6";
@@ -38,7 +42,9 @@ export async function ensureLeadOriginTags(params: {
       .limit(1);
 
     let nextSort =
-      (typeof maxSortData?.[0]?.sort_order === "number" ? maxSortData[0].sort_order : 0) + 1;
+      (typeof maxSortData?.[0]?.sort_order === "number"
+        ? maxSortData[0].sort_order
+        : 0) + 1;
 
     const sourceLabel = leadSourceDisplay(lead).trim();
     const tagIds: string[] = [];
@@ -77,7 +83,11 @@ export async function ensureLeadOriginTags(params: {
           byLower.set(raced.name.toLowerCase().trim(), raced);
           tagIds.push(raced.id);
         } else {
-          console.error("ensureLeadOriginTags: failed to create tag", name, createError);
+          console.error(
+            "ensureLeadOriginTags: failed to create tag",
+            name,
+            createError,
+          );
         }
         continue;
       }
@@ -90,15 +100,17 @@ export async function ensureLeadOriginTags(params: {
 
     if (tagIds.length === 0) return;
 
-    const { error: assignError } = await supabase.from("chat_contact_tags").upsert(
-      tagIds.map((tag_id) => ({
-        tag_id,
-        lead_id: leadId,
-        tenant_id: tenantId,
-        user_id: userId,
-      })),
-      { onConflict: "tag_id,lead_id", ignoreDuplicates: true },
-    );
+    const { error: assignError } = await supabase
+      .from("chat_contact_tags")
+      .upsert(
+        tagIds.map((tag_id) => ({
+          tag_id,
+          lead_id: leadId,
+          tenant_id: tenantId,
+          user_id: userId,
+        })),
+        { onConflict: "tag_id,lead_id", ignoreDuplicates: true },
+      );
     if (assignError) {
       console.error("ensureLeadOriginTags: failed to assign tags", assignError);
     }

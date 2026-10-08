@@ -2,7 +2,10 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { SeoDashboardView } from "./SeoDashboardView";
-import { resolveLinkedCrmTableId, resolveSeoLinkedGscSiteUrl } from "@/lib/seoDomain";
+import {
+  resolveLinkedCrmTableId,
+  resolveSeoLinkedGscSiteUrl,
+} from "@/lib/seoDomain";
 
 interface SeoDashboardWithGaProps {
   tenantId: string;
@@ -18,7 +21,10 @@ interface SeoDashboardWithGaProps {
  * 1. integration_settings.linkedGaTableId on the client's Ahrefs SEO table
  * 2. A google_analytics crm_table whose client_id matches
  */
-export function SeoDashboardWithGa({ tenantId, clientId }: SeoDashboardWithGaProps) {
+export function SeoDashboardWithGa({
+  tenantId,
+  clientId,
+}: SeoDashboardWithGaProps) {
   // Find the SEO (Ahrefs) table for this client to read linkedGaTableId
   const { data: seoTable } = useQuery({
     queryKey: ["seo-table-for-ga-link", tenantId, clientId],
@@ -77,11 +83,16 @@ export function SeoDashboardWithGa({ tenantId, clientId }: SeoDashboardWithGaPro
   });
 
   const linkedGaTableId = useMemo(() => {
-    const fromSettings = (seoTable?.integration_settings as any)?.linkedGaTableId as string | undefined;
+    const fromSettings = (seoTable?.integration_settings as any)
+      ?.linkedGaTableId as string | undefined;
     const candidates = gaTableByClient?.id
       ? [{ id: gaTableByClient.id, client_id: clientId }]
       : [];
-    return resolveLinkedCrmTableId(fromSettings, candidates, clientId) || fromSettings || "";
+    return (
+      resolveLinkedCrmTableId(fromSettings, candidates, clientId) ||
+      fromSettings ||
+      ""
+    );
   }, [seoTable, gaTableByClient, clientId]);
 
   // Fetch GA records (channel_group + monthly_organic + daily_source) for the linked table
@@ -102,28 +113,50 @@ export function SeoDashboardWithGa({ tenantId, clientId }: SeoDashboardWithGaPro
   });
 
   const savedGscSiteUrl = resolveSeoLinkedGscSiteUrl({
-    integrationSettings: (seoTable?.integration_settings || {}) as Record<string, unknown>,
+    integrationSettings: (seoTable?.integration_settings || {}) as Record<
+      string,
+      unknown
+    >,
     clientGscSiteUrl,
   });
-  const savedLangFilter = ((seoTable?.integration_settings as any)?.linkedGscLangFilter || "all") as "all" | "he" | "en";
+  const savedLangFilter = ((seoTable?.integration_settings as any)
+    ?.linkedGscLangFilter || "all") as "all" | "he" | "en";
 
   const persistGscSiteUrl = async (siteUrl: string) => {
     if (!seoTable?.id || !siteUrl || siteUrl === savedGscSiteUrl) return;
     try {
-      const newSettings = { ...((seoTable.integration_settings as any) || {}), linkedGscSiteUrl: siteUrl };
-      await supabase.from("crm_tables").update({ integration_settings: newSettings }).eq("id", seoTable.id);
+      const newSettings = {
+        ...((seoTable.integration_settings as any) || {}),
+        linkedGscSiteUrl: siteUrl,
+      };
+      await supabase
+        .from("crm_tables")
+        .update({ integration_settings: newSettings })
+        .eq("id", seoTable.id);
     } catch (err) {
-      console.warn("[SeoDashboardWithGa] failed to persist linkedGscSiteUrl", err);
+      console.warn(
+        "[SeoDashboardWithGa] failed to persist linkedGscSiteUrl",
+        err,
+      );
     }
   };
 
   const persistLangFilter = async (lang: "all" | "he" | "en") => {
     if (!seoTable?.id || lang === savedLangFilter) return;
     try {
-      const newSettings = { ...((seoTable.integration_settings as any) || {}), linkedGscLangFilter: lang };
-      await supabase.from("crm_tables").update({ integration_settings: newSettings }).eq("id", seoTable.id);
+      const newSettings = {
+        ...((seoTable.integration_settings as any) || {}),
+        linkedGscLangFilter: lang,
+      };
+      await supabase
+        .from("crm_tables")
+        .update({ integration_settings: newSettings })
+        .eq("id", seoTable.id);
     } catch (err) {
-      console.warn("[SeoDashboardWithGa] failed to persist linkedGscLangFilter", err);
+      console.warn(
+        "[SeoDashboardWithGa] failed to persist linkedGscLangFilter",
+        err,
+      );
     }
   };
 

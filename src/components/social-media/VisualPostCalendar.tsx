@@ -110,7 +110,7 @@ function PostChip({
         "w-full text-right flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] border transition-all",
         "hover:shadow-md hover:scale-[1.02] cursor-pointer",
         cfg.bg,
-        cfg.color
+        cfg.color,
       )}
     >
       {hasImage && (
@@ -150,7 +150,7 @@ function PostEditorDialog({
   const [title, setTitle] = useState(post?.title ?? "");
   const [content, setContent] = useState(post?.content ?? "");
   const [localImage, setLocalImage] = useState<string | null>(
-    post?.media_urls?.[0] ?? null
+    post?.media_urls?.[0] ?? null,
   );
   const [uploading, setUploading] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
@@ -159,7 +159,9 @@ function PostEditorDialog({
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const cfg = post ? (statusConfig[post.status] ?? statusConfig.draft) : statusConfig.draft;
+  const cfg = post
+    ? (statusConfig[post.status] ?? statusConfig.draft)
+    : statusConfig.draft;
 
   const dateStr = post
     ? post.scheduled_at || post.published_at || post.created_at
@@ -209,7 +211,7 @@ function PostEditorDialog({
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     },
-    [post, tenantId]
+    [post, tenantId],
   );
 
   // ── Generate AI image ──
@@ -218,13 +220,16 @@ function PostEditorDialog({
 
     setGeneratingAI(true);
     try {
-      const { data, error } = await supabase.functions.invoke("ai-generate-social-image", {
-        body: {
-          prompt: aiPrompt,
-          tenant_id: tenantId,
-          post_id: post?.id ?? "new",
+      const { data, error } = await supabase.functions.invoke(
+        "ai-generate-social-image",
+        {
+          body: {
+            prompt: aiPrompt,
+            tenant_id: tenantId,
+            post_id: post?.id ?? "new",
+          },
         },
-      });
+      );
 
       if (error) throw error;
       if (data?.image_url) {
@@ -279,7 +284,9 @@ function PostEditorDialog({
           .eq("id", post!.id);
 
         if (error) throw error;
-        queryClient.invalidateQueries({ queryKey: ["social-media-posts", tenantId] });
+        queryClient.invalidateQueries({
+          queryKey: ["social-media-posts", tenantId],
+        });
         toast.success("הפוסט עודכן בהצלחה");
       }
       onSaved();
@@ -289,7 +296,19 @@ function PostEditorDialog({
     } finally {
       setSaving(false);
     }
-  }, [isNew, title, content, localImage, selectedDate, post, createPost, queryClient, tenantId, onSaved, onClose]);
+  }, [
+    isNew,
+    title,
+    content,
+    localImage,
+    selectedDate,
+    post,
+    createPost,
+    queryClient,
+    tenantId,
+    onSaved,
+    onClose,
+  ]);
 
   return (
     <div className="flex flex-col gap-4" dir="rtl">
@@ -306,7 +325,9 @@ function PostEditorDialog({
                 className={cn("text-xs px-2 py-0.5 border", cfg.bg, cfg.color)}
                 variant="outline"
               >
-                <span className={cn("h-1.5 w-1.5 rounded-full me-1.5", cfg.dot)} />
+                <span
+                  className={cn("h-1.5 w-1.5 rounded-full me-1.5", cfg.dot)}
+                />
                 {cfg.label}
               </Badge>
             )}
@@ -343,7 +364,7 @@ function PostEditorDialog({
               "relative w-full aspect-square rounded-xl overflow-hidden border-2 border-dashed",
               localImage
                 ? "border-transparent"
-                : "border-muted-foreground/30 bg-muted/20"
+                : "border-muted-foreground/30 bg-muted/20",
             )}
           >
             {localImage ? (
@@ -479,16 +500,20 @@ function PostEditorDialog({
 // ─── Main VisualPostCalendar ──────────────────────────────────────────────────
 export function VisualPostCalendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedPost, setSelectedPost] = useState<SocialMediaPost | null>(null);
+  const [selectedPost, setSelectedPost] = useState<SocialMediaPost | null>(
+    null,
+  );
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [dialogMode, setDialogMode] = useState<"view" | "edit" | "create" | null>(null);
+  const [dialogMode, setDialogMode] = useState<
+    "view" | "edit" | "create" | null
+  >(null);
   const { data: posts = [] } = useSocialMediaPosts();
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
 
   const scheduledPosts = useMemo(
     () => posts.filter((p) => p.scheduled_at || p.published_at),
-    [posts]
+    [posts],
   );
 
   const monthStart = startOfMonth(currentMonth);
@@ -526,7 +551,9 @@ export function VisualPostCalendar() {
   };
 
   const handleSaved = () => {
-    queryClient.invalidateQueries({ queryKey: ["social-media-posts", tenantId] });
+    queryClient.invalidateQueries({
+      queryKey: ["social-media-posts", tenantId],
+    });
   };
 
   const dayHeaders = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"];
@@ -602,7 +629,7 @@ export function VisualPostCalendar() {
                 className={cn(
                   "border-b border-s min-h-[100px] p-1.5 flex flex-col gap-1 cursor-pointer group",
                   today ? "bg-primary/5" : "bg-background hover:bg-muted/20",
-                  "transition-colors"
+                  "transition-colors",
                 )}
               >
                 {/* Day number + add button */}
@@ -612,7 +639,7 @@ export function VisualPostCalendar() {
                       "text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full",
                       today
                         ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground"
+                        : "text-muted-foreground",
                     )}
                   >
                     {format(day, "d")}
@@ -675,14 +702,15 @@ export function VisualPostCalendar() {
               {dialogMode === "create" ? "פוסט חדש" : "עריכת פוסט"}
             </DialogTitle>
           </DialogHeader>
-          {(dialogMode === "create" || dialogMode === "edit") && selectedDate && (
-            <PostEditorDialog
-              post={selectedPost}
-              selectedDate={selectedDate}
-              onClose={handleDialogClose}
-              onSaved={handleSaved}
-            />
-          )}
+          {(dialogMode === "create" || dialogMode === "edit") &&
+            selectedDate && (
+              <PostEditorDialog
+                post={selectedPost}
+                selectedDate={selectedDate}
+                onClose={handleDialogClose}
+                onSaved={handleSaved}
+              />
+            )}
         </DialogContent>
       </Dialog>
     </div>

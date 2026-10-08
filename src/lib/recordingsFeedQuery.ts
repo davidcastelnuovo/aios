@@ -11,7 +11,8 @@ async function markStaleProcessing(list: any[]) {
     (r) =>
       r.transcription_status === "processing" &&
       !r.transcription &&
-      Date.now() - new Date(r.updated_at || r.created_at).getTime() > STALE_PROCESSING_MS,
+      Date.now() - new Date(r.updated_at || r.created_at).getTime() >
+        STALE_PROCESSING_MS,
   );
   if (stale.length === 0) return;
 
@@ -51,7 +52,10 @@ export async function fetchRecordingsFeed(tenantId: string) {
     return { list, usedFallback: false as const };
   }
 
-  console.error("[recordings] embed query failed, retrying without joins:", error.message);
+  console.error(
+    "[recordings] embed query failed, retrying without joins:",
+    error.message,
+  );
 
   const { data: fallbackData, error: fallbackError } = await supabase
     .from("zoom_recordings")

@@ -10,13 +10,17 @@ type LayoutMap = Record<string, LayoutItem>;
 export function useWorkspaceLayout() {
   const { tenantId } = useCurrentTenant();
   const [userId, setUserId] = useState<string | null>(null);
-  const [layout, setLayout] = useState<LayoutMap>(() => ({ ...DEFAULT_LAYOUTS }));
+  const [layout, setLayout] = useState<LayoutMap>(() => ({
+    ...DEFAULT_LAYOUTS,
+  }));
   const [loaded, setLoaded] = useState(false);
   const saveTimers = useRef<Record<string, any>>({});
 
   // Resolve user id once
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+    supabase.auth
+      .getUser()
+      .then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
   // Load saved layout
@@ -49,16 +53,17 @@ export function useWorkspaceLayout() {
         if (!cancelled) setLoaded(true);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [userId, tenantId]);
 
-  const persist = useCallback((moduleId: string, item: LayoutItem) => {
-    if (!userId || !tenantId) return;
-    clearTimeout(saveTimers.current[moduleId]);
-    saveTimers.current[moduleId] = setTimeout(async () => {
-      await supabase
-        .from("user_workspace_layout")
-        .upsert(
+  const persist = useCallback(
+    (moduleId: string, item: LayoutItem) => {
+      if (!userId || !tenantId) return;
+      clearTimeout(saveTimers.current[moduleId]);
+      saveTimers.current[moduleId] = setTimeout(async () => {
+        await supabase.from("user_workspace_layout").upsert(
           {
             user_id: userId,
             tenant_id: tenantId,
@@ -69,21 +74,32 @@ export function useWorkspaceLayout() {
             height: item.height,
             is_open: item.is_open,
           },
-          { onConflict: "user_id,tenant_id,module_id" }
+          { onConflict: "user_id,tenant_id,module_id" },
         );
-    }, 800);
-  }, [userId, tenantId]);
+      }, 800);
+    },
+    [userId, tenantId],
+  );
 
-  const updateItem = useCallback((moduleId: string, patch: Partial<LayoutItem>) => {
-    setLayout((prev) => {
-      const current = prev[moduleId] ?? DEFAULT_LAYOUTS[(moduleId as IslandId)] ?? {
-        module_id: moduleId, x_position: 0, y_position: 0, width: 320, height: 220, is_open: false,
-      };
-      const next = { ...current, ...patch, module_id: moduleId };
-      persist(moduleId, next);
-      return { ...prev, [moduleId]: next };
-    });
-  }, [persist]);
+  const updateItem = useCallback(
+    (moduleId: string, patch: Partial<LayoutItem>) => {
+      setLayout((prev) => {
+        const current = prev[moduleId] ??
+          DEFAULT_LAYOUTS[moduleId as IslandId] ?? {
+            module_id: moduleId,
+            x_position: 0,
+            y_position: 0,
+            width: 320,
+            height: 220,
+            is_open: false,
+          };
+        const next = { ...current, ...patch, module_id: moduleId };
+        persist(moduleId, next);
+        return { ...prev, [moduleId]: next };
+      });
+    },
+    [persist],
+  );
 
   return { layout, updateItem, loaded };
 }

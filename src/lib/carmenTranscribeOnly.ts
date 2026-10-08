@@ -14,7 +14,9 @@ export const MIC_CAPTURE_MODE_LABELS: Record<MicCaptureMode, string> = {
   transcribe_only: "תמלול בלבד",
 };
 
-export function isMicCaptureMode(value: string | null | undefined): value is MicCaptureMode {
+export function isMicCaptureMode(
+  value: string | null | undefined,
+): value is MicCaptureMode {
   return value === "realtime_voice" || value === "transcribe_only";
 }
 
@@ -34,7 +36,13 @@ export function shouldAllowTtsResponse(inputMode: CarmenInputMode): boolean {
 
 /** Structured client log for transcribe-only pipeline checks. */
 export function logTranscribeOnlyEvent(
-  step: "record_start" | "record_stop" | "transcribe_ok" | "transcribe_fail" | "send_text" | "text_response",
+  step:
+    | "record_start"
+    | "record_stop"
+    | "transcribe_ok"
+    | "transcribe_fail"
+    | "send_text"
+    | "text_response",
   detail: Record<string, unknown> = {},
 ): void {
   console.info("[carmen:transcribe_only]", { step, ...detail });
@@ -49,15 +57,20 @@ export async function transcribeAudioBlob(
   formData.append("audio", audioBlob, opts?.filename ?? "voice.webm");
   if (opts?.inputMode) formData.append("input_mode", opts.inputMode);
 
-  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-voice`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: formData,
-  });
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-voice`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: formData,
+    },
+  );
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error || "Transcription failed");
+    throw new Error(
+      (err as { error?: string }).error || "Transcription failed",
+    );
   }
 
   const { text } = (await res.json()) as { text?: string };

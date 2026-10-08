@@ -18,7 +18,7 @@ export interface ClientOption {
  */
 export function useAgencyClients(
   agencyId: string | null,
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean },
 ) {
   return useQuery({
     queryKey: ["clients", "by-agency", agencyId],
@@ -80,19 +80,23 @@ export function useTableDialogAgencies(options?: {
       ).filter((id) => !(ownedAgencies || []).some((a) => a.id === id));
 
       if (sharedIds.length === 0) {
-        return (ownedAgencies || []).sort((a, b) => a.name.localeCompare(b.name, "he"));
+        return (ownedAgencies || []).sort((a, b) =>
+          a.name.localeCompare(b.name, "he"),
+        );
       }
 
       // 2) Resolve names via agencies SELECT (requires shared-agency RLS for owners).
       //    Prefer a direct id filter over an embed — clearer when RLS blocks a row.
-      const { data: sharedAgencies, error: sharedAgenciesError } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .in("id", sharedIds);
+      const { data: sharedAgencies, error: sharedAgenciesError } =
+        await supabase.from("agencies").select("id, name").in("id", sharedIds);
       if (sharedAgenciesError) throw sharedAgenciesError;
 
-      const mergedAgencies = [...(ownedAgencies || []), ...(sharedAgencies || [])].filter(
-        (agency, index, arr) => arr.findIndex((item) => item.id === agency.id) === index,
+      const mergedAgencies = [
+        ...(ownedAgencies || []),
+        ...(sharedAgencies || []),
+      ].filter(
+        (agency, index, arr) =>
+          arr.findIndex((item) => item.id === agency.id) === index,
       );
 
       return mergedAgencies.sort((a, b) => a.name.localeCompare(b.name, "he"));

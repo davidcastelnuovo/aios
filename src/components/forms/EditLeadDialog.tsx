@@ -5,18 +5,56 @@ import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
-import { Pencil, CalendarIcon, FileText, DollarSign, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2, Paperclip, UserPlus, FolderOpen } from "lucide-react";
+import {
+  Pencil,
+  CalendarIcon,
+  FileText,
+  DollarSign,
+  Send,
+  Trash2,
+  Settings2,
+  Clock,
+  Users,
+  AlertCircle,
+  CheckCircle2,
+  Paperclip,
+  UserPlus,
+  FolderOpen,
+} from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ManageLeadStatusesDialog } from "./ManageLeadStatusesDialog";
 import { format } from "date-fns";
@@ -31,7 +69,10 @@ import { useLeadPipelineStages } from "@/hooks/useLeadPipelineStages";
 import { ManagePipelineStagesDialog } from "./ManagePipelineStagesDialog";
 import { LeadUpdatesTab } from "@/components/leads/LeadUpdatesTab";
 import { SendSignatureFromLeadPanel } from "@/components/leads/SendSignatureFromLeadPanel";
-import { LeadTagSelector, LeadTagBadgesEditable } from "@/components/leads/LeadTagSelector";
+import {
+  LeadTagSelector,
+  LeadTagBadgesEditable,
+} from "@/components/leads/LeadTagSelector";
 import { FolderLinksField } from "./FolderLinksField";
 import { AttachmentsField } from "./AttachmentsField";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
@@ -90,12 +131,21 @@ interface EditLeadDialogProps {
   inline?: boolean;
 }
 
-export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpenChange, hideTrigger = false, initialTab = "details", inline = false }: EditLeadDialogProps) {
+export function EditLeadDialog({
+  lead: initialLead,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+  initialTab = "details",
+  inline = false,
+}: EditLeadDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
-  
+
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange !== undefined ? onOpenChange : setInternalOpen;
-  const [activeTab, setActiveTab] = useState(initialTab === "updates" ? "details" : initialTab);
+  const [activeTab, setActiveTab] = useState(
+    initialTab === "updates" ? "details" : initialTab,
+  );
 
   useEffect(() => {
     if (open) setActiveTab(initialTab === "updates" ? "details" : initialTab);
@@ -105,12 +155,12 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
 
   // Fetch fresh lead data when dialog opens to get latest attachments/folder_links
   const { data: freshLead } = useQuery({
-    queryKey: ['lead-detail', initialLead.id],
+    queryKey: ["lead-detail", initialLead.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('id', initialLead.id)
+        .from("leads")
+        .select("*")
+        .eq("id", initialLead.id)
         .single();
       if (error) throw error;
       return data;
@@ -129,7 +179,7 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
-  const { getFieldLabel, isFieldVisible } = useCustomFieldLabels('lead');
+  const { getFieldLabel, isFieldVisible } = useCustomFieldLabels("lead");
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStages } = useLeadPipelineStages();
   const { tenantId } = useCurrentTenant();
@@ -142,7 +192,7 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
     error: teamMembersError,
   } = useTeamMembersForMeeting(tenantId);
 
-// State for multi-select sales people
+  // State for multi-select sales people
   const [selectedSalesPeople, setSelectedSalesPeople] = useState<string[]>([]);
 
   const form = useForm<FormValues>({
@@ -158,8 +208,12 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
       response_status: lead.response_status || "",
       estimated_deal_value: lead.estimated_deal_value?.toString() || "",
       monthly_budget: lead.monthly_budget?.toString() || "",
-      proposal_date: lead.proposal_date ? new Date(lead.proposal_date) : undefined,
-      itai_meeting_date: lead.itai_meeting_date ? new Date(lead.itai_meeting_date) : undefined,
+      proposal_date: lead.proposal_date
+        ? new Date(lead.proposal_date)
+        : undefined,
+      itai_meeting_date: lead.itai_meeting_date
+        ? new Date(lead.itai_meeting_date)
+        : undefined,
       sale_date: lead.sale_date ? new Date(lead.sale_date) : undefined,
       industry: lead.industry || "",
       products: (() => {
@@ -203,14 +257,14 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
 
   // Fetch current lead's sales people assignments from junction table
   const { data: leadSalesPeople = [] } = useQuery({
-    queryKey: ['lead-sales-people', lead.id],
+    queryKey: ["lead-sales-people", lead.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('lead_sales_people')
-        .select('sales_person_id')
-        .eq('lead_id', lead.id);
+        .from("lead_sales_people")
+        .select("sales_person_id")
+        .eq("lead_id", lead.id);
       if (error) throw error;
-      return data.map(sp => sp.sales_person_id);
+      return data.map((sp) => sp.sales_person_id);
     },
     enabled: !!lead.id && open,
   });
@@ -232,8 +286,12 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
       response_status: lead.response_status || "",
       estimated_deal_value: lead.estimated_deal_value?.toString() || "",
       monthly_budget: lead.monthly_budget?.toString() || "",
-      proposal_date: lead.proposal_date ? new Date(lead.proposal_date) : undefined,
-      itai_meeting_date: lead.itai_meeting_date ? new Date(lead.itai_meeting_date) : undefined,
+      proposal_date: lead.proposal_date
+        ? new Date(lead.proposal_date)
+        : undefined,
+      itai_meeting_date: lead.itai_meeting_date
+        ? new Date(lead.itai_meeting_date)
+        : undefined,
       sale_date: lead.sale_date ? new Date(lead.sale_date) : undefined,
       industry: lead.industry || "",
       products: (() => {
@@ -262,7 +320,7 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
   useEffect(() => {
     // Only sync when dialog is open
     if (!open) return;
-    
+
     if (leadSalesPeople.length > 0) {
       setSelectedSalesPeople(leadSalesPeople);
     } else if (lead.sales_person_id) {
@@ -275,30 +333,30 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
 
   // Fetch lead's tags
   const { data: leadTagIds = [] } = useQuery({
-    queryKey: ['lead-tags', lead.id],
+    queryKey: ["lead-tags", lead.id],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
-        .from('chat_contact_tags')
-        .select('tag_id')
-        .eq('lead_id', lead.id)
-        .eq('tenant_id', tenantId);
+        .from("chat_contact_tags")
+        .select("tag_id")
+        .eq("lead_id", lead.id)
+        .eq("tenant_id", tenantId);
       if (error) throw error;
-      return data.map(ct => ct.tag_id);
+      return data.map((ct) => ct.tag_id);
     },
     enabled: !!tenantId && !!lead.id && open,
   });
 
   // Fetch all tags for displaying badges
   const { data: allTags = [] } = useQuery({
-    queryKey: ['chat-tags', tenantId],
+    queryKey: ["chat-tags", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
-        .from('chat_tags')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('sort_order', { ascending: true });
+        .from("chat_tags")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("sort_order", { ascending: true });
       if (error) throw error;
       return data;
     },
@@ -306,16 +364,17 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
     staleTime: 60000,
   });
 
-const updateMutation = useMutation({
+  const updateMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       const safeCompanyName = (() => {
-        if (isFieldVisible('company_name')) return (values.company_name || '').trim();
+        if (isFieldVisible("company_name"))
+          return (values.company_name || "").trim();
 
-        const existing = (lead.company_name || '').trim();
+        const existing = (lead.company_name || "").trim();
         if (existing) return existing;
 
-        const fromContact = (values.contact_name || '').trim();
-        return fromContact || 'ליד';
+        const fromContact = (values.contact_name || "").trim();
+        return fromContact || "ליד";
       })();
 
       const submitData: any = {
@@ -324,24 +383,35 @@ const updateMutation = useMutation({
         email: values.email || null,
         phone: values.phone || null,
         campaign_name: (values.campaign_name || "").trim() || null,
-        source: (inferLeadSource(values.source || lead.source || "paid_ads") as any),
+        source: inferLeadSource(
+          values.source || lead.source || "paid_ads",
+        ) as any,
         status: (values.status as any) || "new",
-        response_status: values.response_status && values.response_status !== "none"
-          ? (resolveResponseStatusKey(values.response_status, leadStatuses) || values.response_status)
+        response_status:
+          values.response_status && values.response_status !== "none"
+            ? resolveResponseStatusKey(values.response_status, leadStatuses) ||
+              values.response_status
+            : null,
+        estimated_deal_value: values.estimated_deal_value
+          ? parseFloat(values.estimated_deal_value)
           : null,
-        estimated_deal_value: values.estimated_deal_value 
-          ? parseFloat(values.estimated_deal_value) 
-          : null,
-        monthly_budget: values.monthly_budget 
-          ? parseFloat(values.monthly_budget) 
+        monthly_budget: values.monthly_budget
+          ? parseFloat(values.monthly_budget)
           : null,
         proposal_date: values.proposal_date || null,
         sale_date: values.sale_date || null,
         industry: values.industry || null,
-        products: values.products && values.products.length > 0 ? JSON.stringify(values.products) : null,
+        products:
+          values.products && values.products.length > 0
+            ? JSON.stringify(values.products)
+            : null,
         notes: values.notes || null,
-        sales_person_id: selectedSalesPeople.length > 0 ? selectedSalesPeople[0] : null,
-        agency_id: values.agency_id && values.agency_id !== 'none' ? values.agency_id : null,
+        sales_person_id:
+          selectedSalesPeople.length > 0 ? selectedSalesPeople[0] : null,
+        agency_id:
+          values.agency_id && values.agency_id !== "none"
+            ? values.agency_id
+            : null,
         folder_link: values.folder_link || null,
         lost_reason: values.lost_reason || null,
         created_at: values.created_at || new Date(),
@@ -352,16 +422,19 @@ const updateMutation = useMutation({
       // Helper function to update sales people assignments
       const updateSalesPeopleAssignments = async () => {
         // Delete existing assignments
-        await supabase.from('lead_sales_people').delete().eq('lead_id', lead.id);
-        
+        await supabase
+          .from("lead_sales_people")
+          .delete()
+          .eq("lead_id", lead.id);
+
         // Insert new assignments
         if (selectedSalesPeople.length > 0 && lead.tenant_id) {
-          const assignments = selectedSalesPeople.map(spId => ({
+          const assignments = selectedSalesPeople.map((spId) => ({
             lead_id: lead.id,
             sales_person_id: spId,
             tenant_id: lead.tenant_id,
           }));
-          await supabase.from('lead_sales_people').insert(assignments);
+          await supabase.from("lead_sales_people").insert(assignments);
         }
       };
 
@@ -372,7 +445,11 @@ const updateMutation = useMutation({
       ]);
 
       if (leadResult.error) throw leadResult.error;
-      const data = leadResult.data?.[0] ?? { ...lead, ...submitData, id: lead.id };
+      const data = leadResult.data?.[0] ?? {
+        ...lead,
+        ...submitData,
+        id: lead.id,
+      };
 
       if (data && tenantId && userId) {
         await ensureLeadOriginTags({
@@ -386,27 +463,29 @@ const updateMutation = useMutation({
 
       // Fire-and-forget: trigger automation in background (don't await!)
       if (data && lead.status !== data.status) {
-        supabase.functions.invoke('trigger-automation', {
-          body: {
-            trigger_type: 'lead_status_changed',
-            data: {
-              id: data.id,
-              status: data.status,
-              new_status: data.status,
-              old_status: lead.status,
-              contact_name: data.contact_name,
-              company_name: data.company_name,
-              phone: data.phone,
-              email: data.email,
-              agency_id: data.agency_id,
-              sales_person_id: data.sales_person_id,
-              tenant_id: data.tenant_id
+        supabase.functions
+          .invoke("trigger-automation", {
+            body: {
+              trigger_type: "lead_status_changed",
+              data: {
+                id: data.id,
+                status: data.status,
+                new_status: data.status,
+                old_status: lead.status,
+                contact_name: data.contact_name,
+                company_name: data.company_name,
+                phone: data.phone,
+                email: data.email,
+                agency_id: data.agency_id,
+                sales_person_id: data.sales_person_id,
+                tenant_id: data.tenant_id,
+              },
+              tenant_id: data.tenant_id,
             },
-            tenant_id: data.tenant_id
-          }
-        }).catch(err => console.error('Automation trigger failed:', err));
+          })
+          .catch((err) => console.error("Automation trigger failed:", err));
       }
-      
+
       return data;
     },
     // Optimistic update: close dialog immediately and update cache
@@ -421,7 +500,7 @@ const updateMutation = useMutation({
 
       // Show immediate feedback
       sonnerToast.info("מעדכן ליד...");
-      
+
       // Close dialog immediately for better UX
       setOpen(false);
 
@@ -432,8 +511,12 @@ const updateMutation = useMutation({
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["lead-sales-people", tenantId, lead.id] });
-      queryClient.invalidateQueries({ queryKey: ["lead-detail", tenantId, lead.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["lead-sales-people", tenantId, lead.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["lead-detail", tenantId, lead.id],
+      });
       queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["lead-tags", lead.id] });
       sonnerToast.success("ליד עודכן בהצלחה");
@@ -450,7 +533,6 @@ const updateMutation = useMutation({
     },
   });
 
-
   // Wrapper for scheduling meeting with lead details
   const handleScheduleMeeting = async () => {
     const inviteeLabels = teamMembers
@@ -460,7 +542,7 @@ const updateMutation = useMutation({
       contactName: lead.contact_name || lead.company_name,
       contactEmail: lead.email,
       contactId: lead.id,
-      contactType: 'lead',
+      contactType: "lead",
       additionalEmails: selectedTeamMembers,
       inviteeLabels,
       onSuccess: () => {
@@ -472,9 +554,9 @@ const updateMutation = useMutation({
   };
 
   const onSubmit = (values: FormValues) => {
-    if (isFieldVisible('company_name') && !(values.company_name || '').trim()) {
+    if (isFieldVisible("company_name") && !(values.company_name || "").trim()) {
       sonnerToast.error("שם העסק הוא שדה חובה");
-      setActiveTab('details');
+      setActiveTab("details");
       return;
     }
     updateMutation.mutate(values);
@@ -489,952 +571,1187 @@ const updateMutation = useMutation({
   // Get available time slots from the meeting scheduler hook
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
   const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
-  const startConflict = !!meetingScheduler.meetingTime && timeSlots.some(s => s.time === meetingScheduler.meetingTime && !s.available);
-  const endConflict = !!meetingScheduler.meetingEndTime && endTimeSlots.some(s => s.time === meetingScheduler.meetingEndTime && !s.available);
+  const startConflict =
+    !!meetingScheduler.meetingTime &&
+    timeSlots.some(
+      (s) => s.time === meetingScheduler.meetingTime && !s.available,
+    );
+  const endConflict =
+    !!meetingScheduler.meetingEndTime &&
+    endTimeSlots.some(
+      (s) => s.time === meetingScheduler.meetingEndTime && !s.available,
+    );
   const meetingHasConflict = startConflict || endConflict;
 
   const body = (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={cn("grid w-full grid-cols-2 sm:grid-cols-5 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm", inline && "hidden")}>
-            <TabsTrigger 
-              value="details" 
-              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
-            >
-              <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
-              פרטי ליד
-            </TabsTrigger>
-            <TabsTrigger 
-              value="proposals" 
-              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
-            >
-              <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
-              הצעות מחיר
-            </TabsTrigger>
-            <TabsTrigger 
-              value="files" 
-              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
-            >
-              <Paperclip className="h-3 w-3 sm:h-4 sm:w-4" />
-              קבצים
-              {(folderLinks.length + attachments.length) > 0 && (
-                <span className="mr-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-xs">
-                  {folderLinks.length + attachments.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger 
-              value="docs" 
-              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
-            >
-              <FolderOpen className="h-3 w-3 sm:h-4 sm:w-4" />
-              מסמכים
-            </TabsTrigger>
-              <TabsTrigger 
-              value="meeting" 
-              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
-            >
-              <Users className="h-3 w-3 sm:h-4 sm:w-4" />
-              קביעת פגישה
-            </TabsTrigger>
-          </TabsList>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <TabsList
+        className={cn(
+          "grid w-full grid-cols-2 sm:grid-cols-5 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm",
+          inline && "hidden",
+        )}
+      >
+        <TabsTrigger
+          value="details"
+          className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
+        >
+          <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+          פרטי ליד
+        </TabsTrigger>
+        <TabsTrigger
+          value="proposals"
+          className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
+        >
+          <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
+          הצעות מחיר
+        </TabsTrigger>
+        <TabsTrigger
+          value="files"
+          className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
+        >
+          <Paperclip className="h-3 w-3 sm:h-4 sm:w-4" />
+          קבצים
+          {folderLinks.length + attachments.length > 0 && (
+            <span className="mr-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-xs">
+              {folderLinks.length + attachments.length}
+            </span>
+          )}
+        </TabsTrigger>
+        <TabsTrigger
+          value="docs"
+          className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
+        >
+          <FolderOpen className="h-3 w-3 sm:h-4 sm:w-4" />
+          מסמכים
+        </TabsTrigger>
+        <TabsTrigger
+          value="meeting"
+          className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
+        >
+          <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+          קביעת פגישה
+        </TabsTrigger>
+      </TabsList>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="mt-6">
-              
-              {/* Tab 1: Lead Details */}
-              <TabsContent value="details" className="space-y-4 mt-0">
-                <div className="grid grid-cols-2 gap-4" dir="rtl">
-                  <FormField
-                    control={form.control}
-                    name="contact_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">{getFieldLabel('contact_name', 'שם איש קשר')} *</FormLabel>
-                        <FormControl>
-                          <Input {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+          className="mt-6"
+        >
+          {/* Tab 1: Lead Details */}
+          <TabsContent value="details" className="space-y-4 mt-0">
+            <div className="grid grid-cols-2 gap-4" dir="rtl">
+              <FormField
+                control={form.control}
+                name="contact_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("contact_name", "שם איש קשר")} *
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        className="text-right rounded-lg border-2 h-11 px-4"
+                        dir="rtl"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                  {isFieldVisible('company_name') && (
-                    <FormField
-                      control={form.control}
-                      name="company_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm font-medium">{getFieldLabel('company_name', 'שם העסק')} *</FormLabel>
-                          <FormControl>
-                            <Input {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                </div>
-
+              {isFieldVisible("company_name") && (
                 <FormField
                   control={form.control}
-                  name="agency_id"
+                  name="company_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">{getFieldLabel('agency_id', 'סוכנות')} *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormLabel className="text-sm font-medium">
+                        {getFieldLabel("company_name", "שם העסק")} *
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          className="text-right rounded-lg border-2 h-11 px-4"
+                          dir="rtl"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+
+            <FormField
+              control={form.control}
+              name="agency_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">
+                    {getFieldLabel("agency_id", "סוכנות")} *
+                  </FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="text-right rounded-lg border-2 h-11">
+                        <SelectValue placeholder="בחר סוכנות" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent
+                      className="bg-background z-50 text-right"
+                      align="end"
+                    >
+                      {agencies?.map((agency) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Multi-select salespeople */}
+            <FormItem>
+              <FormLabel className="text-sm font-medium">אנשי מכירות</FormLabel>
+              <div className="border rounded-lg p-3 max-h-[150px] overflow-y-auto space-y-2 bg-muted/30">
+                {salesPeople && salesPeople.length > 0 ? (
+                  salesPeople.map((person) => (
+                    <div key={person.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`sp-edit-${person.id}`}
+                        checked={selectedSalesPeople.includes(person.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedSalesPeople((prev) => [
+                              ...prev,
+                              person.id,
+                            ]);
+                          } else {
+                            setSelectedSalesPeople((prev) =>
+                              prev.filter((id) => id !== person.id),
+                            );
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={`sp-edit-${person.id}`}
+                        className="text-sm cursor-pointer flex-1"
+                      >
+                        {person.full_name}
+                      </label>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    אין אנשי מכירות זמינים
+                  </p>
+                )}
+              </div>
+              {selectedSalesPeople.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  נבחרו {selectedSalesPeople.length} אנשי מכירות
+                </p>
+              )}
+            </FormItem>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">טלפון</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        className="text-right rounded-lg border-2 h-11 px-4"
+                        dir="rtl"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      אימייל
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        {...field}
+                        className="text-right rounded-lg border-2 h-11 px-4"
+                        dir="rtl"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* ManyChat ID - Read Only */}
+            {isFieldVisible("manychat_subscriber_id") && (
+              <div className="space-y-2">
+                <FormLabel className="text-sm font-medium">
+                  {getFieldLabel("manychat_subscriber_id", "ManyChat ID")}
+                </FormLabel>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={lead.manychat_subscriber_id || ""}
+                    disabled
+                    className="text-right rounded-lg border-2 h-11 px-4 bg-muted"
+                    dir="ltr"
+                    placeholder={
+                      lead.manychat_subscriber_id === "SYNC_CONFLICT"
+                        ? "קונפליקט - נדרש סנכרון ידני"
+                        : "ממתין לסנכרון"
+                    }
+                  />
+                  {lead.manychat_subscriber_id &&
+                    lead.manychat_subscriber_id !== "SYNC_CONFLICT" && (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                    )}
+                  {lead.manychat_subscriber_id === "SYNC_CONFLICT" && (
+                    <AlertCircle className="h-5 w-5 text-amber-500" />
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="response_status"
+                render={({ field }) => {
+                  const selectedStatus = findLeadStatus(
+                    field.value,
+                    leadStatuses,
+                  );
+                  const unmatched = unmatchedResponseStatusValue(
+                    field.value,
+                    leadStatuses,
+                  );
+                  return (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">
+                        סטטוס תגובה
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={responseStatusSelectValue(
+                          field.value,
+                          leadStatuses,
+                        )}
+                        open={responseSelectOpen}
+                        onOpenChange={setResponseSelectOpen}
+                      >
                         <FormControl>
-                          <SelectTrigger className="text-right rounded-lg border-2 h-11">
-                            <SelectValue placeholder="בחר סוכנות" />
+                          <SelectTrigger
+                            className="text-right rounded-lg border-2 h-11"
+                            style={{
+                              backgroundColor:
+                                selectedStatus?.color || undefined,
+                              color:
+                                field.value && field.value !== "none"
+                                  ? "#fff"
+                                  : undefined,
+                            }}
+                          >
+                            <SelectValue placeholder="בחר סטטוס" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent className="bg-background z-50 text-right" align="end">
-                          {agencies?.map((agency) => (
-                            <SelectItem key={agency.id} value={agency.id}>
-                              {agency.name}
+                        <SelectContent
+                          className="bg-background z-50 text-right"
+                          align="end"
+                        >
+                          <SelectItem value="none">ללא סטטוס</SelectItem>
+                          {unmatched && (
+                            <SelectItem value={unmatched}>
+                              {unmatched}
+                            </SelectItem>
+                          )}
+                          {leadStatuses.map((status) => (
+                            <SelectItem
+                              key={status.status_key}
+                              value={status.status_key}
+                              style={{
+                                backgroundColor: status.color,
+                                color: "#fff",
+                              }}
+                            >
+                              {status.label}
                             </SelectItem>
                           ))}
+                          <div className="border-t mt-1 pt-1">
+                            <ManageLeadStatusesDialog
+                              trigger={
+                                <button
+                                  type="button"
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                                >
+                                  <Settings2 className="h-4 w-4" />
+                                  ניהול סטטוסים
+                                </button>
+                              }
+                              onDialogOpen={() => setResponseSelectOpen(false)}
+                            />
+                          </div>
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
-                  )}
-                />
+                  );
+                }}
+              />
 
-                {/* Multi-select salespeople */}
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">אנשי מכירות</FormLabel>
-                  <div className="border rounded-lg p-3 max-h-[150px] overflow-y-auto space-y-2 bg-muted/30">
-                    {salesPeople && salesPeople.length > 0 ? (
-                      salesPeople.map((person) => (
-                        <div key={person.id} className="flex items-center gap-2">
-                          <Checkbox
-                            id={`sp-edit-${person.id}`}
-                            checked={selectedSalesPeople.includes(person.id)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setSelectedSalesPeople(prev => [...prev, person.id]);
-                              } else {
-                                setSelectedSalesPeople(prev => 
-                                  prev.filter(id => id !== person.id)
-                                );
-                              }
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => {
+                  const selectedStage = pipelineStages.find(
+                    (s) => s.stage_key === field.value,
+                  );
+                  return (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">
+                        שלב במשפך *
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        open={stageSelectOpen}
+                        onOpenChange={setStageSelectOpen}
+                      >
+                        <FormControl>
+                          <SelectTrigger
+                            className="text-right rounded-lg border-2 h-11"
+                            style={{
+                              backgroundColor:
+                                selectedStage?.color || undefined,
+                              color: field.value ? "#fff" : undefined,
                             }}
-                          />
-                          <label 
-                            htmlFor={`sp-edit-${person.id}`}
-                            className="text-sm cursor-pointer flex-1"
                           >
-                            {person.full_name}
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent
+                          className="bg-background z-50 text-right"
+                          align="end"
+                        >
+                          {pipelineStages.map((stage) => (
+                            <SelectItem
+                              key={stage.stage_key}
+                              value={stage.stage_key}
+                              style={{
+                                backgroundColor: stage.color,
+                                color: "#fff",
+                              }}
+                            >
+                              {stage.label}
+                            </SelectItem>
+                          ))}
+                          <div className="border-t mt-1 pt-1">
+                            <ManagePipelineStagesDialog
+                              trigger={
+                                <button
+                                  type="button"
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                                >
+                                  <Settings2 className="h-4 w-4" />
+                                  ניהול שלבי משפך
+                                </button>
+                              }
+                              onDialogOpen={() => setStageSelectOpen(false)}
+                            />
+                          </div>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
+              />
+            </div>
+
+            {/* Tags field */}
+            <div className="space-y-2">
+              <FormLabel className="text-sm font-medium">תגיות</FormLabel>
+              <div className="flex items-start gap-2 flex-wrap">
+                <LeadTagSelector leadId={lead.id} initialTagIds={leadTagIds} />
+                <LeadTagBadgesEditable
+                  leadId={lead.id}
+                  allTags={allTags}
+                  tagIds={leadTagIds}
+                />
+              </div>
+            </div>
+
+            <FormField
+              control={form.control}
+              name="created_at"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel className="text-sm font-medium">
+                    תאריך יצירת ליד
+                  </FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
+                            !field.value && "text-muted-foreground",
+                          )}
+                        >
+                          {field.value ? (
+                            format(field.value, "dd/MM/yyyy")
+                          ) : (
+                            <span>בחר תאריך</span>
+                          )}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-auto p-0 bg-background z-50"
+                      align="start"
+                    >
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {leadCreatedAtWasBumped(lead) && (
+              <div className="text-sm text-muted-foreground">
+                תאריך יצירה ראשוני:{" "}
+                {format(new Date(lead.first_created_at), "dd/MM/yyyy HH:mm")}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="source"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("source", leadSourceFieldLabel(lead))}
+                    </FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || "paid_ads"}
+                    >
+                      <FormControl>
+                        <SelectTrigger
+                          className="text-right rounded-lg border-2 h-11"
+                          dir="rtl"
+                        >
+                          <SelectValue placeholder="FB" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {LEAD_SOURCE_SELECT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {leadArrivalSourceChanged(lead) && (
+                      <p className="text-xs text-muted-foreground">
+                        מקור הגעה ראשוני: {leadFirstSourceDisplay(lead)}
+                      </p>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="campaign_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("campaign_name", "שם הקמפיין")}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        className="text-right rounded-lg border-2 h-11"
+                        placeholder="שם הקמפיין"
+                        dir="rtl"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="industry"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">
+                    תחום עיסוק
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      className="text-right rounded-lg border-2 h-11 px-4"
+                      dir="rtl"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">הערות</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      rows={3}
+                      className="text-right rounded-lg border-2 px-4 py-3"
+                      dir="rtl"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div
+              className="border border-border/60 rounded-xl p-4 text-right space-y-3 bg-card shadow-sm"
+              dir="rtl"
+            >
+              <h3 className="font-semibold text-sm">עדכונים ומשימות</h3>
+              <LeadUpdatesTab
+                leadId={lead.id}
+                leadName={lead.company_name || lead.contact_name || ""}
+              />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={updateMutation.isPending}
+              className="w-full"
+            >
+              {updateMutation.isPending ? "מעדכן..." : "עדכן ליד"}
+            </Button>
+          </TabsContent>
+
+          {/* Tab: Files & Links */}
+          <TabsContent value="files" className="space-y-6 mt-0">
+            <FolderLinksField links={folderLinks} onChange={setFolderLinks} />
+
+            <AttachmentsField
+              attachments={attachments}
+              onChange={setAttachments}
+              entityType="lead"
+              entityId={lead.id}
+            />
+
+            {/* Files linked from team chat */}
+            <div>
+              <h4 className="text-sm font-medium mb-2">קבצים מצ׳אט הצוות</h4>
+              <ClientLinkedFiles leadId={lead.id} tenantId={tenantId || ""} />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={updateMutation.isPending}
+              className="w-full"
+            >
+              {updateMutation.isPending ? "מעדכן..." : "שמור שינויים"}
+            </Button>
+          </TabsContent>
+
+          {/* Tab: Digital signature documents */}
+          <TabsContent value="docs" className="space-y-6 mt-0">
+            <SendSignatureFromLeadPanel lead={lead} tenantId={tenantId} />
+          </TabsContent>
+
+          {/* Tab 2: Proposals & Pricing */}
+          <TabsContent value="proposals" className="space-y-4 mt-0">
+            <FormField
+              control={form.control}
+              name="products"
+              render={({ field }) => {
+                const selectedProducts = field.value || [];
+
+                const handleToggleProduct = (productId: string) => {
+                  const currentProducts = [...selectedProducts];
+                  const index = currentProducts.indexOf(productId);
+
+                  if (index > -1) {
+                    currentProducts.splice(index, 1);
+                  } else {
+                    currentProducts.push(productId);
+                  }
+
+                  field.onChange(currentProducts);
+
+                  // Calculate total price
+                  const totalPrice = currentProducts.reduce((sum, id) => {
+                    const product = products?.find((p) => p.id === id);
+                    return (
+                      sum + (product ? parseFloat(product.price.toString()) : 0)
+                    );
+                  }, 0);
+
+                  form.setValue("estimated_deal_value", totalPrice.toString());
+                };
+
+                return (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      מוצרים/שירותים (בחר אחד או יותר)
+                    </FormLabel>
+                    <div className="space-y-2 border-2 rounded-lg p-4 bg-background">
+                      {products?.map((product) => (
+                        <div
+                          key={product.id}
+                          className="flex items-center space-x-2 space-x-reverse"
+                        >
+                          <Checkbox
+                            id={product.id}
+                            checked={selectedProducts.includes(product.id)}
+                            onCheckedChange={() =>
+                              handleToggleProduct(product.id)
+                            }
+                          />
+                          <label
+                            htmlFor={product.id}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1 flex justify-between items-center"
+                          >
+                            <span>{product.name}</span>
+                            <span className="text-muted-foreground">
+                              ₪
+                              {parseFloat(
+                                product.price.toString(),
+                              ).toLocaleString()}
+                            </span>
                           </label>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">אין אנשי מכירות זמינים</p>
-                    )}
-                  </div>
-                  {selectedSalesPeople.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      נבחרו {selectedSalesPeople.length} אנשי מכירות
-                    </p>
-                  )}
-                </FormItem>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">טלפון</FormLabel>
-                        <FormControl>
-                          <Input {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">אימייל</FormLabel>
-                        <FormControl>
-                          <Input type="email" {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                {/* ManyChat ID - Read Only */}
-                {isFieldVisible('manychat_subscriber_id') && (
-                  <div className="space-y-2">
-                    <FormLabel className="text-sm font-medium">{getFieldLabel('manychat_subscriber_id', 'ManyChat ID')}</FormLabel>
-                    <div className="flex items-center gap-2">
-                      <Input 
-                        value={lead.manychat_subscriber_id || ''} 
-                        disabled 
-                        className="text-right rounded-lg border-2 h-11 px-4 bg-muted" 
-                        dir="ltr"
-                        placeholder={lead.manychat_subscriber_id === 'SYNC_CONFLICT' ? 'קונפליקט - נדרש סנכרון ידני' : 'ממתין לסנכרון'}
-                      />
-                      {lead.manychat_subscriber_id && lead.manychat_subscriber_id !== 'SYNC_CONFLICT' && (
-                        <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                      )}
-                      {lead.manychat_subscriber_id === 'SYNC_CONFLICT' && (
-                        <AlertCircle className="h-5 w-5 text-amber-500" />
-                      )}
+                      ))}
                     </div>
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="response_status"
-                    render={({ field }) => {
-                      const selectedStatus = findLeadStatus(field.value, leadStatuses);
-                      const unmatched = unmatchedResponseStatusValue(field.value, leadStatuses);
-                      return (
-                        <FormItem>
-                          <FormLabel className="text-sm font-medium">סטטוס תגובה</FormLabel>
-                          <Select 
-                            onValueChange={field.onChange} 
-                            value={responseStatusSelectValue(field.value, leadStatuses)}
-                            open={responseSelectOpen}
-                            onOpenChange={setResponseSelectOpen}
-                          >
-                            <FormControl>
-                              <SelectTrigger 
-                                className="text-right rounded-lg border-2 h-11"
-                                style={{ 
-                                  backgroundColor: selectedStatus?.color || undefined,
-                                  color: field.value && field.value !== "none" ? '#fff' : undefined 
-                                }}
-                              >
-                                <SelectValue placeholder="בחר סטטוס" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-background z-50 text-right" align="end">
-                              <SelectItem value="none">ללא סטטוס</SelectItem>
-                              {unmatched && (
-                                <SelectItem value={unmatched}>{unmatched}</SelectItem>
-                              )}
-                              {leadStatuses.map((status) => (
-                                <SelectItem 
-                                  key={status.status_key} 
-                                  value={status.status_key}
-                                  style={{ backgroundColor: status.color, color: '#fff' }}
-                                >
-                                  {status.label}
-                                </SelectItem>
-                              ))}
-                              <div className="border-t mt-1 pt-1">
-                                <ManageLeadStatusesDialog 
-                                  trigger={
-                                    <button 
-                                      type="button"
-                                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
-                                    >
-                                      <Settings2 className="h-4 w-4" />
-                                      ניהול סטטוסים
-                                    </button>
-                                  }
-                                  onDialogOpen={() => setResponseSelectOpen(false)}
-                                />
-                              </div>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      );
-                    }}
-                  />
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
+            />
 
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => {
-                      const selectedStage = pipelineStages.find(s => s.stage_key === field.value);
-                      return (
-                        <FormItem>
-                          <FormLabel className="text-sm font-medium">שלב במשפך *</FormLabel>
-                          <Select 
-                            onValueChange={field.onChange} 
-                            defaultValue={field.value}
-                            open={stageSelectOpen}
-                            onOpenChange={setStageSelectOpen}
-                          >
-                            <FormControl>
-                              <SelectTrigger 
-                                className="text-right rounded-lg border-2 h-11"
-                                style={{ 
-                                  backgroundColor: selectedStage?.color || undefined,
-                                  color: field.value ? '#fff' : undefined 
-                                }}
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-background z-50 text-right" align="end">
-                              {pipelineStages.map((stage) => (
-                                <SelectItem 
-                                  key={stage.stage_key} 
-                                  value={stage.stage_key}
-                                  style={{ backgroundColor: stage.color, color: '#fff' }}
-                                >
-                                  {stage.label}
-                                </SelectItem>
-                              ))}
-                              <div className="border-t mt-1 pt-1">
-                                <ManagePipelineStagesDialog 
-                                  trigger={
-                                    <button 
-                                      type="button"
-                                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
-                                    >
-                                      <Settings2 className="h-4 w-4" />
-                                      ניהול שלבי משפך
-                                    </button>
-                                  }
-                                  onDialogOpen={() => setStageSelectOpen(false)}
-                                />
-                              </div>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      );
-                    }}
-                  />
-                </div>
-
-                {/* Tags field */}
-                <div className="space-y-2">
-                  <FormLabel className="text-sm font-medium">תגיות</FormLabel>
-                  <div className="flex items-start gap-2 flex-wrap">
-                    <LeadTagSelector leadId={lead.id} initialTagIds={leadTagIds} />
-                    <LeadTagBadgesEditable 
-                      leadId={lead.id}
-                      allTags={allTags} 
-                      tagIds={leadTagIds} 
+            <FormField
+              control={form.control}
+              name="estimated_deal_value"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">
+                    שווי שירות (₪)
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      {...field}
+                      className="text-right rounded-lg border-2 h-11 px-4"
+                      dir="rtl"
+                      placeholder="0"
                     />
-                  </div>
-                </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-                <FormField
-                  control={form.control}
-                  name="created_at"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel className="text-sm font-medium">תאריך יצירת ליד</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={"outline"}
-                              className={cn(
-                                "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
-                                !field.value && "text-muted-foreground"
-                              )}
-                            >
-                              {field.value ? (
-                                format(field.value, "dd/MM/yyyy")
-                              ) : (
-                                <span>בחר תאריך</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            initialFocus
-                            className={cn("p-3 pointer-events-auto")}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                {leadCreatedAtWasBumped(lead) && (
-                  <div className="text-sm text-muted-foreground">
-                    תאריך יצירה ראשוני: {format(new Date(lead.first_created_at), "dd/MM/yyyy HH:mm")}
-                  </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="monthly_budget"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("monthly_budget", "תקציב")} (₪)
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        {...field}
+                        className="text-right rounded-lg border-2 h-11 px-4"
+                        dir="rtl"
+                        placeholder="0"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
+              />
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="source"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">
-                          {getFieldLabel("source", leadSourceFieldLabel(lead))}
-                        </FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value || "paid_ads"}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="text-right rounded-lg border-2 h-11" dir="rtl">
-                              <SelectValue placeholder="FB" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {LEAD_SOURCE_SELECT_OPTIONS.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {leadArrivalSourceChanged(lead) && (
-                          <p className="text-xs text-muted-foreground">
-                            מקור הגעה ראשוני: {leadFirstSourceDisplay(lead)}
-                          </p>
-                        )}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="campaign_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">
-                          {getFieldLabel("campaign_name", "שם הקמפיין")}
-                        </FormLabel>
+              <FormField
+                control={form.control}
+                name="proposal_date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("proposal_date", "תאריך הצעה")}
+                    </FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
                         <FormControl>
-                          <Input
-                            {...field}
-                            className="text-right rounded-lg border-2 h-11"
-                            placeholder="שם הקמפיין"
-                            dir="rtl"
-                          />
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
+                              !field.value && "text-muted-foreground",
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "dd/MM/yyyy")
+                            ) : (
+                              <span>בחר תאריך</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="industry"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">תחום עיסוק</FormLabel>
-                      <FormControl>
-                        <Input {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">הערות</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} rows={3} className="text-right rounded-lg border-2 px-4 py-3" dir="rtl" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="border border-border/60 rounded-xl p-4 text-right space-y-3 bg-card shadow-sm" dir="rtl">
-                  <h3 className="font-semibold text-sm">עדכונים ומשימות</h3>
-                  <LeadUpdatesTab leadId={lead.id} leadName={lead.company_name || lead.contact_name || ""} />
-                </div>
-
-                <Button type="submit" disabled={updateMutation.isPending} className="w-full">
-                  {updateMutation.isPending ? "מעדכן..." : "עדכן ליד"}
-                </Button>
-              </TabsContent>
-
-              {/* Tab: Files & Links */}
-              <TabsContent value="files" className="space-y-6 mt-0">
-                <FolderLinksField 
-                  links={folderLinks} 
-                  onChange={setFolderLinks} 
-                />
-                
-                <AttachmentsField
-                  attachments={attachments}
-                  onChange={setAttachments}
-                  entityType="lead"
-                  entityId={lead.id}
-                />
-
-                {/* Files linked from team chat */}
-                <div>
-                  <h4 className="text-sm font-medium mb-2">קבצים מצ׳אט הצוות</h4>
-                  <ClientLinkedFiles leadId={lead.id} tenantId={tenantId || ""} />
-                </div>
-
-                <Button type="submit" disabled={updateMutation.isPending} className="w-full">
-                  {updateMutation.isPending ? "מעדכן..." : "שמור שינויים"}
-                </Button>
-              </TabsContent>
-
-              {/* Tab: Digital signature documents */}
-              <TabsContent value="docs" className="space-y-6 mt-0">
-                <SendSignatureFromLeadPanel lead={lead} tenantId={tenantId} />
-              </TabsContent>
-
-              {/* Tab 2: Proposals & Pricing */}
-              <TabsContent value="proposals" className="space-y-4 mt-0">
-                <FormField
-                  control={form.control}
-                  name="products"
-                  render={({ field }) => {
-                    const selectedProducts = field.value || [];
-                    
-                    const handleToggleProduct = (productId: string) => {
-                      const currentProducts = [...selectedProducts];
-                      const index = currentProducts.indexOf(productId);
-                      
-                      if (index > -1) {
-                        currentProducts.splice(index, 1);
-                      } else {
-                        currentProducts.push(productId);
-                      }
-                      
-                      field.onChange(currentProducts);
-                      
-                      // Calculate total price
-                      const totalPrice = currentProducts.reduce((sum, id) => {
-                        const product = products?.find(p => p.id === id);
-                        return sum + (product ? parseFloat(product.price.toString()) : 0);
-                      }, 0);
-                      
-                      form.setValue("estimated_deal_value", totalPrice.toString());
-                    };
-                    
-                    return (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">מוצרים/שירותים (בחר אחד או יותר)</FormLabel>
-                        <div className="space-y-2 border-2 rounded-lg p-4 bg-background">
-                          {products?.map((product) => (
-                            <div key={product.id} className="flex items-center space-x-2 space-x-reverse">
-                              <Checkbox
-                                id={product.id}
-                                checked={selectedProducts.includes(product.id)}
-                                onCheckedChange={() => handleToggleProduct(product.id)}
-                              />
-                              <label
-                                htmlFor={product.id}
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1 flex justify-between items-center"
-                              >
-                                <span>{product.name}</span>
-                                <span className="text-muted-foreground">₪{parseFloat(product.price.toString()).toLocaleString()}</span>
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    );
-                  }}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="estimated_deal_value"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">שווי שירות (₪)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" placeholder="0" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="monthly_budget"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">{getFieldLabel('monthly_budget', 'תקציב')} (₪)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" placeholder="0" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="proposal_date"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel className="text-sm font-medium">{getFieldLabel('proposal_date', 'תאריך הצעה')}</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
-                                {field.value ? (
-                                  format(field.value, "dd/MM/yyyy")
-                                ) : (
-                                  <span>בחר תאריך</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              initialFocus
-                              className={cn("p-3 pointer-events-auto")}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                {isFieldVisible('itai_meeting_date') && (
-                  <FormField
-                    control={form.control}
-                    name="itai_meeting_date"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel className="text-sm font-medium">{getFieldLabel('itai_meeting_date', 'שיחה עם איתי')}</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
-                                {field.value ? (
-                                  format(field.value, "dd/MM/yyyy")
-                                ) : (
-                                  <span>בחר תאריך</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              initialFocus
-                              className={cn("p-3 pointer-events-auto")}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-
-                <FormField
-                  control={form.control}
-                  name="sale_date"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel className="text-sm font-medium">תאריך מכירה</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={"outline"}
-                              className={cn(
-                                "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
-                                !field.value && "text-muted-foreground"
-                              )}
-                            >
-                              {field.value ? (
-                                format(field.value, "dd/MM/yyyy")
-                              ) : (
-                                <span>בחר תאריך</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            initialFocus
-                            className={cn("p-3 pointer-events-auto")}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {showLostReason && (
-                  <FormField
-                    control={form.control}
-                    name="lost_reason"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">פרטי סגירה / סיבת אובדן</FormLabel>
-                        <FormControl>
-                          <Textarea {...field} rows={2} placeholder="האם נסגר בהצלחה או אבד? פרטים..." className="text-right rounded-lg border-2 px-4 py-3" dir="rtl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-
-                <Button type="submit" disabled={updateMutation.isPending} className="w-full">
-                  {updateMutation.isPending ? "מעדכן..." : "עדכן הצעות מחיר"}
-                </Button>
-              </TabsContent>
-
-              {/* Tab 3: Schedule Meeting */}
-              <TabsContent value="meeting" className="space-y-4 mt-0">
-                <div className="space-y-4">
-                  <h4 className="text-sm font-medium flex items-center gap-2">
-                    <CalendarIcon className="h-4 w-4" />
-                    קביעת פגישה חדשה
-                  </h4>
-
-                  {!lead.email && (
-                    <Alert variant="default" className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
-                      <AlertCircle className="h-4 w-4 text-amber-600" />
-                      <AlertDescription className="text-amber-700 dark:text-amber-400">
-                        לליד זה אין כתובת אימייל. ניתן לקבוע פגישה ביומן אך לא לשלוח זימון במייל.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Calendar Side */}
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium">בחר תאריך</label>
-                      <Card className="p-2">
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-auto p-0 bg-background z-50"
+                        align="start"
+                      >
                         <Calendar
                           mode="single"
-                          selected={meetingScheduler.meetingDate}
-                          onSelect={meetingScheduler.handleDateSelect}
-                          disabled={(date) => date < new Date()}
-                          className="pointer-events-auto"
-                          locale={he}
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
                         />
-                      </Card>
-                    </div>
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
-                    {/* Details Side */}
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          משעה
-                        </label>
-                        <Select value={meetingScheduler.meetingTime} onValueChange={meetingScheduler.setMeetingTime}>
-                          <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
-                            <SelectValue placeholder="בחר שעה" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background z-50 max-h-[200px]">
-                            {meetingScheduler.isLoadingCalendar ? (
-                              <div className="p-2 text-center text-sm text-muted-foreground">טוען יומן...</div>
-                            ) : (
-                              timeSlots.map(({ time, available }) => (
-                                <SelectItem
-                                  key={time}
-                                  value={time}
-                                  className={cn(!available && "text-amber-600 font-medium")}
-                                >
-                                  {time} {!available && "⚠️ (תפוס ביומן)"}
-                                </SelectItem>
-                              ))
+            {isFieldVisible("itai_meeting_date") && (
+              <FormField
+                control={form.control}
+                name="itai_meeting_date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("itai_meeting_date", "שיחה עם איתי")}
+                    </FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
+                              !field.value && "text-muted-foreground",
                             )}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">עד שעה</label>
-                        <Select value={meetingScheduler.meetingEndTime} onValueChange={meetingScheduler.setMeetingEndTime}>
-                          <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
-                            <SelectValue placeholder="בחר שעת סיום" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background z-50 max-h-[200px]">
-                            {!meetingScheduler.meetingTime ? (
-                              <div className="p-2 text-center text-sm text-muted-foreground">בחר קודם שעת התחלה</div>
-                            ) : meetingScheduler.isLoadingCalendar ? (
-                              <div className="p-2 text-center text-sm text-muted-foreground">טוען יומן...</div>
-                            ) : endTimeSlots.length === 0 ? (
-                              <div className="p-2 text-center text-sm text-muted-foreground">אין אפשרויות סיום ליום זה</div>
+                          >
+                            {field.value ? (
+                              format(field.value, "dd/MM/yyyy")
                             ) : (
-                              endTimeSlots.map(({ time, available }) => (
-                                <SelectItem
-                                  key={`end-${time}`}
-                                  value={time}
-                                  className={cn(!available && "text-amber-600 font-medium")}
-                                >
-                                  {time} {!available && "⚠️ (תפוס ביומן)"}
-                                </SelectItem>
-                              ))
+                              <span>בחר תאריך</span>
                             )}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {meetingHasConflict && (
-                        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200">
-                          ⚠️ יש לך כבר אירוע ביומן בשעה הזו — הזימון ייקבע במקביל.
-                        </div>
-                      )}
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">נושא הפגישה</label>
-                        <Input
-                          value={meetingScheduler.meetingSubject}
-                          onChange={(e) => meetingScheduler.setMeetingSubject(e.target.value)}
-                          placeholder={`פגישה עם ${lead.contact_name || lead.company_name}`}
-                          className="text-right rounded-lg border-2 h-11 px-4"
-                          dir="rtl"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium flex items-center gap-2">
-                          <UserPlus className="h-4 w-4" />
-                          הזמן משתמשים מהמערכת:
-                        </label>
-                        {isLoadingTeamMembers ? (
-                          <p className="text-sm text-muted-foreground">טוען משתמשי צוות...</p>
-                        ) : teamMembersError ? (
-                          <p className="text-sm text-destructive">
-                            {teamMembersError instanceof Error
-                              ? teamMembersError.message
-                              : "שגיאה בטעינת משתמשי צוות"}
-                          </p>
-                        ) : teamMembers.length > 0 ? (
-                          <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
-                            {teamMembers.map((member) => (
-                              <label
-                                key={member.id}
-                                className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm"
-                              >
-                                <Checkbox
-                                  checked={selectedTeamMembers.includes(member.email)}
-                                  onCheckedChange={(checked) => {
-                                    setSelectedTeamMembers((prev) =>
-                                      checked
-                                        ? [...prev, member.email]
-                                        : prev.filter((email) => email !== member.email),
-                                    );
-                                  }}
-                                />
-                                <span className="font-medium">{member.full_name || member.email}</span>
-                                <span className="text-muted-foreground mr-auto">{member.email}</span>
-                              </label>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">לא נמצאו משתמשים עם אימייל</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">מיקום הפגישה (אופציונלי)</label>
-                        <Input
-                          value={meetingScheduler.meetingLocation}
-                          onChange={(e) => meetingScheduler.setMeetingLocation(e.target.value)}
-                          placeholder="למשל: זום, משרד, כתובת..."
-                          className="text-right rounded-lg border-2 h-11 px-4"
-                          dir="rtl"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">הודעה אישית (אופציונלי)</label>
-                        <Textarea
-                          value={meetingScheduler.personalMessage}
-                          onChange={(e) => meetingScheduler.setPersonalMessage(e.target.value)}
-                          placeholder="הוסף הודעה אישית לזימון..."
-                          rows={3}
-                          className="text-right rounded-lg border-2 px-4 py-3"
-                          dir="rtl"
-                        />
-                      </div>
-
-                      {meetingScheduler.meetingDate && (
-                        <Card className="p-3 bg-primary/5 border-primary/20">
-                          <div className="flex items-center gap-2 text-sm">
-                            <CheckCircle2 className="h-4 w-4 text-primary" />
-                            <span className="font-medium">
-                              {format(meetingScheduler.meetingDate, "EEEE, d בMMMM yyyy", { locale: he })} {meetingScheduler.meetingTime} - {meetingScheduler.meetingEndTime}
-                            </span>
-                          </div>
-                        </Card>
-                      )}
-
-                      <Button
-                        type="button"
-                        onClick={handleScheduleMeeting}
-                        disabled={!meetingScheduler.meetingDate || !meetingScheduler.meetingTime || !meetingScheduler.meetingEndTime || meetingScheduler.isSchedulingMeeting}
-                        className="w-full h-11"
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-auto p-0 bg-background z-50"
+                        align="start"
                       >
-                        {meetingScheduler.isSchedulingMeeting ? (
-                          "קובע פגישה..."
-                        ) : selectedTeamMembers.length > 0 || lead.email ? (
-                          <>
-                            <Send className="h-4 w-4 ml-2" />
-                            {selectedTeamMembers.length > 0
-                              ? `קבע פגישה ושלח זימון ל-${selectedTeamMembers.length + (lead.email ? 1 : 0)} משתתפים`
-                              : "קבע פגישה ושלח זימון"}
-                          </>
-                        ) : (
-                          <>
-                            <CalendarIcon className="h-4 w-4 ml-2" />
-                            קבע פגישה ביומן
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            <FormField
+              control={form.control}
+              name="sale_date"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel className="text-sm font-medium">
+                    תאריך מכירה
+                  </FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
+                            !field.value && "text-muted-foreground",
+                          )}
+                        >
+                          {field.value ? (
+                            format(field.value, "dd/MM/yyyy")
+                          ) : (
+                            <span>בחר תאריך</span>
+                          )}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-auto p-0 bg-background z-50"
+                      align="start"
+                    >
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {showLostReason && (
+              <FormField
+                control={form.control}
+                name="lost_reason"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      פרטי סגירה / סיבת אובדן
+                    </FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        rows={2}
+                        placeholder="האם נסגר בהצלחה או אבד? פרטים..."
+                        className="text-right rounded-lg border-2 px-4 py-3"
+                        dir="rtl"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            <Button
+              type="submit"
+              disabled={updateMutation.isPending}
+              className="w-full"
+            >
+              {updateMutation.isPending ? "מעדכן..." : "עדכן הצעות מחיר"}
+            </Button>
+          </TabsContent>
+
+          {/* Tab 3: Schedule Meeting */}
+          <TabsContent value="meeting" className="space-y-4 mt-0">
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium flex items-center gap-2">
+                <CalendarIcon className="h-4 w-4" />
+                קביעת פגישה חדשה
+              </h4>
+
+              {!lead.email && (
+                <Alert
+                  variant="default"
+                  className="border-amber-500 bg-amber-50 dark:bg-amber-950/20"
+                >
+                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-amber-700 dark:text-amber-400">
+                    לליד זה אין כתובת אימייל. ניתן לקבוע פגישה ביומן אך לא לשלוח
+                    זימון במייל.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Calendar Side */}
+                <div className="space-y-3">
+                  <label className="text-sm font-medium">בחר תאריך</label>
+                  <Card className="p-2">
+                    <Calendar
+                      mode="single"
+                      selected={meetingScheduler.meetingDate}
+                      onSelect={meetingScheduler.handleDateSelect}
+                      disabled={(date) => date < new Date()}
+                      className="pointer-events-auto"
+                      locale={he}
+                    />
+                  </Card>
                 </div>
-              </TabsContent>
-            </form>
-          </Form>
-        </Tabs>
+
+                {/* Details Side */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      משעה
+                    </label>
+                    <Select
+                      value={meetingScheduler.meetingTime}
+                      onValueChange={meetingScheduler.setMeetingTime}
+                    >
+                      <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
+                        <SelectValue placeholder="בחר שעה" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50 max-h-[200px]">
+                        {meetingScheduler.isLoadingCalendar ? (
+                          <div className="p-2 text-center text-sm text-muted-foreground">
+                            טוען יומן...
+                          </div>
+                        ) : (
+                          timeSlots.map(({ time, available }) => (
+                            <SelectItem
+                              key={time}
+                              value={time}
+                              className={cn(
+                                !available && "text-amber-600 font-medium",
+                              )}
+                            >
+                              {time} {!available && "⚠️ (תפוס ביומן)"}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">עד שעה</label>
+                    <Select
+                      value={meetingScheduler.meetingEndTime}
+                      onValueChange={meetingScheduler.setMeetingEndTime}
+                    >
+                      <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
+                        <SelectValue placeholder="בחר שעת סיום" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50 max-h-[200px]">
+                        {!meetingScheduler.meetingTime ? (
+                          <div className="p-2 text-center text-sm text-muted-foreground">
+                            בחר קודם שעת התחלה
+                          </div>
+                        ) : meetingScheduler.isLoadingCalendar ? (
+                          <div className="p-2 text-center text-sm text-muted-foreground">
+                            טוען יומן...
+                          </div>
+                        ) : endTimeSlots.length === 0 ? (
+                          <div className="p-2 text-center text-sm text-muted-foreground">
+                            אין אפשרויות סיום ליום זה
+                          </div>
+                        ) : (
+                          endTimeSlots.map(({ time, available }) => (
+                            <SelectItem
+                              key={`end-${time}`}
+                              value={time}
+                              className={cn(
+                                !available && "text-amber-600 font-medium",
+                              )}
+                            >
+                              {time} {!available && "⚠️ (תפוס ביומן)"}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {meetingHasConflict && (
+                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200">
+                      ⚠️ יש לך כבר אירוע ביומן בשעה הזו — הזימון ייקבע במקביל.
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">נושא הפגישה</label>
+                    <Input
+                      value={meetingScheduler.meetingSubject}
+                      onChange={(e) =>
+                        meetingScheduler.setMeetingSubject(e.target.value)
+                      }
+                      placeholder={`פגישה עם ${lead.contact_name || lead.company_name}`}
+                      className="text-right rounded-lg border-2 h-11 px-4"
+                      dir="rtl"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <UserPlus className="h-4 w-4" />
+                      הזמן משתמשים מהמערכת:
+                    </label>
+                    {isLoadingTeamMembers ? (
+                      <p className="text-sm text-muted-foreground">
+                        טוען משתמשי צוות...
+                      </p>
+                    ) : teamMembersError ? (
+                      <p className="text-sm text-destructive">
+                        {teamMembersError instanceof Error
+                          ? teamMembersError.message
+                          : "שגיאה בטעינת משתמשי צוות"}
+                      </p>
+                    ) : teamMembers.length > 0 ? (
+                      <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                        {teamMembers.map((member) => (
+                          <label
+                            key={member.id}
+                            className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm"
+                          >
+                            <Checkbox
+                              checked={selectedTeamMembers.includes(
+                                member.email,
+                              )}
+                              onCheckedChange={(checked) => {
+                                setSelectedTeamMembers((prev) =>
+                                  checked
+                                    ? [...prev, member.email]
+                                    : prev.filter(
+                                        (email) => email !== member.email,
+                                      ),
+                                );
+                              }}
+                            />
+                            <span className="font-medium">
+                              {member.full_name || member.email}
+                            </span>
+                            <span className="text-muted-foreground mr-auto">
+                              {member.email}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        לא נמצאו משתמשים עם אימייל
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      מיקום הפגישה (אופציונלי)
+                    </label>
+                    <Input
+                      value={meetingScheduler.meetingLocation}
+                      onChange={(e) =>
+                        meetingScheduler.setMeetingLocation(e.target.value)
+                      }
+                      placeholder="למשל: זום, משרד, כתובת..."
+                      className="text-right rounded-lg border-2 h-11 px-4"
+                      dir="rtl"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      הודעה אישית (אופציונלי)
+                    </label>
+                    <Textarea
+                      value={meetingScheduler.personalMessage}
+                      onChange={(e) =>
+                        meetingScheduler.setPersonalMessage(e.target.value)
+                      }
+                      placeholder="הוסף הודעה אישית לזימון..."
+                      rows={3}
+                      className="text-right rounded-lg border-2 px-4 py-3"
+                      dir="rtl"
+                    />
+                  </div>
+
+                  {meetingScheduler.meetingDate && (
+                    <Card className="p-3 bg-primary/5 border-primary/20">
+                      <div className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-primary" />
+                        <span className="font-medium">
+                          {format(
+                            meetingScheduler.meetingDate,
+                            "EEEE, d בMMMM yyyy",
+                            { locale: he },
+                          )}{" "}
+                          {meetingScheduler.meetingTime} -{" "}
+                          {meetingScheduler.meetingEndTime}
+                        </span>
+                      </div>
+                    </Card>
+                  )}
+
+                  <Button
+                    type="button"
+                    onClick={handleScheduleMeeting}
+                    disabled={
+                      !meetingScheduler.meetingDate ||
+                      !meetingScheduler.meetingTime ||
+                      !meetingScheduler.meetingEndTime ||
+                      meetingScheduler.isSchedulingMeeting
+                    }
+                    className="w-full h-11"
+                  >
+                    {meetingScheduler.isSchedulingMeeting ? (
+                      "קובע פגישה..."
+                    ) : selectedTeamMembers.length > 0 || lead.email ? (
+                      <>
+                        <Send className="h-4 w-4 ml-2" />
+                        {selectedTeamMembers.length > 0
+                          ? `קבע פגישה ושלח זימון ל-${selectedTeamMembers.length + (lead.email ? 1 : 0)} משתתפים`
+                          : "קבע פגישה ושלח זימון"}
+                      </>
+                    ) : (
+                      <>
+                        <CalendarIcon className="h-4 w-4 ml-2" />
+                        קבע פגישה ביומן
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        </form>
+      </Form>
+    </Tabs>
   );
 
   if (inline) {
@@ -1450,7 +1767,10 @@ const updateMutation = useMutation({
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
+      <DialogContent
+        className="max-w-3xl max-h-[90vh] overflow-y-auto"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle>ערוך ליד</DialogTitle>
         </DialogHeader>

@@ -57,27 +57,35 @@ export interface CalendarMatchContext {
   clients: CalendarClient[];
 }
 
-function eventDateTime(value?: { dateTime?: string; date?: string }): string | null {
+function eventDateTime(value?: {
+  dateTime?: string;
+  date?: string;
+}): string | null {
   return value?.dateTime || null; // all-day events cannot match a recording
 }
 
 function calendarEventText(event: CalendarEventLike): string {
-  const conferenceUris = event.conferenceData?.entryPoints
-    ?.map((entry) => entry.uri || "")
-    .join(" ") || "";
+  const conferenceUris =
+    event.conferenceData?.entryPoints
+      ?.map((entry) => entry.uri || "")
+      .join(" ") || "";
   return [
     event.summary,
     event.description,
     event.location,
     event.hangoutLink,
     conferenceUris,
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function isZoomCalendarEvent(event: CalendarEventLike): boolean {
   const text = calendarEventText(event);
-  return /(?:https?:\/\/)?(?:[\w.-]+\.)?zoom\.(?:us|com)\//i.test(text)
-    || /(?:^|\s)(?:zoom|זום)(?:\s|$)/i.test(event.summary || "");
+  return (
+    /(?:https?:\/\/)?(?:[\w.-]+\.)?zoom\.(?:us|com)\//i.test(text) ||
+    /(?:^|\s)(?:zoom|זום)(?:\s|$)/i.test(event.summary || "")
+  );
 }
 
 export function normalizeCalendarMatchText(value: string): string {
@@ -96,8 +104,9 @@ function clientNameVariants(name: string): string[] {
     .replace(/\b(?:בעמ|ltd|limited|inc|llc)\b/gi, "")
     .replace(/\s+/g, " ")
     .trim();
-  return [...new Set([normalized, withoutLegalSuffix])]
-    .filter((value) => value.replace(/\s/g, "").length >= 3);
+  return [...new Set([normalized, withoutLegalSuffix])].filter(
+    (value) => value.replace(/\s/g, "").length >= 3,
+  );
 }
 
 export function matchClientFromCalendarTitle(
@@ -109,29 +118,39 @@ export function matchClientFromCalendarTitle(
     .flatMap((client) =>
       clientNameVariants(client.name)
         .filter((variant) => normalizedTitle.includes(` ${variant} `))
-        .map((variant) => ({ client, score: variant.length }))
+        .map((variant) => ({ client, score: variant.length })),
     )
     .sort((a, b) => b.score - a.score);
 
   if (matches.length === 0) return null;
   const bestScore = matches[0].score;
-  const bestIds = new Set(matches.filter((match) => match.score === bestScore).map((match) => match.client.id));
+  const bestIds = new Set(
+    matches
+      .filter((match) => match.score === bestScore)
+      .map((match) => match.client.id),
+  );
   return bestIds.size === 1 ? matches[0].client : null;
 }
 
 function isMeaningfulEventTitle(title: string): boolean {
   const normalized = normalizeCalendarMatchText(title);
-  return !!normalized && !new Set([
-    "zoom meeting",
-    "פגישת zoom",
-    "פגישת זום",
-    "meeting",
-    "פגישה",
-  ]).has(normalized);
+  return (
+    !!normalized &&
+    !new Set([
+      "zoom meeting",
+      "פגישת zoom",
+      "פגישת זום",
+      "meeting",
+      "פגישה",
+    ]).has(normalized)
+  );
 }
 
 export function chooseCalendarRecordingMatch(
-  recording: Pick<CalendarRecording, "start_time" | "duration" | "meeting_topic" | "source">,
+  recording: Pick<
+    CalendarRecording,
+    "start_time" | "duration" | "meeting_topic" | "source"
+  >,
   events: CalendarEventLike[],
   clients: CalendarClient[],
 ): CalendarRecordingMatch | null {
@@ -139,30 +158,45 @@ export function chooseCalendarRecordingMatch(
   const sourceAndTopic = normalizeCalendarMatchText(
     `${recording.source || ""} ${recording.meeting_topic || ""}`,
   );
-  if (/(?:google meet|google_meet|microsoft teams|teams|גוגל מיט|טימס)/i.test(sourceAndTopic)) {
+  if (
+    /(?:google meet|google_meet|microsoft teams|teams|גוגל מיט|טימס)/i.test(
+      sourceAndTopic,
+    )
+  ) {
     return null;
   }
   const recordingStart = new Date(recording.start_time).getTime();
   if (!Number.isFinite(recordingStart)) return null;
-  const recordingEnd = recordingStart + Math.max(1, recording.duration || 1) * 60 * 1000;
+  const recordingEnd =
+    recordingStart + Math.max(1, recording.duration || 1) * 60 * 1000;
 
-  const candidates = events.flatMap((event) => {
-    if (event.status === "cancelled" || !event.id || !isZoomCalendarEvent(event)) return [];
-    const startIso = eventDateTime(event.start);
-    if (!startIso) return [];
-    const eventStart = new Date(startIso).getTime();
-    if (!Number.isFinite(eventStart)) return [];
-    const endIso = eventDateTime(event.end);
-    const eventEnd = endIso ? new Date(endIso).getTime() : eventStart + 60 * 60 * 1000;
-    const startDelta = Math.abs(eventStart - recordingStart);
-    const overlaps = eventStart <= recordingEnd + EVENT_OVERLAP_TOLERANCE_MS
-      && eventEnd >= recordingStart - EVENT_OVERLAP_TOLERANCE_MS;
-    if (startDelta > EVENT_START_TOLERANCE_MS && !overlaps) return [];
+  const candidates = events
+    .flatMap((event) => {
+      if (
+        event.status === "cancelled" ||
+        !event.id ||
+        !isZoomCalendarEvent(event)
+      )
+        return [];
+      const startIso = eventDateTime(event.start);
+      if (!startIso) return [];
+      const eventStart = new Date(startIso).getTime();
+      if (!Number.isFinite(eventStart)) return [];
+      const endIso = eventDateTime(event.end);
+      const eventEnd = endIso
+        ? new Date(endIso).getTime()
+        : eventStart + 60 * 60 * 1000;
+      const startDelta = Math.abs(eventStart - recordingStart);
+      const overlaps =
+        eventStart <= recordingEnd + EVENT_OVERLAP_TOLERANCE_MS &&
+        eventEnd >= recordingStart - EVENT_OVERLAP_TOLERANCE_MS;
+      if (startDelta > EVENT_START_TOLERANCE_MS && !overlaps) return [];
 
-    const title = (event.summary || "").trim();
-    if (!isMeaningfulEventTitle(title)) return [];
-    return [{ event, title, startIso, startDelta }];
-  }).sort((a, b) => a.startDelta - b.startDelta);
+      const title = (event.summary || "").trim();
+      if (!isMeaningfulEventTitle(title)) return [];
+      return [{ event, title, startIso, startDelta }];
+    })
+    .sort((a, b) => a.startDelta - b.startDelta);
 
   if (candidates.length === 0) return null;
   const best = candidates[0];
@@ -178,7 +212,10 @@ export function chooseCalendarRecordingMatch(
 }
 
 // deno-lint-ignore no-explicit-any
-async function refreshCalendarToken(admin: any, token: any): Promise<string | null> {
+async function refreshCalendarToken(
+  admin: any,
+  token: any,
+): Promise<string | null> {
   const expiresAt = new Date(token.expires_at).getTime();
   if (Number.isFinite(expiresAt) && expiresAt > Date.now() + 60_000) {
     return token.access_token;
@@ -201,21 +238,27 @@ async function refreshCalendarToken(admin: any, token: any): Promise<string | nu
   const data = await response.json();
   if (!data.access_token) {
     if (data.error === "invalid_grant") {
-      await admin.from("calendar_tokens").update({
-        needs_reconnect: true,
-        sync_status: "needs_reconnect",
-        sync_error: "refresh token revoked",
-      }).eq("user_id", token.user_id);
+      await admin
+        .from("calendar_tokens")
+        .update({
+          needs_reconnect: true,
+          sync_status: "needs_reconnect",
+          sync_error: "refresh token revoked",
+        })
+        .eq("user_id", token.user_id);
     }
     return null;
   }
 
-  await admin.from("calendar_tokens").update({
-    access_token: data.access_token,
-    expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-    needs_reconnect: false,
-  }).eq("user_id", token.user_id);
+  await admin
+    .from("calendar_tokens")
+    .update({
+      access_token: data.access_token,
+      expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
+      needs_reconnect: false,
+    })
+    .eq("user_id", token.user_id);
   return data.access_token;
 }
 
@@ -235,46 +278,72 @@ async function fetchEventsForToken(
     const listData = await listResponse.json();
     const listed = Array.isArray(listData.items)
       ? listData.items
-        .filter((calendar: { deleted?: boolean; selected?: boolean; primary?: boolean }) =>
-          !calendar.deleted && (calendar.selected !== false || calendar.primary)
-        )
-        .map((calendar: { id?: string }) => calendar.id)
-        .filter(Boolean)
+          .filter(
+            (calendar: {
+              deleted?: boolean;
+              selected?: boolean;
+              primary?: boolean;
+            }) =>
+              !calendar.deleted &&
+              (calendar.selected !== false || calendar.primary),
+          )
+          .map((calendar: { id?: string }) => calendar.id)
+          .filter(Boolean)
       : [];
     if (listed.length > 0) calendarIds = [...new Set(listed)] as string[];
   }
 
-  const eventBatches = await Promise.all(calendarIds.map(async (calendarId) => {
-    const url = new URL(`${GOOGLE_CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events`);
-    url.searchParams.set("timeMin", timeMin);
-    url.searchParams.set("timeMax", timeMax);
-    url.searchParams.set("singleEvents", "true");
-    url.searchParams.set("orderBy", "startTime");
-    url.searchParams.set("maxResults", "250");
-    const response = await fetch(url.toString(), { headers });
-    if (!response.ok) return [];
-    const data = await response.json();
-    return Array.isArray(data.items) ? data.items : [];
-  }));
+  const eventBatches = await Promise.all(
+    calendarIds.map(async (calendarId) => {
+      const url = new URL(
+        `${GOOGLE_CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events`,
+      );
+      url.searchParams.set("timeMin", timeMin);
+      url.searchParams.set("timeMax", timeMax);
+      url.searchParams.set("singleEvents", "true");
+      url.searchParams.set("orderBy", "startTime");
+      url.searchParams.set("maxResults", "250");
+      const response = await fetch(url.toString(), { headers });
+      if (!response.ok) return [];
+      const data = await response.json();
+      return Array.isArray(data.items) ? data.items : [];
+    }),
+  );
   return eventBatches.flat();
 }
 
 // deno-lint-ignore no-explicit-any
-async function calendarTokenCandidates(admin: any, opts: {
-  tenantId: string;
-  preferredUserId?: string | null;
-  hostEmail?: string | null;
-}): Promise<any[]> {
+async function calendarTokenCandidates(
+  admin: any,
+  opts: {
+    tenantId: string;
+    preferredUserId?: string | null;
+    hostEmail?: string | null;
+  },
+): Promise<any[]> {
   const userIds: string[] = [];
   if (opts.preferredUserId) userIds.push(opts.preferredUserId);
 
   const [{ data: tenantUsers }, { data: campaigners }] = await Promise.all([
-    admin.from("tenant_users").select("user_id").eq("tenant_id", opts.tenantId).limit(30),
-    admin.from("campaigners").select("id").eq("tenant_id", opts.tenantId).eq("active", true).limit(30),
+    admin
+      .from("tenant_users")
+      .select("user_id")
+      .eq("tenant_id", opts.tenantId)
+      .limit(30),
+    admin
+      .from("campaigners")
+      .select("id")
+      .eq("tenant_id", opts.tenantId)
+      .eq("active", true)
+      .limit(30),
   ]);
-  userIds.push(...(tenantUsers || []).map((row: { user_id: string }) => row.user_id));
+  userIds.push(
+    ...(tenantUsers || []).map((row: { user_id: string }) => row.user_id),
+  );
 
-  const campaignerIds = (campaigners || []).map((row: { id: string }) => row.id);
+  const campaignerIds = (campaigners || []).map(
+    (row: { id: string }) => row.id,
+  );
   if (campaignerIds.length > 0) {
     const { data: profiles } = await admin
       .from("profiles")
@@ -288,7 +357,9 @@ async function calendarTokenCandidates(admin: any, opts: {
   if (uniqueUserIds.length > 0) {
     const { data } = await admin
       .from("calendar_tokens")
-      .select("user_id, access_token, refresh_token, expires_at, google_email, needs_reconnect")
+      .select(
+        "user_id, access_token, refresh_token, expires_at, google_email, needs_reconnect",
+      )
       .in("user_id", uniqueUserIds)
       .limit(30);
     tokens = data || [];
@@ -297,10 +368,15 @@ async function calendarTokenCandidates(admin: any, opts: {
   if (opts.hostEmail) {
     const { data: hostToken } = await admin
       .from("calendar_tokens")
-      .select("user_id, access_token, refresh_token, expires_at, google_email, needs_reconnect")
+      .select(
+        "user_id, access_token, refresh_token, expires_at, google_email, needs_reconnect",
+      )
       .ilike("google_email", opts.hostEmail)
       .maybeSingle();
-    if (hostToken && !tokens.some((token) => token.user_id === hostToken.user_id)) {
+    if (
+      hostToken &&
+      !tokens.some((token) => token.user_id === hostToken.user_id)
+    ) {
       tokens.unshift(hostToken);
     }
   }
@@ -309,18 +385,23 @@ async function calendarTokenCandidates(admin: any, opts: {
   if (opts.preferredUserId) priority.set(opts.preferredUserId, 0);
   return tokens
     .filter((token) => !token.needs_reconnect)
-    .sort((a, b) => (priority.get(a.user_id) ?? 1) - (priority.get(b.user_id) ?? 1))
+    .sort(
+      (a, b) => (priority.get(a.user_id) ?? 1) - (priority.get(b.user_id) ?? 1),
+    )
     .slice(0, MAX_CALENDAR_TOKENS);
 }
 
 // deno-lint-ignore no-explicit-any
-export async function loadCalendarMatchContext(admin: any, opts: {
-  tenantId: string;
-  timeMin: string;
-  timeMax: string;
-  preferredUserId?: string | null;
-  hostEmail?: string | null;
-}): Promise<CalendarMatchContext> {
+export async function loadCalendarMatchContext(
+  admin: any,
+  opts: {
+    tenantId: string;
+    timeMin: string;
+    timeMax: string;
+    preferredUserId?: string | null;
+    hostEmail?: string | null;
+  },
+): Promise<CalendarMatchContext> {
   try {
     const [{ data: clients }, tokens] = await Promise.all([
       admin.from("clients").select("id, name").eq("tenant_id", opts.tenantId),
@@ -332,9 +413,19 @@ export async function loadCalendarMatchContext(admin: any, opts: {
       const accessToken = await refreshCalendarToken(admin, token);
       if (!accessToken) continue;
       try {
-        allEvents.push(...await fetchEventsForToken(accessToken, opts.timeMin, opts.timeMax));
+        allEvents.push(
+          ...(await fetchEventsForToken(
+            accessToken,
+            opts.timeMin,
+            opts.timeMax,
+          )),
+        );
       } catch (error) {
-        console.warn("[calendar-recording-match] calendar fetch failed", token.user_id, error);
+        console.warn(
+          "[calendar-recording-match] calendar fetch failed",
+          token.user_id,
+          error,
+        );
       }
     }
 
@@ -353,22 +444,34 @@ export async function loadCalendarMatchContext(admin: any, opts: {
 }
 
 // deno-lint-ignore no-explicit-any
-export async function enrichRecordingFromCalendar(admin: any, recording: CalendarRecording, opts?: {
-  preferredUserId?: string | null;
-  context?: CalendarMatchContext;
-}): Promise<CalendarRecordingMatch | null> {
+export async function enrichRecordingFromCalendar(
+  admin: any,
+  recording: CalendarRecording,
+  opts?: {
+    preferredUserId?: string | null;
+    context?: CalendarMatchContext;
+  },
+): Promise<CalendarRecordingMatch | null> {
   if (!recording.start_time || recording.calendar_event_id) return null;
   const start = new Date(recording.start_time);
   if (!Number.isFinite(start.getTime())) return null;
 
-  const context = opts?.context || await loadCalendarMatchContext(admin, {
-    tenantId: recording.tenant_id,
-    timeMin: new Date(start.getTime() - 90 * 60 * 1000).toISOString(),
-    timeMax: new Date(start.getTime() + Math.max(120, recording.duration || 0) * 60 * 1000).toISOString(),
-    preferredUserId: opts?.preferredUserId,
-    hostEmail: recording.host_email,
-  });
-  const match = chooseCalendarRecordingMatch(recording, context.events, context.clients);
+  const context =
+    opts?.context ||
+    (await loadCalendarMatchContext(admin, {
+      tenantId: recording.tenant_id,
+      timeMin: new Date(start.getTime() - 90 * 60 * 1000).toISOString(),
+      timeMax: new Date(
+        start.getTime() + Math.max(120, recording.duration || 0) * 60 * 1000,
+      ).toISOString(),
+      preferredUserId: opts?.preferredUserId,
+      hostEmail: recording.host_email,
+    }));
+  const match = chooseCalendarRecordingMatch(
+    recording,
+    context.events,
+    context.clients,
+  );
   if (!match) return null;
 
   const updates: Record<string, unknown> = {
@@ -377,7 +480,8 @@ export async function enrichRecordingFromCalendar(admin: any, recording: Calenda
     calendar_matched_at: new Date().toISOString(),
   };
 
-  let query = admin.from("zoom_recordings")
+  let query = admin
+    .from("zoom_recordings")
     .update(updates)
     .eq("tenant_id", recording.tenant_id);
   query = recording.meeting_id
@@ -390,7 +494,8 @@ export async function enrichRecordingFromCalendar(admin: any, recording: Calenda
   }
 
   if (!recording.client_id && match.clientId) {
-    let clientQuery = admin.from("zoom_recordings")
+    let clientQuery = admin
+      .from("zoom_recordings")
       .update({ client_id: match.clientId, suggested_client_id: null })
       .eq("tenant_id", recording.tenant_id)
       .is("client_id", null);
@@ -399,13 +504,16 @@ export async function enrichRecordingFromCalendar(admin: any, recording: Calenda
       : clientQuery.eq("id", recording.id);
     const { error: clientError } = await clientQuery;
     if (clientError) {
-      console.error("[calendar-recording-match] client assignment failed", clientError);
+      console.error(
+        "[calendar-recording-match] client assignment failed",
+        clientError,
+      );
     }
   }
 
   console.log(
-    `[calendar-recording-match] matched "${match.eventTitle}" (${match.startDeltaMinutes}m)`
-      + (match.clientName ? ` → client ${match.clientName}` : ""),
+    `[calendar-recording-match] matched "${match.eventTitle}" (${match.startDeltaMinutes}m)` +
+      (match.clientName ? ` → client ${match.clientName}` : ""),
   );
   return match;
 }

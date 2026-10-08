@@ -38,7 +38,8 @@ import {
 } from "../_shared/mcp-streamable-http.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const SUPABASE_SERVICE_ROLE_KEY =
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,7 +60,8 @@ const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 100_000;
 const DEFAULT_REPO = "https://github.com/davidcastelnuovo/aios";
 const DEFAULT_GROK_MODEL = "cursor-grok-4.6-high-fast";
-const STICKY_ENABLED = (Deno.env.get("GROK_STICKY") || "true").toLowerCase() !== "false";
+const STICKY_ENABLED =
+  (Deno.env.get("GROK_STICKY") || "true").toLowerCase() !== "false";
 
 const TOOLS = [
   {
@@ -76,7 +78,8 @@ const TOOLS = [
       properties: {
         task: {
           type: "string",
-          description: "Clear, self-contained description of the development work to perform.",
+          description:
+            "Clear, self-contained description of the development work to perform.",
         },
         branch: {
           type: "string",
@@ -84,16 +87,19 @@ const TOOLS = [
         },
         context: {
           type: "string",
-          description: "Optional extra context: error logs, file paths, links, constraints, acceptance criteria.",
+          description:
+            "Optional extra context: error logs, file paths, links, constraints, acceptance criteria.",
         },
         reply_via: {
           type: "string",
           enum: ["carmen", "cursor"],
-          description: "Who should receive Grok's reply when done. Use cursor when Cursor Cloud Agent called this tool; default carmen.",
+          description:
+            "Who should receive Grok's reply when done. Use cursor when Cursor Cloud Agent called this tool; default carmen.",
         },
         session_id: {
           type: "string",
-          description: "When reply_via=cursor: the live Cursor chat bc-… to reply into (Grok Bot Direct). Do not omit if you want the reply in THIS chat.",
+          description:
+            "When reply_via=cursor: the live Cursor chat bc-… to reply into (Grok Bot Direct). Do not omit if you want the reply in THIS chat.",
         },
       },
       required: ["task"],
@@ -119,11 +125,13 @@ const TOOLS = [
         reply_via: {
           type: "string",
           enum: ["carmen", "cursor"],
-          description: "Who should receive Grok's reply when done. Use cursor when Cursor Cloud Agent called this tool; default carmen.",
+          description:
+            "Who should receive Grok's reply when done. Use cursor when Cursor Cloud Agent called this tool; default carmen.",
         },
         session_id: {
           type: "string",
-          description: "When reply_via=cursor: the live Cursor chat bc-… to reply into (Grok Bot Direct). Do not omit if you want the reply in THIS chat.",
+          description:
+            "When reply_via=cursor: the live Cursor chat bc-… to reply into (Grok Bot Direct). Do not omit if you want the reply in THIS chat.",
         },
       },
       required: ["request"],
@@ -149,57 +157,90 @@ const TOOLS = [
 ];
 
 function rpcResult(id: unknown, result: unknown) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
-function rpcError(id: unknown, code: number, message: string, httpStatus = 200) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }), {
-    status: httpStatus,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+function rpcError(
+  id: unknown,
+  code: number,
+  message: string,
+  httpStatus = 200,
+) {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: id ?? null,
+      error: { code, message },
+    }),
+    {
+      status: httpStatus,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
 function bearerFrom(req: Request): string | undefined {
-  const h = req.headers.get("authorization") || req.headers.get("Authorization");
+  const h =
+    req.headers.get("authorization") || req.headers.get("Authorization");
   if (!h) return undefined;
   const m = h.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : undefined;
 }
 
 function requiredBearer(): string {
-  return Deno.env.get("GROK_MCP_BEARER") || Deno.env.get("CURSOR_MCP_BEARER") || "";
+  return (
+    Deno.env.get("GROK_MCP_BEARER") || Deno.env.get("CURSOR_MCP_BEARER") || ""
+  );
 }
 
 function sbClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
 }
 
 async function resolveContext(
   bearer: string | undefined,
 ): Promise<{ tenantId: string | null; agentId: string | null }> {
   const fallback = {
-    tenantId: Deno.env.get("CURSOR_DEFAULT_TENANT_ID") ||
+    tenantId:
+      Deno.env.get("CURSOR_DEFAULT_TENANT_ID") ||
       Deno.env.get("CLAUDE_DEFAULT_TENANT_ID") ||
       null,
     agentId: null as string | null,
   };
   if (!bearer || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return fallback;
   try {
-    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
     const { data } = await sb
       .from("agent_mcp_connections")
       .select("tenant_id, agent_id")
       .eq("state", "ready")
       .filter("oauth_tokens->>bearer", "eq", bearer);
-    const rows = (data || []) as Array<{ tenant_id: string | null; agent_id: string | null }>;
-    const tenants = Array.from(new Set(rows.map((r) => r.tenant_id).filter(Boolean)));
+    const rows = (data || []) as Array<{
+      tenant_id: string | null;
+      agent_id: string | null;
+    }>;
+    const tenants = Array.from(
+      new Set(rows.map((r) => r.tenant_id).filter(Boolean)),
+    );
     if (tenants.length === 1) {
-      const agents = Array.from(new Set(rows.map((r) => r.agent_id).filter(Boolean)));
-      return { tenantId: tenants[0] as string, agentId: agents.length === 1 ? (agents[0] as string) : null };
+      const agents = Array.from(
+        new Set(rows.map((r) => r.agent_id).filter(Boolean)),
+      );
+      return {
+        tenantId: tenants[0] as string,
+        agentId: agents.length === 1 ? (agents[0] as string) : null,
+      };
     }
     return fallback;
   } catch {
@@ -225,12 +266,21 @@ function webhookConfig(): { url: string; key: string } | null {
 }
 
 function replyViaChannel(raw: unknown): "carmen" | "cursor" {
-  return String(raw || "").trim().toLowerCase() === "cursor" ? "cursor" : "carmen";
+  return String(raw || "")
+    .trim()
+    .toLowerCase() === "cursor"
+    ? "cursor"
+    : "carmen";
 }
 
-function replyInstructions(channel: "carmen" | "cursor", sessionId?: string): string {
+function replyInstructions(
+  channel: "carmen" | "cursor",
+  sessionId?: string,
+): string {
   if (channel === "cursor") {
-    const sid = String(sessionId || Deno.env.get("GROK_DIRECT_AGENT_ID") || "").trim();
+    const sid = String(
+      sessionId || Deno.env.get("GROK_DIRECT_AGENT_ID") || "",
+    ).trim();
     const sessionLine = sid.startsWith("bc-")
       ? `reply_to_bc_id: ${sid}. Call reply_to_cursor_session({ session_id: "${sid}", message: "<your reply>" }).`
       : `Call reply_to_cursor_session with the session_id (bc-…) from this webhook.`;
@@ -249,7 +299,12 @@ function replyInstructions(channel: "carmen" | "cursor", sessionId?: string): st
 async function fireGrokWebhook(
   task: string,
   context: string,
-  opts?: { tool?: string; tenantId?: string | null; replyVia?: "carmen" | "cursor"; sessionId?: string },
+  opts?: {
+    tool?: string;
+    tenantId?: string | null;
+    replyVia?: "carmen" | "cursor";
+    sessionId?: string;
+  },
 ): Promise<FireResult> {
   const cfg = webhookConfig();
   if (!cfg) {
@@ -265,19 +320,24 @@ async function fireGrokWebhook(
   const contextParts: string[] = [];
   if (opts?.tool) contextParts.push(`tool: ${opts.tool}`);
   if (opts?.tenantId) contextParts.push(`tenant_id: ${opts.tenantId}`);
-  contextParts.push(replyInstructions(opts?.replyVia ?? "carmen", opts?.sessionId));
+  contextParts.push(
+    replyInstructions(opts?.replyVia ?? "carmen", opts?.sessionId),
+  );
   if (context.trim()) contextParts.push(context.trim());
   const payload = {
-    task: trimmedTask.length > MAX_TEXT ? trimmedTask.slice(0, MAX_TEXT) : trimmedTask,
+    task:
+      trimmedTask.length > MAX_TEXT
+        ? trimmedTask.slice(0, MAX_TEXT)
+        : trimmedTask,
     context: contextParts.join("\n\n"),
   };
 
   const resp = await fetch(cfg.url, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${cfg.key}`,
+      Authorization: `Bearer ${cfg.key}`,
       "Content-Type": "application/json",
-      "Accept": "application/json",
+      Accept: "application/json",
       "User-Agent": "aios-grok-mcp/1.1",
     },
     body: JSON.stringify(payload),
@@ -285,7 +345,12 @@ async function fireGrokWebhook(
   const raw = await resp.text();
   if (!resp.ok) {
     let detail = raw.slice(0, 500);
-    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    try {
+      detail =
+        JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail;
+    } catch {
+      /* keep */
+    }
     throw new Error(`Grok Bot webhook ${resp.status}: ${detail}`);
   }
 
@@ -293,7 +358,9 @@ async function fireGrokWebhook(
   try {
     const data = JSON.parse(raw);
     id = String(data?.id || data?.runId || data?.dispatchId || id);
-  } catch { /* empty body is fine */ }
+  } catch {
+    /* empty body is fine */
+  }
 
   return {
     id,
@@ -303,20 +370,33 @@ async function fireGrokWebhook(
   };
 }
 
-function cursorAuthHeaders(apiKey: string, basic = false): Record<string, string> {
+function cursorAuthHeaders(
+  apiKey: string,
+  basic = false,
+): Record<string, string> {
   return {
-    "Authorization": basic ? `Basic ${btoa(`${apiKey}:`)}` : `Bearer ${apiKey}`,
+    Authorization: basic ? `Basic ${btoa(`${apiKey}:`)}` : `Bearer ${apiKey}`,
     "Content-Type": "application/json",
-    "Accept": "application/json",
+    Accept: "application/json",
     "User-Agent": "aios-grok-mcp/1.0",
   };
 }
 
-async function cursorFetch(apiKey: string, url: string, init: RequestInit): Promise<Response> {
-  const headers = { ...cursorAuthHeaders(apiKey, false), ...(init.headers || {}) };
+async function cursorFetch(
+  apiKey: string,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  const headers = {
+    ...cursorAuthHeaders(apiKey, false),
+    ...(init.headers || {}),
+  };
   let resp = await fetch(url, { ...init, headers });
   if (resp.status === 401 || resp.status === 403) {
-    const basicHeaders = { ...cursorAuthHeaders(apiKey, true), ...(init.headers || {}) };
+    const basicHeaders = {
+      ...cursorAuthHeaders(apiKey, true),
+      ...(init.headers || {}),
+    };
     resp = await fetch(url, { ...init, headers: basicHeaders });
   }
   return resp;
@@ -324,7 +404,11 @@ async function cursorFetch(apiKey: string, url: string, init: RequestInit): Prom
 
 function parseAgentResponse(raw: string): { url: string; id: string } {
   let data: any = {};
-  try { data = JSON.parse(raw); } catch { /* ignore */ }
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
   const agent = data?.agent || data;
   const id = String(agent?.id || data?.id || "");
   const url = String(
@@ -336,7 +420,9 @@ function parseAgentResponse(raw: string): { url: string; id: string } {
   return { url, id: id || url };
 }
 
-async function getStickyAgentId(tenantId: string | null): Promise<string | null> {
+async function getStickyAgentId(
+  tenantId: string | null,
+): Promise<string | null> {
   const forced = Deno.env.get("GROK_STICKY_AGENT_ID") || "";
   if (forced.startsWith("bc-")) return forced;
   if (!tenantId) return null;
@@ -361,24 +447,37 @@ async function getStickyAgentId(tenantId: string | null): Promise<string | null>
     const lastId = String((last as any)?.cursor_agent_id || "");
     return lastId.startsWith("bc-") ? lastId : null;
   } catch (e) {
-    console.error("[grok-mcp] getStickyAgentId failed:", (e as any)?.message ?? e);
+    console.error(
+      "[grok-mcp] getStickyAgentId failed:",
+      (e as any)?.message ?? e,
+    );
     return null;
   }
 }
 
-async function saveStickyAgent(tenantId: string | null, agentId: string, sessionUrl: string): Promise<void> {
+async function saveStickyAgent(
+  tenantId: string | null,
+  agentId: string,
+  sessionUrl: string,
+): Promise<void> {
   if (!tenantId || !agentId.startsWith("bc-")) return;
   const sb = sbClient();
   if (!sb) return;
   try {
-    await sb.from("grok_sticky_agents").upsert({
-      tenant_id: tenantId,
-      cursor_agent_id: agentId,
-      session_url: sessionUrl,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "tenant_id" });
+    await sb.from("grok_sticky_agents").upsert(
+      {
+        tenant_id: tenantId,
+        cursor_agent_id: agentId,
+        session_url: sessionUrl,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "tenant_id" },
+    );
   } catch (e) {
-    console.error("[grok-mcp] saveStickyAgent failed:", (e as any)?.message ?? e);
+    console.error(
+      "[grok-mcp] saveStickyAgent failed:",
+      (e as any)?.message ?? e,
+    );
   }
 }
 
@@ -388,7 +487,9 @@ async function clearStickyAgent(tenantId: string | null): Promise<void> {
   if (!sb) return;
   try {
     await sb.from("grok_sticky_agents").delete().eq("tenant_id", tenantId);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 async function followUpStickyAgent(
@@ -418,11 +519,18 @@ async function followUpStickyAgent(
       continue;
     }
     if (resp.status === 404 || resp.status === 410 || resp.status === 400) {
-      console.warn(`[grok-mcp] sticky follow-up ${resp.status}: ${raw.slice(0, 200)}`);
+      console.warn(
+        `[grok-mcp] sticky follow-up ${resp.status}: ${raw.slice(0, 200)}`,
+      );
       return null;
     }
     let detail = raw.slice(0, 500);
-    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    try {
+      detail =
+        JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail;
+    } catch {
+      /* keep */
+    }
     throw new Error(`Grok follow-up ${resp.status}: ${detail}`);
   }
   return {
@@ -433,16 +541,24 @@ async function followUpStickyAgent(
   };
 }
 
-async function createGrokAgent(apiKey: string, promptText: string, opts?: {
-  name?: string;
-  startingRef?: string;
-  omitModel?: boolean;
-}): Promise<FireResult> {
+async function createGrokAgent(
+  apiKey: string,
+  promptText: string,
+  opts?: {
+    name?: string;
+    startingRef?: string;
+    omitModel?: boolean;
+  },
+): Promise<FireResult> {
   const repoUrl = Deno.env.get("CURSOR_REPO_URL") || DEFAULT_REPO;
-  const startingRef = opts?.startingRef || Deno.env.get("CURSOR_STARTING_REF") || "main";
+  const startingRef =
+    opts?.startingRef || Deno.env.get("CURSOR_STARTING_REF") || "main";
   const envName = Deno.env.get("CURSOR_CLOUD_ENV_NAME") || "";
-  const modelId = opts?.omitModel ? "" : (Deno.env.get("GROK_MODEL_ID") || DEFAULT_GROK_MODEL);
-  const autoCreatePR = (Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false";
+  const modelId = opts?.omitModel
+    ? ""
+    : Deno.env.get("GROK_MODEL_ID") || DEFAULT_GROK_MODEL;
+  const autoCreatePR =
+    (Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false";
 
   const body: Record<string, unknown> = {
     prompt: { text: promptText },
@@ -464,34 +580,46 @@ async function createGrokAgent(apiKey: string, promptText: string, opts?: {
   if (!resp.ok) {
     const looksLikeModel = /model/i.test(raw) && !opts?.omitModel && !!modelId;
     if (looksLikeModel) {
-      console.warn(`[grok-mcp] model ${modelId} rejected, retrying without model id`);
+      console.warn(
+        `[grok-mcp] model ${modelId} rejected, retrying without model id`,
+      );
       return createGrokAgent(apiKey, promptText, { ...opts, omitModel: true });
     }
     let detail = raw.slice(0, 500);
-    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    try {
+      detail =
+        JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail;
+    } catch {
+      /* keep */
+    }
     throw new Error(`Grok agent create ${resp.status}: ${detail}`);
   }
   const parsed = parseAgentResponse(raw);
   return { ...parsed, reused: false };
 }
 
-async function fireGrokAgent(promptText: string, opts?: {
-  name?: string;
-  startingRef?: string;
-  tenantId?: string | null;
-  task?: string;
-  context?: string;
-  tool?: string;
-  replyVia?: "carmen" | "cursor";
-  sessionId?: string;
-}): Promise<FireResult> {
+async function fireGrokAgent(
+  promptText: string,
+  opts?: {
+    name?: string;
+    startingRef?: string;
+    tenantId?: string | null;
+    task?: string;
+    context?: string;
+    tool?: string;
+    replyVia?: "carmen" | "cursor";
+    sessionId?: string;
+  },
+): Promise<FireResult> {
   if (webhookConfig()) {
     const task = String(opts?.task || promptText).trim();
     const contextParts: string[] = [];
     if (opts?.startingRef) contextParts.push(`branch: ${opts.startingRef}`);
     if (opts?.context) contextParts.push(opts.context);
     if (opts?.name) contextParts.push(`label: ${opts.name}`);
-    contextParts.push(replyInstructions(opts?.replyVia ?? "carmen", opts?.sessionId));
+    contextParts.push(
+      replyInstructions(opts?.replyVia ?? "carmen", opts?.sessionId),
+    );
     contextParts.push(teachingBlock(opts?.tenantId ?? null).trim());
     return fireGrokWebhook(task, contextParts.join("\n\n"), {
       tool: opts?.tool,
@@ -501,20 +629,26 @@ async function fireGrokAgent(promptText: string, opts?: {
     });
   }
 
-  const apiKey = Deno.env.get("CURSOR_API_KEY") || Deno.env.get("GROK_BOT_API_KEY") || "";
+  const apiKey =
+    Deno.env.get("CURSOR_API_KEY") || Deno.env.get("GROK_BOT_API_KEY") || "";
   if (!apiKey) {
     throw new Error(
       "Grok Bot is not configured (set GROK_BOT_WEBHOOK_URL + GROK_BOT_WEBHOOK_KEY, or CURSOR_API_KEY).",
     );
   }
-  const text = promptText.length > MAX_TEXT ? promptText.slice(0, MAX_TEXT) : promptText;
+  const text =
+    promptText.length > MAX_TEXT ? promptText.slice(0, MAX_TEXT) : promptText;
 
   if (STICKY_ENABLED) {
     const stickyId = await getStickyAgentId(opts?.tenantId ?? null);
     if (stickyId) {
       const followed = await followUpStickyAgent(apiKey, stickyId, text);
       if (followed?.delivered) {
-        await saveStickyAgent(opts?.tenantId ?? null, followed.id, followed.url);
+        await saveStickyAgent(
+          opts?.tenantId ?? null,
+          followed.id,
+          followed.url,
+        );
         return followed;
       }
       if (followed && followed.delivered === false) {
@@ -544,8 +678,12 @@ async function recentDispatchContext(tenantId: string | null): Promise<string> {
     const rows = (data || []) as Array<any>;
     if (!rows.length) return "";
     const lines = rows.map((r) => {
-      const when = String(r.created_at || "").slice(0, 16).replace("T", " ");
-      const what = String(r.request_text || "").replace(/\s+/g, " ").slice(0, 200);
+      const when = String(r.created_at || "")
+        .slice(0, 16)
+        .replace("T", " ");
+      const what = String(r.request_text || "")
+        .replace(/\s+/g, " ")
+        .slice(0, 200);
       const tag = r.tool === "request_dev_task" ? "DEV" : "ASK";
       const sess = r.session_url ? ` — ${r.session_url}` : "";
       return `• [${when} · ${tag} · ${r.status || "dispatched"}] ${what}${sess}`;
@@ -558,7 +696,10 @@ async function recentDispatchContext(tenantId: string | null): Promise<string> {
       lines.join("\n")
     );
   } catch (e) {
-    console.error("[grok-mcp] recentDispatchContext failed:", (e as any)?.message ?? e);
+    console.error(
+      "[grok-mcp] recentDispatchContext failed:",
+      (e as any)?.message ?? e,
+    );
     return "";
   }
 }
@@ -642,11 +783,9 @@ async function handleToolCall(
       `\nPlease implement this in the AIOS codebase and open a pull request when done.` +
       recent +
       teachingBlock(ctx.tenantId);
-    const webhookContext = [
-      context,
-      branch ? `branch: ${branch}` : "",
-      recent,
-    ].filter(Boolean).join("\n\n");
+    const webhookContext = [context, branch ? `branch: ${branch}` : "", recent]
+      .filter(Boolean)
+      .join("\n\n");
     const { url, id, reused, viaWebhook } = await fireGrokAgent(text, {
       name: `Carmen → Grok DEV: ${task.slice(0, 50)}`,
       startingRef: branch || undefined,
@@ -668,17 +807,15 @@ async function handleToolCall(
       cursorAgentId: id,
     });
     return viaWebhook
-      ? (
-        `✅ שלחתי את המשימה ל-Grok Bot (אוטומציית webhook). הוא יתעורר, יבצע, ` +
-        `ויחזיר תשובה דרך ${replyVia === "cursor" ? "reply_to_cursor_session" : "ask_carmen"} כשיגמר.\n` +
-        `Dispatch: ${id}`
-      )
-      : (
-        `✅ Dispatched the dev task to Grok Bot` +
-        (reused ? ` (same sticky agent — history preserved)` : ` (new sticky Grok agent for this tenant)`) +
-        `. Grok is now working on it and will open a pull request when finished.\n` +
-        `Session: ${url}`
-      );
+      ? `✅ שלחתי את המשימה ל-Grok Bot (אוטומציית webhook). הוא יתעורר, יבצע, ` +
+          `ויחזיר תשובה דרך ${replyVia === "cursor" ? "reply_to_cursor_session" : "ask_carmen"} כשיגמר.\n` +
+          `Dispatch: ${id}`
+      : `✅ Dispatched the dev task to Grok Bot` +
+          (reused
+            ? ` (same sticky agent — history preserved)`
+            : ` (new sticky Grok agent for this tenant)`) +
+          `. Grok is now working on it and will open a pull request when finished.\n` +
+          `Session: ${url}`;
   }
 
   if (name === "ask_grok") {
@@ -716,30 +853,32 @@ async function handleToolCall(
       cursorAgentId: id,
     });
     return viaWebhook
-      ? (
-        `✅ שלחתי את הבקשה ל-Grok Bot (אוטומציית webhook). הוא יתעורר, יעבוד על זה, ` +
-        `ויחזיר תשובה דרך ${replyVia === "cursor" ? "reply_to_cursor_session" : "ask_carmen"} כשיגמר.\n` +
-        `Dispatch: ${id}`
-      )
-      : (
-        `✅ Sent your request to Grok Bot` +
-        (reused ? ` (same sticky agent — history preserved)` : ` (new sticky Grok agent for this tenant)`) +
-        `. A Grok session is now running on it.\n` +
-        `Session: ${url}`
-      );
+      ? `✅ שלחתי את הבקשה ל-Grok Bot (אוטומציית webhook). הוא יתעורר, יעבוד על זה, ` +
+          `ויחזיר תשובה דרך ${replyVia === "cursor" ? "reply_to_cursor_session" : "ask_carmen"} כשיגמר.\n` +
+          `Dispatch: ${id}`
+      : `✅ Sent your request to Grok Bot` +
+          (reused
+            ? ` (same sticky agent — history preserved)`
+            : ` (new sticky Grok agent for this tenant)`) +
+          `. A Grok session is now running on it.\n` +
+          `Session: ${url}`;
   }
 
   if (name === "reply_to_aios_session") {
-    const { ingestChannelReply } = await import("../_shared/agent-channel/ingest.ts");
+    const { ingestChannelReply } =
+      await import("../_shared/agent-channel/ingest.ts");
     const conversationId = String(args?.conversation_id ?? "").trim();
     const content = String(args?.content ?? "").trim();
-    if (!conversationId || !content) throw new Error("conversation_id and content are required");
+    if (!conversationId || !content)
+      throw new Error("conversation_id and content are required");
     const result = await ingestChannelReply({
       conversation_id: conversationId,
       session_id: args?.session_id ? String(args.session_id) : undefined,
       origin: (args?.origin || "grok") as any,
       content,
-      idempotency_key: args?.idempotency_key ? String(args.idempotency_key) : undefined,
+      idempotency_key: args?.idempotency_key
+        ? String(args.idempotency_key)
+        : undefined,
       tenant_id: ctx.tenantId || undefined,
     });
     return result.duplicate
@@ -750,12 +889,22 @@ async function handleToolCall(
   throw new Error(`Unknown tool: ${name}`);
 }
 
-type RpcCtx = { tenantId: string | null; agentId: string | null; grokMode: boolean };
+type RpcCtx = {
+  tenantId: string | null;
+  agentId: string | null;
+  grokMode: boolean;
+};
 
-async function handleRpcMessage(msg: McpRpcMessage, ctx: RpcCtx, bearer?: string): Promise<Response> {
+async function handleRpcMessage(
+  msg: McpRpcMessage,
+  ctx: RpcCtx,
+  bearer?: string,
+): Promise<Response> {
   const { id, method, params } = msg ?? {};
   const clientProtocol =
-    typeof (params as any)?.protocolVersion === "string" ? (params as any).protocolVersion : undefined;
+    typeof (params as any)?.protocolVersion === "string"
+      ? (params as any).protocolVersion
+      : undefined;
 
   try {
     switch (method) {
@@ -765,10 +914,10 @@ async function handleRpcMessage(msg: McpRpcMessage, ctx: RpcCtx, bearer?: string
           ctx.grokMode
             ? grokCompatibleInitializeResult(clientProtocol, SERVER_INFO)
             : {
-              protocolVersion: PROTOCOL_VERSION,
-              capabilities: { tools: {} },
-              serverInfo: SERVER_INFO,
-            },
+                protocolVersion: PROTOCOL_VERSION,
+                capabilities: { tools: {} },
+                serverInfo: SERVER_INFO,
+              },
         );
       case "notifications/initialized":
       case "initialized":
@@ -804,10 +953,12 @@ async function handleRpcMessage(msg: McpRpcMessage, ctx: RpcCtx, bearer?: string
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   const pathname = new URL(req.url).pathname;
-  const streamable = wantsStreamableHttp(req, pathname) || isStreamableMcpPath(pathname);
+  const streamable =
+    wantsStreamableHttp(req, pathname) || isStreamableMcpPath(pathname);
 
   if (!streamable && req.method === "GET") {
     return new Response(
@@ -816,9 +967,13 @@ Deno.serve(async (req) => {
         server: SERVER_INFO,
         tools: TOOLS.map((t) => t.name),
         streamable_http: GROK_MCP_STREAMABLE_URL,
-        setup: "Cursor .mcp.json or Grok Bot Plugins → URL must end with /mcp + GROK_MCP_BEARER",
+        setup:
+          "Cursor .mcp.json or Grok Bot Plugins → URL must end with /mcp + GROK_MCP_BEARER",
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
@@ -827,15 +982,28 @@ Deno.serve(async (req) => {
   if (gate && bearer !== gate) {
     if (streamable) {
       return handleStreamableMcpRequest(req, async (msg) =>
-        rpcError(msg.id, -32001, "Unauthorized: invalid or missing bearer token", 401));
+        rpcError(
+          msg.id,
+          -32001,
+          "Unauthorized: invalid or missing bearer token",
+          401,
+        ),
+      );
     }
-    return rpcError(null, -32001, "Unauthorized: invalid or missing bearer token", 401);
+    return rpcError(
+      null,
+      -32001,
+      "Unauthorized: invalid or missing bearer token",
+      401,
+    );
   }
 
   const ctx: RpcCtx = { tenantId: null, agentId: null, grokMode: streamable };
 
   if (streamable) {
-    return handleStreamableMcpRequest(req, (msg) => handleRpcMessage(msg, ctx, bearer));
+    return handleStreamableMcpRequest(req, (msg) =>
+      handleRpcMessage(msg, ctx, bearer),
+    );
   }
 
   let msg: McpRpcMessage;

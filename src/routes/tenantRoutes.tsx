@@ -27,7 +27,9 @@ const MarketingDepartment = lazy(() => import("@/pages/MarketingDepartment"));
 const CampaignAlerts = lazy(() => import("@/pages/CampaignAlerts"));
 const Broadcast = lazy(() => import("@/pages/Broadcast"));
 const Products = lazy(() => import("@/pages/Products"));
-const AccountingIntegrations = lazy(() => import("@/pages/AccountingIntegrations"));
+const AccountingIntegrations = lazy(
+  () => import("@/pages/AccountingIntegrations"),
+);
 const AccountingSettings = lazy(() => import("@/pages/AccountingSettings"));
 const MenuManagement = lazy(() => import("@/pages/MenuManagement"));
 const FieldsManagement = lazy(() => import("@/pages/FieldsManagement"));
@@ -38,15 +40,21 @@ const Chat = lazy(() => import("@/pages/Chat"));
 const ManyChatSettings = lazy(() => import("@/pages/ManyChatSettings"));
 const ChatIntegrations = lazy(() => import("@/pages/ChatIntegrations"));
 const GreenAPISettings = lazy(() => import("@/pages/GreenAPISettings"));
-const ManusWhatsAppSettings = lazy(() => import("@/pages/ManusWhatsAppSettings"));
+const ManusWhatsAppSettings = lazy(
+  () => import("@/pages/ManusWhatsAppSettings"),
+);
 const MetaWhatsAppSettings = lazy(() => import("@/pages/MetaWhatsAppSettings"));
 const LLMSettings = lazy(() => import("@/pages/LLMSettings"));
 const FacebookSettings = lazy(() => import("@/pages/FacebookSettings"));
 const FacebookCallback = lazy(() => import("@/pages/FacebookCallback"));
 const GoogleAdsSettings = lazy(() => import("@/pages/GoogleAdsSettings"));
-const GoogleAnalyticsSettings = lazy(() => import("@/pages/GoogleAnalyticsSettings"));
+const GoogleAnalyticsSettings = lazy(
+  () => import("@/pages/GoogleAnalyticsSettings"),
+);
 const MakeSettings = lazy(() => import("@/pages/MakeSettings"));
-const GoogleSearchConsoleSettings = lazy(() => import("@/pages/GoogleSearchConsoleSettings"));
+const GoogleSearchConsoleSettings = lazy(
+  () => import("@/pages/GoogleSearchConsoleSettings"),
+);
 const AhrefsSettings = lazy(() => import("@/pages/AhrefsSettings"));
 const TikTokSettings = lazy(() => import("@/pages/TikTokSettings"));
 const Integrations = lazy(() => import("@/pages/Integrations"));
@@ -72,7 +80,9 @@ const MaskyooSettings = lazy(() => import("@/pages/MaskyooSettings"));
 const TelegramSettings = lazy(() => import("@/pages/TelegramSettings"));
 const GithubAgent = lazy(() => import("@/pages/GithubAgent"));
 const WordPressSettings = lazy(() => import("@/pages/WordPressSettings"));
-const LandingPageSubmissions = lazy(() => import("@/pages/LandingPageSubmissions"));
+const LandingPageSubmissions = lazy(
+  () => import("@/pages/LandingPageSubmissions"),
+);
 const UnifiedSettings = lazy(() => import("@/pages/UnifiedSettings"));
 const UnifiedCallback = lazy(() => import("@/pages/UnifiedCallback"));
 const DMMDashboard = lazy(() => import("@/pages/DMMDashboard"));
@@ -86,12 +96,50 @@ function TenantUnknownRoute() {
 export function tenantRoutes() {
   return (
     <>
-      <Route path="/t/:tenantSlug/marketing" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
-      <Route path="/t/:tenantSlug/marketing/department/:department" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
-      <Route path="/t/:tenantSlug/marketing/:clientId" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
-      <Route path="/t/:tenantSlug/marketing/:clientId/:department" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
-      <Route path="/t/:tenantSlug/command-center" element={<ProtectedRoute><CarmenCommandCenter /></ProtectedRoute>} />
-      <Route path="/t/:tenantSlug/unified-callback" element={<UnifiedCallback />} />
+      <Route
+        path="/t/:tenantSlug/marketing"
+        element={
+          <ProtectedRoute>
+            <MarketingDepartment />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/t/:tenantSlug/marketing/department/:department"
+        element={
+          <ProtectedRoute>
+            <MarketingDepartment />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/t/:tenantSlug/marketing/:clientId"
+        element={
+          <ProtectedRoute>
+            <MarketingDepartment />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/t/:tenantSlug/marketing/:clientId/:department"
+        element={
+          <ProtectedRoute>
+            <MarketingDepartment />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/t/:tenantSlug/command-center"
+        element={
+          <ProtectedRoute>
+            <CarmenCommandCenter />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/t/:tenantSlug/unified-callback"
+        element={<UnifiedCallback />}
+      />
 
       <Route path="/t/:tenantSlug" element={<TenantAppShell />}>
         <Route index element={<Home />} />
@@ -116,14 +164,23 @@ export function tenantRoutes() {
             on every list↔editor navigation (sidebar flash / "jumping"). Permission is
             enforced by RoutedModulePermissionGate via the automations prefix. */}
         <Route path="automations" element={<Automations />} />
-        <Route path="automations/flow/:automationId" element={<AutomationFlow />} />
+        <Route
+          path="automations/flow/:automationId"
+          element={<AutomationFlow />}
+        />
         <Route path="broadcast" element={<Broadcast />} />
-        <Route path="carmen-insights" element={<Navigate to="../agents?tab=learning" replace />} />
+        <Route
+          path="carmen-insights"
+          element={<Navigate to="../agents?tab=learning" replace />}
+        />
         <Route path="visual-workspace" element={<VisualWorkspace />} />
         <Route path="campaign-alerts" element={<CampaignAlerts />} />
         <Route path="products" element={<Products />} />
         <Route path="branding" element={<Branding />} />
-        <Route path="accounting-integrations" element={<AccountingIntegrations />} />
+        <Route
+          path="accounting-integrations"
+          element={<AccountingIntegrations />}
+        />
         <Route path="accounting-settings" element={<AccountingSettings />} />
         <Route path="ai-support" element={<DashboardRouter />} />
         <Route path="menu-management" element={<MenuManagement />} />
@@ -137,7 +194,10 @@ export function tenantRoutes() {
         <Route path="manychat-settings" element={<ManyChatSettings />} />
         <Route path="green-api-settings" element={<GreenAPISettings />} />
         <Route path="manus-wa-settings" element={<ManusWhatsAppSettings />} />
-        <Route path="meta-whatsapp-settings" element={<MetaWhatsAppSettings />} />
+        <Route
+          path="meta-whatsapp-settings"
+          element={<MetaWhatsAppSettings />}
+        />
         <Route path="llm-settings" element={<LLMSettings />} />
         <Route path="telegram-settings" element={<TelegramSettings />} />
         <Route path="integrations" element={<Integrations />} />
@@ -145,14 +205,23 @@ export function tenantRoutes() {
         <Route path="facebook-settings" element={<FacebookSettings />} />
         <Route path="facebook-callback" element={<FacebookCallback />} />
         <Route path="google-ads-settings" element={<GoogleAdsSettings />} />
-        <Route path="google-analytics-settings" element={<GoogleAnalyticsSettings />} />
-        <Route path="google-search-console-settings" element={<GoogleSearchConsoleSettings />} />
+        <Route
+          path="google-analytics-settings"
+          element={<GoogleAnalyticsSettings />}
+        />
+        <Route
+          path="google-search-console-settings"
+          element={<GoogleSearchConsoleSettings />}
+        />
         <Route path="ahrefs-settings" element={<AhrefsSettings />} />
         <Route path="tiktok-settings" element={<TikTokSettings />} />
         <Route path="make-settings" element={<MakeSettings />} />
         <Route path="site-analytics" element={<SiteAnalytics />} />
         <Route path="rank-tracking" element={<RankTracking />} />
-        <Route path="rank-tracking/:projectId" element={<RankTrackingProject />} />
+        <Route
+          path="rank-tracking/:projectId"
+          element={<RankTrackingProject />}
+        />
         <Route path="dmm-dashboard" element={<DMMDashboard />} />
         <Route path="integrations/serpapi" element={<SerpApiSettings />} />
         <Route path="zoom-settings" element={<ZoomSettings />} />
@@ -166,13 +235,22 @@ export function tenantRoutes() {
         <Route path="agents" element={<AgentHub />} />
         <Route path="agent-tasks" element={<AgentTasksPage />} />
         <Route path="skins" element={<SkinsManager />} />
-        <Route path="carmen-access" element={<Navigate to="../agents?tab=access" replace />} />
-        <Route path="carmen-studio" element={<Navigate to="../agents" replace />} />
+        <Route
+          path="carmen-access"
+          element={<Navigate to="../agents?tab=access" replace />}
+        />
+        <Route
+          path="carmen-studio"
+          element={<Navigate to="../agents" replace />}
+        />
         <Route path="github-agent" element={<GithubAgent />} />
         <Route path="telephony-settings" element={<TelephonySettings />} />
         <Route path="maskyoo-settings" element={<MaskyooSettings />} />
         <Route path="wordpress-settings" element={<WordPressSettings />} />
-        <Route path="landing-page-submissions" element={<LandingPageSubmissions />} />
+        <Route
+          path="landing-page-submissions"
+          element={<LandingPageSubmissions />}
+        />
         <Route path="unified-settings" element={<UnifiedSettings />} />
         <Route path="*" element={<TenantUnknownRoute />} />
       </Route>

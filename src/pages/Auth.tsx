@@ -3,7 +3,13 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Building2 } from "lucide-react";
@@ -14,9 +20,12 @@ const AUTH_REDIRECT = `${window.location.origin}/auth`;
 
 async function processPendingInvitation(accessToken: string) {
   try {
-    const { error } = await supabase.functions.invoke("process-user-invitation", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const { error } = await supabase.functions.invoke(
+      "process-user-invitation",
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
     if (error) console.error("Error processing invitation:", error);
   } catch (e) {
     console.error("Exception processing invitation:", e);
@@ -87,7 +96,8 @@ export default function Auth() {
       const orgName =
         (data.tenants as { name?: string } | null)?.name ||
         (data.metadata as { tenant_name?: string } | null)?.tenant_name;
-      const invitedName = (data.metadata as { fullName?: string } | null)?.fullName;
+      const invitedName = (data.metadata as { fullName?: string } | null)
+        ?.fullName;
 
       if (orgName) {
         setInviteBanner(
@@ -105,7 +115,10 @@ export default function Auth() {
 
     const spinnerTimeout = setTimeout(() => setCheckingSession(false), 4000);
 
-    const goToApp = async (session: { user: { id: string }; access_token: string }) => {
+    const goToApp = async (session: {
+      user: { id: string };
+      access_token: string;
+    }) => {
       if (navigated || needsPasswordSetup) return;
       navigated = true;
       setCheckingSession(true);
@@ -116,15 +129,23 @@ export default function Auth() {
       }
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY" || needsPasswordSetup) {
         setUpdatePasswordMode(true);
         setCheckingSession(false);
         return;
       }
-      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
+      if (
+        (event === "SIGNED_IN" || event === "INITIAL_SESSION") &&
+        session?.user
+      ) {
         goToApp(session);
-      } else if ((event === "INITIAL_SESSION" && !hasOAuthCode) || event === "SIGNED_OUT") {
+      } else if (
+        (event === "INITIAL_SESSION" && !hasOAuthCode) ||
+        event === "SIGNED_OUT"
+      ) {
         setCheckingSession(false);
       }
     });
@@ -135,7 +156,9 @@ export default function Auth() {
         setCheckingSession(false);
         return;
       }
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session?.user) {
         goToApp(session);
       } else if (!hasOAuthCode) {
@@ -152,7 +175,10 @@ export default function Auth() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) {
       toast({
         title: "שגיאה",
@@ -163,7 +189,9 @@ export default function Auth() {
       return;
     }
 
-    const { data: { currentLevel, nextLevel } } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const {
+      data: { currentLevel, nextLevel },
+    } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
     if (nextLevel === "aal2" && currentLevel !== "aal2") {
       const factors = await supabase.auth.mfa.listFactors();
@@ -177,7 +205,10 @@ export default function Auth() {
 
     const { data: session } = await supabase.auth.getSession();
     if (session?.session) {
-      await navigateToApp(session.session.user.id, session.session.access_token);
+      await navigateToApp(
+        session.session.user.id,
+        session.session.access_token,
+      );
     }
     setLoading(false);
   };
@@ -218,10 +249,14 @@ export default function Auth() {
 
       const { data: session } = await supabase.auth.getSession();
       if (session?.session) {
-        await navigateToApp(session.session.user.id, session.session.access_token);
+        await navigateToApp(
+          session.session.user.id,
+          session.session.access_token,
+        );
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "הקוד שגוי, נסה שוב";
+      const message =
+        error instanceof Error ? error.message : "הקוד שגוי, נסה שוב";
       toast({ title: "שגיאה", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -240,11 +275,13 @@ export default function Auth() {
 
       toast({
         title: "נשלח קישור לאיפוס סיסמה",
-        description: "בדוק את תיבת המייל שלך ולחץ על הקישור כדי להגדיר סיסמה חדשה.",
+        description:
+          "בדוק את תיבת המייל שלך ולחץ על הקישור כדי להגדיר סיסמה חדשה.",
       });
       setResetMode(false);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "שגיאה בשליחת קישור איפוס";
+      const message =
+        error instanceof Error ? error.message : "שגיאה בשליחת קישור איפוס";
       toast({ title: "שגיאה", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -260,7 +297,8 @@ export default function Auth() {
       });
       if (error) throw error;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "שגיאה בהתחברות עם Google";
+      const message =
+        error instanceof Error ? error.message : "שגיאה בהתחברות עם Google";
       toast({ title: "שגיאה", description: message, variant: "destructive" });
       setLoading(false);
     }
@@ -291,14 +329,20 @@ export default function Auth() {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
 
     if (error) {
-      toast({ title: "שגיאה", description: error.message, variant: "destructive" });
+      toast({
+        title: "שגיאה",
+        description: error.message,
+        variant: "destructive",
+      });
       setLoading(false);
       return;
     }
 
     toast({ title: "הסיסמה עודכנה", description: "הסיסמה שלך עודכנה בהצלחה" });
 
-    const { data: { user, session } } = await supabase.auth.getUser();
+    const {
+      data: { user, session },
+    } = await supabase.auth.getUser();
     if (user) {
       await navigateToApp(user.id, session?.access_token);
     }
@@ -386,7 +430,9 @@ export default function Auth() {
                   type="text"
                   maxLength={6}
                   value={mfaCode}
-                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) =>
+                    setMfaCode(e.target.value.replace(/\D/g, ""))
+                  }
                   placeholder="123456"
                   className="font-mono text-lg tracking-wider text-center"
                   autoComplete="off"
@@ -394,7 +440,11 @@ export default function Auth() {
                   disabled={loading}
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={loading || mfaCode.length !== 6}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading || mfaCode.length !== 6}
+              >
                 {loading ? "מאמת..." : "אמת"}
               </Button>
               <Button
@@ -414,7 +464,8 @@ export default function Auth() {
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground mb-4">
-                  נשלח לך קישור לאיפוס סיסמה למייל. לחץ על הקישור כדי להגדיר סיסמה חדשה.
+                  נשלח לך קישור לאיפוס סיסמה למייל. לחץ על הקישור כדי להגדיר
+                  סיסמה חדשה.
                 </p>
                 <Label htmlFor="email-reset">אימייל</Label>
                 <Input
@@ -472,7 +523,9 @@ export default function Auth() {
                   <span className="w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">או</span>
+                  <span className="bg-background px-2 text-muted-foreground">
+                    או
+                  </span>
                 </div>
               </div>
 
@@ -506,8 +559,10 @@ export default function Auth() {
 
               {isDevEnv && (
                 <p className="text-xs text-muted-foreground text-center leading-relaxed">
-                  Preview/Staging: קודם התחבר ל-Vercel כשהדפדפן מבקש, ואז Google.
-                  אם Google נכשל עם redirect_uri_mismatch — הוסף ב-Google Cloud את ה-Callback URL של Supabase Staging (ראה docs/ENVIRONMENTS.md).
+                  Preview/Staging: קודם התחבר ל-Vercel כשהדפדפן מבקש, ואז
+                  Google. אם Google נכשל עם redirect_uri_mismatch — הוסף
+                  ב-Google Cloud את ה-Callback URL של Supabase Staging (ראה
+                  docs/ENVIRONMENTS.md).
                 </p>
               )}
 
@@ -522,7 +577,10 @@ export default function Auth() {
 
               <p className="text-center text-sm text-muted-foreground pt-2">
                 רוצה לפתוח ארגון חדש?{" "}
-                <Link to="/signup" className="text-primary underline-offset-4 hover:underline">
+                <Link
+                  to="/signup"
+                  className="text-primary underline-offset-4 hover:underline"
+                >
                   הירשם כאן
                 </Link>
               </p>

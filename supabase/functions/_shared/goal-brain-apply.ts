@@ -20,12 +20,15 @@ export async function applyBrainResponse(
   }
   const payload = json || { summary: content.slice(0, 2000) };
 
-  await supabase.from("goal_brain_requests").update({
-    response_json: payload,
-    status: "completed",
-    completed_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }).eq("id", request.id);
+  await supabase
+    .from("goal_brain_requests")
+    .update({
+      response_json: payload,
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", request.id);
 
   switch (request.request_type) {
     case "plan":
@@ -35,9 +38,17 @@ export async function applyBrainResponse(
     case "efficiency_review":
       return await applyEfficiencyReviewResponse(supabase, request, json);
     case "manual_guidance":
-      return await applyManualGuidanceResponse(supabase, request, payload, content);
+      return await applyManualGuidanceResponse(
+        supabase,
+        request,
+        payload,
+        content,
+      );
     default:
-      return { ok: false, error: `unknown_request_type:${request.request_type}` };
+      return {
+        ok: false,
+        error: `unknown_request_type:${request.request_type}`,
+      };
   }
 }
 
@@ -49,17 +60,30 @@ async function applyPlanResponse(
   const steps = Array.isArray(json.plan_steps) ? json.plan_steps : [];
   if (!steps.length) return { ok: false, error: "empty_plan_steps" };
 
-  const { data: goal } = await supabase.from("goals").select("tenant_id, title")
-    .eq("id", request.goal_id).maybeSingle();
+  const { data: goal } = await supabase
+    .from("goals")
+    .select("tenant_id, title")
+    .eq("id", request.goal_id)
+    .maybeSingle();
   if (!goal) return { ok: false, error: "goal_not_found" };
 
   const slice = steps.slice(0, 8) as Array<Record<string, unknown>>;
   for (const [i, step] of slice.entries()) {
     const actionTypeRaw = String(step.action_type || "model");
-    const actionType = ["model", "cursor", "verify", "observe", "tool"].includes(actionTypeRaw)
+    const actionType = [
+      "model",
+      "cursor",
+      "verify",
+      "observe",
+      "tool",
+    ].includes(actionTypeRaw)
       ? actionTypeRaw
       : "model";
-    const parallelTrack = !!(step.parallel_track && actionType === "cursor" && step.sub_project_key);
+    const parallelTrack = !!(
+      step.parallel_track &&
+      actionType === "cursor" &&
+      step.sub_project_key
+    );
     await supabase.from("goal_plan_steps").insert({
       tenant_id: goal.tenant_id,
       goal_id: request.goal_id,
@@ -71,17 +95,22 @@ async function applyPlanResponse(
       sort_order: i,
       parallel_track: parallelTrack,
       sub_project_key: parallelTrack ? String(step.sub_project_key) : null,
-      sub_project_label: parallelTrack ? String(step.sub_project_label || step.title || "") : null,
+      sub_project_label: parallelTrack
+        ? String(step.sub_project_label || step.title || "")
+        : null,
       metadata: parallelTrack ? { parallel_track: true } : {},
     });
   }
 
-  await supabase.from("goals").update({
-    plan: slice,
-    engine_status: "EXECUTING",
-    next_run_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }).eq("id", request.goal_id);
+  await supabase
+    .from("goals")
+    .update({
+      plan: slice,
+      engine_status: "EXECUTING",
+      next_run_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", request.goal_id);
 
   return { ok: true };
 }
@@ -91,11 +120,15 @@ async function applyStepExecuteResponse(
   request: BrainRequestRow,
   json: Record<string, unknown>,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { data: goal } = await supabase.from("goals").select("tenant_id")
-    .eq("id", request.goal_id).maybeSingle();
+  const { data: goal } = await supabase
+    .from("goals")
+    .select("tenant_id")
+    .eq("id", request.goal_id)
+    .maybeSingle();
   if (!goal) return { ok: false, error: "goal_not_found" };
 
-  const { data: criteria } = await supabase.from("goal_success_criteria")
+  const { data: criteria } = await supabase
+    .from("goal_success_criteria")
     .select("id, criterion_key")
     .eq("goal_id", request.goal_id);
 
@@ -103,7 +136,9 @@ async function applyStepExecuteResponse(
   for (const ev of evidence) {
     const row = ev as Record<string, unknown>;
     const key = row.criterion_key ? String(row.criterion_key) : "";
-    const criterion = (criteria || []).find((c: { criterion_key: string }) => c.criterion_key === key);
+    const criterion = (criteria || []).find(
+      (c: { criterion_key: string }) => c.criterion_key === key,
+    );
     await supabase.from("goal_evidence").insert({
       tenant_id: goal.tenant_id,
       goal_id: request.goal_id,
@@ -114,41 +149,57 @@ async function applyStepExecuteResponse(
     });
   }
 
-  const updates = Array.isArray(json.criterion_updates) ? json.criterion_updates : [];
+  const updates = Array.isArray(json.criterion_updates)
+    ? json.criterion_updates
+    : [];
   for (const upd of updates) {
     const row = upd as Record<string, unknown>;
     const key = String(row.key || "");
     const status = String(row.status || "");
-    const criterion = (criteria || []).find((c: { criterion_key: string }) => c.criterion_key === key);
+    const criterion = (criteria || []).find(
+      (c: { criterion_key: string }) => c.criterion_key === key,
+    );
     if (!criterion) continue;
     if (!["PASS", "FAIL", "UNKNOWN", "NOT_TESTED"].includes(status)) continue;
-    await supabase.from("goal_success_criteria").update({
-      status: status as CriterionStatus,
-      last_verified_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq("id", criterion.id);
+    await supabase
+      .from("goal_success_criteria")
+      .update({
+        status: status as CriterionStatus,
+        last_verified_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", criterion.id);
   }
 
   if (request.action_id) {
-    await supabase.from("goal_actions").update({
-      status: "completed",
-      result: json,
-      completed_at: new Date().toISOString(),
-    }).eq("id", request.action_id);
+    await supabase
+      .from("goal_actions")
+      .update({
+        status: "completed",
+        result: json,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", request.action_id);
   }
 
   if (request.step_id) {
-    await supabase.from("goal_plan_steps").update({
-      status: "done",
-      completed_at: new Date().toISOString(),
-    }).eq("id", request.step_id);
+    await supabase
+      .from("goal_plan_steps")
+      .update({
+        status: "done",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", request.step_id);
   }
 
-  await supabase.from("goals").update({
-    engine_status: "EXECUTING",
-    next_run_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }).eq("id", request.goal_id);
+  await supabase
+    .from("goals")
+    .update({
+      engine_status: "EXECUTING",
+      next_run_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", request.goal_id);
 
   return { ok: true };
 }
@@ -162,31 +213,41 @@ async function applyEfficiencyReviewResponse(
     efficient: !!json.efficient,
     score: Number(json.score) || 50,
     issues: Array.isArray(json.issues) ? json.issues.map(String) : [],
-    optimizations: Array.isArray(json.optimizations) ? json.optimizations.map(String) : [],
-    send_to_cursor: !!json.send_to_cursor && !!String(json.cursor_instruction || "").trim(),
-    cursor_instruction: String(json.cursor_instruction || "").trim() || undefined,
+    optimizations: Array.isArray(json.optimizations)
+      ? json.optimizations.map(String)
+      : [],
+    send_to_cursor:
+      !!json.send_to_cursor && !!String(json.cursor_instruction || "").trim(),
+    cursor_instruction:
+      String(json.cursor_instruction || "").trim() || undefined,
   };
 
   if (request.iteration_id) {
-    const { data: iter } = await supabase.from("goal_loop_iterations")
+    const { data: iter } = await supabase
+      .from("goal_loop_iterations")
       .select("context_snapshot")
       .eq("id", request.iteration_id)
       .maybeSingle();
     const snap = (iter?.context_snapshot as Record<string, unknown>) || {};
-    await supabase.from("goal_loop_iterations").update({
-      context_snapshot: { ...snap, efficiency_review: review },
-    }).eq("id", request.iteration_id);
+    await supabase
+      .from("goal_loop_iterations")
+      .update({
+        context_snapshot: { ...snap, efficiency_review: review },
+      })
+      .eq("id", request.iteration_id);
   }
 
   let cursorDispatched = false;
   if (review.send_to_cursor && review.cursor_instruction) {
-    const { data: goal } = await supabase.from("goals")
+    const { data: goal } = await supabase
+      .from("goals")
       .select("title, objective, constraints")
       .eq("id", request.goal_id)
       .maybeSingle();
     if (goal) {
       try {
-        const { dispatchToGoalCursor } = await import("./goal-cursor-dispatch.ts");
+        const { dispatchToGoalCursor } =
+          await import("./goal-cursor-dispatch.ts");
         await dispatchToGoalCursor(supabase, {
           tenantId: request.tenant_id,
           goalId: request.goal_id,
@@ -199,7 +260,10 @@ async function applyEfficiencyReviewResponse(
         });
         cursorDispatched = true;
       } catch (e) {
-        console.warn("[goal-brain-apply] efficiency cursor dispatch failed:", e);
+        console.warn(
+          "[goal-brain-apply] efficiency cursor dispatch failed:",
+          e,
+        );
       }
     }
   }
@@ -210,15 +274,22 @@ async function applyEfficiencyReviewResponse(
       goal_id: request.goal_id,
       event_type: "efficiency_review",
       actor: "autonomous_goal_engine",
-      detail: { review, cursor_dispatched: cursorDispatched, via: "cursor_direct_brain" },
+      detail: {
+        review,
+        cursor_dispatched: cursorDispatched,
+        via: "cursor_direct_brain",
+      },
     });
   }
 
-  await supabase.from("goals").update({
-    engine_status: "EXECUTING",
-    next_run_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }).eq("id", request.goal_id);
+  await supabase
+    .from("goals")
+    .update({
+      engine_status: "EXECUTING",
+      next_run_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", request.goal_id);
 
   return { ok: true };
 }
@@ -229,7 +300,10 @@ async function applyManualGuidanceResponse(
   json: Record<string, unknown>,
   rawContent: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const summary = String(json.summary || json.notes || rawContent).slice(0, 2000);
+  const summary = String(json.summary || json.notes || rawContent).slice(
+    0,
+    2000,
+  );
   await supabase.from("goal_events").insert({
     tenant_id: request.tenant_id,
     goal_id: request.goal_id,
@@ -244,23 +318,35 @@ async function applyManualGuidanceResponse(
   });
 
   if (json.replan) {
-    await supabase.from("goals").update({
-      engine_status: "REPLANNING",
-      plan: [],
-      updated_at: new Date().toISOString(),
-    }).eq("id", request.goal_id);
-    await supabase.from("goal_plan_steps").update({ status: "skipped" })
-      .eq("goal_id", request.goal_id).in("status", ["pending", "in_progress"]);
+    await supabase
+      .from("goals")
+      .update({
+        engine_status: "REPLANNING",
+        plan: [],
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", request.goal_id);
+    await supabase
+      .from("goal_plan_steps")
+      .update({ status: "skipped" })
+      .eq("goal_id", request.goal_id)
+      .in("status", ["pending", "in_progress"]);
   } else {
-    await supabase.from("goals").update({
-      engine_status: "EXECUTING",
-      updated_at: new Date().toISOString(),
-    }).eq("id", request.goal_id);
+    await supabase
+      .from("goals")
+      .update({
+        engine_status: "EXECUTING",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", request.goal_id);
   }
 
-  await supabase.from("goals").update({
-    next_run_at: new Date().toISOString(),
-  }).eq("id", request.goal_id);
+  await supabase
+    .from("goals")
+    .update({
+      next_run_at: new Date().toISOString(),
+    })
+    .eq("id", request.goal_id);
 
   return { ok: true };
 }

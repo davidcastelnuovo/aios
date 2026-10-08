@@ -3,7 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { findGaIntegrationForDomain, type GaPropertyRef } from "@/lib/gaPropertyMatch";
+import {
+  findGaIntegrationForDomain,
+  type GaPropertyRef,
+} from "@/lib/gaPropertyMatch";
 import { Loader2 } from "lucide-react";
 
 type GaConnection = {
@@ -44,7 +47,13 @@ export function GaDomainSearch({
         async (integrationId, matchDomain) => {
           const { data, error } = await supabase.functions.invoke(
             "google-analytics-auth?action=get_properties",
-            { body: { integrationId, probe: true, ...(matchDomain ? { matchDomain } : {}) } },
+            {
+              body: {
+                integrationId,
+                probe: true,
+                ...(matchDomain ? { matchDomain } : {}),
+              },
+            },
           );
           if (error || data?.needs_reconnect) return null;
           return (data?.properties || []) as GaPropertyRef[];
@@ -55,9 +64,12 @@ export function GaDomainSearch({
         setStatus("לא נמצא נכס לדומיין הזה");
         return;
       }
-      const propertyName = found.property.name || found.property.displayName || found.propertyId;
+      const propertyName =
+        found.property.name || found.property.displayName || found.propertyId;
       const accountName = found.property.accountName || "";
-      const connection = connections.find((item) => item.id === found.integrationId);
+      const connection = connections.find(
+        (item) => item.id === found.integrationId,
+      );
       onFound({
         integrationId: found.integrationId,
         propertyId: found.propertyId,
@@ -91,12 +103,18 @@ export function GaDomainSearch({
             }
           }}
         />
-        <Button type="button" variant="secondary" onClick={() => void search()} disabled={pending || !domain.trim()}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => void search()}
+          disabled={pending || !domain.trim()}
+        >
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : "מצא חשבון"}
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        {status || "מדביקים דומיין. החיפוש רץ על החשבון שלך ועל חשבונות ששותפו איתך"}
+        {status ||
+          "מדביקים דומיין. החיפוש רץ על החשבון שלך ועל חשבונות ששותפו איתך"}
       </p>
     </div>
   );

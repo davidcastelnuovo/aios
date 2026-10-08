@@ -33,7 +33,8 @@ export interface ResolvedClientTaskAgency {
 
 export const MISSING_CLIENT_ERROR = "יש לבחור לקוח למשימת לקוח";
 export const CLIENT_WITHOUT_AGENCY_ERROR = "הלקוח שנבחר לא משויך לסוכנות";
-export const CLIENT_UNREADABLE_ERROR = "לא ניתן לטעון את פרטי הלקוח. רענן את הדף ונסה שוב.";
+export const CLIENT_UNREADABLE_ERROR =
+  "לא ניתן לטעון את פרטי הלקוח. רענן את הדף ונסה שוב.";
 
 export async function resolveClientTaskAgency({
   clientId,
@@ -55,12 +56,15 @@ export async function resolveClientTaskAgency({
   }
 
   if (!client) {
-    client = cachedClients?.find((candidate) => candidate.id === clientId) ?? null;
+    client =
+      cachedClients?.find((candidate) => candidate.id === clientId) ?? null;
   }
 
   const agencyId = client?.agency_id || fallbackAgencyId || null;
   if (!agencyId) {
-    throw new Error(client ? CLIENT_WITHOUT_AGENCY_ERROR : CLIENT_UNREADABLE_ERROR);
+    throw new Error(
+      client ? CLIENT_WITHOUT_AGENCY_ERROR : CLIENT_UNREADABLE_ERROR,
+    );
   }
 
   return { client, agencyId, clientName: client?.name || "לקוח" };

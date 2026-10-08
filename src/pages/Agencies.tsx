@@ -4,7 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Phone, Mail, Calendar, Link as LinkIcon, Pencil, Trash2, Star } from "lucide-react";
+import {
+  Building2,
+  Phone,
+  Mail,
+  Calendar,
+  Link as LinkIcon,
+  Pencil,
+  Trash2,
+  Star,
+} from "lucide-react";
 import { AddAgencyForm } from "@/components/forms/AddAgencyForm";
 import { EditAgencyDialog } from "@/components/forms/EditAgencyDialog";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -38,25 +47,26 @@ export default function Agencies() {
   const queryClient = useQueryClient();
   const [editingAgency, setEditingAgency] = useState<any | null>(null);
   const [deletingAgency, setDeletingAgency] = useState<any | null>(null);
-  
+
   const { data: agencies, isLoading } = useQuery({
     queryKey: ["agencies-list", tenantId, userId, userAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      
+
       // Get owned agencies
       const { data: ownedAgencies, error: ownedError } = await supabase
         .from("agencies")
         .select("*, is_owned:tenant_id")
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
-      
+
       if (ownedError) throw ownedError;
-      
+
       // Get shared agencies via agency_tenant_access
       const { data: sharedAccess, error: sharedError } = await supabase
         .from("agency_tenant_access")
-        .select(`
+        .select(
+          `
           agency_id,
           agencies (
             id,
@@ -70,31 +80,36 @@ export default function Agencies() {
             created_at,
             is_default
           )
-        `)
+        `,
+        )
         .eq("accessing_tenant_id", tenantId);
-      
+
       if (sharedError) throw sharedError;
-      
+
       // Mark owned agencies
-      const markedOwned = (ownedAgencies || []).map(a => ({ ...a, is_owned: true }));
-      
+      const markedOwned = (ownedAgencies || []).map((a) => ({
+        ...a,
+        is_owned: true,
+      }));
+
       // Extract and mark shared agencies
       const shared = (sharedAccess || [])
-        .map(s => s.agencies)
+        .map((s) => s.agencies)
         .filter(Boolean)
-        .map(a => ({ ...a, is_owned: false }));
-      
+        .map((a) => ({ ...a, is_owned: false }));
+
       // Combine and remove duplicates
       const combined = [...markedOwned, ...shared];
       const uniqueMap = new Map();
-      combined.forEach(agency => {
+      combined.forEach((agency) => {
         if (agency && agency.id && !uniqueMap.has(agency.id)) {
           uniqueMap.set(agency.id, agency);
         }
       });
-      
-      return Array.from(uniqueMap.values()).sort((a: any, b: any) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+
+      return Array.from(uniqueMap.values()).sort(
+        (a: any, b: any) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
     },
     enabled: !!tenantId,
@@ -114,7 +129,9 @@ export default function Agencies() {
         .eq("agency_id", agencyId);
 
       if ((clientsCount || 0) > 0 || (leadsCount || 0) > 0) {
-        throw new Error(`לא ניתן למחוק סוכנות עם ${clientsCount || 0} לקוחות ו-${leadsCount || 0} לידים משויכים`);
+        throw new Error(
+          `לא ניתן למחוק סוכנות עם ${clientsCount || 0} לקוחות ו-${leadsCount || 0} לידים משויכים`,
+        );
       }
 
       const { error } = await supabase
@@ -193,19 +210,21 @@ export default function Agencies() {
     }
   };
 
-
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold">{t('agency', true)}</h2>
+          <h2 className="text-3xl font-bold">{t("agency", true)}</h2>
         </div>
         <AddAgencyForm />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {agencies?.map((agency) => (
-          <Card key={agency.id} className={`shadow-card hover:shadow-lg transition-all hover:scale-[1.02] ${agency.is_default ? 'ring-2 ring-primary' : ''}`}>
+          <Card
+            key={agency.id}
+            className={`shadow-card hover:shadow-lg transition-all hover:scale-[1.02] ${agency.is_default ? "ring-2 ring-primary" : ""}`}
+          >
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -229,7 +248,9 @@ export default function Agencies() {
                       )}
                     </div>
                     {agency.contact_name && (
-                      <p className="text-sm text-muted-foreground">{agency.contact_name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {agency.contact_name}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -243,7 +264,9 @@ export default function Agencies() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setDefaultAgencyMutation.mutate(agency.id)}
+                                onClick={() =>
+                                  setDefaultAgencyMutation.mutate(agency.id)
+                                }
                                 disabled={setDefaultAgencyMutation.isPending}
                               >
                                 <Star className="h-4 w-4" />
@@ -272,7 +295,10 @@ export default function Agencies() {
                       </Button>
                     </>
                   )}
-                  <Badge variant="outline" className={getStatusColor(agency.status)}>
+                  <Badge
+                    variant="outline"
+                    className={getStatusColor(agency.status)}
+                  >
                     {getStatusText(agency.status)}
                   </Badge>
                 </div>
@@ -294,7 +320,9 @@ export default function Agencies() {
               {agency.start_date && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Calendar className="h-4 w-4" />
-                  <span>{new Date(agency.start_date).toLocaleDateString("he-IL")}</span>
+                  <span>
+                    {new Date(agency.start_date).toLocaleDateString("he-IL")}
+                  </span>
                 </div>
               )}
               {agency.notes && (
@@ -311,8 +339,12 @@ export default function Agencies() {
         <Card className="shadow-card">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-1">אין {t('agency', true)}</h3>
-            <p className="text-sm text-muted-foreground">התחל בהוספת {t('agency')} ראשונה</p>
+            <h3 className="text-lg font-semibold mb-1">
+              אין {t("agency", true)}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              התחל בהוספת {t("agency")} ראשונה
+            </p>
           </CardContent>
         </Card>
       )}
@@ -325,7 +357,10 @@ export default function Agencies() {
         />
       )}
 
-      <AlertDialog open={!!deletingAgency} onOpenChange={(open) => !open && setDeletingAgency(null)}>
+      <AlertDialog
+        open={!!deletingAgency}
+        onOpenChange={(open) => !open && setDeletingAgency(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>מחיקת סוכנות</AlertDialogTitle>
@@ -339,7 +374,9 @@ export default function Agencies() {
             <AlertDialogCancel>ביטול</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deletingAgency && deleteAgencyMutation.mutate(deletingAgency.id)}
+              onClick={() =>
+                deletingAgency && deleteAgencyMutation.mutate(deletingAgency.id)
+              }
               disabled={deleteAgencyMutation.isPending}
             >
               {deleteAgencyMutation.isPending ? "מוחק..." : "מחק"}

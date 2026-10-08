@@ -8,12 +8,18 @@ export type TopicChat = {
 };
 
 export function topicTitle(title?: string | null): string {
-  const t = String(title || "").replace(/\s+/g, " ").trim();
+  const t = String(title || "")
+    .replace(/\s+/g, " ")
+    .trim();
   return t || "שיחה חדשה";
 }
 
 export function topicIsLive(status?: string | null): boolean {
-  return status === "debating" || status === "waiting_external" || status === "streaming";
+  return (
+    status === "debating" ||
+    status === "waiting_external" ||
+    status === "streaming"
+  );
 }
 
 export function topicModeLabel(routing?: string | null): string {
@@ -27,7 +33,10 @@ export function lastConversationStorageKey(tenantId: string): string {
   return `aios:cc-conversation:${tenantId}`;
 }
 
-export function streamAppliesToActive(boundId?: string | null, activeId?: string | null): boolean {
+export function streamAppliesToActive(
+  boundId?: string | null,
+  activeId?: string | null,
+): boolean {
   return !!boundId && boundId === activeId;
 }
 
@@ -37,7 +46,13 @@ export function composerLockedForChat(args: {
   liveStreamIds: string[];
   status?: string | null;
 }): boolean {
-  if (args.conversationId && args.liveStreamIds.includes(args.conversationId)) return true;
-  if (!args.conversationId && args.liveStreamIds.length && args.status === "streaming") return true;
+  if (args.conversationId && args.liveStreamIds.includes(args.conversationId))
+    return true;
+  if (
+    !args.conversationId &&
+    args.liveStreamIds.length &&
+    args.status === "streaming"
+  )
+    return true;
   return false;
 }

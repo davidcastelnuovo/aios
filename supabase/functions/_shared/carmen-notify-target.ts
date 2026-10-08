@@ -62,7 +62,9 @@ export type ResolveCarmenNotifyTargetResult = {
 };
 
 /** Normalize Israeli / international WhatsApp digits for comparison. */
-export function normalizeNotifyPhone(raw: string | null | undefined): string | null {
+export function normalizeNotifyPhone(
+  raw: string | null | undefined,
+): string | null {
   if (!raw) return null;
   // Strip WhatsApp JID suffix (@c.us / @g.us / @lid)
   const local = String(raw).trim().split("@")[0] ?? "";
@@ -77,7 +79,10 @@ export function normalizeNotifyPhone(raw: string | null | undefined): string | n
   return digits;
 }
 
-export function phonesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+export function phonesMatch(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
   const na = normalizeNotifyPhone(a);
   const nb = normalizeNotifyPhone(b);
   if (!na || !nb) return false;
@@ -132,12 +137,16 @@ export function pickNotifyDelivery(
   bridgeSession: NotifyBridgeSession | null;
 } {
   const phone = normalizeNotifyPhone(target.phone) || "";
-  const matchedSession = (findSessionForPhone(sessions, phone) as NotifyBridgeSession | null) ?? null;
+  const matchedSession =
+    (findSessionForPhone(sessions, phone) as NotifyBridgeSession | null) ??
+    null;
   const bridgeSession =
     (matchedSession?.automation_id ? matchedSession : null) ||
     sessions.find((s) => !!s.automation_id) ||
     null;
-  const fromTarget = isGroupChatId(target.chatId) ? phone : (target.chatId || phone);
+  const fromTarget = isGroupChatId(target.chatId)
+    ? phone
+    : target.chatId || phone;
   const chatId = matchedSession?.chat_id || fromTarget;
   return {
     chatId: isGroupChatId(chatId) ? phone : chatId,
@@ -184,7 +193,9 @@ export function resolveCarmenNotifyTarget(
     // Never treat a group JID as a private notify target
     if (String(phoneRaw || "").includes("@g.us")) return null;
     const session = findSessionForPhone(sessions, phone);
-    const chatId = isGroupChatId(session?.chat_id) ? phone : (session?.chat_id ?? phone);
+    const chatId = isGroupChatId(session?.chat_id)
+      ? phone
+      : (session?.chat_id ?? phone);
     return {
       chatId,
       phone: normalizeNotifyPhone(session?.phone) ?? phone,
@@ -202,8 +213,12 @@ export function resolveCarmenNotifyTarget(
   // Prefer a session whose chat belongs to a tenant campaigner.
   // Managers (מנהל צוות) win over regular campaigners when both have sessions.
   const rankedStaffPhones = [
-    ...staff.filter((s) => isManagerStaffRole(s.role)).map((s) => normalizeNotifyPhone(s.phone)!),
-    ...staff.filter((s) => !isManagerStaffRole(s.role)).map((s) => normalizeNotifyPhone(s.phone)!),
+    ...staff
+      .filter((s) => isManagerStaffRole(s.role))
+      .map((s) => normalizeNotifyPhone(s.phone)!),
+    ...staff
+      .filter((s) => !isManagerStaffRole(s.role))
+      .map((s) => normalizeNotifyPhone(s.phone)!),
   ];
 
   for (const staffPhone of rankedStaffPhones) {
@@ -223,7 +238,9 @@ export function resolveCarmenNotifyTarget(
     return {
       chatId: firstStaffPhone,
       phone: firstStaffPhone,
-      contactName: staff.find((s) => phonesMatch(s.phone, firstStaffPhone))?.full_name ?? null,
+      contactName:
+        staff.find((s) => phonesMatch(s.phone, firstStaffPhone))?.full_name ??
+        null,
       source: "tenant_staff_phone",
     };
   }

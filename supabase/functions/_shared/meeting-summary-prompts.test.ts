@@ -16,7 +16,8 @@ import {
 test("long transcripts are split on speaker-line boundaries without losing content", () => {
   const lines = Array.from(
     { length: 900 },
-    (_, index) => `[${String(index).padStart(4, "0")}] דובר: פרט אופרטיבי ${index}`,
+    (_, index) =>
+      `[${String(index).padStart(4, "0")}] דובר: פרט אופרטיבי ${index}`,
   );
   const transcript = lines.join("\n");
   assert.ok(transcript.length > LONG_TRANSCRIPT_THRESHOLD);
@@ -32,7 +33,10 @@ test("summary prompt requires exhaustive detail and forbids inferred deadlines",
   assert.match(MEETING_SUMMARY_SYSTEM_PROMPT, /שמור כל פרט אופרטיבי מהותי/);
   assert.match(MEETING_SUMMARY_SYSTEM_PROMPT, /אל תהפוך תאריך פגישה.*לדדליין/);
   assert.match(MEETING_SUMMARY_SYSTEM_PROMPT, /שאלות פתוחות ונושאים להכרעה/);
-  assert.match(MEETING_SUMMARY_SYSTEM_PROMPT, /לעולם אל תשלים אותם לפי ההיגיון/);
+  assert.match(
+    MEETING_SUMMARY_SYSTEM_PROMPT,
+    /לעולם אל תשלים אותם לפי ההיגיון/,
+  );
 });
 
 test("extraction and synthesis prompts preserve source context and user focus", () => {
@@ -52,7 +56,11 @@ test("extraction and synthesis prompts preserve source context and user focus", 
 });
 
 test("cursor summary task keeps the source and forbids mixing clients", () => {
-  const task = buildMeetingSummaryCursorTask("בינת: 20 שקל לליד", "נושא: בינת", "");
+  const task = buildMeetingSummaryCursorTask(
+    "בינת: 20 שקל לליד",
+    "נושא: בינת",
+    "",
+  );
   assert.match(task, /write one Hebrew Markdown meeting summary/);
   assert.match(task, /אל תערוך קוד/);
   assert.match(task, /בינת: 20 שקל לליד/);
@@ -61,20 +69,29 @@ test("cursor summary task keeps the source and forbids mixing clients", () => {
 
 test("automatic summary sends share one key and a manual resend uses another", () => {
   assert.equal(meetingSummaryIdempotencyKey("rec-1"), "meeting-summary:rec-1");
-  assert.equal(meetingSummaryIdempotencyKey("rec-1"), meetingSummaryIdempotencyKey("rec-1"));
-  assert.notEqual(meetingSummaryIdempotencyKey("rec-1", true), meetingSummaryIdempotencyKey("rec-1"));
+  assert.equal(
+    meetingSummaryIdempotencyKey("rec-1"),
+    meetingSummaryIdempotencyKey("rec-1"),
+  );
+  assert.notEqual(
+    meetingSummaryIdempotencyKey("rec-1", true),
+    meetingSummaryIdempotencyKey("rec-1"),
+  );
 });
 
 test("meeting summary jobs are recognized only with a complete target", () => {
   assert.equal(meetingSummaryJobFromMetadata({ purpose: "other" }), null);
-  assert.equal(meetingSummaryJobFromMetadata({
-    purpose: "meeting_summary",
-    recording_id: "rec",
-    target_type: "client",
-    target_id: "",
-    target_name: "בינת",
-    tenant_id: "ten",
-  }), null);
+  assert.equal(
+    meetingSummaryJobFromMetadata({
+      purpose: "meeting_summary",
+      recording_id: "rec",
+      target_type: "client",
+      target_id: "",
+      target_name: "בינת",
+      tenant_id: "ten",
+    }),
+    null,
+  );
   const job = meetingSummaryJobFromMetadata({
     purpose: "meeting_summary",
     recording_id: "rec",
@@ -108,7 +125,13 @@ test("long meetings run a complete extraction pass before final synthesis", asyn
   assert.ok(calls.length > 1);
   assert.ok(calls.every((call) => call.maxTokens === 4_000));
   assert.match(calls[0].system, /שלב חילוץ עובדות/);
-  assert.match(calls.at(-1)!.user, new RegExp(`חלק ${calls.length} מתוך ${calls.length}`));
+  assert.match(
+    calls.at(-1)!.user,
+    new RegExp(`חלק ${calls.length} מתוך ${calls.length}`),
+  );
   assert.match(source, /### ממצאים מחלק 1\nממצאים 1/);
-  assert.match(source, new RegExp(`### ממצאים מחלק ${calls.length}\\nממצאים ${calls.length}`));
+  assert.match(
+    source,
+    new RegExp(`### ממצאים מחלק ${calls.length}\\nממצאים ${calls.length}`),
+  );
 });

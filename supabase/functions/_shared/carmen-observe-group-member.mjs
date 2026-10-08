@@ -7,21 +7,27 @@
  * carmen_whatsapp_identities row or an active campaigner (no access widening).
  */
 
-import { phoneTail, phonesMatch } from './carmen-group-sender.mjs';
+import { phoneTail, phonesMatch } from "./carmen-group-sender.mjs";
 
 export function normalizeObservedPhone(phone, groupChatId) {
-  const digits = String(phone || '').replace(/\D/g, '');
+  const digits = String(phone || "").replace(/\D/g, "");
   if (!digits) return null;
-  const groupDigits = String(groupChatId || '').split('@')[0].replace(/\D/g, '');
+  const groupDigits = String(groupChatId || "")
+    .split("@")[0]
+    .replace(/\D/g, "");
   if (groupDigits && digits === groupDigits) return null;
   if (phoneTail(digits).length < 9) return null;
   return digits;
 }
 
-export function pickCandidateStatus({ phone, matchedIdentity, matchedCampaigner }) {
-  if (!phone) return 'awaiting_identity';
-  if (matchedIdentity || matchedCampaigner) return 'approved';
-  return 'awaiting_approval';
+export function pickCandidateStatus({
+  phone,
+  matchedIdentity,
+  matchedCampaigner,
+}) {
+  if (!phone) return "awaiting_identity";
+  if (matchedIdentity || matchedCampaigner) return "approved";
+  return "awaiting_approval";
 }
 
 /**
@@ -38,42 +44,42 @@ export function pickCandidateStatus({ phone, matchedIdentity, matchedCampaigner 
  */
 export async function observeManusGroupMember(supabase, args) {
   const tenantId = args.tenantId;
-  const groupChatId = String(args.groupChatId || '').trim();
+  const groupChatId = String(args.groupChatId || "").trim();
   if (!tenantId || !groupChatId) {
-    return { observed: false, reason: 'missing_tenant_or_group' };
+    return { observed: false, reason: "missing_tenant_or_group" };
   }
 
   const phone = normalizeObservedPhone(args.phone, groupChatId);
   const lid = args.whatsappLid ? String(args.whatsappLid).trim() : null;
   if (!phone && !lid) {
-    return { observed: false, reason: 'unresolved_member' };
+    return { observed: false, reason: "unresolved_member" };
   }
 
   // Never map Carmen's own Manus number as a group "member".
   if (phone) {
     const { data: manusRows } = await supabase
-      .from('tenant_integrations')
-      .select('settings')
-      .eq('tenant_id', tenantId)
-      .eq('integration_type', 'manus_wa')
-      .eq('is_active', true)
+      .from("tenant_integrations")
+      .select("settings")
+      .eq("tenant_id", tenantId)
+      .eq("integration_type", "manus_wa")
+      .eq("is_active", true)
       .limit(5);
     const isSelfBot = (manusRows || []).some((row) => {
-      const bot = String(row?.settings?.phone_number || '').replace(/\D/g, '');
+      const bot = String(row?.settings?.phone_number || "").replace(/\D/g, "");
       return bot && phonesMatch(bot, phone);
     });
     if (isSelfBot) {
-      return { observed: false, reason: 'self_bot_phone' };
+      return { observed: false, reason: "self_bot_phone" };
     }
   }
 
   let groupId = args.groupId || null;
   if (!groupId) {
     const { data: wg } = await supabase
-      .from('whatsapp_groups')
-      .select('id, description')
-      .eq('tenant_id', tenantId)
-      .eq('group_chat_id', groupChatId)
+      .from("whatsapp_groups")
+      .select("id, description")
+      .eq("tenant_id", tenantId)
+      .eq("group_chat_id", groupChatId)
       .maybeSingle();
     groupId = wg?.id || null;
   }
@@ -84,30 +90,38 @@ export async function observeManusGroupMember(supabase, args) {
   if (phone) {
     const tail = phoneTail(phone);
     const { data: identities } = await supabase
-      .from('carmen_whatsapp_identities')
-      .select('id, phone, display_name, entity_type, entity_id, status')
-      .eq('tenant_id', tenantId)
-      .eq('status', 'approved')
+      .from("carmen_whatsapp_identities")
+      .select("id, phone, display_name, entity_type, entity_id, status")
+      .eq("tenant_id", tenantId)
+      .eq("status", "approved")
       .or(`phone.eq.${phone},phone.ilike.%${tail}`)
       .limit(5);
-    matchedIdentity = (identities || []).find((row) => phonesMatch(row.phone, phone)) || null;
+    matchedIdentity =
+      (identities || []).find((row) => phonesMatch(row.phone, phone)) || null;
 
     if (!matchedIdentity) {
       const { data: campaigners } = await supabase
-        .from('campaigners')
-        .select('id, full_name, phone, active')
-        .eq('tenant_id', tenantId)
-        .eq('active', true)
+        .from("campaigners")
+        .select("id, full_name, phone, active")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
         .limit(200);
-      matchedCampaigner = (campaigners || []).find((row) => phonesMatch(row.phone, phone)) || null;
+      matchedCampaigner =
+        (campaigners || []).find((row) => phonesMatch(row.phone, phone)) ||
+        null;
     }
   }
 
-  const status = pickCandidateStatus({ phone, matchedIdentity, matchedCampaigner });
-  const displayName = args.whatsappName
-    || matchedIdentity?.display_name
-    || matchedCampaigner?.full_name
-    || null;
+  const status = pickCandidateStatus({
+    phone,
+    matchedIdentity,
+    matchedCampaigner,
+  });
+  const displayName =
+    args.whatsappName ||
+    matchedIdentity?.display_name ||
+    matchedCampaigner?.full_name ||
+    null;
 
   const row = {
     tenant_id: tenantId,
@@ -124,40 +138,40 @@ export async function observeManusGroupMember(supabase, args) {
   let existing = null;
   if (phone) {
     const { data } = await supabase
-      .from('carmen_whatsapp_identity_candidates')
-      .select('id, status')
-      .eq('tenant_id', tenantId)
-      .eq('group_chat_id', groupChatId)
-      .eq('phone', phone)
+      .from("carmen_whatsapp_identity_candidates")
+      .select("id, status")
+      .eq("tenant_id", tenantId)
+      .eq("group_chat_id", groupChatId)
+      .eq("phone", phone)
       .maybeSingle();
     existing = data;
   } else if (lid) {
     const { data } = await supabase
-      .from('carmen_whatsapp_identity_candidates')
-      .select('id, status')
-      .eq('tenant_id', tenantId)
-      .eq('group_chat_id', groupChatId)
-      .eq('whatsapp_lid', lid)
+      .from("carmen_whatsapp_identity_candidates")
+      .select("id, status")
+      .eq("tenant_id", tenantId)
+      .eq("group_chat_id", groupChatId)
+      .eq("whatsapp_lid", lid)
       .maybeSingle();
     existing = data;
   }
 
   if (existing?.id) {
     // Never downgrade an approved candidate if a later turn lacks identity match.
-    const nextStatus = existing.status === 'approved' ? 'approved' : status;
+    const nextStatus = existing.status === "approved" ? "approved" : status;
     const { error } = await supabase
-      .from('carmen_whatsapp_identity_candidates')
+      .from("carmen_whatsapp_identity_candidates")
       .update({
         ...row,
         status: nextStatus,
         phone: phone || undefined,
         whatsapp_lid: lid || undefined,
       })
-      .eq('id', existing.id);
+      .eq("id", existing.id);
     if (error) throw error;
   } else {
     const { error } = await supabase
-      .from('carmen_whatsapp_identity_candidates')
+      .from("carmen_whatsapp_identity_candidates")
       .insert(row);
     if (error) throw error;
   }
@@ -171,55 +185,69 @@ export async function observeManusGroupMember(supabase, args) {
     identityId: matchedIdentity?.id || null,
     campaignerId: matchedCampaigner?.id || matchedIdentity?.entity_id || null,
     displayName,
-    source: args.source || 'manus_wa',
+    source: args.source || "manus_wa",
   };
 }
 
 /** True when this group is part of Carmen's Manus membership catalog. */
-export async function isCarmenManusGroup(supabase, tenantId, groupId, groupChatId) {
+export async function isCarmenManusGroup(
+  supabase,
+  tenantId,
+  groupId,
+  groupChatId,
+) {
   if (groupId) {
     const { data } = await supabase
-      .from('whatsapp_groups')
-      .select('id, description, group_chat_id')
-      .eq('tenant_id', tenantId)
-      .eq('id', groupId)
+      .from("whatsapp_groups")
+      .select("id, description, group_chat_id")
+      .eq("tenant_id", tenantId)
+      .eq("id", groupId)
       .maybeSingle();
-    if (data?.description === 'manus_wa_sync') return true;
+    if (data?.description === "manus_wa_sync") return true;
     if (data?.group_chat_id) groupChatId = data.group_chat_id;
   }
   if (!groupChatId) return false;
 
   const { data: integ } = await supabase
-    .from('tenant_integrations')
-    .select('settings')
-    .eq('tenant_id', tenantId)
-    .eq('integration_type', 'manus_wa')
-    .eq('is_active', true)
+    .from("tenant_integrations")
+    .select("settings")
+    .eq("tenant_id", tenantId)
+    .eq("integration_type", "manus_wa")
+    .eq("is_active", true)
     .limit(1)
     .maybeSingle();
   const sync = integ?.settings?.manus_groups_sync || {};
-  const ids = Array.isArray(sync.group_chat_ids) ? sync.group_chat_ids.map(String) : [];
+  const ids = Array.isArray(sync.group_chat_ids)
+    ? sync.group_chat_ids.map(String)
+    : [];
   if (ids.includes(String(groupChatId))) return true;
   const groups = Array.isArray(sync.groups) ? sync.groups : [];
-  return groups.some((g) => String(g?.groupChatId || g?.id || '') === String(groupChatId));
+  return groups.some(
+    (g) => String(g?.groupChatId || g?.id || "") === String(groupChatId),
+  );
 }
 
 /** Compact roster note for Carmen's group prompt. */
-export async function buildObservedGroupMembersNote(supabase, tenantId, groupChatId, limit = 12) {
+export async function buildObservedGroupMembersNote(
+  supabase,
+  tenantId,
+  groupChatId,
+  limit = 12,
+) {
   const { data } = await supabase
-    .from('carmen_whatsapp_identity_candidates')
-    .select('phone, whatsapp_name, status, updated_at')
-    .eq('tenant_id', tenantId)
-    .eq('group_chat_id', groupChatId)
-    .not('phone', 'is', null)
-    .order('updated_at', { ascending: false })
+    .from("carmen_whatsapp_identity_candidates")
+    .select("phone, whatsapp_name, status, updated_at")
+    .eq("tenant_id", tenantId)
+    .eq("group_chat_id", groupChatId)
+    .not("phone", "is", null)
+    .order("updated_at", { ascending: false })
     .limit(limit);
   const rows = data || [];
-  if (!rows.length) return '';
+  if (!rows.length) return "";
   const lines = rows.map((r) => {
-    const name = r.whatsapp_name || 'ללא שם';
-    const link = r.status === 'approved' ? 'מזוהה' : 'נצפה';
+    const name = r.whatsapp_name || "ללא שם";
+    const link = r.status === "approved" ? "מזוהה" : "נצפה";
     return `${name} (${r.phone}, ${link})`;
   });
-  return `\n\n[חברים שנצפו בקבוצת Manus זו] ${lines.join('; ')}. כשפונים אליך — השתמש ב-participant_phone לזיהוי, לא בשם תצוגה בלבד.`;
+  return `\n\n[חברים שנצפו בקבוצת Manus זו] ${lines.join("; ")}. כשפונים אליך — השתמש ב-participant_phone לזיהוי, לא בשם תצוגה בלבד.`;
 }

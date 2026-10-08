@@ -6,14 +6,14 @@ Carmen already speaks MCP as a client (`agent_mcp_connections`, `mcp-connect`, `
 
 ## Tools
 
-| Tool | What it does |
-| --- | --- |
+| Tool                        | What it does                                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `get_cursor_direct_session` | Read-only: return the fixed Cursor Direct bc-… id (from `CURSOR_DIRECT_AGENT_ID` / DB). No new agent. |
-| `reply_to_cursor_session` | Post into the fixed or explicit live Cursor chat. No new Background Agent. `session_id` optional. |
-| `list_cursor_task_sessions` | Read-only: active/recent bc-… sessions mapped to tasks |
-| `get_cursor_task_session` | Read-only: lookup session for a `public.tasks` id |
-| `request_dev_task` | Code/feature/bugfix. Opens a named agent (`AIOS · <title>`) and tracks bc-… |
-| `ask_cursor` | Research/planning (tracked when a new bc-… is created). Not for connection tests. |
+| `reply_to_cursor_session`   | Post into the fixed or explicit live Cursor chat. No new Background Agent. `session_id` optional.     |
+| `list_cursor_task_sessions` | Read-only: active/recent bc-… sessions mapped to tasks                                                |
+| `get_cursor_task_session`   | Read-only: lookup session for a `public.tasks` id                                                     |
+| `request_dev_task`          | Code/feature/bugfix. Opens a named agent (`AIOS · <title>`) and tracks bc-…                           |
+| `ask_cursor`                | Research/planning (tracked when a new bc-… is created). Not for connection tests.                     |
 
 Both are **asynchronous**: the call returns `https://cursor.com/agents/<bcId>` immediately.
 
@@ -35,18 +35,18 @@ Optional secrets: `CURSOR_STICKY_AGENT_ID` (force a specific `bc-…`), `CURSOR_
 
 ### 2. Supabase secrets (project `zvoijyneresvkadpprel`)
 
-| Secret | Required | Value |
-| --- | --- | --- |
-| `CURSOR_API_KEY` | ✅ | Cursor API key |
-| `CURSOR_MCP_BEARER` | ✅ | Carmen only — Agent Editor → MCP Connections → Cursor |
-| `GROK_CURSOR_MCP_BEARER` | ✅ (Grok direct) | Grok Bot → Cursor direct channel only — **separate from Carmen** |
-| `CURSOR_CLOUD_ENV_NAME` | recommended | named cloud environment (same VM setup as David) |
-| `CURSOR_REPO_URL` | optional | default `https://github.com/davidcastelnuovo/aios` |
-| `CURSOR_STARTING_REF` | optional | default `main` |
-| `CURSOR_DIRECT_AGENT_ID` | recommended | Fixed Cursor Direct chat bc-… (connection tests / Carmen Direct replies) |
-| `CURSOR_MODEL_ID` | optional | default `composer-2.5` (fast). Set explicitly to override; omitting used to fall back to account default (often Grok). |
-| `CURSOR_AUTO_CREATE_PR` | optional | default `true` |
-| `CURSOR_DEFAULT_TENANT_ID` | optional | fallback tenant for teach-back skins |
+| Secret                     | Required         | Value                                                                                                                  |
+| -------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `CURSOR_API_KEY`           | ✅               | Cursor API key                                                                                                         |
+| `CURSOR_MCP_BEARER`        | ✅               | Carmen only — Agent Editor → MCP Connections → Cursor                                                                  |
+| `GROK_CURSOR_MCP_BEARER`   | ✅ (Grok direct) | Grok Bot → Cursor direct channel only — **separate from Carmen**                                                       |
+| `CURSOR_CLOUD_ENV_NAME`    | recommended      | named cloud environment (same VM setup as David)                                                                       |
+| `CURSOR_REPO_URL`          | optional         | default `https://github.com/davidcastelnuovo/aios`                                                                     |
+| `CURSOR_STARTING_REF`      | optional         | default `main`                                                                                                         |
+| `CURSOR_DIRECT_AGENT_ID`   | recommended      | Fixed Cursor Direct chat bc-… (connection tests / Carmen Direct replies)                                               |
+| `CURSOR_MODEL_ID`          | optional         | default `composer-2.5` (fast). Set explicitly to override; omitting used to fall back to account default (often Grok). |
+| `CURSOR_AUTO_CREATE_PR`    | optional         | default `true`                                                                                                         |
+| `CURSOR_DEFAULT_TENANT_ID` | optional         | fallback tenant for teach-back skins                                                                                   |
 
 ```bash
 supabase secrets set \
@@ -78,10 +78,10 @@ reply_to_cursor_session({ session_id: "bc-…", message: "OK …" })
 
 Grok Bot talks to Cursor via **Streamable HTTP MCP**:
 
-| Field | Value |
-| --- | --- |
-| **URL** | `https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp` |
-| **Header** | `Authorization: Bearer <GROK_CURSOR_MCP_BEARER>` |
+| Field      | Value                                                                  |
+| ---------- | ---------------------------------------------------------------------- |
+| **URL**    | `https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp` |
+| **Header** | `Authorization: Bearer <GROK_CURSOR_MCP_BEARER>`                       |
 
 Tools: `ask_cursor`, `request_dev_task`, `generate_creative`, `reply_to_cursor_session` (Grok Bot Direct — reply into a live `bc-…` chat).
 

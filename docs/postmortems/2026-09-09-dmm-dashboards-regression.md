@@ -24,12 +24,12 @@ merge result (31cb0a3e): .eq('tenant_id', tenantId)   ← wrong side won
 
 ## Why it wasn't caught
 
-| Gate | Would it catch? |
-|------|-----------------|
-| `pnpm build` | No — both versions type-check/build |
-| Preview of the SEO/access PR | Only if someone opened MC → Dashboards with DMM-MC agency filter |
-| Staging after merge to `develop` | **Yes** — if that surface was smoke-checked |
-| Unit tests on `crmDashboards.ts` | No — helper stayed correct; call site was removed |
+| Gate                             | Would it catch?                                                  |
+| -------------------------------- | ---------------------------------------------------------------- |
+| `pnpm build`                     | No — both versions type-check/build                              |
+| Preview of the SEO/access PR     | Only if someone opened MC → Dashboards with DMM-MC agency filter |
+| Staging after merge to `develop` | **Yes** — if that surface was smoke-checked                      |
+| Unit tests on `crmDashboards.ts` | No — helper stayed correct; call site was removed                |
 
 ## Prevention (implemented)
 

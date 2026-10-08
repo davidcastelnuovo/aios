@@ -34,14 +34,20 @@ export default function LeadsArchive() {
   const [busy, setBusy] = useState(false);
   const [deleteIds, setDeleteIds] = useState<string[] | null>(null);
 
-  const { data: leads = [], isLoading, refetch } = useQuery({
+  const {
+    data: leads = [],
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["leads-archive", tenantId, search],
     enabled: !!tenantId,
     queryFn: async () => {
       if (!tenantId) return [];
       let query = supabase
         .from("leads")
-        .select("id, contact_name, company_name, phone, email, status, campaign_name, archived_at, created_at")
+        .select(
+          "id, contact_name, company_name, phone, email, status, campaign_name, archived_at, created_at",
+        )
         .eq("tenant_id", tenantId)
         .not("archived_at", "is", null)
         .order("archived_at", { ascending: false })
@@ -75,7 +81,9 @@ export default function LeadsArchive() {
     setBusy(true);
     try {
       const n = await restoreArchivedLeads(ids);
-      toast.success(n === 1 ? "הליד שוחזר ל-Pipeline" : `${n} לידים שוחזרו ל-Pipeline`);
+      toast.success(
+        n === 1 ? "הליד שוחזר ל-Pipeline" : `${n} לידים שוחזרו ל-Pipeline`,
+      );
       setSelected(new Set());
       invalidate();
       await refetch();
@@ -110,7 +118,8 @@ export default function LeadsArchive() {
         <div>
           <h1 className="text-2xl font-bold">ארכיון לידים</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            לידים שהועברו מה-Pipeline. מחיקה לצמיתות דורשת אישור מפורש ונמחקת מהמסד.
+            לידים שהועברו מה-Pipeline. מחיקה לצמיתות דורשת אישור מפורש ונמחקת
+            מהמסד.
           </p>
         </div>
         <Button variant="outline" asChild>
@@ -136,7 +145,12 @@ export default function LeadsArchive() {
 
       {selected.size > 0 && (
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => restore(Array.from(selected))}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => restore(Array.from(selected))}
+          >
             <ArchiveRestore className="h-4 w-4 ml-1" />
             שחזר ({selected.size})
           </Button>
@@ -175,13 +189,19 @@ export default function LeadsArchive() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                <TableCell
+                  colSpan={6}
+                  className="text-center text-muted-foreground py-10"
+                >
                   טוען...
                 </TableCell>
               </TableRow>
             ) : leads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                <TableCell
+                  colSpan={6}
+                  className="text-center text-muted-foreground py-10"
+                >
                   הארכיון ריק
                 </TableCell>
               </TableRow>
@@ -201,19 +221,28 @@ export default function LeadsArchive() {
                       }}
                     />
                   </TableCell>
-                  <TableCell className="font-medium">{lead.contact_name || "—"}</TableCell>
+                  <TableCell className="font-medium">
+                    {lead.contact_name || "—"}
+                  </TableCell>
                   <TableCell>{lead.company_name || "—"}</TableCell>
                   <TableCell className="font-mono text-sm" dir="ltr">
                     {lead.phone || "—"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {lead.archived_at
-                      ? format(new Date(lead.archived_at), "dd/MM/yyyy HH:mm", { locale: he })
+                      ? format(new Date(lead.archived_at), "dd/MM/yyyy HH:mm", {
+                          locale: he,
+                        })
                       : "—"}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1 justify-end">
-                      <Button size="sm" variant="outline" disabled={busy} onClick={() => restore([lead.id])}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => restore([lead.id])}
+                      >
                         שחזר
                       </Button>
                       <Button

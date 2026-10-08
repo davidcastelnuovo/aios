@@ -1,4 +1,7 @@
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import {
+  createClient,
+  type SupabaseClient,
+} from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import type {
   BrainRouteRow,
   CallbackPayload,
@@ -14,7 +17,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 export function serviceClient(): SupabaseClient {
-  return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+  return createClient(SUPABASE_URL, SERVICE_KEY, {
+    auth: { persistSession: false },
+  });
 }
 
 export async function userHasTenantAccess(
@@ -30,7 +35,9 @@ export async function userHasTenantAccess(
       .eq("role", "super_admin")
       .maybeSingle();
     if (superRow) return true;
-  } catch { /* user_roles may not be readable */ }
+  } catch {
+    /* user_roles may not be readable */
+  }
   const { data: membership } = await sb
     .from("tenant_users")
     .select("user_id")
@@ -40,7 +47,10 @@ export async function userHasTenantAccess(
   return !!membership;
 }
 
-export async function resolveCarmenAgent(sb: SupabaseClient, tenantId: string): Promise<{ id: string; name: string } | null> {
+export async function resolveCarmenAgent(
+  sb: SupabaseClient,
+  tenantId: string,
+): Promise<{ id: string; name: string } | null> {
   const { data } = await sb
     .from("ai_agents")
     .select("id, name")
@@ -64,7 +74,9 @@ export async function ensureDefaultRoutes(
     .eq("tenant_id", tenantId)
     .eq("active", true);
   const have = new Set((existing || []).map((r: { slug: string }) => r.slug));
-  const missing = DEFAULT_BRAIN_ROUTE_SEEDS.filter((seed) => !have.has(seed.slug));
+  const missing = DEFAULT_BRAIN_ROUTE_SEEDS.filter(
+    (seed) => !have.has(seed.slug),
+  );
   if (missing.length) {
     const rows = missing.map((seed) => ({
       tenant_id: tenantId,
@@ -79,18 +91,31 @@ export async function ensureDefaultRoutes(
     const { error } = await sb
       .from("agent_brain_routes")
       .upsert(rows, { onConflict: "tenant_id,slug" });
-    if (error) console.error("[agent-channel] seed routes failed", error.message);
+    if (error)
+      console.error("[agent-channel] seed routes failed", error.message);
   }
 
-  const parliament = (existing || []).find((r: { slug: string }) => r.slug === "parliament") as BrainRouteRow | undefined;
+  const parliament = (existing || []).find(
+    (r: { slug: string }) => r.slug === "parliament",
+  ) as BrainRouteRow | undefined;
   if (parliament) {
-    const cfg = (parliament.config && typeof parliament.config === "object") ? { ...parliament.config } : {};
+    const cfg =
+      parliament.config && typeof parliament.config === "object"
+        ? { ...parliament.config }
+        : {};
     const seats = Array.isArray(cfg.seats) ? cfg.seats.map(String) : [];
     if (!seats.includes("codex")) {
-      await sb.from("agent_brain_routes").update({
-        label: "שולחן אבירים · Cursor + Grok + Codex",
-        config: { ...cfg, seats: [...(seats.length ? seats : ["cursor", "grok"]), "codex"], chair: "carmen" },
-      }).eq("id", parliament.id);
+      await sb
+        .from("agent_brain_routes")
+        .update({
+          label: "שולחן אבירים · Cursor + Grok + Codex",
+          config: {
+            ...cfg,
+            seats: [...(seats.length ? seats : ["cursor", "grok"]), "codex"],
+            chair: "carmen",
+          },
+        })
+        .eq("id", parliament.id);
     }
   }
 
@@ -120,10 +145,12 @@ export async function loadRoute(
     if (data) return data as BrainRouteRow;
   }
   const slug = opts.slug || "cursor";
-  return routes.find((r) => r.slug === slug)
-    || routes.find((r) => r.slug === "cursor")
-    || routes.find((r) => r.route_type === "internal")
-    || null;
+  return (
+    routes.find((r) => r.slug === slug) ||
+    routes.find((r) => r.slug === "cursor") ||
+    routes.find((r) => r.route_type === "internal") ||
+    null
+  );
 }
 
 export async function ensureConversation(
@@ -153,7 +180,10 @@ export async function ensureConversation(
           updated_at: new Date().toISOString(),
         })
         .eq("id", data.id);
-      return { id: data.id, status: (data.status as ConversationStatus) || "idle" };
+      return {
+        id: data.id,
+        status: (data.status as ConversationStatus) || "idle",
+      };
     }
   }
   const { data, error } = await sb
@@ -170,7 +200,10 @@ export async function ensureConversation(
     })
     .select("id, status")
     .single();
-  if (error || !data) throw new Error(`Failed to create conversation: ${error?.message || "unknown"}`);
+  if (error || !data)
+    throw new Error(
+      `Failed to create conversation: ${error?.message || "unknown"}`,
+    );
   return { id: data.id, status: "idle" };
 }
 
@@ -229,7 +262,8 @@ export async function insertMessage(
         .eq("tenant_id", row.tenant_id)
         .eq("idempotency_key", row.idempotency_key)
         .maybeSingle();
-      if (existing) return { row: existing as ConversationMessageRow, duplicate: true };
+      if (existing)
+        return { row: existing as ConversationMessageRow, duplicate: true };
     }
     throw new Error(`insert message failed: ${error.message}`);
   }
@@ -257,7 +291,10 @@ async function appendJsonbMessage(
   const current = Array.isArray(data?.messages) ? data!.messages : [];
   await sb
     .from("ai_conversations")
-    .update({ messages: [...current, msg], updated_at: new Date().toISOString() })
+    .update({
+      messages: [...current, msg],
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", conversationId);
 }
 
@@ -325,14 +362,16 @@ export async function upsertRunningSession(
     metadata?: Record<string, unknown>;
   },
 ): Promise<ChannelSessionRow> {
-  const existing = (await getRunningSession(sb, row.conversation_id, row.provider))
-    || (await getLatestSession(sb, row.conversation_id, row.provider));
+  const existing =
+    (await getRunningSession(sb, row.conversation_id, row.provider)) ||
+    (await getLatestSession(sb, row.conversation_id, row.provider));
   if (existing) {
     const { data, error } = await sb
       .from("agent_channel_sessions")
       .update({
         brain_route_id: row.brain_route_id,
-        external_session_id: row.external_session_id ?? existing.external_session_id,
+        external_session_id:
+          row.external_session_id ?? existing.external_session_id,
         external_run_id: row.external_run_id ?? existing.external_run_id,
         external_url: row.external_url ?? existing.external_url,
         conversation_key: row.conversation_key ?? existing.conversation_key,
@@ -345,7 +384,8 @@ export async function upsertRunningSession(
       .eq("id", existing.id)
       .select("*")
       .single();
-    if (error || !data) throw new Error(`update session failed: ${error?.message}`);
+    if (error || !data)
+      throw new Error(`update session failed: ${error?.message}`);
     return data as ChannelSessionRow;
   }
   const { data, error } = await sb
@@ -367,7 +407,8 @@ export async function upsertRunningSession(
     })
     .select("*")
     .single();
-  if (error || !data) throw new Error(`insert session failed: ${error?.message}`);
+  if (error || !data)
+    throw new Error(`insert session failed: ${error?.message}`);
   return data as ChannelSessionRow;
 }
 
@@ -386,7 +427,11 @@ export async function loadSession(
   sb: SupabaseClient,
   sessionId: string,
 ): Promise<ChannelSessionRow | null> {
-  const { data } = await sb.from("agent_channel_sessions").select("*").eq("id", sessionId).maybeSingle();
+  const { data } = await sb
+    .from("agent_channel_sessions")
+    .select("*")
+    .eq("id", sessionId)
+    .maybeSingle();
   return (data as ChannelSessionRow) || null;
 }
 
@@ -449,11 +494,16 @@ export async function logChannelAction(
       error_message: args.error ?? null,
     });
   } catch (e) {
-    console.error("[agent-channel] action log failed", (e as any)?.message ?? e);
+    console.error(
+      "[agent-channel] action log failed",
+      (e as any)?.message ?? e,
+    );
   }
 }
 
-export function duplicateSendResult(existing: ConversationMessageRow): SendResult | null {
+export function duplicateSendResult(
+  existing: ConversationMessageRow,
+): SendResult | null {
   const dispatch = (existing.metadata as any)?.dispatch;
   if (!dispatch) return null;
   return dispatch as SendResult;

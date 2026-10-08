@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-secret",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-webhook-secret",
 };
 
 Deno.serve(async (req) => {
@@ -22,10 +23,10 @@ Deno.serve(async (req) => {
     }
 
     if (!table_id) {
-      return new Response(
-        JSON.stringify({ error: "Missing table_id" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Missing table_id" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const webhookSecret = req.headers.get("x-webhook-secret");
@@ -39,13 +40,16 @@ Deno.serve(async (req) => {
 
     if (tableError || !table) {
       console.error("Table not found:", tableError);
-      return new Response(
-        JSON.stringify({ error: "Table not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Table not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const integrationSettings = table.integration_settings as { campaign_type?: string; webhook_secret?: string } | null;
+    const integrationSettings = table.integration_settings as {
+      campaign_type?: string;
+      webhook_secret?: string;
+    } | null;
     const campaignType = integrationSettings?.campaign_type || "leads";
 
     // Verify webhook secret
@@ -53,7 +57,10 @@ Deno.serve(async (req) => {
       if (webhookSecret !== integrationSettings.webhook_secret) {
         return new Response(
           JSON.stringify({ error: "Invalid webhook secret" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
     }
@@ -61,7 +68,10 @@ Deno.serve(async (req) => {
     if (!Array.isArray(records) || records.length === 0) {
       return new Response(
         JSON.stringify({ error: "No records provided", received: 0 }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -92,7 +102,8 @@ Deno.serve(async (req) => {
       { key: "roas", name: "ROAS", type: "number" },
     ];
 
-    const expectedFields = campaignType === "ecommerce" ? ecommerceFields : leadFields;
+    const expectedFields =
+      campaignType === "ecommerce" ? ecommerceFields : leadFields;
 
     const normalizeDate = (value: unknown): string => {
       if (!value) return "";
@@ -140,17 +151,21 @@ Deno.serve(async (req) => {
       .select("key")
       .eq("table_id", table_id);
 
-    const existingFieldKeys = new Set((existingFields || []).map((f: any) => f.key));
-    const missingFields = expectedFields.filter((f) => !existingFieldKeys.has(f.key)).map((f, i) => ({
-      table_id,
-      key: f.key,
-      name: f.name,
-      type: f.type,
-      position: i,
-      is_visible: true,
-      is_required: false,
-      config: {},
-    }));
+    const existingFieldKeys = new Set(
+      (existingFields || []).map((f: any) => f.key),
+    );
+    const missingFields = expectedFields
+      .filter((f) => !existingFieldKeys.has(f.key))
+      .map((f, i) => ({
+        table_id,
+        key: f.key,
+        name: f.name,
+        type: f.type,
+        position: i,
+        is_visible: true,
+        is_required: false,
+        config: {},
+      }));
 
     if (missingFields.length > 0) {
       await supabase.from("crm_fields").insert(missingFields);
@@ -169,7 +184,7 @@ Deno.serve(async (req) => {
 
     // Build lookup map: "campaign_id|date" -> record id
     const existingMap = new Map<string, string>();
-    for (const r of (allExisting || [])) {
+    for (const r of allExisting || []) {
       const d = r.data as any;
       const existingCampaignId = String(d?.campaign_id || "").trim();
       const existingDate = normalizeDate(d?.date);
@@ -177,7 +192,6 @@ Deno.serve(async (req) => {
         existingMap.set(`${existingCampaignId}|${existingDate}`, r.id);
       }
     }
-
 
     // Process all records and split into inserts vs updates
     const toInsert: any[] = [];
@@ -187,17 +201,40 @@ Deno.serve(async (req) => {
 
     for (const record of records) {
       const normalizedDate = normalizeDate(
-        record.date ?? record.segments_date ?? record.segment_date ?? record.day ?? record.data_date ?? record["segments.date"]
+        record.date ??
+          record.segments_date ??
+          record.segment_date ??
+          record.day ??
+          record.data_date ??
+          record["segments.date"],
       );
-      const campaignId = String(record.campaign_id ?? record.campaignId ?? record["campaign.id"] ?? record.id ?? "").trim();
-      const campaignName = String(record.campaign_name ?? record.campaignName ?? record["campaign.name"] ?? record.name ?? "").trim();
+      const campaignId = String(
+        record.campaign_id ??
+          record.campaignId ??
+          record["campaign.id"] ??
+          record.id ??
+          "",
+      ).trim();
+      const campaignName = String(
+        record.campaign_name ??
+          record.campaignName ??
+          record["campaign.name"] ??
+          record.name ??
+          "",
+      ).trim();
 
       if (!campaignId || !normalizedDate) {
         skippedInvalidCount++;
         continue;
       }
 
-      if (!isWithinRange(normalizedDate, syncStartDate || undefined, syncEndDate || undefined)) {
+      if (
+        !isWithinRange(
+          normalizedDate,
+          syncStartDate || undefined,
+          syncEndDate || undefined,
+        )
+      ) {
         skippedOutOfRangeCount++;
         continue;
       }
@@ -205,9 +242,14 @@ Deno.serve(async (req) => {
       let recordData: Record<string, any>;
 
       if (campaignType === "ecommerce") {
-        const cost = Number(record.cost) || Number(record.cost_micros) / 1000000 || 0;
-        const conversionsValue = Number(record.conversions_value) || Number(record.purchase_value) || 0;
-        const conversions = Number(record.conversions) || Number(record.purchases) || 0;
+        const cost =
+          Number(record.cost) || Number(record.cost_micros) / 1000000 || 0;
+        const conversionsValue =
+          Number(record.conversions_value) ||
+          Number(record.purchase_value) ||
+          0;
+        const conversions =
+          Number(record.conversions) || Number(record.purchases) || 0;
         const allConversions = Number(record.all_conversions) || 0;
 
         recordData = {
@@ -223,7 +265,8 @@ Deno.serve(async (req) => {
           roas: cost > 0 ? Number((conversionsValue / cost).toFixed(2)) : 0,
         };
       } else {
-        const cost = Number(record.cost) || Number(record.cost_micros) / 1000000 || 0;
+        const cost =
+          Number(record.cost) || Number(record.cost_micros) / 1000000 || 0;
         const conversions = Number(record.conversions) || 0;
 
         recordData = {
@@ -236,7 +279,8 @@ Deno.serve(async (req) => {
           conversions,
           ctr: Number(record.ctr) || 0,
           cpc: Number(record.cpc) || Number(record.average_cpc) / 1000000 || 0,
-          cost_per_conversion: conversions > 0 ? Number((cost / conversions).toFixed(2)) : 0,
+          cost_per_conversion:
+            conversions > 0 ? Number((cost / conversions).toFixed(2)) : 0,
         };
       }
 
@@ -287,7 +331,7 @@ Deno.serve(async (req) => {
       .eq("id", table_id);
 
     console.log(
-      `Synced ${records.length} records: ${insertedCount} inserted, ${updatedCount} updated, ${skippedInvalidCount} skipped invalid, ${skippedOutOfRangeCount} skipped out-of-range`
+      `Synced ${records.length} records: ${insertedCount} inserted, ${updatedCount} updated, ${skippedInvalidCount} skipped invalid, ${skippedOutOfRangeCount} skipped out-of-range`,
     );
 
     return new Response(
@@ -301,14 +345,20 @@ Deno.serve(async (req) => {
         records_skipped_out_of_range: skippedOutOfRangeCount,
         table_id,
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   } catch (error: unknown) {
     console.error("Webhook error:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
       JSON.stringify({ error: "Internal server error", details: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

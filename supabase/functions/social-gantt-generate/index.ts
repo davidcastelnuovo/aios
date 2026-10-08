@@ -1,72 +1,109 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
-const AI_GATEWAY_URL = 'https://api.openai.com/v1/chat/completions'
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const AI_GATEWAY_URL = "https://api.openai.com/v1/chat/completions";
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) throw new Error('Missing authorization')
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) throw new Error("Missing authorization");
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    if (authError || !user) throw new Error('Unauthorized')
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const token = authHeader.replace("Bearer ", "");
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+    if (authError || !user) throw new Error("Unauthorized");
 
-    const body = await req.json()
-    const { action, post_id, tenant_id, prompt, style, additional_notes, tone, target_audience, call_to_action, date } = body
+    const body = await req.json();
+    const {
+      action,
+      post_id,
+      tenant_id,
+      prompt,
+      style,
+      additional_notes,
+      tone,
+      target_audience,
+      call_to_action,
+      date,
+    } = body;
 
     if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY not configured')
+      throw new Error("OPENAI_API_KEY not configured");
     }
 
-    let result: any
+    let result: any;
 
-    if (action === 'generate_copy') {
-      result = await generateCopy({ prompt, tone, target_audience, call_to_action, post_id, tenant_id }, supabase)
-    } else if (action === 'generate_creative_prompt') {
-      result = await generateCreativePrompt({ prompt, style, additional_notes, post_id, tenant_id }, supabase)
-    } else if (action === 'generate_day_ideas') {
-      result = await generateDayIdeas({ date, tenant_id }, supabase)
+    if (action === "generate_copy") {
+      result = await generateCopy(
+        { prompt, tone, target_audience, call_to_action, post_id, tenant_id },
+        supabase,
+      );
+    } else if (action === "generate_creative_prompt") {
+      result = await generateCreativePrompt(
+        { prompt, style, additional_notes, post_id, tenant_id },
+        supabase,
+      );
+    } else if (action === "generate_day_ideas") {
+      result = await generateDayIdeas({ date, tenant_id }, supabase);
     } else {
-      throw new Error(`Unknown action: ${action}`)
+      throw new Error(`Unknown action: ${action}`);
     }
 
     return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    console.error('Error:', error)
+    console.error("Error:", error);
     return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
-})
+});
 
 // ─── generate_day_ideas ────────────────────────────────────────────────────
-async function generateDayIdeas(params: { date: string; tenant_id: string }, _supabase: any) {
-  const { date } = params
+async function generateDayIdeas(
+  params: { date: string; tenant_id: string },
+  _supabase: any,
+) {
+  const { date } = params;
 
   // Parse the date to understand context (day of week, month, upcoming events)
-  const d = new Date(date)
-  const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
-  const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
-  const dayOfWeek = dayNames[d.getDay()]
-  const monthName = monthNames[d.getMonth()]
-  const dayNum = d.getDate()
-  const year = d.getFullYear()
+  const d = new Date(date);
+  const dayNames = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+  const monthNames = [
+    "ינואר",
+    "פברואר",
+    "מרץ",
+    "אפריל",
+    "מאי",
+    "יוני",
+    "יולי",
+    "אוגוסט",
+    "ספטמבר",
+    "אוקטובר",
+    "נובמבר",
+    "דצמבר",
+  ];
+  const dayOfWeek = dayNames[d.getDay()];
+  const monthName = monthNames[d.getMonth()];
+  const dayNum = d.getDate();
+  const year = d.getFullYear();
 
   const systemPrompt = `אתה מנהל תוכן סושיאל מדיה מנוסה בישראל.
 תפקידך להציע רעיונות לפוסטים לפי תאריך ספציפי, תוך התחשבות ב:
@@ -77,7 +114,7 @@ async function generateDayIdeas(params: { date: string; tenant_id: string }, _su
 - אירועי ספורט, תרבות, כלכלה
 
 כל רעיון צריך להיות ספציפי, אקטואלי ורלוונטי לתאריך.
-כתוב בעברית.`
+כתוב בעברית.`;
 
   const userPrompt = `תאריך: יום ${dayOfWeek}, ${dayNum} ב${monthName} ${year}
 
@@ -95,67 +132,71 @@ async function generateDayIdeas(params: { date: string; tenant_id: string }, _su
       "hook": "פתיח קצר לפוסט (משפט אחד מושך)"
     }
   ]
-}`
+}`;
 
   const response = await fetch(AI_GATEWAY_URL, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: "gpt-4o-mini",
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
       temperature: 0.85,
     }),
-  })
+  });
 
   if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`AI Gateway error: ${response.status} - ${errorText}`)
+    const errorText = await response.text();
+    throw new Error(`AI Gateway error: ${response.status} - ${errorText}`);
   }
 
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content || ''
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || "";
 
-  let parsed
+  let parsed;
   try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { ideas: [] }
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { ideas: [] };
   } catch {
-    parsed = { ideas: [] }
+    parsed = { ideas: [] };
   }
 
-  return { ideas: parsed.ideas || [] }
+  return { ideas: parsed.ideas || [] };
 }
 
 // ─── generate_copy ─────────────────────────────────────────────────────────
-async function generateCopy(params: {
-  prompt: string
-  tone: string
-  target_audience: string
-  call_to_action: string
-  post_id: string
-  tenant_id: string
-}, supabase: any) {
-  const { prompt, tone, target_audience, call_to_action, post_id, tenant_id } = params
+async function generateCopy(
+  params: {
+    prompt: string;
+    tone: string;
+    target_audience: string;
+    call_to_action: string;
+    post_id: string;
+    tenant_id: string;
+  },
+  supabase: any,
+) {
+  const { prompt, tone, target_audience, call_to_action, post_id, tenant_id } =
+    params;
 
   const { data: post } = await supabase
-    .from('social_gantt_posts')
-    .select('*')
-    .eq('id', post_id)
-    .single()
+    .from("social_gantt_posts")
+    .select("*")
+    .eq("id", post_id)
+    .single();
 
   const toneMap: Record<string, string> = {
-    professional: 'מקצועי ורשמי',
-    casual: 'קז׳ואל וקליל',
-    bold: 'נועז ובולט',
-    emotional: 'רגשי ומרגש',
-    humorous: 'הומוריסטי ומצחיק',
-  }
+    professional: "מקצועי ורשמי",
+    casual: "קז׳ואל וקליל",
+    bold: "נועז ובולט",
+    emotional: "רגשי ומרגש",
+    humorous: "הומוריסטי ומצחיק",
+  };
 
   const systemPrompt = `אתה קופירייטר מקצועי לסושיאל מדיה. אתה כותב בעברית מצוינת.
 אתה מייצר קופי קצר, קליט ואפקטיבי לפלטפורמות סושיאל.
@@ -165,15 +206,15 @@ async function generateCopy(params: {
 - התאם את הטון לפלטפורמה ולקהל היעד
 - השתמש באימוג׳ים בצורה מושכלת
 - הוסף האשטגים רלוונטיים בסוף
-- כל אפשרות צריכה להיות שונה בגישה ובמסר`
+- כל אפשרות צריכה להיות שונה בגישה ובמסר`;
 
   const userPrompt = `צור 3 אפשרויות קופי לפוסט בנושא "${post?.topic || prompt}".
 
-פלטפורמה: ${post?.platform || 'instagram'}
+פלטפורמה: ${post?.platform || "instagram"}
 טון: ${toneMap[tone] || tone}
-${target_audience ? `קהל יעד: ${target_audience}` : ''}
-${call_to_action ? `קריאה לפעולה: ${call_to_action}` : ''}
-${prompt ? `הנחיות נוספות: ${prompt}` : ''}
+${target_audience ? `קהל יעד: ${target_audience}` : ""}
+${call_to_action ? `קריאה לפעולה: ${call_to_action}` : ""}
+${prompt ? `הנחיות נוספות: ${prompt}` : ""}
 
 החזר את התוצאה כ-JSON בפורמט הבא (בלי markdown, רק JSON טהור):
 {
@@ -182,71 +223,72 @@ ${prompt ? `הנחיות נוספות: ${prompt}` : ''}
     { "text": "הקופי כאן", "tone_label": "תיאור הטון" },
     { "text": "הקופי כאן", "tone_label": "תיאור הטון" }
   ]
-}`
+}`;
 
   const response = await fetch(AI_GATEWAY_URL, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: "gpt-4o-mini",
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
       temperature: 0.9,
     }),
-  })
+  });
 
   if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`AI Gateway error: ${response.status} - ${errorText}`)
+    const errorText = await response.text();
+    throw new Error(`AI Gateway error: ${response.status} - ${errorText}`);
   }
 
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content || ''
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || "";
 
-  let parsed
+  let parsed;
   try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { options: [] }
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { options: [] };
   } catch {
     parsed = {
-      options: [
-        { text: content, tone_label: toneMap[tone] || tone },
-      ],
-    }
+      options: [{ text: content, tone_label: toneMap[tone] || tone }],
+    };
   }
 
-  return { options: parsed.options || [] }
+  return { options: parsed.options || [] };
 }
 
 // ─── generate_creative_prompt ──────────────────────────────────────────────
-async function generateCreativePrompt(params: {
-  prompt: string
-  style: string
-  additional_notes: string
-  post_id: string
-  tenant_id: string
-}, supabase: any) {
-  const { prompt, style, additional_notes, post_id } = params
+async function generateCreativePrompt(
+  params: {
+    prompt: string;
+    style: string;
+    additional_notes: string;
+    post_id: string;
+    tenant_id: string;
+  },
+  supabase: any,
+) {
+  const { prompt, style, additional_notes, post_id } = params;
 
   const { data: post } = await supabase
-    .from('social_gantt_posts')
-    .select('*')
-    .eq('id', post_id)
-    .single()
+    .from("social_gantt_posts")
+    .select("*")
+    .eq("id", post_id)
+    .single();
 
   const styleMap: Record<string, string> = {
-    modern: 'מודרני ונקי עם קווים חדים וצבעים עזים',
-    minimal: 'מינימליסטי עם הרבה רווח לבן ואלמנטים מעטים',
-    bold: 'בולט ודרמטי עם צבעים חזקים וטיפוגרפיה גדולה',
-    elegant: 'אלגנטי ומעודן עם גוונים רכים',
-    playful: 'שובב וצבעוני עם אלמנטים כיפיים',
-    corporate: 'עסקי ומקצועי עם מראה רציני',
-  }
+    modern: "מודרני ונקי עם קווים חדים וצבעים עזים",
+    minimal: "מינימליסטי עם הרבה רווח לבן ואלמנטים מעטים",
+    bold: "בולט ודרמטי עם צבעים חזקים וטיפוגרפיה גדולה",
+    elegant: "אלגנטי ומעודן עם גוונים רכים",
+    playful: "שובב וצבעוני עם אלמנטים כיפיים",
+    corporate: "עסקי ומקצועי עם מראה רציני",
+  };
 
   const systemPrompt = `אתה מנהל אמנותי (Art Director) מקצועי.
 תפקידך ליצור 3 בריפים מפורטים לעיצוב קריאייטיב לפוסט סושיאל.
@@ -258,14 +300,14 @@ async function generateCreativePrompt(params: {
 - מבנה הקומפוזיציה
 - טקסט שיופיע על הקריאייטיב (אם רלוונטי)
 
-כתוב בעברית.`
+כתוב בעברית.`;
 
   const userPrompt = `צור 3 בריפים שונים לקריאייטיב בנושא "${post?.topic || prompt}".
 
-פלטפורמה: ${post?.platform || 'instagram'}
+פלטפורמה: ${post?.platform || "instagram"}
 סגנון: ${styleMap[style] || style}
-${additional_notes ? `הערות: ${additional_notes}` : ''}
-${prompt ? `תיאור: ${prompt}` : ''}
+${additional_notes ? `הערות: ${additional_notes}` : ""}
+${prompt ? `תיאור: ${prompt}` : ""}
 
 החזר JSON בפורמט (בלי markdown, רק JSON טהור):
 {
@@ -277,41 +319,48 @@ ${prompt ? `תיאור: ${prompt}` : ''}
       "style_label": "שם הסגנון"
     }
   ]
-}`
+}`;
 
   const response = await fetch(AI_GATEWAY_URL, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: "gpt-4o-mini",
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
       temperature: 0.9,
     }),
-  })
+  });
 
   if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`AI Gateway error: ${response.status} - ${errorText}`)
+    const errorText = await response.text();
+    throw new Error(`AI Gateway error: ${response.status} - ${errorText}`);
   }
 
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content || ''
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || "";
 
-  let parsed
+  let parsed;
   try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { options: [] }
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { options: [] };
   } catch {
     parsed = {
-      options: [{ brief: content, colors: ['#6366f1', '#ec4899', '#f59e0b'], headline_text: post?.topic || '', style_label: style }],
-    }
+      options: [
+        {
+          brief: content,
+          colors: ["#6366f1", "#ec4899", "#f59e0b"],
+          headline_text: post?.topic || "",
+          style_label: style,
+        },
+      ],
+    };
   }
 
-  return { options: parsed.options || [] }
+  return { options: parsed.options || [] };
 }

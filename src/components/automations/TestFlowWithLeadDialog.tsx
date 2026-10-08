@@ -97,13 +97,20 @@ function getDateFilter(range: DateRange, customFrom?: Date, customTo?: Date) {
     case "today":
       return { from: startOfDay(now).toISOString(), to: undefined };
     case "yesterday":
-      return { from: startOfDay(subDays(now, 1)).toISOString(), to: startOfDay(now).toISOString() };
+      return {
+        from: startOfDay(subDays(now, 1)).toISOString(),
+        to: startOfDay(now).toISOString(),
+      };
     case "last_week":
       return { from: startOfDay(subDays(now, 7)).toISOString(), to: undefined };
     case "custom":
       return {
-        from: customFrom ? startOfDay(customFrom).toISOString() : startOfDay(subDays(now, 7)).toISOString(),
-        to: customTo ? startOfDay(subDays(customTo, -1)).toISOString() : undefined,
+        from: customFrom
+          ? startOfDay(customFrom).toISOString()
+          : startOfDay(subDays(now, 7)).toISOString(),
+        to: customTo
+          ? startOfDay(subDays(customTo, -1)).toISOString()
+          : undefined,
       };
   }
 }
@@ -118,12 +125,22 @@ export function TestFlowWithLeadDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRange, setDateRange] = useState<DateRange>("last_week");
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
-  const [testResults, setTestResults] = useState<Array<{ leadId: string; leadName: string; success: boolean; data?: any; error?: string }>>([]);
+  const [testResults, setTestResults] = useState<
+    Array<{
+      leadId: string;
+      leadName: string;
+      success: boolean;
+      data?: any;
+      error?: string;
+    }>
+  >([]);
   const [lastMessageData, setLastMessageData] = useState<any>(null);
   const [isFetchingMessage, setIsFetchingMessage] = useState(false);
   const [inputMode, setInputMode] = useState<"select" | "manual">("select");
@@ -174,7 +191,8 @@ export function TestFlowWithLeadDialog({
     automation?.trigger_type === "whatsapp_message_received" ||
     triggerStep?.action_type === "whatsapp_message_received";
 
-  const triggerConfig = triggerStep?.configuration || (automation?.configuration as any) || {};
+  const triggerConfig =
+    triggerStep?.configuration || (automation?.configuration as any) || {};
 
   const dateFilter = getDateFilter(dateRange, customFrom, customTo);
 
@@ -186,42 +204,66 @@ export function TestFlowWithLeadDialog({
 
   const handleSyncFacebookNow = async () => {
     if (!tenantId || !facebookFormId || !facebookIntegrationId) {
-      toast({ title: "חסרים נתונים", description: "לא נמצא טופס פייסבוק ב-trigger", variant: "destructive" });
+      toast({
+        title: "חסרים נתונים",
+        description: "לא נמצא טופס פייסבוק ב-trigger",
+        variant: "destructive",
+      });
       return;
     }
     setIsSyncingFb(true);
     try {
-      const { data, error } = await supabase.functions.invoke("sync-facebook-leads", {
-        body: {
-          tenant_id: tenantId,
-          integration_id: facebookIntegrationId,
-          form_id: facebookFormId,
-          since_date: dateFilter.from,
-          days: dateRange === "last_week" ? 7 : undefined,
+      const { data, error } = await supabase.functions.invoke(
+        "sync-facebook-leads",
+        {
+          body: {
+            tenant_id: tenantId,
+            integration_id: facebookIntegrationId,
+            form_id: facebookFormId,
+            since_date: dateFilter.from,
+            days: dateRange === "last_week" ? 7 : undefined,
+          },
         },
-      });
+      );
       if (error) throw error;
       const synced = (data as any)?.synced ?? 0;
       const skipped = (data as any)?.skipped ?? 0;
-      toast({ title: "סנכרון הושלם", description: `${synced} לידים חדשים, ${skipped} כפולים` });
-      await queryClient.invalidateQueries({ queryKey: ["leads-for-flow-test", tenantId] });
+      toast({
+        title: "סנכרון הושלם",
+        description: `${synced} לידים חדשים, ${skipped} כפולים`,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["leads-for-flow-test", tenantId],
+      });
     } catch (e: any) {
       console.error(e);
-      toast({ title: "שגיאת סנכרון", description: e?.message || "כשל בסנכרון מפייסבוק", variant: "destructive" });
+      toast({
+        title: "שגיאת סנכרון",
+        description: e?.message || "כשל בסנכרון מפייסבוק",
+        variant: "destructive",
+      });
     } finally {
       setIsSyncingFb(false);
     }
   };
 
-
   // Fetch leads with date filtering and optional form ID filtering
   const { data: leads = [], isLoading: leadsLoading } = useQuery({
-    queryKey: ["leads-for-flow-test", tenantId, dateFilter.from, dateFilter.to, facebookFormId, facebookFormName],
+    queryKey: [
+      "leads-for-flow-test",
+      tenantId,
+      dateFilter.from,
+      dateFilter.to,
+      facebookFormId,
+      facebookFormName,
+    ],
     queryFn: async () => {
       if (!tenantId) return [];
       let query = supabase
         .from("leads")
-        .select("id, company_name, contact_name, phone, email, source, notes, agency_id, manychat_subscriber_id, status, industry, created_at")
+        .select(
+          "id, company_name, contact_name, phone, email, source, notes, agency_id, manychat_subscriber_id, status, industry, created_at",
+        )
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
 
@@ -232,7 +274,8 @@ export function TestFlowWithLeadDialog({
       if (facebookFormId || facebookFormName) {
         const orParts: string[] = [];
         if (facebookFormId) orParts.push(`notes.ilike.%${facebookFormId}%`);
-        if (facebookFormName) orParts.push(`notes.ilike.%Facebook Form: ${facebookFormName}%`);
+        if (facebookFormName)
+          orParts.push(`notes.ilike.%Facebook Form: ${facebookFormName}%`);
         query = query.or(orParts.join(","));
       }
 
@@ -281,7 +324,9 @@ export function TestFlowWithLeadDialog({
     try {
       let query = supabase
         .from("chat_messages")
-        .select("*, whatsapp_groups!chat_messages_group_id_fkey(id, group_name, group_chat_id)")
+        .select(
+          "*, whatsapp_groups!chat_messages_group_id_fkey(id, group_name, group_chat_id)",
+        )
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false })
         .limit(1);
@@ -291,7 +336,10 @@ export function TestFlowWithLeadDialog({
         query = query.eq("group_id", triggerConfig.group_id);
       }
       if (triggerConfig?.connection_user_id) {
-        query = query.eq("connection_user_id", triggerConfig.connection_user_id);
+        query = query.eq(
+          "connection_user_id",
+          triggerConfig.connection_user_id,
+        );
       }
       if (triggerConfig?.keyword) {
         query = query.ilike("message_text", `%${triggerConfig.keyword}%`);
@@ -301,7 +349,11 @@ export function TestFlowWithLeadDialog({
       if (error) throw error;
 
       if (!data) {
-        toast({ title: "לא נמצאה הודעה", description: "לא נמצאה הודעה תואמת להגדרות הטריגר", variant: "destructive" });
+        toast({
+          title: "לא נמצאה הודעה",
+          description: "לא נמצאה הודעה תואמת להגדרות הטריגר",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -313,7 +365,13 @@ export function TestFlowWithLeadDialog({
         group_id: group?.id || null,
         group_name: group?.group_name || null,
         group_chat_id: group?.group_chat_id || null,
-        contact_type: data.group_id ? "group" : data.lead_id ? "lead" : data.client_id ? "client" : "unknown",
+        contact_type: data.group_id
+          ? "group"
+          : data.lead_id
+            ? "lead"
+            : data.client_id
+              ? "client"
+              : "unknown",
         contact_id: data.lead_id || data.client_id || data.group_id || null,
         contact_name: group?.group_name || data.sender_name || "לא ידוע",
         connection_user_id: data.connection_user_id || "",
@@ -324,9 +382,16 @@ export function TestFlowWithLeadDialog({
       };
 
       setLastMessageData(msgData);
-      toast({ title: "הודעה נטענה", description: `"${data.message_text?.substring(0, 50)}..." מ-${msgData.sender_name}` });
+      toast({
+        title: "הודעה נטענה",
+        description: `"${data.message_text?.substring(0, 50)}..." מ-${msgData.sender_name}`,
+      });
     } catch (err: any) {
-      toast({ title: "שגיאה בשליפת הודעה", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה בשליפת הודעה",
+        description: err.message,
+        variant: "destructive",
+      });
     } finally {
       setIsFetchingMessage(false);
     }
@@ -341,11 +406,22 @@ export function TestFlowWithLeadDialog({
           body: {
             automationId,
             tenant_id: tenantId,
-            data: { test: true, ...lastMessageData, timestamp: new Date().toISOString() },
+            data: {
+              test: true,
+              ...lastMessageData,
+              timestamp: new Date().toISOString(),
+            },
           },
         });
         if (response.error) throw response.error;
-        return [{ leadId: "whatsapp", leadName: lastMessageData.sender_name, success: true, data: response.data }];
+        return [
+          {
+            leadId: "whatsapp",
+            leadName: lastMessageData.sender_name,
+            success: true,
+            data: response.data,
+          },
+        ];
       }
 
       // Manual input mode
@@ -371,46 +447,59 @@ export function TestFlowWithLeadDialog({
         // If trigger is Facebook/webhook, add fb_ prefixed fields to mimic real FB lead data
         if (isFacebookTrigger) {
           // Read actual form field names from trigger configuration
-          const formFields = (triggerConfig as any)?.facebook_form_fields as Array<{type: string; label: string; key: string}> | undefined;
-          
+          const formFields = (triggerConfig as any)?.facebook_form_fields as
+            Array<{ type: string; label: string; key: string }> | undefined;
+
           // Build a mapping from generic type to actual fb_ field key
           const fieldMap: Record<string, string> = {
-            fb_phone: 'fb_phone',
-            fb_full_name: 'fb_full_name',
-            fb_email: 'fb_email',
-            fb_company_name: 'fb_company_name',
+            fb_phone: "fb_phone",
+            fb_full_name: "fb_full_name",
+            fb_email: "fb_email",
+            fb_company_name: "fb_company_name",
           };
-          
+
           if (formFields && formFields.length > 0) {
             for (const field of formFields) {
               const fbKey = `fb_${field.label || field.key}`;
-              const fieldType = (field.type || '').toUpperCase();
-              if (fieldType === 'PHONE' || fieldType.includes('PHONE')) {
+              const fieldType = (field.type || "").toUpperCase();
+              if (fieldType === "PHONE" || fieldType.includes("PHONE")) {
                 fieldMap.fb_phone = fbKey;
-              } else if (fieldType === 'FULL_NAME' || fieldType.includes('NAME')) {
+              } else if (
+                fieldType === "FULL_NAME" ||
+                fieldType.includes("NAME")
+              ) {
                 fieldMap.fb_full_name = fbKey;
-              } else if (fieldType === 'EMAIL' || fieldType.includes('EMAIL')) {
+              } else if (fieldType === "EMAIL" || fieldType.includes("EMAIL")) {
                 fieldMap.fb_email = fbKey;
-              } else if (fieldType === 'COMPANY_NAME' || fieldType.includes('COMPANY')) {
+              } else if (
+                fieldType === "COMPANY_NAME" ||
+                fieldType.includes("COMPANY")
+              ) {
                 fieldMap.fb_company_name = fbKey;
               }
             }
           }
-          
+
           if (manualData.phone) testData[fieldMap.fb_phone] = manualData.phone;
-          if (manualData.contact_name) testData[fieldMap.fb_full_name] = manualData.contact_name;
+          if (manualData.contact_name)
+            testData[fieldMap.fb_full_name] = manualData.contact_name;
           if (manualData.email) testData[fieldMap.fb_email] = manualData.email;
-          if (manualData.company_name) testData[fieldMap.fb_company_name] = manualData.company_name;
+          if (manualData.company_name)
+            testData[fieldMap.fb_company_name] = manualData.company_name;
 
           // Append fb_ fields to notes like real FB leads do
           const fbEntries = [
-            manualData.contact_name && `${fieldMap.fb_full_name}: ${manualData.contact_name}`,
+            manualData.contact_name &&
+              `${fieldMap.fb_full_name}: ${manualData.contact_name}`,
             manualData.phone && `${fieldMap.fb_phone}: ${manualData.phone}`,
             manualData.email && `${fieldMap.fb_email}: ${manualData.email}`,
-            manualData.company_name && `${fieldMap.fb_company_name}: ${manualData.company_name}`,
+            manualData.company_name &&
+              `${fieldMap.fb_company_name}: ${manualData.company_name}`,
           ].filter(Boolean);
           if (fbEntries.length > 0) {
-            testData.notes = (testData.notes ? testData.notes + "\n" : "") + fbEntries.join("\n");
+            testData.notes =
+              (testData.notes ? testData.notes + "\n" : "") +
+              fbEntries.join("\n");
           }
         }
 
@@ -418,13 +507,27 @@ export function TestFlowWithLeadDialog({
           body: { automationId, tenant_id: tenantId, data: testData },
         });
         if (response.error) throw response.error;
-        return [{ leadId: "manual", leadName: manualData.contact_name || manualData.company_name || "ידני", success: true, data: response.data }];
+        return [
+          {
+            leadId: "manual",
+            leadName:
+              manualData.contact_name || manualData.company_name || "ידני",
+            success: true,
+            data: response.data,
+          },
+        ];
       }
 
       // Lead-based batch test
       if (selectedLeadIds.size === 0) throw new Error("יש לבחור לפחות ליד אחד");
 
-      const results: Array<{ leadId: string; leadName: string; success: boolean; data?: any; error?: string }> = [];
+      const results: Array<{
+        leadId: string;
+        leadName: string;
+        success: boolean;
+        data?: any;
+        error?: string;
+      }> = [];
 
       for (const leadId of selectedLeadIds) {
         const lead = leads.find((l: any) => l.id === leadId);
@@ -449,17 +552,35 @@ export function TestFlowWithLeadDialog({
             if (!(key in testData)) testData[key] = value;
           });
 
-          const response = await supabase.functions.invoke("trigger-automation", {
-            body: { automationId, tenant_id: tenantId, data: testData },
-          });
+          const response = await supabase.functions.invoke(
+            "trigger-automation",
+            {
+              body: { automationId, tenant_id: tenantId, data: testData },
+            },
+          );
 
           if (response.error) {
-            results.push({ leadId, leadName: lead.company_name || lead.contact_name || "ליד", success: false, error: response.error.message });
+            results.push({
+              leadId,
+              leadName: lead.company_name || lead.contact_name || "ליד",
+              success: false,
+              error: response.error.message,
+            });
           } else {
-            results.push({ leadId, leadName: lead.company_name || lead.contact_name || "ליד", success: true, data: response.data });
+            results.push({
+              leadId,
+              leadName: lead.company_name || lead.contact_name || "ליד",
+              success: true,
+              data: response.data,
+            });
           }
         } catch (err: any) {
-          results.push({ leadId, leadName: lead.company_name || lead.contact_name || "ליד", success: false, error: err.message });
+          results.push({
+            leadId,
+            leadName: lead.company_name || lead.contact_name || "ליד",
+            success: false,
+            error: err.message,
+          });
         }
       }
 
@@ -468,14 +589,27 @@ export function TestFlowWithLeadDialog({
     onSuccess: (results) => {
       setTestResults(results);
       const successCount = results.filter((r) => r.success).length;
-      toast({ title: "בדיקה הושלמה", description: `${successCount}/${results.length} הצליחו` });
+      toast({
+        title: "בדיקה הושלמה",
+        description: `${successCount}/${results.length} הצליחו`,
+      });
       // Refresh execution history so the new run shows up immediately
-      queryClient.invalidateQueries({ queryKey: ["automation-logs-flow", automationId, tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["automation-logs", automationId, tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["automation-logs-flow", automationId, tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["automation-logs", automationId, tenantId],
+      });
     },
     onError: (error: any) => {
-      setTestResults([{ leadId: "", leadName: "", success: false, error: error.message }]);
-      toast({ title: "שגיאה בבדיקה", description: error.message, variant: "destructive" });
+      setTestResults([
+        { leadId: "", leadName: "", success: false, error: error.message },
+      ]);
+      toast({
+        title: "שגיאה בבדיקה",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -485,11 +619,22 @@ export function TestFlowWithLeadDialog({
     setLastMessageData(null);
     setSearchQuery("");
     setInputMode("select");
-    setManualData({ contact_name: "", company_name: "", phone: "", email: "", source: "", notes: "" });
+    setManualData({
+      contact_name: "",
+      company_name: "",
+      phone: "",
+      email: "",
+      source: "",
+      notes: "",
+    });
     onOpenChange(false);
   };
 
-  const canRunManual = !!(manualData.contact_name || manualData.phone || manualData.company_name);
+  const canRunManual = !!(
+    manualData.contact_name ||
+    manualData.phone ||
+    manualData.company_name
+  );
   const canRunTest = isWhatsAppTrigger
     ? !!lastMessageData
     : inputMode === "manual"
@@ -513,34 +658,65 @@ export function TestFlowWithLeadDialog({
 
         <ScrollArea className="flex-1 overflow-y-auto">
           <div className="space-y-4 py-2 px-1">
-
             {/* WhatsApp: Pull Last Message */}
             {isWhatsAppTrigger && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="font-medium">משוך הודעה אחרונה מהווטסאפ</Label>
-                  <Button variant="outline" size="sm" onClick={handleFetchLastMessage} disabled={isFetchingMessage}>
-                    {isFetchingMessage ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <MessageSquare className="h-4 w-4 ml-1" />}
+                  <Label className="font-medium">
+                    משוך הודעה אחרונה מהווטסאפ
+                  </Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleFetchLastMessage}
+                    disabled={isFetchingMessage}
+                  >
+                    {isFetchingMessage ? (
+                      <Loader2 className="h-4 w-4 ml-1 animate-spin" />
+                    ) : (
+                      <MessageSquare className="h-4 w-4 ml-1" />
+                    )}
                     משוך הודעה
                   </Button>
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">
-                  {triggerConfig?.source_filter === "group" && <Badge variant="secondary" className="text-xs">קבוצה ספציפית</Badge>}
-                  {triggerConfig?.source_filter === "tagged_contact" && <Badge variant="secondary" className="text-xs">איש קשר מתויג</Badge>}
-                  {triggerConfig?.keyword && <Badge variant="outline" className="text-xs">מילת מפתח: {triggerConfig.keyword}</Badge>}
-                  {(!triggerConfig?.source_filter || triggerConfig?.source_filter === "all") && <Badge variant="secondary" className="text-xs">כל ההודעות</Badge>}
+                  {triggerConfig?.source_filter === "group" && (
+                    <Badge variant="secondary" className="text-xs">
+                      קבוצה ספציפית
+                    </Badge>
+                  )}
+                  {triggerConfig?.source_filter === "tagged_contact" && (
+                    <Badge variant="secondary" className="text-xs">
+                      איש קשר מתויג
+                    </Badge>
+                  )}
+                  {triggerConfig?.keyword && (
+                    <Badge variant="outline" className="text-xs">
+                      מילת מפתח: {triggerConfig.keyword}
+                    </Badge>
+                  )}
+                  {(!triggerConfig?.source_filter ||
+                    triggerConfig?.source_filter === "all") && (
+                    <Badge variant="secondary" className="text-xs">
+                      כל ההודעות
+                    </Badge>
+                  )}
                 </div>
 
                 {lastMessageData && (
                   <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
-                    <p className="text-sm font-medium text-muted-foreground">הודעה שנמשכה:</p>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      הודעה שנמשכה:
+                    </p>
                     <div className="space-y-1.5 text-sm">
                       <div className="flex items-center gap-1.5">
                         <User className="h-3.5 w-3.5 text-muted-foreground" />
                         <span>{lastMessageData.sender_name}</span>
                         <Badge variant="outline" className="text-xs mr-1">
-                          {lastMessageData.direction === "inbound" ? "נכנסת" : "יוצאת"}
+                          {lastMessageData.direction === "inbound"
+                            ? "נכנסת"
+                            : "יוצאת"}
                         </Badge>
                       </div>
                       {lastMessageData.sender_phone && (
@@ -557,10 +733,15 @@ export function TestFlowWithLeadDialog({
                       )}
                       <div className="rounded bg-background p-2 text-xs border mt-1">
                         {lastMessageData.message_text?.substring(0, 200)}
-                        {lastMessageData.message_text?.length > 200 ? "..." : ""}
+                        {lastMessageData.message_text?.length > 200
+                          ? "..."
+                          : ""}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {lastMessageData.created_at && new Date(lastMessageData.created_at).toLocaleString("he-IL")}
+                        {lastMessageData.created_at &&
+                          new Date(lastMessageData.created_at).toLocaleString(
+                            "he-IL",
+                          )}
                       </p>
                     </div>
                   </div>
@@ -568,14 +749,20 @@ export function TestFlowWithLeadDialog({
 
                 <div className="relative flex items-center gap-2">
                   <div className="flex-1 border-t" />
-                  <span className="text-xs text-muted-foreground px-2">או בחר לידים</span>
+                  <span className="text-xs text-muted-foreground px-2">
+                    או בחר לידים
+                  </span>
                   <div className="flex-1 border-t" />
                 </div>
               </div>
             )}
 
             {/* Input Mode Tabs */}
-            <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as "select" | "manual")} className="w-full">
+            <Tabs
+              value={inputMode}
+              onValueChange={(v) => setInputMode(v as "select" | "manual")}
+              className="w-full"
+            >
               <TabsList className="w-full grid grid-cols-2">
                 <TabsTrigger value="select">בחירה מהמאגר</TabsTrigger>
                 <TabsTrigger value="manual">הזנה ידנית</TabsTrigger>
@@ -585,7 +772,13 @@ export function TestFlowWithLeadDialog({
                 {/* Date Range Tabs */}
                 <div className="space-y-2">
                   <Label>טווח תאריכים:</Label>
-                  <Tabs value={dateRange} onValueChange={(v) => { setDateRange(v as DateRange); setSelectedLeadIds(new Set()); }}>
+                  <Tabs
+                    value={dateRange}
+                    onValueChange={(v) => {
+                      setDateRange(v as DateRange);
+                      setSelectedLeadIds(new Set());
+                    }}
+                  >
                     <TabsList className="w-full grid grid-cols-4">
                       <TabsTrigger value="today">היום</TabsTrigger>
                       <TabsTrigger value="yesterday">אתמול</TabsTrigger>
@@ -598,25 +791,53 @@ export function TestFlowWithLeadDialog({
                     <div className="flex gap-2 items-center">
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button variant="outline" size="sm" className={cn("flex-1 justify-start text-right", !customFrom && "text-muted-foreground")}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "flex-1 justify-start text-right",
+                              !customFrom && "text-muted-foreground",
+                            )}
+                          >
                             <CalendarIcon className="h-4 w-4 ml-2" />
-                            {customFrom ? format(customFrom, "dd/MM/yyyy") : "מתאריך"}
+                            {customFrom
+                              ? format(customFrom, "dd/MM/yyyy")
+                              : "מתאריך"}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar mode="single" selected={customFrom} onSelect={setCustomFrom} className="p-3 pointer-events-auto" />
+                          <Calendar
+                            mode="single"
+                            selected={customFrom}
+                            onSelect={setCustomFrom}
+                            className="p-3 pointer-events-auto"
+                          />
                         </PopoverContent>
                       </Popover>
                       <span className="text-sm text-muted-foreground">עד</span>
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button variant="outline" size="sm" className={cn("flex-1 justify-start text-right", !customTo && "text-muted-foreground")}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "flex-1 justify-start text-right",
+                              !customTo && "text-muted-foreground",
+                            )}
+                          >
                             <CalendarIcon className="h-4 w-4 ml-2" />
-                            {customTo ? format(customTo, "dd/MM/yyyy") : "עד תאריך"}
+                            {customTo
+                              ? format(customTo, "dd/MM/yyyy")
+                              : "עד תאריך"}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar mode="single" selected={customTo} onSelect={setCustomTo} className="p-3 pointer-events-auto" />
+                          <Calendar
+                            mode="single"
+                            selected={customTo}
+                            onSelect={setCustomTo}
+                            className="p-3 pointer-events-auto"
+                          />
                         </PopoverContent>
                       </Popover>
                     </div>
@@ -632,12 +853,14 @@ export function TestFlowWithLeadDialog({
                     onClick={handleSyncFacebookNow}
                     disabled={isSyncingFb}
                   >
-                    {isSyncingFb ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    {isSyncingFb ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="h-4 w-4" />
+                    )}
                     משוך לידים מפייסבוק עכשיו
                   </Button>
                 )}
-
-
 
                 {/* Search + Select All */}
                 <div className="space-y-2">
@@ -651,19 +874,33 @@ export function TestFlowWithLeadDialog({
                         className="pr-9 text-right"
                       />
                     </div>
-                    <Button variant="outline" size="sm" onClick={toggleAll} className="shrink-0 gap-1.5">
-                      {selectedLeadIds.size === filteredLeads.length && filteredLeads.length > 0 ? (
-                        <><Square className="h-3.5 w-3.5" /> בטל הכל</>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={toggleAll}
+                      className="shrink-0 gap-1.5"
+                    >
+                      {selectedLeadIds.size === filteredLeads.length &&
+                      filteredLeads.length > 0 ? (
+                        <>
+                          <Square className="h-3.5 w-3.5" /> בטל הכל
+                        </>
                       ) : (
-                        <><CheckSquare className="h-3.5 w-3.5" /> בחר הכל</>
+                        <>
+                          <CheckSquare className="h-3.5 w-3.5" /> בחר הכל
+                        </>
                       )}
                     </Button>
                   </div>
 
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant="secondary" className="text-xs">{filteredLeads.length} לידים</Badge>
+                    <Badge variant="secondary" className="text-xs">
+                      {filteredLeads.length} לידים
+                    </Badge>
                     {selectedLeadIds.size > 0 && (
-                      <Badge className="text-xs">{selectedLeadIds.size} נבחרו</Badge>
+                      <Badge className="text-xs">
+                        {selectedLeadIds.size} נבחרו
+                      </Badge>
                     )}
                   </div>
                 </div>
@@ -676,38 +913,67 @@ export function TestFlowWithLeadDialog({
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                       </div>
                     ) : filteredLeads.length === 0 ? (
-                      <div className="text-center py-8 text-sm text-muted-foreground">לא נמצאו לידים בטווח הנבחר</div>
+                      <div className="text-center py-8 text-sm text-muted-foreground">
+                        לא נמצאו לידים בטווח הנבחר
+                      </div>
                     ) : (
                       <div className="divide-y">
                         {filteredLeads.map((lead: any) => {
                           // Try to extract a real name from fb_ fields if company_name is generic
                           let displayName = lead.company_name || "ללא שם";
                           if (displayName === "ליד מפייסבוק" && lead.notes) {
-                            const nameMatch = lead.notes.match(/fb_(?:שם_מלא|שם|full_name|name):\s*(.+)/i);
-                            if (nameMatch) displayName = `${nameMatch[1].trim()} (FB)`;
+                            const nameMatch = lead.notes.match(
+                              /fb_(?:שם_מלא|שם|full_name|name):\s*(.+)/i,
+                            );
+                            if (nameMatch)
+                              displayName = `${nameMatch[1].trim()} (FB)`;
                           }
                           return (
-                          <label
-                            key={lead.id}
-                            className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer transition-colors"
-                          >
-                            <Checkbox
-                              checked={selectedLeadIds.has(lead.id)}
-                              onCheckedChange={() => toggleLead(lead.id)}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium truncate">{displayName}</span>
-                                {lead.source && <Badge variant="outline" className="text-[10px] shrink-0">{lead.source}</Badge>}
-                                {facebookFormId && <Badge variant="secondary" className="text-[10px] shrink-0">טופס FB</Badge>}
+                            <label
+                              key={lead.id}
+                              className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer transition-colors"
+                            >
+                              <Checkbox
+                                checked={selectedLeadIds.has(lead.id)}
+                                onCheckedChange={() => toggleLead(lead.id)}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium truncate">
+                                    {displayName}
+                                  </span>
+                                  {lead.source && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] shrink-0"
+                                    >
+                                      {lead.source}
+                                    </Badge>
+                                  )}
+                                  {facebookFormId && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[10px] shrink-0"
+                                    >
+                                      טופס FB
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                  {lead.contact_name && (
+                                    <span>{lead.contact_name}</span>
+                                  )}
+                                  {lead.phone && (
+                                    <span dir="ltr">{lead.phone}</span>
+                                  )}
+                                  <span>
+                                    {new Date(
+                                      lead.created_at,
+                                    ).toLocaleDateString("he-IL")}
+                                  </span>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                                {lead.contact_name && <span>{lead.contact_name}</span>}
-                                {lead.phone && <span dir="ltr">{lead.phone}</span>}
-                                <span>{new Date(lead.created_at).toLocaleDateString("he-IL")}</span>
-                              </div>
-                            </div>
-                          </label>
+                            </label>
                           );
                         })}
                       </div>
@@ -716,58 +982,94 @@ export function TestFlowWithLeadDialog({
                 </div>
 
                 {/* Parameters Preview for selected lead */}
-                {selectedLeadIds.size === 1 && (() => {
-                  const selectedId = Array.from(selectedLeadIds)[0];
-                  const selectedLead = leads.find((l: any) => l.id === selectedId);
-                  if (!selectedLead) return null;
-                  
-                  const sysParams: Array<{key: string; value: string}> = [];
-                  
-                  const fbParams = parseFacebookParamsFromNotes(selectedLead.notes);
-                  
-                  // System fields
-                  if (selectedLead.contact_name) sysParams.push({ key: 'contact_name', value: selectedLead.contact_name });
-                  if (selectedLead.company_name) sysParams.push({ key: 'company_name', value: selectedLead.company_name });
-                  if (selectedLead.phone) sysParams.push({ key: 'phone', value: selectedLead.phone });
-                  if (selectedLead.email) sysParams.push({ key: 'email', value: selectedLead.email });
-                  if (selectedLead.source) sysParams.push({ key: 'source', value: selectedLead.source });
-                  
-                  return (
-                    <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                      <p className="text-sm font-medium flex items-center gap-1.5">
-                        📋 פרמטרים שימשכו לטסט:
-                      </p>
-                      {fbParams.length > 0 ? (
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground font-medium">שדות פייסבוק:</p>
-                          {fbParams.map((p, i) => (
-                            <div key={i} className="flex items-center gap-2 text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 rounded px-2 py-1">
-                              <span className="font-mono font-medium">{`{{${p.key}}}`}</span>
-                              <span className="text-muted-foreground">→</span>
-                              <span>{p.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1.5">
-                          ⚠️ לא נמצאו שדות fb_ בהערות הליד. משתני פייסבוק לא יוחלפו.
-                        </div>
-                      )}
-                      {sysParams.length > 0 && (
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground font-medium">שדות מערכת:</p>
-                          {sysParams.map((p, i) => (
-                            <div key={i} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1">
-                              <span className="font-mono font-medium">{`{{${p.key}}}`}</span>
-                              <span className="text-muted-foreground">→</span>
-                              <span>{p.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                {selectedLeadIds.size === 1 &&
+                  (() => {
+                    const selectedId = Array.from(selectedLeadIds)[0];
+                    const selectedLead = leads.find(
+                      (l: any) => l.id === selectedId,
+                    );
+                    if (!selectedLead) return null;
+
+                    const sysParams: Array<{ key: string; value: string }> = [];
+
+                    const fbParams = parseFacebookParamsFromNotes(
+                      selectedLead.notes,
+                    );
+
+                    // System fields
+                    if (selectedLead.contact_name)
+                      sysParams.push({
+                        key: "contact_name",
+                        value: selectedLead.contact_name,
+                      });
+                    if (selectedLead.company_name)
+                      sysParams.push({
+                        key: "company_name",
+                        value: selectedLead.company_name,
+                      });
+                    if (selectedLead.phone)
+                      sysParams.push({
+                        key: "phone",
+                        value: selectedLead.phone,
+                      });
+                    if (selectedLead.email)
+                      sysParams.push({
+                        key: "email",
+                        value: selectedLead.email,
+                      });
+                    if (selectedLead.source)
+                      sysParams.push({
+                        key: "source",
+                        value: selectedLead.source,
+                      });
+
+                    return (
+                      <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                        <p className="text-sm font-medium flex items-center gap-1.5">
+                          📋 פרמטרים שימשכו לטסט:
+                        </p>
+                        {fbParams.length > 0 ? (
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground font-medium">
+                              שדות פייסבוק:
+                            </p>
+                            {fbParams.map((p, i) => (
+                              <div
+                                key={i}
+                                className="flex items-center gap-2 text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 rounded px-2 py-1"
+                              >
+                                <span className="font-mono font-medium">{`{{${p.key}}}`}</span>
+                                <span className="text-muted-foreground">→</span>
+                                <span>{p.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1.5">
+                            ⚠️ לא נמצאו שדות fb_ בהערות הליד. משתני פייסבוק לא
+                            יוחלפו.
+                          </div>
+                        )}
+                        {sysParams.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground font-medium">
+                              שדות מערכת:
+                            </p>
+                            {sysParams.map((p, i) => (
+                              <div
+                                key={i}
+                                className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1"
+                              >
+                                <span className="font-mono font-medium">{`{{${p.key}}}`}</span>
+                                <span className="text-muted-foreground">→</span>
+                                <span>{p.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
               </TabsContent>
 
               <TabsContent value="manual" className="space-y-3 mt-3">
@@ -777,7 +1079,12 @@ export function TestFlowWithLeadDialog({
                     <Input
                       placeholder="שם מלא"
                       value={manualData.contact_name}
-                      onChange={(e) => setManualData(prev => ({ ...prev, contact_name: e.target.value }))}
+                      onChange={(e) =>
+                        setManualData((prev) => ({
+                          ...prev,
+                          contact_name: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -785,7 +1092,12 @@ export function TestFlowWithLeadDialog({
                     <Input
                       placeholder="שם החברה"
                       value={manualData.company_name}
-                      onChange={(e) => setManualData(prev => ({ ...prev, company_name: e.target.value }))}
+                      onChange={(e) =>
+                        setManualData((prev) => ({
+                          ...prev,
+                          company_name: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -795,7 +1107,12 @@ export function TestFlowWithLeadDialog({
                       dir="ltr"
                       className="text-right"
                       value={manualData.phone}
-                      onChange={(e) => setManualData(prev => ({ ...prev, phone: e.target.value }))}
+                      onChange={(e) =>
+                        setManualData((prev) => ({
+                          ...prev,
+                          phone: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -806,7 +1123,12 @@ export function TestFlowWithLeadDialog({
                       className="text-right"
                       type="email"
                       value={manualData.email}
-                      onChange={(e) => setManualData(prev => ({ ...prev, email: e.target.value }))}
+                      onChange={(e) =>
+                        setManualData((prev) => ({
+                          ...prev,
+                          email: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -814,7 +1136,12 @@ export function TestFlowWithLeadDialog({
                     <Input
                       placeholder="פייסבוק, גוגל..."
                       value={manualData.source}
-                      onChange={(e) => setManualData(prev => ({ ...prev, source: e.target.value }))}
+                      onChange={(e) =>
+                        setManualData((prev) => ({
+                          ...prev,
+                          source: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                 </div>
@@ -824,11 +1151,18 @@ export function TestFlowWithLeadDialog({
                     placeholder="הערות נוספות..."
                     rows={2}
                     value={manualData.notes}
-                    onChange={(e) => setManualData(prev => ({ ...prev, notes: e.target.value }))}
+                    onChange={(e) =>
+                      setManualData((prev) => ({
+                        ...prev,
+                        notes: e.target.value,
+                      }))
+                    }
                   />
                 </div>
                 {!canRunManual && (
-                  <p className="text-xs text-muted-foreground">יש למלא לפחות שם, טלפון או שם חברה</p>
+                  <p className="text-xs text-muted-foreground">
+                    יש למלא לפחות שם, טלפון או שם חברה
+                  </p>
                 )}
               </TabsContent>
             </Tabs>
@@ -836,11 +1170,17 @@ export function TestFlowWithLeadDialog({
             {/* Test Results */}
             {testResults.length > 0 && (
               <div className="rounded-lg border p-3 space-y-2">
-                <p className="text-sm font-medium">תוצאות הבדיקה ({testResults.filter(r => r.success).length}/{testResults.length} הצליחו):</p>
+                <p className="text-sm font-medium">
+                  תוצאות הבדיקה ({testResults.filter((r) => r.success).length}/
+                  {testResults.length} הצליחו):
+                </p>
                 <ScrollArea className="max-h-[200px]">
                   <div className="space-y-1.5">
                     {testResults.map((result, idx) => (
-                      <div key={idx} className="flex items-start gap-2 text-sm rounded-md bg-muted/50 p-2">
+                      <div
+                        key={idx}
+                        className="flex items-start gap-2 text-sm rounded-md bg-muted/50 p-2"
+                      >
                         {result.success ? (
                           <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
                         ) : (
@@ -848,18 +1188,40 @@ export function TestFlowWithLeadDialog({
                         )}
                         <div className="flex-1 min-w-0">
                           <p className="font-medium">{result.leadName}</p>
-                          {result.error && <p className="text-xs text-destructive mt-0.5">{result.error}</p>}
-                          {result.data?.results && Array.isArray(result.data.results) && (
-                            <div className="space-y-1 mt-1">
-                              {result.data.results.map((step: any, si: number) => (
-                                <div key={si} className="text-xs flex items-center gap-1">
-                                  {step.success ? <CheckCircle className="h-3 w-3 text-green-600" /> : <XCircle className="h-3 w-3 text-destructive" />}
-                                  <span>{step.step_type === "agent" ? "סוכן AI" : step.action_type || step.step_type}</span>
-                                  {step.error && <span className="text-destructive">- {step.error}</span>}
-                                </div>
-                              ))}
-                            </div>
+                          {result.error && (
+                            <p className="text-xs text-destructive mt-0.5">
+                              {result.error}
+                            </p>
                           )}
+                          {result.data?.results &&
+                            Array.isArray(result.data.results) && (
+                              <div className="space-y-1 mt-1">
+                                {result.data.results.map(
+                                  (step: any, si: number) => (
+                                    <div
+                                      key={si}
+                                      className="text-xs flex items-center gap-1"
+                                    >
+                                      {step.success ? (
+                                        <CheckCircle className="h-3 w-3 text-green-600" />
+                                      ) : (
+                                        <XCircle className="h-3 w-3 text-destructive" />
+                                      )}
+                                      <span>
+                                        {step.step_type === "agent"
+                                          ? "סוכן AI"
+                                          : step.action_type || step.step_type}
+                                      </span>
+                                      {step.error && (
+                                        <span className="text-destructive">
+                                          - {step.error}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            )}
                         </div>
                       </div>
                     ))}
@@ -886,7 +1248,11 @@ export function TestFlowWithLeadDialog({
             ) : (
               <>
                 <TestTube className="h-4 w-4 ml-2" />
-                {inputMode === "manual" ? "הרץ טסט ידני" : selectedLeadIds.size > 1 ? `הרץ על ${selectedLeadIds.size} לידים` : "הרץ טסט"}
+                {inputMode === "manual"
+                  ? "הרץ טסט ידני"
+                  : selectedLeadIds.size > 1
+                    ? `הרץ על ${selectedLeadIds.size} לידים`
+                    : "הרץ טסט"}
               </>
             )}
           </Button>

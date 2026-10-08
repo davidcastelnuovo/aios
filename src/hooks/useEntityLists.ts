@@ -9,7 +9,10 @@ import { agenciesFromJoin, mergeAgencyLists } from "@/lib/resolveTenantAgency";
  * so caches never leak across tenants.
  */
 
-export function useAgencies(options?: { activeOnly?: boolean; enabled?: boolean }) {
+export function useAgencies(options?: {
+  activeOnly?: boolean;
+  enabled?: boolean;
+}) {
   const { tenantId } = useCurrentTenant();
   const activeOnly = options?.activeOnly ?? false;
 
@@ -39,18 +42,26 @@ export function useAgencies(options?: { activeOnly?: boolean; enabled?: boolean 
       }
 
       const shared = (sharedAccess || [])
-        .flatMap((row) => agenciesFromJoin((row as { agencies?: unknown }).agencies))
-        .filter((agency) => !activeOnly || agency.status === "active" || !agency.status);
+        .flatMap((row) =>
+          agenciesFromJoin((row as { agencies?: unknown }).agencies),
+        )
+        .filter(
+          (agency) =>
+            !activeOnly || agency.status === "active" || !agency.status,
+        );
 
-      return mergeAgencyLists(owned || [], shared as typeof owned).sort((a, b) =>
-        (a.name || "").localeCompare(b.name || "", "he"),
+      return mergeAgencyLists(owned || [], shared as typeof owned).sort(
+        (a, b) => (a.name || "").localeCompare(b.name || "", "he"),
       );
     },
     enabled: !!tenantId && (options?.enabled ?? true),
   });
 }
 
-export function useCampaigners(options?: { activeOnly?: boolean; enabled?: boolean }) {
+export function useCampaigners(options?: {
+  activeOnly?: boolean;
+  enabled?: boolean;
+}) {
   const { tenantId } = useCurrentTenant();
   const activeOnly = options?.activeOnly ?? false;
 
@@ -71,7 +82,10 @@ export function useCampaigners(options?: { activeOnly?: boolean; enabled?: boole
   });
 }
 
-export function useSalesPeople(options?: { activeOnly?: boolean; enabled?: boolean }) {
+export function useSalesPeople(options?: {
+  activeOnly?: boolean;
+  enabled?: boolean;
+}) {
   const { tenantId } = useCurrentTenant();
   const activeOnly = options?.activeOnly ?? false;
 

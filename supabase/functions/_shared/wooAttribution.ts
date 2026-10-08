@@ -14,61 +14,71 @@ export type WooOrderAttribution = {
 };
 
 const ATTRIBUTION_META_KEYS = {
-  source_type: '_wc_order_attribution_source_type',
-  utm_source: '_wc_order_attribution_utm_source',
-  utm_medium: '_wc_order_attribution_utm_medium',
-  utm_campaign: '_wc_order_attribution_utm_campaign',
-  utm_content: '_wc_order_attribution_utm_content',
-  utm_term: '_wc_order_attribution_utm_term',
-  referrer: '_wc_order_attribution_referrer',
-  session_entry: '_wc_order_attribution_session_entry',
-  device_type: '_wc_order_attribution_device_type',
+  source_type: "_wc_order_attribution_source_type",
+  utm_source: "_wc_order_attribution_utm_source",
+  utm_medium: "_wc_order_attribution_utm_medium",
+  utm_campaign: "_wc_order_attribution_utm_campaign",
+  utm_content: "_wc_order_attribution_utm_content",
+  utm_term: "_wc_order_attribution_utm_term",
+  referrer: "_wc_order_attribution_referrer",
+  session_entry: "_wc_order_attribution_session_entry",
+  device_type: "_wc_order_attribution_device_type",
 } as const;
 
-const metaValue = (meta: Array<{ key?: string; value?: unknown }> | undefined, key: string): string | null => {
+const metaValue = (
+  meta: Array<{ key?: string; value?: unknown }> | undefined,
+  key: string,
+): string | null => {
   const row = (meta || []).find((m) => m.key === key);
   const value = row?.value;
-  if (value === null || value === undefined || value === '') return null;
+  if (value === null || value === undefined || value === "") return null;
   return String(value);
 };
 
-export function buildWooAttributionLabel(attr: {
-  source_type?: string | null;
-  utm_source?: string | null;
-  utm_medium?: string | null;
-  referrer?: string | null;
-  session_entry?: string | null;
-} | null): string {
-  if (!attr) return 'לא ידוע';
+export function buildWooAttributionLabel(
+  attr: {
+    source_type?: string | null;
+    utm_source?: string | null;
+    utm_medium?: string | null;
+    referrer?: string | null;
+    session_entry?: string | null;
+  } | null,
+): string {
+  if (!attr) return "לא ידוע";
 
-  const src = (attr.utm_source || '').toLowerCase();
-  const med = (attr.utm_medium || '').toLowerCase();
-  const ref = (attr.referrer || '').toLowerCase();
-  const entry = (attr.session_entry || '').toLowerCase();
+  const src = (attr.utm_source || "").toLowerCase();
+  const med = (attr.utm_medium || "").toLowerCase();
+  const ref = (attr.referrer || "").toLowerCase();
+  const entry = (attr.session_entry || "").toLowerCase();
 
   const looksFacebook =
-    src === 'fb' ||
-    src === 'facebook' ||
-    ref.includes('facebook') ||
-    ref.includes('fb.com') ||
-    entry.includes('fbclid');
+    src === "fb" ||
+    src === "facebook" ||
+    ref.includes("facebook") ||
+    ref.includes("fb.com") ||
+    entry.includes("fbclid");
 
   if (looksFacebook) {
-    return med === 'paid' || med === 'cpc' ? 'Facebook ממומן' : 'Facebook';
+    return med === "paid" || med === "cpc" ? "Facebook ממומן" : "Facebook";
   }
 
   const looksGoogle =
-    src === 'google' ||
-    src.includes('google') ||
-    ref.includes('google') ||
-    entry.includes('gclid');
+    src === "google" ||
+    src.includes("google") ||
+    ref.includes("google") ||
+    entry.includes("gclid");
 
   if (looksGoogle) {
-    return med === 'paid' || med === 'cpc' || med === 'ppc' || med === 'paidsearch' ? 'Google Ads' : 'Google אורגני';
+    return med === "paid" ||
+      med === "cpc" ||
+      med === "ppc" ||
+      med === "paidsearch"
+      ? "Google Ads"
+      : "Google אורגני";
   }
 
-  if (src === '(direct)' || attr.source_type === 'typein') {
-    return 'ישיר / Direct';
+  if (src === "(direct)" || attr.source_type === "typein") {
+    return "ישיר / Direct";
   }
 
   if (attr.utm_source && attr.utm_medium) {
@@ -76,7 +86,7 @@ export function buildWooAttributionLabel(attr: {
   }
   if (attr.utm_source) return attr.utm_source;
 
-  return 'אחר';
+  return "אחר";
 }
 
 export function extractWooOrderAttribution(
@@ -89,7 +99,10 @@ export function extractWooOrderAttribution(
   const utm_content = metaValue(metaData, ATTRIBUTION_META_KEYS.utm_content);
   const utm_term = metaValue(metaData, ATTRIBUTION_META_KEYS.utm_term);
   const referrer = metaValue(metaData, ATTRIBUTION_META_KEYS.referrer);
-  const session_entry = metaValue(metaData, ATTRIBUTION_META_KEYS.session_entry);
+  const session_entry = metaValue(
+    metaData,
+    ATTRIBUTION_META_KEYS.session_entry,
+  );
   const device_type = metaValue(metaData, ATTRIBUTION_META_KEYS.device_type);
 
   if (!source_type && !utm_source && !referrer && !session_entry) return null;

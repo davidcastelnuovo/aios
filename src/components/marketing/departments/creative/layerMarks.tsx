@@ -95,7 +95,8 @@ export const LAYER_ROLE_LABEL: Record<CreativeLayerRole, string> = {
 };
 
 export const layerLabel = (layer: CreativeLayer, index: number): string => {
-  if (layer.role && LAYER_ROLE_LABEL[layer.role]) return LAYER_ROLE_LABEL[layer.role];
+  if (layer.role && LAYER_ROLE_LABEL[layer.role])
+    return LAYER_ROLE_LABEL[layer.role];
   if (layer.type === "image") return "לוגו";
   if (layer.icon) return "אייקון";
   if (layer.type === "shape") return `צורה ${index + 1}`;
@@ -115,7 +116,13 @@ export const OfferIconMark = ({
     ? (name as CreativeIconId)
     : "badge-check";
   const Icon = ICONS[key];
-  return <Icon className={className} style={{ color: color ?? "#dc2626" }} strokeWidth={2.2} />;
+  return (
+    <Icon
+      className={className}
+      style={{ color: color ?? "#dc2626" }}
+      strokeWidth={2.2}
+    />
+  );
 };
 
 export const isIconLayer = (layer: CreativeLayer): boolean =>

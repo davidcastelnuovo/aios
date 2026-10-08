@@ -54,7 +54,9 @@ export function LinkPhoneDialog({
   const queryClient = useQueryClient();
   const { terms } = useTerminology();
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedType, setSelectedType] = useState<"client" | "lead">(contactType || "client");
+  const [selectedType, setSelectedType] = useState<"client" | "lead">(
+    contactType || "client",
+  );
 
   const form = useForm<LinkFormValues>({
     resolver: zodResolver(linkSchema),
@@ -74,11 +76,13 @@ export function LinkPhoneDialog({
         .select("id, name, phone, agency_id, agencies(name)")
         .eq("tenant_id", tenantId)
         .order("name");
-      
+
       if (searchTerm) {
-        query = query.or(`name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+        query = query.or(
+          `name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`,
+        );
       }
-      
+
       const { data } = await query.limit(50);
       return data || [];
     },
@@ -92,14 +96,18 @@ export function LinkPhoneDialog({
       if (!tenantId) return [];
       let query = supabase
         .from("leads")
-        .select("id, company_name, contact_name, phone, agency_id, agencies(name)")
+        .select(
+          "id, company_name, contact_name, phone, agency_id, agencies(name)",
+        )
         .eq("tenant_id", tenantId)
         .order("company_name");
-      
+
       if (searchTerm) {
-        query = query.or(`company_name.ilike.%${searchTerm}%,contact_name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+        query = query.or(
+          `company_name.ilike.%${searchTerm}%,contact_name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`,
+        );
       }
-      
+
       const { data } = await query.limit(50);
       return data || [];
     },
@@ -109,7 +117,9 @@ export function LinkPhoneDialog({
   // Link phone mutation
   const linkMutation = useMutation({
     mutationFn: async (values: LinkFormValues) => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
       // Update the phone number in the selected contact
@@ -123,7 +133,9 @@ export function LinkPhoneDialog({
       return { type: values.type, id: values.contact_id };
     },
     onSuccess: (result) => {
-      toast.success(`הטלפון עודכן בהצלחה ל${selectedType === 'client' ? 'לקוח' : 'ליד'}`);
+      toast.success(
+        `הטלפון עודכן בהצלחה ל${selectedType === "client" ? "לקוח" : "ליד"}`,
+      );
       queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads", tenantId] });
@@ -172,8 +184,12 @@ export function LinkPhoneDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="client">{terms?.client?.singular || 'לקוח'}</SelectItem>
-                <SelectItem value="lead">{terms?.lead?.singular || 'ליד'}</SelectItem>
+                <SelectItem value="client">
+                  {terms?.client?.singular || "לקוח"}
+                </SelectItem>
+                <SelectItem value="lead">
+                  {terms?.lead?.singular || "ליד"}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -183,7 +199,7 @@ export function LinkPhoneDialog({
             <div className="relative">
               <Search className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={`חפש ${selectedType === 'client' ? 'לקוח' : 'ליד'}...`}
+                placeholder={`חפש ${selectedType === "client" ? "לקוח" : "ליד"}...`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pr-9"
@@ -215,7 +231,9 @@ export function LinkPhoneDialog({
                       <SelectItem key={contact.id} value={contact.id}>
                         <div className="flex flex-col items-start">
                           <span className="font-medium">
-                            {selectedType === "client" ? contact.name : contact.company_name}
+                            {selectedType === "client"
+                              ? contact.name
+                              : contact.company_name}
                           </span>
                           {contact.phone && (
                             <span className="text-xs text-muted-foreground">

@@ -1,0 +1,15 @@
+# Dependencies, build artifacts, and local generated output
+node_modules/
+dist/
+dist-ssr/
+coverage/
+graphify-out/
+.claude/worktrees/
+
+# Package-manager-generated lockfiles
+pnpm-lock.yaml
+extension/bun.lock
+
+# Local environment files
+.env
+.env.*

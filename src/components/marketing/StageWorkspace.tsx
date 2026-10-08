@@ -69,9 +69,12 @@ const STAGE_CONFIG: Record<
     agentRole: "קופירייטרית",
     headerBg: "from-sky-600 to-sky-500",
     accentColor: "sky",
-    systemHint:
-      "את קופירייטרית מוכשרת. תפקידך לכתוב תוכן שיווקי מרתק ומשכנע.",
-    quickPrompts: ["כתוב קופי לפייסבוק", "כתוב קופי לאינסטגרם", "3 גרסאות שונות"],
+    systemHint: "את קופירייטרית מוכשרת. תפקידך לכתוב תוכן שיווקי מרתק ומשכנע.",
+    quickPrompts: [
+      "כתוב קופי לפייסבוק",
+      "כתוב קופי לאינסטגרם",
+      "3 גרסאות שונות",
+    ],
   },
   creative: {
     icon: ImageIcon,
@@ -89,8 +92,7 @@ const STAGE_CONFIG: Record<
     agentRole: "מנהלת קמפיינים",
     headerBg: "from-rose-600 to-rose-500",
     accentColor: "rose",
-    systemHint:
-      "את מנהלת קמפיינים ממומנים מנוסה ב-Meta ו-Google Ads.",
+    systemHint: "את מנהלת קמפיינים ממומנים מנוסה ב-Meta ו-Google Ads.",
     quickPrompts: ["הגדרות קמפיין Meta", "תקציב ומיקוד", "מבנה אד-סט"],
   },
   target_seo: {
@@ -109,8 +111,7 @@ const STAGE_CONFIG: Record<
     agentRole: "מנהלת מדיה חברתית",
     headerBg: "from-violet-600 to-violet-500",
     accentColor: "violet",
-    systemHint:
-      "את מנהלת מדיה חברתית מנוסה. תפקידך לתכנן ולפרסם תוכן אורגני.",
+    systemHint: "את מנהלת מדיה חברתית מנוסה. תפקידך לתכנן ולפרסם תוכן אורגני.",
     quickPrompts: ["קפשן לאינסטגרם", "תזמון אידאלי", "האשטגים"],
   },
   measurement: {
@@ -119,20 +120,57 @@ const STAGE_CONFIG: Record<
     agentRole: "אנליסטית שיווקית",
     headerBg: "from-blue-600 to-blue-500",
     accentColor: "blue",
-    systemHint:
-      "את אנליסטית שיווקית. תפקידך לנתח ביצועים ולהפיק תובנות.",
+    systemHint: "את אנליסטית שיווקית. תפקידך לנתח ביצועים ולהפיק תובנות.",
     quickPrompts: ["סיכום ביצועים", "המלצות לשיפור", "השוואה לחודש קודם"],
   },
 };
 
-const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string; borderColor: string }> = {
-  draft: { label: "טיוטה", icon: Clock, color: "text-gray-500", borderColor: "border-border/60" },
-  in_progress: { label: "בעבודה", icon: Loader2, color: "text-blue-500", borderColor: "border-blue-400" },
-  waiting_approval: { label: "ממתין לאישור", icon: AlertCircle, color: "text-amber-500", borderColor: "border-amber-400" },
-  approved: { label: "אושר", icon: CheckCircle2, color: "text-emerald-500", borderColor: "border-emerald-400" },
-  published: { label: "פורסם", icon: CheckCircle2, color: "text-emerald-600", borderColor: "border-emerald-500" },
-  failed: { label: "נכשל", icon: AlertCircle, color: "text-red-500", borderColor: "border-red-400" },
-  archived: { label: "בארכיון", icon: Clock, color: "text-gray-500", borderColor: "border-gray-400" },
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; icon: any; color: string; borderColor: string }
+> = {
+  draft: {
+    label: "טיוטה",
+    icon: Clock,
+    color: "text-gray-500",
+    borderColor: "border-border/60",
+  },
+  in_progress: {
+    label: "בעבודה",
+    icon: Loader2,
+    color: "text-blue-500",
+    borderColor: "border-blue-400",
+  },
+  waiting_approval: {
+    label: "ממתין לאישור",
+    icon: AlertCircle,
+    color: "text-amber-500",
+    borderColor: "border-amber-400",
+  },
+  approved: {
+    label: "אושר",
+    icon: CheckCircle2,
+    color: "text-emerald-500",
+    borderColor: "border-emerald-400",
+  },
+  published: {
+    label: "פורסם",
+    icon: CheckCircle2,
+    color: "text-emerald-600",
+    borderColor: "border-emerald-500",
+  },
+  failed: {
+    label: "נכשל",
+    icon: AlertCircle,
+    color: "text-red-500",
+    borderColor: "border-red-400",
+  },
+  archived: {
+    label: "בארכיון",
+    icon: Clock,
+    color: "text-gray-500",
+    borderColor: "border-gray-400",
+  },
 };
 
 const DEFAULT_SKIN_BY_STAGE: Record<string, string> = {
@@ -155,9 +193,24 @@ function ModeToggle({
 }) {
   const current = stage.approval_mode ?? "hybrid";
   const modes = [
-    { key: "auto", label: "אוטומטי", icon: Zap, activeClass: "bg-emerald-500 text-white" },
-    { key: "hybrid", label: "חצי", icon: Clock, activeClass: "bg-amber-500 text-white" },
-    { key: "manual", label: "ידני", icon: Hand, activeClass: "bg-gray-500 text-white" },
+    {
+      key: "auto",
+      label: "אוטומטי",
+      icon: Zap,
+      activeClass: "bg-emerald-500 text-white",
+    },
+    {
+      key: "hybrid",
+      label: "חצי",
+      icon: Clock,
+      activeClass: "bg-amber-500 text-white",
+    },
+    {
+      key: "manual",
+      label: "ידני",
+      icon: Hand,
+      activeClass: "bg-gray-500 text-white",
+    },
   ];
 
   return (
@@ -171,7 +224,7 @@ function ModeToggle({
             onClick={() => onUpdate(m.key)}
             className={cn(
               "flex items-center gap-1 px-2.5 py-1.5 transition-all",
-              active ? m.activeClass : "text-white/70 hover:bg-white/10"
+              active ? m.activeClass : "text-white/70 hover:bg-white/10",
             )}
           >
             <MIcon className="h-3 w-3" />
@@ -191,13 +244,19 @@ function ChatMessage({
 }) {
   const isUser = msg.role === "user";
   return (
-    <div className={cn("flex gap-3 mb-4", isUser ? "flex-row-reverse" : "flex-row")} dir="rtl">
+    <div
+      className={cn(
+        "flex gap-3 mb-4",
+        isUser ? "flex-row-reverse" : "flex-row",
+      )}
+      dir="rtl"
+    >
       <div
         className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white text-xs font-bold shadow-sm",
           isUser
             ? "bg-primary"
-            : "bg-gradient-to-br from-violet-500 to-fuchsia-500"
+            : "bg-gradient-to-br from-violet-500 to-fuchsia-500",
         )}
       >
         {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
@@ -207,7 +266,7 @@ function ChatMessage({
           "max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm",
           isUser
             ? "bg-primary text-primary-foreground rounded-tr-sm"
-            : "bg-card/80 border border-border/50 text-foreground rounded-tl-sm"
+            : "bg-card/80 border border-border/50 text-foreground rounded-tl-sm",
         )}
       >
         {msg.content}
@@ -247,9 +306,9 @@ function WorkItemCard({
         isRunning
           ? "border-blue-400 animate-pulse"
           : isAwaiting
-          ? "border-amber-400"
-          : statusCfg.borderColor,
-        "hover:shadow-lg hover:border-primary/30 hover:scale-[1.01]"
+            ? "border-amber-400"
+            : statusCfg.borderColor,
+        "hover:shadow-lg hover:border-primary/30 hover:scale-[1.01]",
       )}
       dir="rtl"
     >
@@ -272,7 +331,7 @@ function WorkItemCard({
             className={cn(
               "h-4 w-4 shrink-0",
               statusCfg.color,
-              (item.status === "in_progress" || running) && "animate-spin"
+              (item.status === "in_progress" || running) && "animate-spin",
             )}
           />
           <span className="flex-1 text-sm font-bold truncate">
@@ -280,7 +339,10 @@ function WorkItemCard({
           </span>
           <Badge
             variant="outline"
-            className={cn("text-[10px] px-1.5 py-0 border-current", statusCfg.color)}
+            className={cn(
+              "text-[10px] px-1.5 py-0 border-current",
+              statusCfg.color,
+            )}
           >
             {statusCfg.label}
           </Badge>
@@ -292,9 +354,13 @@ function WorkItemCard({
         </div>
 
         {/* Copy preview (2 lines) */}
-        {(item.payload?.brief_text || item.payload?.brief || item.payload?.copy_text) && (
+        {(item.payload?.brief_text ||
+          item.payload?.brief ||
+          item.payload?.copy_text) && (
           <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-            {item.payload?.copy_text ?? item.payload?.brief_text ?? item.payload?.brief}
+            {item.payload?.copy_text ??
+              item.payload?.brief_text ??
+              item.payload?.brief}
           </p>
         )}
 
@@ -430,7 +496,11 @@ export function StageWorkspace({
 
   const sendMessage = async () => {
     if (!input.trim() || chatLoading) return;
-    const userMsg = { role: "user" as const, content: input.trim(), ts: Date.now() };
+    const userMsg = {
+      role: "user" as const,
+      content: input.trim(),
+      ts: Date.now(),
+    };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setChatLoading(true);
@@ -438,7 +508,10 @@ export function StageWorkspace({
     try {
       const itemsSummary = items
         .slice(0, 3)
-        .map((i) => `- ${i.title}: ${i.payload?.brief ?? i.payload?.copy_text ?? ""}`)
+        .map(
+          (i) =>
+            `- ${i.title}: ${i.payload?.brief ?? i.payload?.copy_text ?? ""}`,
+        )
         .join("\n");
 
       const systemPrompt = `${cfg.systemHint}
@@ -446,7 +519,9 @@ ${stage.configuration?.instructions ? `הוראות ספציפיות לשלב: $
 ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
 ענה תמיד בעברית, בצורה מקצועית ועניינית.`;
 
-      const history = messages.slice(-6).map((m) => ({ role: m.role, content: m.content }));
+      const history = messages
+        .slice(-6)
+        .map((m) => ({ role: m.role, content: m.content }));
 
       const historyText = history
         .map((m) => `${m.role === "user" ? "משתמש" : "כרמן"}: ${m.content}`)
@@ -481,8 +556,14 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
 
       if (error) throw error;
       const reply =
-        data?.output ?? data?.reply ?? data?.message ?? "לא הצלחתי לעבד את הבקשה.";
-      setMessages((prev) => [...prev, { role: "assistant", content: reply, ts: Date.now() }]);
+        data?.output ??
+        data?.reply ??
+        data?.message ??
+        "לא הצלחתי לעבד את הבקשה.";
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: reply, ts: Date.now() },
+      ]);
     } catch (e: any) {
       setMessages((prev) => [
         ...prev,
@@ -501,10 +582,18 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
       });
       if (error) throw error;
       toast({ title: "השלב הורץ בהצלחה" });
-      queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId, tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["marketing-assets", itemId, tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["marketing-items", pipelineId, tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["marketing-assets", itemId, tenantId],
+      });
     } catch (e: any) {
-      toast({ title: "שגיאה בהרצה", description: e.message, variant: "destructive" });
+      toast({
+        title: "שגיאה בהרצה",
+        description: e.message,
+        variant: "destructive",
+      });
     } finally {
       setRunning(null);
     }
@@ -519,7 +608,9 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
         .order("sort_order");
       if (stagesError) throw stagesError;
 
-      const currentIndex = (stages ?? []).findIndex((candidate) => candidate.id === stage.id);
+      const currentIndex = (stages ?? []).findIndex(
+        (candidate) => candidate.id === stage.id,
+      );
       const nextStage = currentIndex >= 0 ? stages?.[currentIndex + 1] : null;
       const update = nextStage
         ? { current_stage_id: nextStage.id, status: "draft" }
@@ -532,12 +623,18 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
         .eq("tenant_id", tenantId);
       if (updateError) throw updateError;
 
-      queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId, tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["marketing-items", pipelineId, tenantId],
+      });
       toast({
         title: nextStage ? "הפריט אושר והועבר לשלב הבא" : "הפריט אושר",
       });
     } catch (e: any) {
-      toast({ title: "שגיאה באישור", description: e.message, variant: "destructive" });
+      toast({
+        title: "שגיאה באישור",
+        description: e.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -547,10 +644,16 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
         .from("marketing_work_items")
         .update({ status: "draft" })
         .eq("id", itemId);
-      queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId, tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["marketing-items", pipelineId, tenantId],
+      });
       toast({ title: "הפריט נדחה וחזר לטיוטה" });
     } catch (e: any) {
-      toast({ title: "שגיאה בדחייה", description: e.message, variant: "destructive" });
+      toast({
+        title: "שגיאה בדחייה",
+        description: e.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -562,17 +665,24 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
         .eq("id", stage.id);
       toast({ title: `מצב עדכן ל-${mode}` });
     } catch (e: any) {
-      toast({ title: "שגיאה בעדכון מצב", description: e.message, variant: "destructive" });
+      toast({
+        title: "שגיאה בעדכון מצב",
+        description: e.message,
+        variant: "destructive",
+      });
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-md" dir="rtl">
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-md"
+      dir="rtl"
+    >
       {/* Header */}
       <header
         className={cn(
           "bg-gradient-to-l text-white px-6 py-4 flex items-center gap-4 shrink-0 shadow-lg",
-          cfg.headerBg
+          cfg.headerBg,
         )}
       >
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 shrink-0">
@@ -608,9 +718,24 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
                   <Bot className="h-4 w-4 text-white" />
                 </div>
                 <div className="flex gap-1 items-center bg-card/80 border border-border/50 rounded-2xl rounded-tl-sm px-4 py-3">
-                  <span className="animate-bounce text-muted-foreground" style={{ animationDelay: "0ms" }}>●</span>
-                  <span className="animate-bounce text-muted-foreground" style={{ animationDelay: "150ms" }}>●</span>
-                  <span className="animate-bounce text-muted-foreground" style={{ animationDelay: "300ms" }}>●</span>
+                  <span
+                    className="animate-bounce text-muted-foreground"
+                    style={{ animationDelay: "0ms" }}
+                  >
+                    ●
+                  </span>
+                  <span
+                    className="animate-bounce text-muted-foreground"
+                    style={{ animationDelay: "150ms" }}
+                  >
+                    ●
+                  </span>
+                  <span
+                    className="animate-bounce text-muted-foreground"
+                    style={{ animationDelay: "300ms" }}
+                  >
+                    ●
+                  </span>
                 </div>
               </div>
             )}
@@ -618,7 +743,10 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
           </div>
 
           {/* Quick prompt chips */}
-          <div className="flex gap-2 overflow-x-auto px-5 pb-2 shrink-0" dir="rtl">
+          <div
+            className="flex gap-2 overflow-x-auto px-5 pb-2 shrink-0"
+            dir="rtl"
+          >
             {cfg.quickPrompts.map((prompt) => (
               <button
                 key={prompt}
@@ -679,9 +807,18 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50 mb-3">
                   <Icon className="h-7 w-7 text-muted-foreground/50" />
                 </div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">אין פריטים בשלב זה</p>
-                <p className="text-xs text-muted-foreground/60 mb-4">לחץ להוספת פריט חדש</p>
-                <Button size="sm" variant="outline" className="text-xs gap-1" onClick={onNewItem}>
+                <p className="text-sm font-medium text-muted-foreground mb-1">
+                  אין פריטים בשלב זה
+                </p>
+                <p className="text-xs text-muted-foreground/60 mb-4">
+                  לחץ להוספת פריט חדש
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs gap-1"
+                  onClick={onNewItem}
+                >
                   <Plus className="h-3.5 w-3.5" />
                   הוסף פריט
                 </Button>

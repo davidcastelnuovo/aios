@@ -40,16 +40,23 @@ export function resolveTop20Rank(input: {
   return null;
 }
 
-export function keywordTop20Rank(kw: {
-  position?: unknown;
-  gsc_position?: unknown;
-  ahrefs_position?: unknown;
-  _source?: string;
-} | null | undefined): { position: number; source: RankSource } | null {
+export function keywordTop20Rank(
+  kw:
+    | {
+        position?: unknown;
+        gsc_position?: unknown;
+        ahrefs_position?: unknown;
+        _source?: string;
+      }
+    | null
+    | undefined,
+): { position: number; source: RankSource } | null {
   if (!kw) return null;
   const fromGsc = kw._source === "gsc";
   const gscPosition = kw.gsc_position ?? (fromGsc ? kw.position : null);
-  const ahrefsPosition = fromGsc ? kw.ahrefs_position : (kw.ahrefs_position ?? kw.position);
+  const ahrefsPosition = fromGsc
+    ? kw.ahrefs_position
+    : (kw.ahrefs_position ?? kw.position);
   return resolveTop20Rank({ ahrefsPosition, gscPosition });
 }
 
@@ -74,7 +81,10 @@ export function betterDisplayRank(input: {
  * A later sync can return the keyword list without ranks (management keywords).
  * Keep the rank, previous rank, and traffic already stored on an earlier report.
  */
-export function mergeTrackedKeywordRows(previous: unknown, next: unknown): Array<Record<string, unknown>> {
+export function mergeTrackedKeywordRows(
+  previous: unknown,
+  next: unknown,
+): Array<Record<string, unknown>> {
   const prevRows = Array.isArray(previous) ? previous : [];
   const nextRows = Array.isArray(next) ? next : [];
   if (nextRows.length === 0) return prevRows as Array<Record<string, unknown>>;
@@ -86,16 +96,27 @@ export function mergeTrackedKeywordRows(previous: unknown, next: unknown): Array
     prevByKey.set(key, row as Record<string, unknown>);
   }
   return nextRows.map((row) => {
-    const current = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
+    const current = (row && typeof row === "object" ? row : {}) as Record<
+      string,
+      unknown
+    >;
     const prev = prevByKey.get(normalizeGscQuery(current.keyword));
     if (!prev) return current;
-    const position = displayRank(current.position) ?? displayRank(prev.position);
-    const positionPrev = displayRank(current.position_prev_month) ?? displayRank(prev.position_prev_month);
+    const position =
+      displayRank(current.position) ?? displayRank(prev.position);
+    const positionPrev =
+      displayRank(current.position_prev_month) ??
+      displayRank(prev.position_prev_month);
     const nextTraffic = Number(current.traffic);
     const prevTraffic = Number(prev.traffic);
-    const traffic = Number.isFinite(nextTraffic) && nextTraffic > 0
-      ? nextTraffic
-      : (Number.isFinite(prevTraffic) && prevTraffic > 0 ? prevTraffic : (Number.isFinite(nextTraffic) ? nextTraffic : 0));
+    const traffic =
+      Number.isFinite(nextTraffic) && nextTraffic > 0
+        ? nextTraffic
+        : Number.isFinite(prevTraffic) && prevTraffic > 0
+          ? prevTraffic
+          : Number.isFinite(nextTraffic)
+            ? nextTraffic
+            : 0;
     return {
       ...prev,
       ...current,
@@ -142,14 +163,19 @@ export type GscAggregateRow = {
  * Impression-weighted position. Days with position 0 or a missing rank are
  * skipped so they cannot pull a query that is outside the top 20 into it.
  */
-export function aggregateGscQueryRows(rows: GscAggregateSample[]): GscAggregateRow[] {
-  const map = new Map<string, {
-    query: string;
-    clicks: number;
-    impressions: number;
-    posWeight: number;
-    posImpr: number;
-  }>();
+export function aggregateGscQueryRows(
+  rows: GscAggregateSample[],
+): GscAggregateRow[] {
+  const map = new Map<
+    string,
+    {
+      query: string;
+      clicks: number;
+      impressions: number;
+      posWeight: number;
+      posImpr: number;
+    }
+  >();
 
   for (const row of rows) {
     const query = String(row.query || row.keyword || "").trim();
@@ -179,6 +205,7 @@ export function aggregateGscQueryRows(rows: GscAggregateSample[]): GscAggregateR
     clicks: v.clicks,
     impressions: v.impressions,
     ctr: v.impressions > 0 ? v.clicks / v.impressions : 0,
-    position: v.posImpr > 0 ? Math.round((v.posWeight / v.posImpr) * 10) / 10 : 0,
+    position:
+      v.posImpr > 0 ? Math.round((v.posWeight / v.posImpr) * 10) / 10 : 0,
   }));
 }

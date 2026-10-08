@@ -46,14 +46,16 @@ export function InlineDialog({
         dir="rtl"
         className={cn(
           "rounded-lg border bg-card shadow-sm p-4 flex flex-col gap-3 animate-in fade-in-0 slide-in-from-top-1",
-          className
+          className,
         )}
       >
         {(title || description) && (
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
               {title && (
-                <h3 className="font-semibold leading-none tracking-tight">{title}</h3>
+                <h3 className="font-semibold leading-none tracking-tight">
+                  {title}
+                </h3>
               )}
               {description && (
                 <p className="text-sm text-muted-foreground">{description}</p>
@@ -83,11 +85,15 @@ export function InlineDialog({
         {(title || description) && (
           <DialogHeader>
             {title && <DialogTitle>{title}</DialogTitle>}
-            {description && <DialogDescription>{description}</DialogDescription>}
+            {description && (
+              <DialogDescription>{description}</DialogDescription>
+            )}
           </DialogHeader>
         )}
         {children}
-        {footer && <DialogFooter className="gap-2 sm:gap-2">{footer}</DialogFooter>}
+        {footer && (
+          <DialogFooter className="gap-2 sm:gap-2">{footer}</DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

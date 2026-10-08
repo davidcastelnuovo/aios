@@ -3,7 +3,14 @@ import { AIOSCommandBar } from "@/components/aios/AIOSCommandBar";
 import { DataCanvas } from "@/components/aios/DataCanvas";
 
 export default function AIOSDashboard() {
-  const { isLoading, statusText, dataPanels, send, removePanel, resetConversation } = useAIOS();
+  const {
+    isLoading,
+    statusText,
+    dataPanels,
+    send,
+    removePanel,
+    resetConversation,
+  } = useAIOS();
 
   return (
     <div className="flex flex-col h-full" dir="rtl">

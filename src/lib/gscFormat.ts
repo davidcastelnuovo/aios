@@ -1,5 +1,7 @@
 /** GSC CTR may be stored as 0–1 (API decimal) or 0–100 (normalized % from fetch-gsc-data). */
-export function formatGscCtrPercent(ctr: number | null | undefined): string | null {
+export function formatGscCtrPercent(
+  ctr: number | null | undefined,
+): string | null {
   if (ctr == null || !Number.isFinite(Number(ctr))) return null;
   const n = Number(ctr);
   const pct = n > 1 ? n : n * 100;

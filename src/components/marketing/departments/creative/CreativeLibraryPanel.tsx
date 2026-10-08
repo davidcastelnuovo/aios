@@ -31,7 +31,9 @@ export function CreativeLibraryPanel({
   const [query, setQuery] = useState("");
   const [ink, setInk] = useState(brandColors[0] || "#111111");
   const icons = useMemo(() => searchCreativeIcons(query).slice(0, 36), [query]);
-  const swatches = [...new Set([...brandColors, "#111111", "#ffffff", "#dc2626", "#2563eb"])].slice(0, 10);
+  const swatches = [
+    ...new Set([...brandColors, "#111111", "#ffffff", "#dc2626", "#2563eb"]),
+  ].slice(0, 10);
 
   return (
     <div className="space-y-5">
@@ -50,12 +52,15 @@ export function CreativeLibraryPanel({
               }`}
             >
               <div className="font-semibold">{item.label}</div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">{item.id}</div>
+              <div className="mt-0.5 text-[10px] text-muted-foreground">
+                {item.id}
+              </div>
             </button>
           ))}
         </div>
         <p className="mt-2 text-[11px] text-muted-foreground">
-          ג׳נרציה חדשה מגוונת בין הטמפלייטים. «לוח הצעה» נשאר לבחירה ידנית לליד־ג׳ן.
+          ג׳נרציה חדשה מגוונת בין הטמפלייטים. «לוח הצעה» נשאר לבחירה ידנית
+          לליד־ג׳ן.
         </p>
       </div>
 
@@ -63,7 +68,13 @@ export function CreativeLibraryPanel({
         <Label className="text-[11px] text-muted-foreground">צורות</Label>
         <div className="mt-2 grid grid-cols-3 gap-2">
           {CREATIVE_SHAPES.map((shape) => (
-            <Button key={shape.id} size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => onAddShape(shape.id, ink)}>
+            <Button
+              key={shape.id}
+              size="sm"
+              variant="outline"
+              className="h-8 text-[11px]"
+              onClick={() => onAddShape(shape.id, ink)}
+            >
               {shape.label}
             </Button>
           ))}
@@ -94,7 +105,9 @@ export function CreativeLibraryPanel({
       </div>
 
       <div>
-        <Label className="text-[11px] text-muted-foreground">צבע — מותג + בסיס</Label>
+        <Label className="text-[11px] text-muted-foreground">
+          צבע — מותג + בסיס
+        </Label>
         <div className="mt-2 flex flex-wrap gap-2">
           {swatches.map((color) => (
             <button
@@ -110,11 +123,18 @@ export function CreativeLibraryPanel({
             />
           ))}
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">לחיצה צובעת את השכבה הנבחרת. האייקון/הצורה הבאים ישתמשו בצבע הזה.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          לחיצה צובעת את השכבה הנבחרת. האייקון/הצורה הבאים ישתמשו בצבע הזה.
+        </p>
       </div>
 
       {logoUrl && onAddLogo && (
-        <Button size="sm" variant="outline" className="w-full" onClick={onAddLogo}>
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full"
+          onClick={onAddLogo}
+        >
           הוסף לוגו מהמותג
         </Button>
       )}

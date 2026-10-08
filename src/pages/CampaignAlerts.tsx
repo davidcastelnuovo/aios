@@ -3,7 +3,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { he } from "date-fns/locale";
-import { AlertTriangle, CheckCircle2, RefreshCw, ChevronDown, ChevronRight, Megaphone } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  Megaphone,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
@@ -34,9 +41,24 @@ type ClientWithIntegration = {
 };
 
 const severityConfig = {
-  critical: { label: "קריטיות", color: "bg-red-500", border: "border-red-200 bg-red-50/50", text: "text-red-700" },
-  warning: { label: "אזהרות", color: "bg-amber-500", border: "border-amber-200 bg-amber-50/50", text: "text-amber-700" },
-  info: { label: "מידע", color: "bg-blue-500", border: "border-blue-200 bg-blue-50/50", text: "text-blue-700" },
+  critical: {
+    label: "קריטיות",
+    color: "bg-red-500",
+    border: "border-red-200 bg-red-50/50",
+    text: "text-red-700",
+  },
+  warning: {
+    label: "אזהרות",
+    color: "bg-amber-500",
+    border: "border-amber-200 bg-amber-50/50",
+    text: "text-amber-700",
+  },
+  info: {
+    label: "מידע",
+    color: "bg-blue-500",
+    border: "border-blue-200 bg-blue-50/50",
+    text: "text-blue-700",
+  },
 } as const;
 
 const alertTypeLabels: Record<string, string> = {
@@ -52,7 +74,9 @@ export default function CampaignAlerts() {
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<"all" | "critical" | "warning" | "info">("all");
+  const [filter, setFilter] = useState<"all" | "critical" | "warning" | "info">(
+    "all",
+  );
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [scanning, setScanning] = useState(false);
 
@@ -65,7 +89,9 @@ export default function CampaignAlerts() {
         .from("clients")
         .select("id, name, meta_ads_account_id, google_ads_account_id")
         .eq("tenant_id", tenantId!)
-        .or("meta_ads_account_id.not.is.null,google_ads_account_id.not.is.null");
+        .or(
+          "meta_ads_account_id.not.is.null,google_ads_account_id.not.is.null",
+        );
       if (error) throw error;
       return (data || []) as ClientWithIntegration[];
     },
@@ -77,8 +103,12 @@ export default function CampaignAlerts() {
     return m;
   }, [clients]);
 
-  const { data: alerts = [], refetch, isFetching } = useQuery({
-    queryKey: ["campaign-alerts", tenantId, clients.map(c => c.id).join(",")],
+  const {
+    data: alerts = [],
+    refetch,
+    isFetching,
+  } = useQuery({
+    queryKey: ["campaign-alerts", tenantId, clients.map((c) => c.id).join(",")],
     enabled: !!tenantId,
     queryFn: async () => {
       if (clients.length === 0) return [] as Alert[];
@@ -87,7 +117,10 @@ export default function CampaignAlerts() {
         .select("*")
         .eq("tenant_id", tenantId!)
         .is("resolved_at", null)
-        .in("client_id", clients.map(c => c.id))
+        .in(
+          "client_id",
+          clients.map((c) => c.id),
+        )
         .order("created_at", { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -103,7 +136,7 @@ export default function CampaignAlerts() {
 
   const filtered = useMemo(() => {
     if (filter === "all") return alerts;
-    return alerts.filter(a => a.severity === filter);
+    return alerts.filter((a) => a.severity === filter);
   }, [alerts, filter]);
 
   const grouped = useMemo(() => {
@@ -115,15 +148,15 @@ export default function CampaignAlerts() {
     }
     // Sort by critical count desc
     return Array.from(map.entries()).sort(([, a], [, b]) => {
-      const ac = a.filter(x => x.severity === "critical").length;
-      const bc = b.filter(x => x.severity === "critical").length;
+      const ac = a.filter((x) => x.severity === "critical").length;
+      const bc = b.filter((x) => x.severity === "critical").length;
       if (bc !== ac) return bc - ac;
       return b.length - a.length;
     });
   }, [filtered]);
 
   const toggleClient = (id: string) =>
-    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const acknowledge = async (id: string) => {
     const { error } = await supabase
@@ -181,8 +214,15 @@ export default function CampaignAlerts() {
             {clients.length > 0 && ` · ${clients.length} לקוחות`}
           </p>
         </div>
-        <Button onClick={scanNow} disabled={scanning} variant="outline" size="sm">
-          <RefreshCw className={`h-4 w-4 ml-2 ${scanning ? "animate-spin" : ""}`} />
+        <Button
+          onClick={scanNow}
+          disabled={scanning}
+          variant="outline"
+          size="sm"
+        >
+          <RefreshCw
+            className={`h-4 w-4 ml-2 ${scanning ? "animate-spin" : ""}`}
+          />
           סרוק עכשיו
         </Button>
       </div>
@@ -211,7 +251,9 @@ export default function CampaignAlerts() {
         {clients.length === 0 ? (
           <Card className="p-12 text-center">
             <Megaphone className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <h3 className="font-semibold mb-1">אין לקוחות עם דוחות מסונכרנים</h3>
+            <h3 className="font-semibold mb-1">
+              אין לקוחות עם דוחות מסונכרנים
+            </h3>
             <p className="text-sm text-muted-foreground">
               חברו חשבון Meta Ads או Google Ads ללקוחות כדי לקבל התראות
             </p>
@@ -228,8 +270,12 @@ export default function CampaignAlerts() {
           grouped.map(([clientId, list]) => {
             const client = clientMap.get(clientId);
             const isOpen = expanded[clientId] ?? true;
-            const critCount = list.filter(a => a.severity === "critical").length;
-            const warnCount = list.filter(a => a.severity === "warning").length;
+            const critCount = list.filter(
+              (a) => a.severity === "critical",
+            ).length;
+            const warnCount = list.filter(
+              (a) => a.severity === "warning",
+            ).length;
             return (
               <Card key={clientId} className="overflow-hidden">
                 <button
@@ -237,24 +283,34 @@ export default function CampaignAlerts() {
                   className="w-full flex items-center justify-between p-4 hover:bg-muted/40 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    <span className="font-semibold text-base">{client?.name || "לקוח"}</span>
+                    {isOpen ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                    <span className="font-semibold text-base">
+                      {client?.name || "לקוח"}
+                    </span>
                     <Badge variant="outline" className="text-xs">
                       {list.length} התראות
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2">
                     {critCount > 0 && (
-                      <Badge className="bg-red-500 hover:bg-red-500">{critCount} קריטיות</Badge>
+                      <Badge className="bg-red-500 hover:bg-red-500">
+                        {critCount} קריטיות
+                      </Badge>
                     )}
                     {warnCount > 0 && (
-                      <Badge className="bg-amber-500 hover:bg-amber-500">{warnCount} אזהרות</Badge>
+                      <Badge className="bg-amber-500 hover:bg-amber-500">
+                        {warnCount} אזהרות
+                      </Badge>
                     )}
                   </div>
                 </button>
                 {isOpen && (
                   <div className="border-t divide-y">
-                    {list.map(alert => {
+                    {list.map((alert) => {
                       const cfg = severityConfig[alert.severity];
                       return (
                         <div key={alert.id} className={`p-4 ${cfg.border}`}>
@@ -262,10 +318,14 @@ export default function CampaignAlerts() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <Badge variant="outline" className={cfg.text}>
-                                  {alertTypeLabels[alert.alert_type] || alert.alert_type}
+                                  {alertTypeLabels[alert.alert_type] ||
+                                    alert.alert_type}
                                 </Badge>
                                 <span className="text-xs text-muted-foreground">
-                                  {formatDistanceToNow(new Date(alert.created_at), { addSuffix: true, locale: he })}
+                                  {formatDistanceToNow(
+                                    new Date(alert.created_at),
+                                    { addSuffix: true, locale: he },
+                                  )}
                                 </span>
                               </div>
                               <div className="font-medium truncate">
@@ -277,16 +337,26 @@ export default function CampaignAlerts() {
                                 </div>
                               )}
                               {alert.details?.message && (
-                                <p className="text-sm mt-1.5 text-muted-foreground">{alert.details.message}</p>
+                                <p className="text-sm mt-1.5 text-muted-foreground">
+                                  {alert.details.message}
+                                </p>
                               )}
                             </div>
                             <div className="flex flex-col gap-1.5 shrink-0">
                               {!alert.acknowledged_at && (
-                                <Button size="sm" variant="outline" onClick={() => acknowledge(alert.id)}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => acknowledge(alert.id)}
+                                >
                                   סמן כטופל
                                 </Button>
                               )}
-                              <Button size="sm" variant="ghost" onClick={() => resolve(alert.id)}>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => resolve(alert.id)}
+                              >
                                 סגור
                               </Button>
                             </div>

@@ -1,4 +1,5 @@
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isUuid(value) {
   return UUID_RE.test(value);
@@ -19,8 +20,8 @@ export function collectSyncedCatalog(integrations) {
 
     if (Array.isArray(sync.groups)) {
       for (const g of sync.groups) {
-        const groupChatId = String(g?.groupChatId || '').trim();
-        const groupId = String(g?.groupId || '').trim();
+        const groupChatId = String(g?.groupChatId || "").trim();
+        const groupId = String(g?.groupId || "").trim();
         if (!groupChatId || !groupId) continue;
         byChatId.set(groupChatId, {
           groupChatId,
@@ -32,11 +33,11 @@ export function collectSyncedCatalog(integrations) {
 
     if (Array.isArray(sync.group_chat_ids)) {
       for (const chatId of sync.group_chat_ids) {
-        const groupChatId = String(chatId || '').trim();
+        const groupChatId = String(chatId || "").trim();
         if (!groupChatId || byChatId.has(groupChatId)) continue;
         byChatId.set(groupChatId, {
           groupChatId,
-          groupId: '',
+          groupId: "",
           name: groupChatId,
         });
       }
@@ -76,6 +77,6 @@ export function mergeSyncCatalogWithDb(entries, dbByChatId) {
   }
 
   return [...byId.values()].sort((a, b) =>
-    String(a.group_name || '').localeCompare(String(b.group_name || ''), 'he'),
+    String(a.group_name || "").localeCompare(String(b.group_name || ""), "he"),
   );
 }

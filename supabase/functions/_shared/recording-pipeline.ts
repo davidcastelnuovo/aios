@@ -35,7 +35,10 @@ export interface RunRecordingPipelineOpts {
 }
 
 // deno-lint-ignore no-explicit-any
-export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelineOpts): Promise<void> {
+export async function runRecordingPipeline(
+  admin: any,
+  opts: RunRecordingPipelineOpts,
+): Promise<void> {
   const { recording, createdByUserId, briefSource, skipTranscribe } = opts;
   const recording_id = recording.id;
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -57,20 +60,27 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
 
   let transcription: string | null = recording.transcription;
   if (!transcription && !skipTranscribe) {
-    const transcribeResponse = await fetch(`${SUPABASE_URL}/functions/v1/transcribe-recording`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    const transcribeResponse = await fetch(
+      `${SUPABASE_URL}/functions/v1/transcribe-recording`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({ recording_id }),
       },
-      body: JSON.stringify({ recording_id }),
-    });
+    );
     if (!transcribeResponse.ok) {
-      console.error("[recording-pipeline] transcription failed:", await transcribeResponse.text());
+      console.error(
+        "[recording-pipeline] transcription failed:",
+        await transcribeResponse.text(),
+      );
       return;
     }
     const transcribeResult = await transcribeResponse.json();
-    transcription = transcribeResult.text || transcribeResult.transcription || null;
+    transcription =
+      transcribeResult.text || transcribeResult.transcription || null;
   }
 
   if (!transcription?.trim()) {
@@ -86,7 +96,13 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
 
   // Explicit internal/agency assignments must never be reclassified as client
   // meetings by the semantic matcher.
-  if (!clientId && !leadId && campaignerIds.length === 0 && !agencyId && summaryScope === "auto") {
+  if (
+    !clientId &&
+    !leadId &&
+    campaignerIds.length === 0 &&
+    !agencyId &&
+    summaryScope === "auto"
+  ) {
     const match = await matchRecordingToClient(admin, OPENAI_API_KEY, {
       tenant_id: recording.tenant_id,
       meeting_topic: meetingTopic,
@@ -102,7 +118,8 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
           .select("agency_id")
           .eq("id", clientId)
           .maybeSingle();
-        await admin.from("zoom_recordings")
+        await admin
+          .from("zoom_recordings")
           .update({
             client_id: clientId,
             agency_id: matchedClient?.agency_id || null,
@@ -112,14 +129,19 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
           })
           .eq("id", recording_id);
       } else {
-        await admin.from("zoom_recordings")
+        await admin
+          .from("zoom_recordings")
           .update({ suggested_client_id: match.clientId })
           .eq("id", recording_id);
       }
-    } else if (match.matchType === "internal" && match.campaignerIds.length > 0) {
+    } else if (
+      match.matchType === "internal" &&
+      match.campaignerIds.length > 0
+    ) {
       campaignerIds = match.campaignerIds;
       summaryScope = "campaigner";
-      await admin.from("zoom_recordings")
+      await admin
+        .from("zoom_recordings")
         .update({
           client_id: null,
           agency_id: null,
@@ -136,7 +158,10 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
     summaryScope = "agency";
   }
 
-  if (!clientId && (summaryScope === "agency" || summaryScope === "campaigner")) {
+  if (
+    !clientId &&
+    (summaryScope === "agency" || summaryScope === "campaigner")
+  ) {
     if (!agencyId) {
       const { data: agency } = await admin
         .from("agencies")
@@ -148,11 +173,14 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
         .maybeSingle();
       agencyId = agency?.id || null;
     }
-    await admin.from("zoom_recordings").update({
-      agency_id: agencyId,
-      campaigner_ids: campaignerIds,
-      summary_scope: summaryScope,
-    }).eq("id", recording_id);
+    await admin
+      .from("zoom_recordings")
+      .update({
+        agency_id: agencyId,
+        campaigner_ids: campaignerIds,
+        summary_scope: summaryScope,
+      })
+      .eq("id", recording_id);
   }
 
   const recordingInfo = `נושא הפגישה: ${meetingTopic || "לא צוין"}
@@ -189,11 +217,15 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
       .in("id", campaignerIds);
     targetType = "campaigner";
     targetId = campaignerIds[0];
-    targetName = (team || []).map((member: { full_name: string }) => member.full_name).join(", ")
-      || "פגישה פנימית";
+    targetName =
+      (team || [])
+        .map((member: { full_name: string }) => member.full_name)
+        .join(", ") || "פגישה פנימית";
   } else {
     if (!agencyId) {
-      console.error("[recording-pipeline] no agency available for general summary");
+      console.error(
+        "[recording-pipeline] no agency available for general summary",
+      );
       return;
     }
     const { data: agency } = await admin
@@ -220,14 +252,26 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
     createdBy: createdByUserId,
   });
   if (dispatched.ok) {
-    console.log("[recording-pipeline] summary sent to Cursor Direct", dispatched.external_url);
+    console.log(
+      "[recording-pipeline] summary sent to Cursor Direct",
+      dispatched.external_url,
+    );
     return;
   }
   if (dispatched.reason !== "not_configured") {
-    console.error("[recording-pipeline] Cursor Direct summary was not sent:", dispatched.reason, dispatched.detail || "");
+    console.error(
+      "[recording-pipeline] Cursor Direct summary was not sent:",
+      dispatched.reason,
+      dispatched.detail || "",
+    );
   }
 
-  const summary = await generateMeetingSummary(OPENAI_API_KEY, transcription, recordingInfo, "");
+  const summary = await generateMeetingSummary(
+    OPENAI_API_KEY,
+    transcription,
+    recordingInfo,
+    "",
+  );
 
   const { fileUrl } = await saveSummaryForTarget(admin, {
     tenant_id: recording.tenant_id,

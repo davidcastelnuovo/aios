@@ -46,8 +46,14 @@ export function resolveSignatureEmailColors(
     headerText: safeHexColor(settings?.headerText, defaults.headerText),
     buttonColor: safeHexColor(settings?.buttonColor, defaults.buttonColor),
     buttonText: safeHexColor(settings?.buttonText, defaults.buttonText),
-    pageBackground: safeHexColor(settings?.pageBackground, defaults.pageBackground),
-    cardBackground: safeHexColor(settings?.cardBackground, defaults.cardBackground),
+    pageBackground: safeHexColor(
+      settings?.pageBackground,
+      defaults.pageBackground,
+    ),
+    cardBackground: safeHexColor(
+      settings?.cardBackground,
+      defaults.cardBackground,
+    ),
     textColor: safeHexColor(settings?.textColor, defaults.textColor),
   };
 }
@@ -67,8 +73,14 @@ export interface SignatureEmailVars {
   id_number?: string;
 }
 
-export function applySignatureEmailTemplate(template: string, vars: SignatureEmailVars): string {
-  return template.replace(/\{\{\s*(name|title|sender|first_name|last_name|company|phone|email|address|id_number)\s*\}\}/g, (_match, key: string) => vars[key as keyof SignatureEmailVars] ?? "");
+export function applySignatureEmailTemplate(
+  template: string,
+  vars: SignatureEmailVars,
+): string {
+  return template.replace(
+    /\{\{\s*(name|title|sender|first_name|last_name|company|phone|email|address|id_number)\s*\}\}/g,
+    (_match, key: string) => vars[key as keyof SignatureEmailVars] ?? "",
+  );
 }
 
 export function signatureRequestSubject(
@@ -77,7 +89,10 @@ export function signatureRequestSubject(
   override?: string | null,
 ): string {
   const raw = (override ?? settings?.subject ?? "").trim() || DEFAULT_SUBJECT;
-  return applySignatureEmailTemplate(raw, vars).trim() || applySignatureEmailTemplate(DEFAULT_SUBJECT, vars);
+  return (
+    applySignatureEmailTemplate(raw, vars).trim() ||
+    applySignatureEmailTemplate(DEFAULT_SUBJECT, vars)
+  );
 }
 
 export function signatureRequestBody(

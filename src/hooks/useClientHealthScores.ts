@@ -8,10 +8,14 @@
  * the existing crm_records / dynamic-tables pipeline).
  */
 
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { calculateHealthScore, HealthInput, HealthResult } from '@/lib/healthScore';
-import { differenceInDays } from 'date-fns';
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  calculateHealthScore,
+  HealthInput,
+  HealthResult,
+} from "@/lib/healthScore";
+import { differenceInDays } from "date-fns";
 
 export interface ClientPerformanceData {
   clientId: string;
@@ -28,19 +32,19 @@ export interface ClientHealthScore extends HealthResult {
 export function useClientHealthScores(
   clientIds: string[],
   tenantId: string | null,
-  performanceData: ClientPerformanceData[] = []
+  performanceData: ClientPerformanceData[] = [],
 ) {
   // ── Fetch latest communication log per client ──────────────
   const { data: commLogs = [] } = useQuery({
-    queryKey: ['communication-logs-latest', clientIds.join(','), tenantId],
+    queryKey: ["communication-logs-latest", clientIds.join(","), tenantId],
     queryFn: async () => {
       if (!clientIds.length || !tenantId) return [];
       const { data, error } = await (supabase as any)
-        .from('communication_logs')
-        .select('client_id, status, created_at')
-        .in('client_id', clientIds)
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false });
+        .from("communication_logs")
+        .select("client_id, status, created_at")
+        .in("client_id", clientIds)
+        .eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -50,15 +54,15 @@ export function useClientHealthScores(
 
   // ── Fetch last 3 SEO entries per client ───────────────────
   const { data: seoUpdates = [] } = useQuery({
-    queryKey: ['seo-monthly-latest', clientIds.join(','), tenantId],
+    queryKey: ["seo-monthly-latest", clientIds.join(","), tenantId],
     queryFn: async () => {
       if (!clientIds.length || !tenantId) return [];
       const { data, error } = await (supabase as any)
-        .from('seo_monthly_updates')
-        .select('client_id, month, status')
-        .in('client_id', clientIds)
-        .eq('tenant_id', tenantId)
-        .order('month', { ascending: false });
+        .from("seo_monthly_updates")
+        .select("client_id, month, status")
+        .in("client_id", clientIds)
+        .eq("tenant_id", tenantId)
+        .order("month", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -80,7 +84,7 @@ export function useClientHealthScores(
     const seoHistory = seoUpdates
       .filter((s: any) => s.client_id === clientId)
       .slice(0, 3)
-      .map((s: any) => s.status as 'up' | 'stable' | 'down');
+      .map((s: any) => s.status as "up" | "stable" | "down");
 
     // Performance data from caller
     const perf = performanceData.find((p) => p.clientId === clientId);
@@ -109,18 +113,18 @@ export function useClientHealthScore(
   tenantId: string | null,
   services: string[],
   performanceChangePct: number | null = null,
-  daysSinceLastCampaignTouch: number | null = null
+  daysSinceLastCampaignTouch: number | null = null,
 ): HealthResult | null {
   const { data: commLogs = [] } = useQuery({
-    queryKey: ['communication-logs-single', clientId, tenantId],
+    queryKey: ["communication-logs-single", clientId, tenantId],
     queryFn: async () => {
       if (!clientId || !tenantId) return [];
       const { data, error } = await (supabase as any)
-        .from('communication_logs')
-        .select('client_id, status, created_at')
-        .eq('client_id', clientId)
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false })
+        .from("communication_logs")
+        .select("client_id, status, created_at")
+        .eq("client_id", clientId)
+        .eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false })
         .limit(1);
       if (error) throw error;
       return data ?? [];
@@ -130,15 +134,15 @@ export function useClientHealthScore(
   });
 
   const { data: seoUpdates = [] } = useQuery({
-    queryKey: ['seo-monthly-single', clientId, tenantId],
+    queryKey: ["seo-monthly-single", clientId, tenantId],
     queryFn: async () => {
       if (!clientId || !tenantId) return [];
       const { data, error } = await (supabase as any)
-        .from('seo_monthly_updates')
-        .select('client_id, month, status')
-        .eq('client_id', clientId)
-        .eq('tenant_id', tenantId)
-        .order('month', { ascending: false })
+        .from("seo_monthly_updates")
+        .select("client_id, month, status")
+        .eq("client_id", clientId)
+        .eq("tenant_id", tenantId)
+        .order("month", { ascending: false })
         .limit(3);
       if (error) throw error;
       return data ?? [];
@@ -152,7 +156,9 @@ export function useClientHealthScore(
     ? differenceInDays(new Date(), new Date(latestComm.created_at))
     : null;
 
-  const seoHistory = seoUpdates.map((s: any) => s.status as 'up' | 'stable' | 'down');
+  const seoHistory = seoUpdates.map(
+    (s: any) => s.status as "up" | "stable" | "down",
+  );
 
   const input: HealthInput = {
     communicationStatus: latestComm?.status ?? null,

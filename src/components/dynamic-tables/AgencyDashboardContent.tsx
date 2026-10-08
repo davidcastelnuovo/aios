@@ -11,6 +11,8 @@ interface AgencyDashboardContentProps {
 /**
  * Agency dashboard entry point — same unified pulse + campaign view as /dmm-dashboard.
  */
-export function AgencyDashboardContent({ agencyId }: AgencyDashboardContentProps) {
+export function AgencyDashboardContent({
+  agencyId,
+}: AgencyDashboardContentProps) {
   return <CampaignPulseDashboard fixedAgencyId={agencyId} showTitle={false} />;
 }

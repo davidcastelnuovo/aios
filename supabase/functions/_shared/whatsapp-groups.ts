@@ -8,17 +8,17 @@ export async function propagateWhatsappGroupInviteLink(
   groupChatId: string,
   inviteLink: string | null | undefined,
 ): Promise<void> {
-  const link = typeof inviteLink === 'string' ? inviteLink.trim() : '';
+  const link = typeof inviteLink === "string" ? inviteLink.trim() : "";
   if (!groupChatId || !link) return;
 
   const { error } = await supabase
-    .from('whatsapp_groups')
+    .from("whatsapp_groups")
     .update({ invite_link: link })
-    .eq('group_chat_id', groupChatId)
-    .neq('invite_link', link);
+    .eq("group_chat_id", groupChatId)
+    .neq("invite_link", link);
 
   if (error) {
-    console.warn('[whatsapp-groups] invite_link propagation failed', {
+    console.warn("[whatsapp-groups] invite_link propagation failed", {
       groupChatId,
       error: error.message,
     });
@@ -31,15 +31,15 @@ export async function resolveWhatsappGroupInviteLink(
   groupChatId: string | null | undefined,
   cachedLink: string | null | undefined,
 ): Promise<string | null> {
-  const link = typeof cachedLink === 'string' ? cachedLink.trim() : '';
+  const link = typeof cachedLink === "string" ? cachedLink.trim() : "";
   if (link) return link;
   if (!groupChatId) return null;
 
   const { data: siblings } = await supabase
-    .from('whatsapp_groups')
-    .select('invite_link')
-    .eq('group_chat_id', groupChatId)
-    .not('invite_link', 'is', null)
+    .from("whatsapp_groups")
+    .select("invite_link")
+    .eq("group_chat_id", groupChatId)
+    .not("invite_link", "is", null)
     .limit(1);
 
   const siblingLink = siblings?.[0]?.invite_link?.trim() || null;

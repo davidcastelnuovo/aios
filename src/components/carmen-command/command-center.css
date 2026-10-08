@@ -31,11 +31,27 @@ html:has(.cc-root) body {
   --cc-text-dim: #8fa3c4;
   background-color: var(--cc-bg);
   background-image:
-    radial-gradient(ellipse 70% 45% at 50% -8%, rgba(76, 195, 255, 0.12), transparent),
-    radial-gradient(ellipse 45% 35% at 8% 105%, rgba(59, 130, 246, 0.08), transparent),
-    repeating-linear-gradient(0deg, rgba(76, 195, 255, 0.025) 0 1px, transparent 1px 3px),
+    radial-gradient(
+      ellipse 70% 45% at 50% -8%,
+      rgba(76, 195, 255, 0.12),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 45% 35% at 8% 105%,
+      rgba(59, 130, 246, 0.08),
+      transparent
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(76, 195, 255, 0.025) 0 1px,
+      transparent 1px 3px
+    ),
     radial-gradient(rgba(76, 195, 255, 0.09) 1px, transparent 1px);
-  background-size: auto, auto, auto, 28px 28px;
+  background-size:
+    auto,
+    auto,
+    auto,
+    28px 28px;
   color: var(--cc-text);
 }
 
@@ -67,14 +83,18 @@ html:has(.cc-root) body {
   pointer-events: none;
 }
 .cc-panel::before {
-  top: 0; right: 0;
-  border-top-width: 2px; border-right-width: 2px;
+  top: 0;
+  right: 0;
+  border-top-width: 2px;
+  border-right-width: 2px;
   border-top-right-radius: 0.625rem;
   filter: drop-shadow(0 0 4px rgba(76, 195, 255, 0.6));
 }
 .cc-panel::after {
-  bottom: 0; left: 0;
-  border-bottom-width: 2px; border-left-width: 2px;
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
   border-bottom-left-radius: 0.625rem;
   filter: drop-shadow(0 0 4px rgba(76, 195, 255, 0.6));
 }
@@ -94,14 +114,20 @@ html:has(.cc-root) body {
   flex: 1;
   height: 1px;
   margin-inline-start: 0.6rem;
-  background: linear-gradient(to left, var(--cc-line-strong), rgba(76, 195, 255, 0.03));
+  background: linear-gradient(
+    to left,
+    var(--cc-line-strong),
+    rgba(76, 195, 255, 0.03)
+  );
   position: relative;
 }
 .cc-title-line::after {
   content: "";
   position: absolute;
-  left: 0; top: -2px;
-  width: 5px; height: 5px;
+  left: 0;
+  top: -2px;
+  width: 5px;
+  height: 5px;
   transform: rotate(45deg);
   background: var(--cc-accent);
   box-shadow: 0 0 6px var(--cc-accent);
@@ -111,7 +137,9 @@ html:has(.cc-root) body {
 
 .cc-title {
   letter-spacing: 0.3em;
-  text-shadow: 0 0 14px rgba(76, 195, 255, 0.8), 0 0 40px rgba(76, 195, 255, 0.35);
+  text-shadow:
+    0 0 14px rgba(76, 195, 255, 0.8),
+    0 0 40px rgba(76, 195, 255, 0.35);
 }
 
 .cc-chip {
@@ -120,14 +148,21 @@ html:has(.cc-root) body {
   gap: 0.4rem;
   border: 1px solid var(--cc-line);
   background: rgba(9, 16, 34, 0.8);
-  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  clip-path: polygon(
+    8px 0,
+    100% 0,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0 100%,
+    0 8px
+  );
   padding: 0.25rem 0.75rem;
 }
 
 /* ---------- Numbers / data ---------- */
 
 .cc-num {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   direction: ltr;
   unicode-bidi: isolate;
@@ -136,10 +171,21 @@ html:has(.cc-root) body {
 /* ---------- Motion ---------- */
 
 @keyframes cc-pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 6px var(--cc-ok); }
-  50% { opacity: 0.5; transform: scale(0.8); box-shadow: 0 0 2px var(--cc-ok); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 6px var(--cc-ok);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+    box-shadow: 0 0 2px var(--cc-ok);
+  }
 }
-.cc-live-dot { animation: cc-pulse-dot 2.2s ease-in-out infinite; }
+.cc-live-dot {
+  animation: cc-pulse-dot 2.2s ease-in-out infinite;
+}
 
 /* the "talk to Carmen" bar gets a stronger presence */
 .cc-talkbar {
@@ -361,7 +407,10 @@ html:has(.cc-root) body {
   background: rgba(8, 16, 34, 0.75);
   padding: 0;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 .cc-seat-btn:hover {
   border-color: var(--cc-line-strong);
@@ -385,7 +434,9 @@ html:has(.cc-root) body {
   background-position: center bottom;
   filter: drop-shadow(0 0 4px rgba(76, 195, 255, 0.2));
   opacity: 0.72;
-  transition: opacity 0.15s ease, filter 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    filter 0.15s ease;
 }
 .cc-seat-btn.is-active .cc-seat-sprite {
   opacity: 1;
@@ -406,10 +457,22 @@ html:has(.cc-root) body {
   background-position: center bottom;
   opacity: 0.8;
 }
-.cc-seat-cluster-dot.is-cursor { left: 0; bottom: 2px; }
-.cc-seat-cluster-dot.is-grok { right: 0; bottom: 2px; }
-.cc-seat-cluster-dot.is-codex { left: 50%; top: 0; transform: translateX(-50%); }
-.cc-seat-btn.is-active .cc-seat-cluster-dot { opacity: 1; }
+.cc-seat-cluster-dot.is-cursor {
+  left: 0;
+  bottom: 2px;
+}
+.cc-seat-cluster-dot.is-grok {
+  right: 0;
+  bottom: 2px;
+}
+.cc-seat-cluster-dot.is-codex {
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+}
+.cc-seat-btn.is-active .cc-seat-cluster-dot {
+  opacity: 1;
+}
 
 /* ---------- Chat messages with avatars ---------- */
 
@@ -506,7 +569,9 @@ html:has(.cc-root) body {
   border: 1px solid var(--cc-line-strong);
   border-radius: 0.625rem;
   background: rgba(8, 16, 34, 0.98);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(76, 195, 255, 0.12);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.45),
+    0 0 24px rgba(76, 195, 255, 0.12);
   padding: 0.7rem 0.75rem;
   color: var(--cc-text);
 }
@@ -582,8 +647,12 @@ html:has(.cc-root) body {
   text-align: right;
   color: var(--cc-text);
 }
-.cc-chat-topic:hover { background: rgba(76, 195, 255, 0.08); }
-.cc-chat-topic.is-active { background: rgba(76, 195, 255, 0.14); }
+.cc-chat-topic:hover {
+  background: rgba(76, 195, 255, 0.08);
+}
+.cc-chat-topic.is-active {
+  background: rgba(76, 195, 255, 0.14);
+}
 .cc-chat-topic-agent-wrap {
   position: relative;
   flex-shrink: 0;
@@ -628,28 +697,57 @@ html:has(.cc-root) body {
 }
 
 @keyframes cc-mic-ring {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(76, 195, 255, 0.35), 0 0 12px rgba(76, 195, 255, 0.4); }
-  50% { box-shadow: 0 0 0 7px rgba(76, 195, 255, 0), 0 0 18px rgba(76, 195, 255, 0.6); }
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(76, 195, 255, 0.35),
+      0 0 12px rgba(76, 195, 255, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 0 7px rgba(76, 195, 255, 0),
+      0 0 18px rgba(76, 195, 255, 0.6);
+  }
 }
-.cc-mic { animation: cc-mic-ring 2.6s ease-in-out infinite; }
+.cc-mic {
+  animation: cc-mic-ring 2.6s ease-in-out infinite;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .cc-live-dot, .cc-mic { animation: none; }
+  .cc-live-dot,
+  .cc-mic {
+    animation: none;
+  }
   .cc-orb-mist::before,
   .cc-orb-mist::after,
-  .cc-orb-glow { animation: none; }
-  .cc-root * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  .cc-orb-glow {
+    animation: none;
+  }
+  .cc-root * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
   /* CarmenFace checks the media query itself and renders a calm static frame */
 }
 
-.cc-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-.cc-scroll::-webkit-scrollbar-thumb { background: rgba(76, 195, 255, 0.25); border-radius: 3px; }
-.cc-scroll::-webkit-scrollbar-track { background: transparent; }
+.cc-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.cc-scroll::-webkit-scrollbar-thumb {
+  background: rgba(76, 195, 255, 0.25);
+  border-radius: 3px;
+}
+.cc-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
 
 /* ---------- Markdown reports in the chat (tables etc.) ---------- */
 
 /* Wide pulse-check tables scroll inside the bubble instead of breaking layout */
-.cc-md { overflow-x: auto; }
+.cc-md {
+  overflow-x: auto;
+}
 
 .cc-md table {
   width: 100%;
@@ -674,9 +772,15 @@ html:has(.cc-root) body {
   border-bottom: 1px solid var(--cc-line);
   vertical-align: top;
 }
-.cc-md tbody tr:last-child td { border-bottom: none; }
-.cc-md tbody tr:nth-child(even) { background: rgba(76, 195, 255, 0.04); }
-.cc-md tbody tr:hover { background: rgba(76, 195, 255, 0.09); }
+.cc-md tbody tr:last-child td {
+  border-bottom: none;
+}
+.cc-md tbody tr:nth-child(even) {
+  background: rgba(76, 195, 255, 0.04);
+}
+.cc-md tbody tr:hover {
+  background: rgba(76, 195, 255, 0.09);
+}
 
 /* ---------- Knights of the Round Table — orb council ---------- */
 
@@ -750,17 +854,37 @@ html:has(.cc-root) body {
 .cc-orb-mist::before {
   inset: -25%;
   background:
-    radial-gradient(circle at 38% 42%, rgba(139, 92, 246, 0.62) 0%, transparent 52%),
-    radial-gradient(circle at 62% 58%, rgba(59, 130, 246, 0.48) 0%, transparent 50%),
+    radial-gradient(
+      circle at 38% 42%,
+      rgba(139, 92, 246, 0.62) 0%,
+      transparent 52%
+    ),
+    radial-gradient(
+      circle at 62% 58%,
+      rgba(59, 130, 246, 0.48) 0%,
+      transparent 50%
+    ),
     radial-gradient(circle at 50% 55%, #140a2e 0%, #060412 68%, #030208 100%);
   animation: cc-orb-mist-drift 16s ease-in-out infinite;
 }
 .cc-orb-mist::after {
   inset: 0;
   background:
-    radial-gradient(circle at 28% 68%, rgba(80, 230, 255, 0.28) 0%, transparent 42%),
-    radial-gradient(circle at 72% 32%, rgba(210, 180, 255, 0.32) 0%, transparent 46%),
-    radial-gradient(circle at 50% 88%, rgba(76, 195, 255, 0.12) 0%, transparent 38%);
+    radial-gradient(
+      circle at 28% 68%,
+      rgba(80, 230, 255, 0.28) 0%,
+      transparent 42%
+    ),
+    radial-gradient(
+      circle at 72% 32%,
+      rgba(210, 180, 255, 0.32) 0%,
+      transparent 46%
+    ),
+    radial-gradient(
+      circle at 50% 88%,
+      rgba(76, 195, 255, 0.12) 0%,
+      transparent 38%
+    );
   animation: cc-orb-mist-drift-alt 18s ease-in-out infinite;
   animation-delay: -7s;
 }
@@ -773,9 +897,22 @@ html:has(.cc-root) body {
   pointer-events: none;
   z-index: 2;
   background:
-    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.14) 0%, transparent 38%),
-    radial-gradient(circle at 50% 100%, rgba(76, 195, 255, 0.1) 0%, transparent 42%),
-    radial-gradient(circle at 50% 50%, transparent 48%, rgba(4, 8, 22, 0.72) 78%, rgba(2, 4, 12, 0.92) 100%);
+    radial-gradient(
+      circle at 50% 18%,
+      rgba(255, 255, 255, 0.14) 0%,
+      transparent 38%
+    ),
+    radial-gradient(
+      circle at 50% 100%,
+      rgba(76, 195, 255, 0.1) 0%,
+      transparent 42%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 48%,
+      rgba(4, 8, 22, 0.72) 78%,
+      rgba(2, 4, 12, 0.92) 100%
+    );
   border: 1.5px solid rgba(186, 210, 255, 0.38);
   box-shadow:
     inset 0 0 32px rgba(20, 12, 48, 0.85),
@@ -811,7 +948,11 @@ html:has(.cc-root) body {
   border-radius: 50%;
   pointer-events: none;
   z-index: 0;
-  background: radial-gradient(circle, rgba(124, 92, 255, 0.2) 0%, transparent 68%);
+  background: radial-gradient(
+    circle,
+    rgba(124, 92, 255, 0.2) 0%,
+    transparent 68%
+  );
   animation: cc-orb-halo 5s ease-in-out infinite;
 }
 
@@ -821,7 +962,11 @@ html:has(.cc-root) body {
   height: 12px;
   margin-top: 4px;
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(76, 195, 255, 0.28) 0%, transparent 72%);
+  background: radial-gradient(
+    ellipse,
+    rgba(76, 195, 255, 0.28) 0%,
+    transparent 72%
+  );
   filter: blur(5px);
   pointer-events: none;
 }
@@ -858,28 +1003,67 @@ html:has(.cc-root) body {
     0 10px 28px rgba(0, 0, 0, 0.4);
 }
 .cc-orb-sphere.is-live .cc-orb-glow {
-  background: radial-gradient(circle, rgba(251, 191, 36, 0.22) 0%, transparent 68%);
+  background: radial-gradient(
+    circle,
+    rgba(251, 191, 36, 0.22) 0%,
+    transparent 68%
+  );
 }
 .cc-orb-sphere.is-live .cc-orb-mist::before {
   background:
-    radial-gradient(circle at 38% 42%, rgba(251, 191, 36, 0.35) 0%, transparent 52%),
-    radial-gradient(circle at 62% 58%, rgba(139, 92, 246, 0.55) 0%, transparent 50%),
+    radial-gradient(
+      circle at 38% 42%,
+      rgba(251, 191, 36, 0.35) 0%,
+      transparent 52%
+    ),
+    radial-gradient(
+      circle at 62% 58%,
+      rgba(139, 92, 246, 0.55) 0%,
+      transparent 50%
+    ),
     radial-gradient(circle at 50% 55%, #140a2e 0%, #060412 68%, #030208 100%);
 }
 
 @keyframes cc-orb-mist-drift {
-  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.82; }
-  33% { transform: translate(6%, -5%) scale(1.06); opacity: 0.95; }
-  66% { transform: translate(-5%, 4%) scale(0.96); opacity: 0.88; }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.82;
+  }
+  33% {
+    transform: translate(6%, -5%) scale(1.06);
+    opacity: 0.95;
+  }
+  66% {
+    transform: translate(-5%, 4%) scale(0.96);
+    opacity: 0.88;
+  }
 }
 @keyframes cc-orb-mist-drift-alt {
-  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.65; }
-  40% { transform: translate(-4%, 6%) scale(1.04); opacity: 0.85; }
-  70% { transform: translate(5%, -3%) scale(0.98); opacity: 0.72; }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.65;
+  }
+  40% {
+    transform: translate(-4%, 6%) scale(1.04);
+    opacity: 0.85;
+  }
+  70% {
+    transform: translate(5%, -3%) scale(0.98);
+    opacity: 0.72;
+  }
 }
 @keyframes cc-orb-halo {
-  0%, 100% { opacity: 0.55; transform: scale(0.97); }
-  50% { opacity: 1; transform: scale(1.03); }
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
 }
 
 /* Legacy flat table — kept for thinking galaxy reuse */
@@ -897,7 +1081,12 @@ html:has(.cc-root) body {
   transform: translate(-50%, -50%) rotateX(56deg);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.55) 0 1.2%, rgba(196, 168, 255, 0.28) 6%, transparent 18%),
+    radial-gradient(
+      circle at 50% 48%,
+      rgba(255, 255, 255, 0.55) 0 1.2%,
+      rgba(196, 168, 255, 0.28) 6%,
+      transparent 18%
+    ),
     radial-gradient(ellipse at 50% 50%, #1a1038 0%, #070614 58%, #04040c 100%);
   border: 2px solid rgba(168, 150, 255, 0.42);
   box-shadow:
@@ -915,19 +1104,18 @@ html:has(.cc-root) body {
   pointer-events: none;
 }
 .cc-roundtable-table::before {
-  background:
-    conic-gradient(
-      from 210deg,
-      transparent 0 6%,
-      rgba(90, 170, 255, 0.22) 12%,
-      transparent 20%,
-      rgba(176, 92, 255, 0.28) 32%,
-      transparent 42%,
-      rgba(255, 176, 92, 0.16) 54%,
-      transparent 64%,
-      rgba(80, 230, 255, 0.2) 76%,
-      transparent 88%
-    );
+  background: conic-gradient(
+    from 210deg,
+    transparent 0 6%,
+    rgba(90, 170, 255, 0.22) 12%,
+    transparent 20%,
+    rgba(176, 92, 255, 0.28) 32%,
+    transparent 42%,
+    rgba(255, 176, 92, 0.16) 54%,
+    transparent 64%,
+    rgba(80, 230, 255, 0.2) 76%,
+    transparent 88%
+  );
   animation: cc-galaxy-spin 26s linear infinite;
   filter: blur(0.6px);
   opacity: 0.95;
@@ -935,9 +1123,23 @@ html:has(.cc-root) body {
 .cc-roundtable-table::after {
   inset: 14%;
   background:
-    radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.85) 0 2%, rgba(210, 180, 255, 0.35) 10%, transparent 24%),
-    radial-gradient(circle at 58% 62%, rgba(90, 170, 255, 0.28), transparent 32%),
-    radial-gradient(circle at 50% 50%, rgba(40, 16, 80, 0.15) 0 18%, rgba(8, 6, 20, 0.55) 55%, #04040c 78%);
+    radial-gradient(
+      circle at 42% 38%,
+      rgba(255, 255, 255, 0.85) 0 2%,
+      rgba(210, 180, 255, 0.35) 10%,
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 58% 62%,
+      rgba(90, 170, 255, 0.28),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(40, 16, 80, 0.15) 0 18%,
+      rgba(8, 6, 20, 0.55) 55%,
+      #04040c 78%
+    );
   animation: cc-galaxy-expand 7.5s ease-in-out infinite;
   box-shadow: inset 0 0 28px rgba(12, 8, 36, 0.65);
 }
@@ -949,11 +1151,20 @@ html:has(.cc-root) body {
     inset 0 0 28px rgba(8, 6, 24, 0.85);
 }
 @keyframes cc-galaxy-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 @keyframes cc-galaxy-expand {
-  0%, 100% { transform: scale(0.78); opacity: 0.7; }
-  50% { transform: scale(1.18); opacity: 1; }
+  0%,
+  100% {
+    transform: scale(0.78);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
 }
 
 .cc-thinking {
@@ -970,14 +1181,21 @@ html:has(.cc-root) body {
   overflow: hidden;
   isolation: isolate;
   background:
-    radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.7) 0 4%, rgba(196, 168, 255, 0.3) 12%, transparent 28%),
+    radial-gradient(
+      circle at 50% 48%,
+      rgba(255, 255, 255, 0.7) 0 4%,
+      rgba(196, 168, 255, 0.3) 12%,
+      transparent 28%
+    ),
     radial-gradient(ellipse at 50% 50%, #1a1038 0%, #070614 70%, #04040c 100%);
   border: 1px solid rgba(168, 150, 255, 0.45);
   box-shadow:
     0 0 20px rgba(124, 92, 255, 0.38),
     inset 0 0 14px rgba(8, 6, 24, 0.85);
 }
-.cc-thinking.is-sm { padding: 0; }
+.cc-thinking.is-sm {
+  padding: 0;
+}
 .cc-thinking.is-sm .cc-thinking-galaxy {
   width: 22px;
   height: 22px;
@@ -992,28 +1210,41 @@ html:has(.cc-root) body {
   pointer-events: none;
 }
 .cc-thinking-galaxy::before {
-  background:
-    conic-gradient(
-      from 210deg,
-      transparent 0 6%,
-      rgba(90, 170, 255, 0.28) 12%,
-      transparent 20%,
-      rgba(176, 92, 255, 0.34) 32%,
-      transparent 42%,
-      rgba(255, 176, 92, 0.2) 54%,
-      transparent 64%,
-      rgba(80, 230, 255, 0.26) 76%,
-      transparent 88%
-    );
+  background: conic-gradient(
+    from 210deg,
+    transparent 0 6%,
+    rgba(90, 170, 255, 0.28) 12%,
+    transparent 20%,
+    rgba(176, 92, 255, 0.34) 32%,
+    transparent 42%,
+    rgba(255, 176, 92, 0.2) 54%,
+    transparent 64%,
+    rgba(80, 230, 255, 0.26) 76%,
+    transparent 88%
+  );
   animation: cc-galaxy-spin 3.6s linear infinite;
   filter: blur(0.4px);
 }
 .cc-thinking-galaxy::after {
   inset: 16%;
   background:
-    radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.9) 0 3%, rgba(210, 180, 255, 0.4) 12%, transparent 26%),
-    radial-gradient(circle at 58% 62%, rgba(90, 170, 255, 0.32), transparent 34%),
-    radial-gradient(circle at 50% 50%, rgba(40, 16, 80, 0.12) 0 18%, rgba(8, 6, 20, 0.5) 55%, #04040c 78%);
+    radial-gradient(
+      circle at 42% 38%,
+      rgba(255, 255, 255, 0.9) 0 3%,
+      rgba(210, 180, 255, 0.4) 12%,
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 58% 62%,
+      rgba(90, 170, 255, 0.32),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(40, 16, 80, 0.12) 0 18%,
+      rgba(8, 6, 20, 0.5) 55%,
+      #04040c 78%
+    );
   animation: cc-galaxy-expand 2.2s ease-in-out infinite;
 }
 
@@ -1045,16 +1276,45 @@ html:has(.cc-root) body {
   font-size: 9px;
 }
 
-.cc-ghost-aura[data-seat="carmen"] { background: #4cc3ff; }
-.cc-ghost-aura[data-seat="cursor"] { background: #60a5fa; }
-.cc-ghost-aura[data-seat="grok"] { background: #fbbf24; }
-.cc-ghost-aura[data-seat="codex"] { background: #e7d3a1; }
+.cc-ghost-aura[data-seat="carmen"] {
+  background: #4cc3ff;
+}
+.cc-ghost-aura[data-seat="cursor"] {
+  background: #60a5fa;
+}
+.cc-ghost-aura[data-seat="grok"] {
+  background: #fbbf24;
+}
+.cc-ghost-aura[data-seat="codex"] {
+  background: #e7d3a1;
+}
 
-.cc-ghost-south { left: 50%; bottom: 8px; z-index: 5; transform: translateX(-50%); }
-.cc-ghost-south .cc-ghost-sprite { width: 86px; height: 110px; }
-.cc-ghost-west { left: 2%; top: 28%; z-index: 4; }
-.cc-ghost-east { right: 2%; top: 28%; z-index: 4; }
-.cc-ghost-north { left: 50%; top: 10%; z-index: 1; transform: translateX(-50%); }
+.cc-ghost-south {
+  left: 50%;
+  bottom: 8px;
+  z-index: 5;
+  transform: translateX(-50%);
+}
+.cc-ghost-south .cc-ghost-sprite {
+  width: 86px;
+  height: 110px;
+}
+.cc-ghost-west {
+  left: 2%;
+  top: 28%;
+  z-index: 4;
+}
+.cc-ghost-east {
+  right: 2%;
+  top: 28%;
+  z-index: 4;
+}
+.cc-ghost-north {
+  left: 50%;
+  top: 10%;
+  z-index: 1;
+  transform: translateX(-50%);
+}
 
 .cc-ghost-aura {
   position: absolute;
@@ -1065,10 +1325,18 @@ html:has(.cc-root) body {
   opacity: 0.55;
   animation: cc-ghost-float 3.6s ease-in-out infinite;
 }
-.cc-ghost-south .cc-ghost-aura { background: #4cc3ff; }
-.cc-ghost-west .cc-ghost-aura { background: #60a5fa; }
-.cc-ghost-east .cc-ghost-aura { background: #fbbf24; }
-.cc-ghost-north .cc-ghost-aura { background: #e7d3a1; }
+.cc-ghost-south .cc-ghost-aura {
+  background: #4cc3ff;
+}
+.cc-ghost-west .cc-ghost-aura {
+  background: #60a5fa;
+}
+.cc-ghost-east .cc-ghost-aura {
+  background: #fbbf24;
+}
+.cc-ghost-north .cc-ghost-aura {
+  background: #e7d3a1;
+}
 
 .cc-ghost-sprite {
   position: relative;
@@ -1080,11 +1348,20 @@ html:has(.cc-root) body {
   filter: drop-shadow(0 0 6px rgba(76, 195, 255, 0.22));
   opacity: 0.62;
   animation: cc-ghost-float 3.6s ease-in-out infinite;
-  transition: opacity 0.2s ease, filter 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    filter 0.2s ease,
+    transform 0.2s ease;
 }
-.cc-ghost-west .cc-ghost-sprite { animation-delay: 0.4s; }
-.cc-ghost-east .cc-ghost-sprite { animation-delay: 0.9s; }
-.cc-ghost-north .cc-ghost-sprite { animation-delay: 1.3s; }
+.cc-ghost-west .cc-ghost-sprite {
+  animation-delay: 0.4s;
+}
+.cc-ghost-east .cc-ghost-sprite {
+  animation-delay: 0.9s;
+}
+.cc-ghost-north .cc-ghost-sprite {
+  animation-delay: 1.3s;
+}
 
 .cc-ghost-body {
   position: relative;
@@ -1117,18 +1394,23 @@ html:has(.cc-root) body {
 }
 .cc-ghost.is-selected .cc-ghost-sprite {
   opacity: 1;
-  filter:
-    drop-shadow(0 0 10px rgba(76, 195, 255, 0.95))
+  filter: drop-shadow(0 0 10px rgba(76, 195, 255, 0.95))
     drop-shadow(0 0 24px rgba(76, 195, 255, 0.7));
 }
 .cc-ghost-orbit.is-selected {
   transform: translate(-50%, -50%) scale(1.08);
   z-index: 6;
 }
-.cc-ghost.is-selected.cc-ghost-south { transform: translateX(-50%) scale(1.08); }
-.cc-ghost.is-selected.cc-ghost-north { transform: translateX(-50%) scale(1.08); }
+.cc-ghost.is-selected.cc-ghost-south {
+  transform: translateX(-50%) scale(1.08);
+}
+.cc-ghost.is-selected.cc-ghost-north {
+  transform: translateX(-50%) scale(1.08);
+}
 .cc-ghost.is-selected.cc-ghost-west,
-.cc-ghost.is-selected.cc-ghost-east { transform: scale(1.08); }
+.cc-ghost.is-selected.cc-ghost-east {
+  transform: scale(1.08);
+}
 .cc-ghost.is-selected .cc-ghost-aura {
   opacity: 0.95;
   height: 48px;
@@ -1160,7 +1442,10 @@ html:has(.cc-root) body {
   color: var(--cc-text);
   z-index: 3;
 }
-.cc-ghost-north .cc-ghost-bubble { bottom: auto; top: -10px; }
+.cc-ghost-north .cc-ghost-bubble {
+  bottom: auto;
+  top: -10px;
+}
 .cc-ghost-bubble-meta {
   display: block;
   margin-bottom: 2px;
@@ -1173,7 +1458,9 @@ html:has(.cc-root) body {
   font-size: 9px;
   color: var(--cc-accent);
 }
-.cc-ghost-clarify:hover { text-decoration: underline; }
+.cc-ghost-clarify:hover {
+  text-decoration: underline;
+}
 
 .cc-roundtable-log {
   margin: 0.4rem 0 0;
@@ -1197,8 +1484,13 @@ html:has(.cc-root) body {
 }
 
 @keyframes cc-ghost-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 .cc-direct-stage {
@@ -1224,8 +1516,7 @@ html:has(.cc-root) body {
   height: min(46%, 320px);
   max-height: calc(100% - 48px);
   opacity: 1;
-  filter:
-    drop-shadow(0 0 14px rgba(76, 195, 255, 0.7))
+  filter: drop-shadow(0 0 14px rgba(76, 195, 255, 0.7))
     drop-shadow(0 0 28px rgba(76, 195, 255, 0.35));
 }
 .cc-ghost-solo .cc-ghost-aura {
@@ -1240,20 +1531,50 @@ html:has(.cc-root) body {
 }
 
 @media (max-width: 640px) {
-  .cc-visual-pane { height: clamp(200px, 34dvh, 300px); min-height: 200px; }
-  .cc-roundtable-stage { min-height: 0; }
-  .cc-orb-sphere { width: min(40vw, 118px); height: min(40vw, 118px); }
-  .cc-orb-shadow { width: min(32vw, 88px); height: 10px; }
-  .cc-ghost-orbit { width: 72px; }
-  .cc-ghost-orbit.is-compact .cc-ghost-sprite { width: 50px; height: 64px; }
-  .cc-ghost-orbit .cc-ghost-bubble { width: 100px; font-size: 8px; bottom: 78px; }
-  .cc-roundtable { padding: 0.25rem 0.35rem 0.1rem; }
-  .cc-roundtable-log { display: none; }
+  .cc-visual-pane {
+    height: clamp(200px, 34dvh, 300px);
+    min-height: 200px;
+  }
+  .cc-roundtable-stage {
+    min-height: 0;
+  }
+  .cc-orb-sphere {
+    width: min(40vw, 118px);
+    height: min(40vw, 118px);
+  }
+  .cc-orb-shadow {
+    width: min(32vw, 88px);
+    height: 10px;
+  }
+  .cc-ghost-orbit {
+    width: 72px;
+  }
+  .cc-ghost-orbit.is-compact .cc-ghost-sprite {
+    width: 50px;
+    height: 64px;
+  }
+  .cc-ghost-orbit .cc-ghost-bubble {
+    width: 100px;
+    font-size: 8px;
+    bottom: 78px;
+  }
+  .cc-roundtable {
+    padding: 0.25rem 0.35rem 0.1rem;
+  }
+  .cc-roundtable-log {
+    display: none;
+  }
   .cc-ghost.is-selected.cc-ghost-south,
-  .cc-ghost.is-selected.cc-ghost-north { transform: translateX(-50%); }
+  .cc-ghost.is-selected.cc-ghost-north {
+    transform: translateX(-50%);
+  }
   .cc-ghost.is-selected.cc-ghost-west,
-  .cc-ghost.is-selected.cc-ghost-east { transform: none; }
-  .cc-ghost-orbit.is-selected { transform: translate(-50%, -50%) scale(1.04); }
+  .cc-ghost.is-selected.cc-ghost-east {
+    transform: none;
+  }
+  .cc-ghost-orbit.is-selected {
+    transform: translate(-50%, -50%) scale(1.04);
+  }
 }
 
 @media (max-width: 1023px) {

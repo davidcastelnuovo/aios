@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -24,7 +28,10 @@ interface ManualROICardProps {
    * who don't have a Supabase session), it's called instead of the default
    * direct Supabase update.
    */
-  saveFn?: (manual_roi: { closures: number | null; revenue: number | null }) => Promise<void>;
+  saveFn?: (manual_roi: {
+    closures: number | null;
+    revenue: number | null;
+  }) => Promise<void>;
 }
 
 export function ManualROICard({
@@ -39,10 +46,10 @@ export function ManualROICard({
   saveFn,
 }: ManualROICardProps) {
   const [closures, setClosures] = useState<string>(
-    initialClosures != null ? String(initialClosures) : ""
+    initialClosures != null ? String(initialClosures) : "",
   );
   const [revenue, setRevenue] = useState<string>(
-    initialRevenue != null ? String(initialRevenue) : ""
+    initialRevenue != null ? String(initialRevenue) : "",
   );
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef<number | null>(null);
@@ -75,8 +82,8 @@ export function ManualROICard({
       } else {
         if (!tableId) return;
         // Merge-only patch so currency / sync metadata are not wiped by a stale settings blob.
-        const { error } = await supabase.functions.invoke('crm-tables', {
-          method: 'PATCH',
+        const { error } = await supabase.functions.invoke("crm-tables", {
+          method: "PATCH",
           body: {
             table_id: tableId,
             integration_settings: { manual_roi: payload },
@@ -99,8 +106,18 @@ export function ManualROICard({
   const formatCurrency = (n: number) =>
     `${currency}${n.toLocaleString("he-IL", { maximumFractionDigits: 0 })}`;
 
-  const profitColor = profit > 0 ? "text-green-600" : profit < 0 ? "text-red-600" : "text-muted-foreground";
-  const roiColor = roi > 0 ? "text-green-600" : roi < 0 ? "text-red-600" : "text-muted-foreground";
+  const profitColor =
+    profit > 0
+      ? "text-green-600"
+      : profit < 0
+        ? "text-red-600"
+        : "text-muted-foreground";
+  const roiColor =
+    roi > 0
+      ? "text-green-600"
+      : roi < 0
+        ? "text-red-600"
+        : "text-muted-foreground";
 
   const [open, setOpen] = useState(false);
 
@@ -114,7 +131,9 @@ export function ManualROICard({
             />
             <h3 className="font-semibold text-base">סיכום ROI ידני</h3>
           </CollapsibleTrigger>
-          {saving && <span className="text-xs text-muted-foreground">שומר...</span>}
+          {saving && (
+            <span className="text-xs text-muted-foreground">שומר...</span>
+          )}
         </div>
 
         <CollapsibleContent>
@@ -131,7 +150,9 @@ export function ManualROICard({
             <div>
               <div className="text-muted-foreground text-xs">סגירות</div>
               {readOnly ? (
-                <div className="font-medium">{hasData ? closuresNum.toLocaleString("he-IL") : "—"}</div>
+                <div className="font-medium">
+                  {hasData ? closuresNum.toLocaleString("he-IL") : "—"}
+                </div>
               ) : (
                 <Input
                   type="number"
@@ -150,7 +171,9 @@ export function ManualROICard({
             <div>
               <div className="text-muted-foreground text-xs">הכנסות</div>
               {readOnly ? (
-                <div className="font-medium">{hasData ? formatCurrency(revenueNum) : "—"}</div>
+                <div className="font-medium">
+                  {hasData ? formatCurrency(revenueNum) : "—"}
+                </div>
               ) : (
                 <Input
                   type="number"
@@ -173,15 +196,24 @@ export function ManualROICard({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t text-sm">
               <div>
                 <div className="text-muted-foreground text-xs">אחוז סגירה</div>
-                <div className="font-medium">{closingRate.toLocaleString("he-IL", { maximumFractionDigits: 1 })}%</div>
+                <div className="font-medium">
+                  {closingRate.toLocaleString("he-IL", {
+                    maximumFractionDigits: 1,
+                  })}
+                  %
+                </div>
               </div>
               <div>
                 <div className="text-muted-foreground text-xs">עלות לסגירה</div>
-                <div className="font-medium">{closuresNum > 0 ? formatCurrency(costPerClosure) : "—"}</div>
+                <div className="font-medium">
+                  {closuresNum > 0 ? formatCurrency(costPerClosure) : "—"}
+                </div>
               </div>
               <div>
                 <div className="text-muted-foreground text-xs">רווח</div>
-                <div className={`font-semibold ${profitColor}`}>{formatCurrency(profit)}</div>
+                <div className={`font-semibold ${profitColor}`}>
+                  {formatCurrency(profit)}
+                </div>
               </div>
               <div>
                 <div className="text-muted-foreground text-xs">ROI</div>

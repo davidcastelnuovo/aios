@@ -21,17 +21,23 @@ interface DeleteTenantDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function DeleteTenantDialog({ tenant, open, onOpenChange }: DeleteTenantDialogProps) {
+export function DeleteTenantDialog({
+  tenant,
+  open,
+  onOpenChange,
+}: DeleteTenantDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [confirmText, setConfirmText] = useState("");
 
   const deleteMutation = useMutation({
     mutationFn: async (tenantId: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('לא מחובר למערכת');
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("לא מחובר למערכת");
 
-      const response = await supabase.functions.invoke('delete-tenant', {
+      const response = await supabase.functions.invoke("delete-tenant", {
         body: { tenant_id: tenantId },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -40,7 +46,7 @@ export function DeleteTenantDialog({ tenant, open, onOpenChange }: DeleteTenantD
 
       if (response.error) throw response.error;
       if (response.data?.error) throw new Error(response.data.error);
-      
+
       return response.data;
     },
     onSuccess: () => {
@@ -95,7 +101,8 @@ export function DeleteTenantDialog({ tenant, open, onOpenChange }: DeleteTenantD
         <div className="space-y-4 pt-2">
           <div>
             <Label htmlFor="confirm">
-              הקלד את שם הארגון <span className="font-bold">"{tenant?.name}"</span> לאישור המחיקה:
+              הקלד את שם הארגון{" "}
+              <span className="font-bold">"{tenant?.name}"</span> לאישור המחיקה:
             </Label>
             <Input
               id="confirm"

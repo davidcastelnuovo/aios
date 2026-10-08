@@ -3,7 +3,13 @@ import DOMPurify from "dompurify";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { shouldShowQueryError } from "@/lib/queryUi";
@@ -15,16 +21,31 @@ import { he } from "date-fns/locale";
 import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
 // MaskyooSiblingCard moved to SeoReportTabs as a separate tab
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
-import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./seo/GscIntegration";
-import { ahrefsPositionsFromReports, displayRank, finiteRank, normalizeGscQuery } from "@/lib/gscPosition";
-import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
+import {
+  GscIntegration,
+  type GscKeywordData,
+  type GscMultiPeriodData,
+} from "./seo/GscIntegration";
+import {
+  ahrefsPositionsFromReports,
+  displayRank,
+  finiteRank,
+  normalizeGscQuery,
+} from "@/lib/gscPosition";
+import {
+  useAhrefsEnrichment,
+  type AhrefsKeyword,
+} from "@/hooks/useAhrefsEnrichment";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
 import { AhrefsProjectPicker } from "./AhrefsProjectPicker";
 import { ListChecks } from "lucide-react";
 import { filterValidSeoReports } from "./seo/reportValidity";
 import { computeGaOrganicByMonth } from "./seo/computeGaOrganicByMonth";
-import { filterSeoReportsByDomain, sortSeoReportsByRecency } from "@/lib/seoDomain";
+import {
+  filterSeoReportsByDomain,
+  sortSeoReportsByRecency,
+} from "@/lib/seoDomain";
 
 const NO_EXTRA_GSC: GscKeywordData[] = [];
 
@@ -65,7 +86,22 @@ interface SeoDashboardViewProps {
   extraGscRows?: GscKeywordData[];
 }
 
-export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, selectedGscIntegrationId, onGscSiteSelected, initialLangFilter, onLangFilterChange, expectedDomain, ahrefsProjectId, ahrefsMode, ahrefsProtocol, extraGscRows = NO_EXTRA_GSC }: SeoDashboardViewProps) {
+export function SeoDashboardView({
+  tenantId,
+  clientId,
+  accessibleTenantIds,
+  gaRecords = [],
+  initialGscSiteUrl,
+  selectedGscIntegrationId,
+  onGscSiteSelected,
+  initialLangFilter,
+  onLangFilterChange,
+  expectedDomain,
+  ahrefsProjectId,
+  ahrefsMode,
+  ahrefsProtocol,
+  extraGscRows = NO_EXTRA_GSC,
+}: SeoDashboardViewProps) {
   const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
@@ -74,15 +110,18 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   const handleFetchSnapshot = useCallback(async () => {
     setIsFetchingSnapshot(true);
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
-        body: {
-          clientId,
-          ...(expectedDomain ? { domain: expectedDomain } : {}),
-          ...(ahrefsProjectId ? { projectId: ahrefsProjectId } : {}),
-          ...(ahrefsMode ? { mode: ahrefsMode } : {}),
-          ...(ahrefsProtocol ? { protocol: ahrefsProtocol } : {}),
+      const { data, error } = await supabase.functions.invoke(
+        "fetch-ahrefs-snapshot",
+        {
+          body: {
+            clientId,
+            ...(expectedDomain ? { domain: expectedDomain } : {}),
+            ...(ahrefsProjectId ? { projectId: ahrefsProjectId } : {}),
+            ...(ahrefsMode ? { mode: ahrefsMode } : {}),
+            ...(ahrefsProtocol ? { protocol: ahrefsProtocol } : {}),
+          },
         },
-      });
+      );
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       const tracked = (data as any)?.tracked_count ?? 0;
@@ -92,18 +131,29 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
           ? `הדוח נטען מ-Ahrefs (${organic} אורגניות, ${tracked} במעקב)`
           : organic > 0
             ? `הדוח נטען מ-Ahrefs (${organic} אורגניות). לא נמצאו ביטויים במעקב — בדוק שיש פרויקט Rank Tracker ב-Ahrefs לדומיין.`
-            : 'הדוח נטען בהצלחה מ-Ahrefs',
+            : "הדוח נטען בהצלחה מ-Ahrefs",
       );
-      await queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
+      await queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
     } catch (err: any) {
-      console.error('fetch-ahrefs-snapshot failed:', err);
-      toast.error(err?.message || 'שליפת הדוח נכשלה. ודא שהוגדר דומיין ושיש מפתח Ahrefs.');
+      console.error("fetch-ahrefs-snapshot failed:", err);
+      toast.error(
+        err?.message || "שליפת הדוח נכשלה. ודא שהוגדר דומיין ושיש מפתח Ahrefs.",
+      );
     } finally {
       setIsFetchingSnapshot(false);
     }
-  }, [clientId, tenantId, queryClient, expectedDomain, ahrefsProjectId, ahrefsMode, ahrefsProtocol]);
+  }, [
+    clientId,
+    tenantId,
+    queryClient,
+    expectedDomain,
+    ahrefsProjectId,
+    ahrefsMode,
+    ahrefsProtocol,
+  ]);
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
-  const [gscMultiPeriod, setGscMultiPeriod] = useState<GscMultiPeriodData | null>(null);
+  const [gscMultiPeriod, setGscMultiPeriod] =
+    useState<GscMultiPeriodData | null>(null);
   const { comparisonData, resetComparisonData } = useAhrefsEnrichment();
   const [hasAutoEnriched, setHasAutoEnriched] = useState(false);
   const [cachedComparison, setCachedComparison] = useState<{
@@ -136,7 +186,9 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   const keywordGscRows = useMemo(() => {
     const byKey = new Map<string, GscKeywordData>();
     const add = (row: GscKeywordData) => {
-      const key = String(row?.keyword || "").toLowerCase().trim();
+      const key = String(row?.keyword || "")
+        .toLowerCase()
+        .trim();
       if (!key) return;
       const prev = byKey.get(key);
       if (!prev) {
@@ -145,15 +197,19 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       }
       const prevRank = finiteRank(prev.position);
       const nextRank = finiteRank(row.position);
-      const position = prevRank == null
-        ? (nextRank ?? prev.position)
-        : nextRank == null
-          ? prev.position
-          : Math.min(prevRank, nextRank);
+      const position =
+        prevRank == null
+          ? (nextRank ?? prev.position)
+          : nextRank == null
+            ? prev.position
+            : Math.min(prevRank, nextRank);
       byKey.set(key, {
         keyword: prev.keyword || row.keyword,
         clicks: Math.max(Number(prev.clicks) || 0, Number(row.clicks) || 0),
-        impressions: Math.max(Number(prev.impressions) || 0, Number(row.impressions) || 0),
+        impressions: Math.max(
+          Number(prev.impressions) || 0,
+          Number(row.impressions) || 0,
+        ),
         ctr: prev.ctr || row.ctr || 0,
         position,
       });
@@ -174,7 +230,12 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         ? [tenantId]
         : [];
 
-  const { data: reports = [], isLoading, isFetching: reportsFetching, error: reportsError } = useAhrefsReports({
+  const {
+    data: reports = [],
+    isLoading,
+    isFetching: reportsFetching,
+    error: reportsError,
+  } = useAhrefsReports({
     clientId,
     tenantIds: reportTenants,
     domain: expectedDomain || undefined,
@@ -198,7 +259,9 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   // viewers see Search Console keywords automatically without a manual sync.
   const firstReportDomain = useMemo(() => {
     if (expectedDomain) return expectedDomain;
-    const r = (Array.isArray(ownDomainReports) ? ownDomainReports : []).find((x: any) => x?.domain);
+    const r = (Array.isArray(ownDomainReports) ? ownDomainReports : []).find(
+      (x: any) => x?.domain,
+    );
     return r?.domain as string | undefined;
   }, [ownDomainReports, expectedDomain]);
 
@@ -217,7 +280,9 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
 
   const selectedReport = useMemo(() => {
     if (selectedReportId) {
-      return validReports.find(r => r.id === selectedReportId) || latestReport;
+      return (
+        validReports.find((r) => r.id === selectedReportId) || latestReport
+      );
     }
     return latestReport;
   }, [validReports, selectedReportId, latestReport]);
@@ -230,33 +295,44 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   const reportData = selectedReport?.report_data as any;
 
   const snapshot = reportData?.snapshot || {};
-  const snapshotPrevMonth = reportData?.snapshot_prev_month || reportData?.snapshot_prev || {};
+  const snapshotPrevMonth =
+    reportData?.snapshot_prev_month || reportData?.snapshot_prev || {};
   const snapshotCampaignStart = reportData?.snapshot_campaign_start || {};
-  const campaignStartDate = reportData?.campaign_start_date || snapshotCampaignStart?.date;
-  const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
+  const campaignStartDate =
+    reportData?.campaign_start_date || snapshotCampaignStart?.date;
+  const trafficHistory = Array.isArray(reportData?.traffic_history)
+    ? reportData.traffic_history
+    : [];
 
   // Monthly NON-PAID sessions for the chart — derived via the shared helper so
   // the public SharedTable produces identical numbers from the same gaRecords.
-  const gaOrganicByMonth = useMemo(() => computeGaOrganicByMonth(gaRecords), [gaRecords]);
+  const gaOrganicByMonth = useMemo(
+    () => computeGaOrganicByMonth(gaRecords),
+    [gaRecords],
+  );
 
   // Snapshot organic sessions — from channel_group 'Organic Search' filtered to current month
   const gaOrganicCurrentMonth = useMemo(() => {
     if (!gaRecords || gaRecords.length === 0) return null;
     const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     const channelOrganic = gaRecords
-      .filter(r => r.data?.report_type === 'channel_group')
-      .filter(r => {
-        const cg = String(r.data?.channel_group || '').toLowerCase();
-        return cg === 'organic search' || cg.includes('organic search');
+      .filter((r) => r.data?.report_type === "channel_group")
+      .filter((r) => {
+        const cg = String(r.data?.channel_group || "").toLowerCase();
+        return cg === "organic search" || cg.includes("organic search");
       })
-      .filter(r => {
+      .filter((r) => {
         // If record has date, filter to current month; otherwise include (legacy)
         const d = r.data?.date;
         if (!d) return true;
         return String(d).startsWith(currentMonth);
       })
-      .reduce((sum, r) => sum + (Number(r.data?.users) || Number(r.data?.sessions) || 0), 0);
+      .reduce(
+        (sum, r) =>
+          sum + (Number(r.data?.users) || Number(r.data?.sessions) || 0),
+        0,
+      );
     if (channelOrganic > 0) return channelOrganic;
     // Fallback: sum from monthly chart data
     if (gaOrganicByMonth.length === 0) return null;
@@ -271,38 +347,47 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     }
     const now = new Date();
     const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
     const prevOrganic = gaRecords
-      .filter(r => r.data?.report_type === 'channel_group')
-      .filter(r => {
-        const cg = String(r.data?.channel_group || '').toLowerCase();
-        return cg === 'organic search' || cg.includes('organic search');
+      .filter((r) => r.data?.report_type === "channel_group")
+      .filter((r) => {
+        const cg = String(r.data?.channel_group || "").toLowerCase();
+        return cg === "organic search" || cg.includes("organic search");
       })
-      .filter(r => {
+      .filter((r) => {
         const d = r.data?.date;
         if (!d) return false; // skip dateless for prev period
         return String(d).startsWith(prevMonth);
       })
-      .reduce((sum, r) => sum + (Number(r.data?.users) || Number(r.data?.sessions) || 0), 0);
+      .reduce(
+        (sum, r) =>
+          sum + (Number(r.data?.users) || Number(r.data?.sessions) || 0),
+        0,
+      );
     if (prevOrganic > 0) return prevOrganic;
     if (gaOrganicByMonth.length < 2) return null;
     return gaOrganicByMonth[gaOrganicByMonth.length - 2]?.sessions ?? null;
   }, [gaRecords, gaOrganicByMonth]);
 
   // Find previous month report for keyword comparison
-  const selectedIdx = validReports.findIndex(r => r.id === selectedReport?.id);
-  const prevMonthReport = selectedIdx >= 0 && selectedIdx < validReports.length - 1 ? validReports[selectedIdx + 1] : null;
+  const selectedIdx = validReports.findIndex(
+    (r) => r.id === selectedReport?.id,
+  );
+  const prevMonthReport =
+    selectedIdx >= 0 && selectedIdx < validReports.length - 1
+      ? validReports[selectedIdx + 1]
+      : null;
 
   // Normalize keyword fields from various source formats
   function normalizeKeyword(kw: any): any {
     return {
-      keyword: kw.keyword || '',
+      keyword: kw.keyword || "",
       position: kw.position ?? kw.best_position ?? null,
       traffic: kw.traffic ?? kw.sum_traffic ?? 0,
       volume: kw.volume ?? kw.search_volume ?? null,
       kd: kw.kd ?? kw.keyword_difficulty ?? null,
       cpc: kw.cpc ?? kw.cost_per_click ?? null,
-      url: kw.url ?? kw.best_position_url ?? '',
+      url: kw.url ?? kw.best_position_url ?? "",
       // Preserve inline comparison fields if they exist in the raw data
       position_prev_month: kw.position_prev_month ?? null,
       position_campaign_start: kw.position_campaign_start ?? null,
@@ -316,10 +401,14 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     const rd = report?.report_data as any;
     if (!rd) return new Map();
     const map = new Map<string, number | null>();
-    const organic = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
-    const tracked = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+    const organic = Array.isArray(rd.organic_keywords)
+      ? rd.organic_keywords
+      : [];
+    const tracked = Array.isArray(rd.tracked_keywords)
+      ? rd.tracked_keywords
+      : [];
     for (const kw of [...tracked, ...organic]) {
-      const name = String(kw.keyword || '').toLowerCase();
+      const name = String(kw.keyword || "").toLowerCase();
       if (!map.has(name)) {
         map.set(name, kw.position ?? kw.best_position ?? null);
       }
@@ -327,17 +416,26 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     return map;
   }
 
-  const prevMonthMap = useMemo(() => buildPrevMonthMap(prevMonthReport), [prevMonthReport]);
+  const prevMonthMap = useMemo(
+    () => buildPrevMonthMap(prevMonthReport),
+    [prevMonthReport],
+  );
 
   // Normalize and enrich keywords with comparison data
   const rawOrganic = useMemo(() => {
-    const organic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
+    const organic = Array.isArray(reportData?.organic_keywords)
+      ? reportData.organic_keywords
+      : [];
     if (organic.length > 0) return organic;
     // Rank-tracker-only reports (dentiq): mirror tracked phrases for the organic table.
-    const tracked = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
+    const tracked = Array.isArray(reportData?.tracked_keywords)
+      ? reportData.tracked_keywords
+      : [];
     return tracked.length > 0 ? tracked : [];
   }, [reportData?.organic_keywords, reportData?.tracked_keywords]);
-  const rawTracked = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
+  const rawTracked = Array.isArray(reportData?.tracked_keywords)
+    ? reportData.tracked_keywords
+    : [];
 
   // Build GSC lookup map (current period — used for clicks/impressions/CTR enrichment)
   const gscMap = useMemo(() => {
@@ -358,27 +456,40 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     }
     return map;
   }
-  const gscPrevMonthMap = useMemo(() => buildGscMap(gscMultiPeriod?.prevMonth || []), [gscMultiPeriod]);
-  const gscThreeMonthMap = useMemo(() => buildGscMap(gscMultiPeriod?.threeMonth || []), [gscMultiPeriod]);
-  const gscYearlyMap = useMemo(() => buildGscMap(gscMultiPeriod?.yearly || []), [gscMultiPeriod]);
-  const hasGscHistory = gscPrevMonthMap.size > 0 || gscThreeMonthMap.size > 0 || gscYearlyMap.size > 0;
+  const gscPrevMonthMap = useMemo(
+    () => buildGscMap(gscMultiPeriod?.prevMonth || []),
+    [gscMultiPeriod],
+  );
+  const gscThreeMonthMap = useMemo(
+    () => buildGscMap(gscMultiPeriod?.threeMonth || []),
+    [gscMultiPeriod],
+  );
+  const gscYearlyMap = useMemo(
+    () => buildGscMap(gscMultiPeriod?.yearly || []),
+    [gscMultiPeriod],
+  );
+  const hasGscHistory =
+    gscPrevMonthMap.size > 0 ||
+    gscThreeMonthMap.size > 0 ||
+    gscYearlyMap.size > 0;
 
   function enrichKeyword(kw: any, effComparison: typeof comparisonData): any {
     const normalized = normalizeKeyword(kw);
     const kwLower = String(normalized.keyword).toLowerCase().trim();
     // Use inline data first, fallback to cross-report comparison
-    let prevPos = normalized.position_prev_month ?? prevMonthMap.get(kwLower) ?? null;
-    
+    let prevPos =
+      normalized.position_prev_month ?? prevMonthMap.get(kwLower) ?? null;
+
     // Enrich from comparison data (API or cached)
     const api3m = effComparison.threeMonth.get(kwLower);
     const apiYear = effComparison.yearly.get(kwLower);
-    
+
     // 3-month position comparison
     let pos3m: number | null = null;
     if (api3m?.best_position_prev != null) {
       pos3m = api3m.best_position_prev;
     }
-    
+
     // Yearly position comparison
     let posYear: number | null = null;
     if (apiYear?.best_position_prev != null) {
@@ -391,21 +502,32 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     }
 
     // GSC historical fallback: when Ahrefs lacks comparison data, use GSC average position per period
-    let positionSource: 'ahrefs' | 'gsc' | undefined =
-      (prevPos != null || pos3m != null || posYear != null) ? 'ahrefs' : undefined;
+    let positionSource: "ahrefs" | "gsc" | undefined =
+      prevPos != null || pos3m != null || posYear != null
+        ? "ahrefs"
+        : undefined;
     if (prevPos == null) {
       const gscPrev = gscPrevMonthMap.get(kwLower)?.position;
-      if (gscPrev != null) { prevPos = gscPrev; positionSource = positionSource ?? 'gsc'; }
+      if (gscPrev != null) {
+        prevPos = gscPrev;
+        positionSource = positionSource ?? "gsc";
+      }
     }
     if (pos3m == null) {
       const gsc3 = gscThreeMonthMap.get(kwLower)?.position;
-      if (gsc3 != null) { pos3m = gsc3; positionSource = positionSource ?? 'gsc'; }
+      if (gsc3 != null) {
+        pos3m = gsc3;
+        positionSource = positionSource ?? "gsc";
+      }
     }
     if (posYear == null) {
       const gscY = gscYearlyMap.get(kwLower)?.position;
-      if (gscY != null) { posYear = gscY; positionSource = positionSource ?? 'gsc'; }
+      if (gscY != null) {
+        posYear = gscY;
+        positionSource = positionSource ?? "gsc";
+      }
     }
-    
+
     // Fill volume/kd/cpc from data if missing
     const apiRow = api3m || apiYear;
     if (apiRow) {
@@ -419,7 +541,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         normalized.cpc = apiRow.cpc;
       }
     }
-    
+
     // Merge GSC supplementary data (clicks, impressions, CTR, avg position).
     // Ahrefs remains the PRIMARY position source so the SEO report stays consistent
     // with the historical dashboard. GSC data is shown alongside, not as a replacement.
@@ -443,34 +565,61 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   }
 
   const organicKeywords = useMemo(() => {
-    const enriched = rawOrganic.map(kw => enrichKeyword(kw, effectiveComparison));
+    const enriched = rawOrganic.map((kw) =>
+      enrichKeyword(kw, effectiveComparison),
+    );
     // Add keywords from Ahrefs comparison API that don't exist in webhook data
     const existingNames = new Set<string>();
-    for (const kw of rawOrganic) existingNames.add(String(kw.keyword || '').toLowerCase().trim());
-    for (const kw of rawTracked) existingNames.add(String(kw.keyword || '').toLowerCase().trim());
-    
+    for (const kw of rawOrganic)
+      existingNames.add(
+        String(kw.keyword || "")
+          .toLowerCase()
+          .trim(),
+      );
+    for (const kw of rawTracked)
+      existingNames.add(
+        String(kw.keyword || "")
+          .toLowerCase()
+          .trim(),
+      );
+
     // Merge from both 3-month and yearly comparison maps
     const comparisonOnly = new Map<string, AhrefsKeyword>();
     for (const [name, kw] of effectiveComparison.threeMonth) {
       if (!existingNames.has(name)) comparisonOnly.set(name, kw);
     }
     for (const [name, kw] of effectiveComparison.yearly) {
-      if (!existingNames.has(name) && !comparisonOnly.has(name)) comparisonOnly.set(name, kw);
+      if (!existingNames.has(name) && !comparisonOnly.has(name))
+        comparisonOnly.set(name, kw);
     }
-    
+
     for (const [, kw] of comparisonOnly) {
-      enriched.push(enrichKeyword({
-        keyword: kw.keyword,
-        position: kw.best_position,
-        traffic: kw.sum_traffic,
-        volume: kw.volume,
-        kd: kw.keyword_difficulty,
-        cpc: kw.cpc,
-        url: kw.best_position_url,
-      }, effectiveComparison));
+      enriched.push(
+        enrichKeyword(
+          {
+            keyword: kw.keyword,
+            position: kw.best_position,
+            traffic: kw.sum_traffic,
+            volume: kw.volume,
+            kd: kw.keyword_difficulty,
+            cpc: kw.cpc,
+            url: kw.best_position_url,
+          },
+          effectiveComparison,
+        ),
+      );
     }
     return enriched;
-  }, [rawOrganic, rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison]);
+  }, [
+    rawOrganic,
+    rawTracked,
+    prevMonthMap,
+    gscMap,
+    gscPrevMonthMap,
+    gscThreeMonthMap,
+    gscYearlyMap,
+    effectiveComparison,
+  ]);
   // Latest sync can store the tracked list with no ranks. Earlier reports in the
   // same series still have the Ahrefs position, including on Staging where the
   // Search Console integration is not connected.
@@ -478,29 +627,56 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     () => ahrefsPositionsFromReports(sortSeoReportsByRecency(validReports)),
     [validReports],
   );
-  const trackedKeywords = useMemo(() => rawTracked.map(kw => {
-    const enriched = enrichKeyword(kw, effectiveComparison);
-    if (displayRank(enriched.position) != null) return enriched;
-    const stored = trackedAhrefsPositions.get(normalizeGscQuery(enriched.keyword));
-    if (stored == null) return enriched;
-    return { ...enriched, position: stored, ahrefs_position: stored };
-  }), [rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison, trackedAhrefsPositions]);
+  const trackedKeywords = useMemo(
+    () =>
+      rawTracked.map((kw) => {
+        const enriched = enrichKeyword(kw, effectiveComparison);
+        if (displayRank(enriched.position) != null) return enriched;
+        const stored = trackedAhrefsPositions.get(
+          normalizeGscQuery(enriched.keyword),
+        );
+        if (stored == null) return enriched;
+        return { ...enriched, position: stored, ahrefs_position: stored };
+      }),
+    [
+      rawTracked,
+      prevMonthMap,
+      gscMap,
+      gscPrevMonthMap,
+      gscThreeMonthMap,
+      gscYearlyMap,
+      effectiveComparison,
+      trackedAhrefsPositions,
+    ],
+  );
 
   // Build GSC-only keywords: keywords in GSC that don't exist in Ahrefs data
   const gscOnlyKeywords = useMemo(() => {
     if (keywordGscRows.length === 0) return [];
     const ahrefsNames = new Set<string>();
     for (const kw of organicKeywords) {
-      ahrefsNames.add(String(kw.keyword || '').toLowerCase().trim());
+      ahrefsNames.add(
+        String(kw.keyword || "")
+          .toLowerCase()
+          .trim(),
+      );
     }
     for (const kw of trackedKeywords) {
-      ahrefsNames.add(String(kw.keyword || '').toLowerCase().trim());
+      ahrefsNames.add(
+        String(kw.keyword || "")
+          .toLowerCase()
+          .trim(),
+      );
     }
-    const gscMetrics: Record<string, { volume: number | null; kd: number | null; cpc: number | null }> =
-      (reportData?.gsc_keyword_metrics as any) || {};
+    const gscMetrics: Record<
+      string,
+      { volume: number | null; kd: number | null; cpc: number | null }
+    > = (reportData?.gsc_keyword_metrics as any) || {};
     return keywordGscRows
-      .filter(g => g.keyword && !ahrefsNames.has(g.keyword.toLowerCase().trim()))
-      .map(g => {
+      .filter(
+        (g) => g.keyword && !ahrefsNames.has(g.keyword.toLowerCase().trim()),
+      )
+      .map((g) => {
         const k = g.keyword.toLowerCase().trim();
         const prev = gscPrevMonthMap.get(k)?.position ?? null;
         const m3 = gscThreeMonthMap.get(k)?.position ?? null;
@@ -521,11 +697,22 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
           gsc_impressions: g.impressions ?? null,
           gsc_ctr: g.ctr ?? null,
           gsc_position: g.position ?? null,
-          _position_source: (prev != null || m3 != null || y1 != null) ? 'gsc' as const : undefined,
-          _source: 'gsc' as const,
+          _position_source:
+            prev != null || m3 != null || y1 != null
+              ? ("gsc" as const)
+              : undefined,
+          _source: "gsc" as const,
         };
       });
-  }, [keywordGscRows, organicKeywords, trackedKeywords, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, reportData]);
+  }, [
+    keywordGscRows,
+    organicKeywords,
+    trackedKeywords,
+    gscPrevMonthMap,
+    gscThreeMonthMap,
+    gscYearlyMap,
+    reportData,
+  ]);
 
   const domain = reportData?.domain || selectedReport?.domain;
 
@@ -538,56 +725,80 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     if (!selectedReport) return;
     const cached = (selectedReport as any).comparison_data;
     if (cached && cached.threeMonth && cached.yearly) {
-      const threeMonthMap = new Map<string, any>(Object.entries(cached.threeMonth));
+      const threeMonthMap = new Map<string, any>(
+        Object.entries(cached.threeMonth),
+      );
       const yearlyMap = new Map<string, any>(Object.entries(cached.yearly));
       setCachedComparison({ threeMonth: threeMonthMap, yearly: yearlyMap });
     }
   }, [selectedReport?.id]);
 
-
   const handleManualSync = useCallback(async () => {
-    const projectId = (selectedReport as any)?.metadata?.ahrefs_project_id || ahrefsProjectId;
+    const projectId =
+      (selectedReport as any)?.metadata?.ahrefs_project_id || ahrefsProjectId;
     if (!projectId) {
-      toast.info('כדי למשוך ביטויים במעקב צריך לבחור פרויקט מ-Ahrefs');
+      toast.info("כדי למשוך ביטויים במעקב צריך לבחור פרויקט מ-Ahrefs");
       setPickerOpen(true);
       return;
     }
     setIsFetchingSnapshot(true);
     try {
-      const gscKws = Array.from(new Set(
-        keywordGscRows.map(g => (g.keyword || '').toLowerCase().trim()).filter(k => k.length > 0)
-      ));
-      const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
-        body: {
-          clientId,
-          domain,
-          projectId,
-          ...(ahrefsMode ? { mode: ahrefsMode } : {}),
-          ...(ahrefsProtocol ? { protocol: ahrefsProtocol } : {}),
-          gsc_keywords: gscKws,
+      const gscKws = Array.from(
+        new Set(
+          keywordGscRows
+            .map((g) => (g.keyword || "").toLowerCase().trim())
+            .filter((k) => k.length > 0),
+        ),
+      );
+      const { data, error } = await supabase.functions.invoke(
+        "fetch-ahrefs-snapshot",
+        {
+          body: {
+            clientId,
+            domain,
+            projectId,
+            ...(ahrefsMode ? { mode: ahrefsMode } : {}),
+            ...(ahrefsProtocol ? { protocol: ahrefsProtocol } : {}),
+            gsc_keywords: gscKws,
+          },
         },
-      });
+      );
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success(`הדוח סונכרן (${(data as any)?.keywords_count ?? 0} אורגניים, ${(data as any)?.tracked_count ?? 0} במעקב)`);
-      await queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
+      toast.success(
+        `הדוח סונכרן (${(data as any)?.keywords_count ?? 0} אורגניים, ${(data as any)?.tracked_count ?? 0} במעקב)`,
+      );
+      await queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
     } catch (err: any) {
-      console.error('fetch-ahrefs-snapshot failed:', err);
-      toast.error(err?.message || 'סנכרון Ahrefs נכשל');
+      console.error("fetch-ahrefs-snapshot failed:", err);
+      toast.error(err?.message || "סנכרון Ahrefs נכשל");
     } finally {
       setIsFetchingSnapshot(false);
     }
-  }, [clientId, domain, selectedReport, queryClient, keywordGscRows, ahrefsProjectId, ahrefsMode, ahrefsProtocol]);
+  }, [
+    clientId,
+    domain,
+    selectedReport,
+    queryClient,
+    keywordGscRows,
+    ahrefsProjectId,
+    ahrefsMode,
+    ahrefsProtocol,
+  ]);
 
   // First load only — background ahrefs_reports refetches must not unmount the
   // whole SEO dashboard (that made client SEO views look empty after #328).
   if (isLoading && reports.length === 0) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" dir="rtl">
-        {[1, 2, 3, 4].map(i => (
+        {[1, 2, 3, 4].map((i) => (
           <Card key={i}>
-            <CardHeader><Skeleton className="h-5 w-32" /></CardHeader>
-            <CardContent><Skeleton className="h-16 w-full" /></CardContent>
+            <CardHeader>
+              <Skeleton className="h-5 w-32" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-16 w-full" />
+            </CardContent>
           </Card>
         ))}
       </div>
@@ -599,9 +810,19 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       <Card className="p-8 text-center" dir="rtl">
         <FileText className="h-12 w-12 mx-auto text-destructive mb-3" />
         <h3 className="font-semibold text-lg mb-1">שגיאה בטעינת דוחות SEO</h3>
-        <p className="text-muted-foreground text-sm mb-2">לא ניתן לטעון את הדוחות. ייתכן שיש בעיית הרשאה או חיבור.</p>
-        <p className="text-xs text-muted-foreground mb-4">{(reportsError as any)?.message || String(reportsError)}</p>
-        <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] })}>נסה שוב</Button>
+        <p className="text-muted-foreground text-sm mb-2">
+          לא ניתן לטעון את הדוחות. ייתכן שיש בעיית הרשאה או חיבור.
+        </p>
+        <p className="text-xs text-muted-foreground mb-4">
+          {(reportsError as any)?.message || String(reportsError)}
+        </p>
+        <Button
+          onClick={() =>
+            queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] })
+          }
+        >
+          נסה שוב
+        </Button>
       </Card>
     );
   }
@@ -613,16 +834,28 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
           <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
           <h3 className="font-semibold text-lg mb-1">אין דוחות SEO</h3>
           <p className="text-muted-foreground text-sm mb-4">
-            לא נמצאו דוחות עבור לקוח זה. ניתן לבחור פרויקט קיים מ-Ahrefs או לסנכרן לפי הדומיין של הלקוח.
+            לא נמצאו דוחות עבור לקוח זה. ניתן לבחור פרויקט קיים מ-Ahrefs או
+            לסנכרן לפי הדומיין של הלקוח.
           </p>
           <div className="flex items-center justify-center gap-2 flex-wrap">
-            <Button onClick={() => setPickerOpen(true)} variant="default" className="gap-2">
+            <Button
+              onClick={() => setPickerOpen(true)}
+              variant="default"
+              className="gap-2"
+            >
               <ListChecks className="h-4 w-4" />
               בחר פרויקט מ-Ahrefs
             </Button>
-            <Button onClick={handleFetchSnapshot} disabled={isFetchingSnapshot} variant="outline" className="gap-2">
-              <RefreshCw className={`h-4 w-4 ${isFetchingSnapshot ? 'animate-spin' : ''}`} />
-              {isFetchingSnapshot ? 'מסנכרן...' : 'סנכרן לפי דומיין הלקוח'}
+            <Button
+              onClick={handleFetchSnapshot}
+              disabled={isFetchingSnapshot}
+              variant="outline"
+              className="gap-2"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${isFetchingSnapshot ? "animate-spin" : ""}`}
+              />
+              {isFetchingSnapshot ? "מסנכרן..." : "סנכרן לפי דומיין הלקוח"}
             </Button>
           </div>
         </Card>
@@ -630,7 +863,9 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
           open={pickerOpen}
           onOpenChange={setPickerOpen}
           clientId={clientId}
-          onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] })}
+          onSyncComplete={() =>
+            queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] })
+          }
         />
       </>
     );
@@ -642,7 +877,9 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-wrap items-center gap-2 min-w-0">
           <Globe className="h-5 w-5 text-primary shrink-0" />
-          <span className="font-semibold text-base sm:text-lg break-words">{reportData?.domain || selectedReport?.domain}</span>
+          <span className="font-semibold text-base sm:text-lg break-words">
+            {reportData?.domain || selectedReport?.domain}
+          </span>
           {reportData?.project_name && (
             <Badge variant="outline">{reportData.project_name}</Badge>
           )}
@@ -654,8 +891,10 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
             className="h-8 text-xs gap-1.5"
             title="מושך מילות מפתח אורגניות ובמעקב מפרויקט Ahrefs (לא מ-Google Search Console)"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isFetchingSnapshot ? 'animate-spin' : ''}`} />
-            {isFetchingSnapshot ? 'מסנכרן...' : 'סנכרון Ahrefs'}
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${isFetchingSnapshot ? "animate-spin" : ""}`}
+            />
+            {isFetchingSnapshot ? "מסנכרן..." : "סנכרון Ahrefs"}
           </Button>
           <Button
             variant="outline"
@@ -669,9 +908,9 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground w-full sm:w-auto min-w-0">
           {(() => {
-             const uniqueDomains = new Set(validReports.map(r => r.domain));
+            const uniqueDomains = new Set(validReports.map((r) => r.domain));
             const showDomain = uniqueDomains.size > 1;
-             if (validReports.length <= 1) {
+            if (validReports.length <= 1) {
               return selectedReport ? (
                 <Badge variant="outline" className="gap-1.5 font-normal">
                   <Globe className="h-3 w-3" />
@@ -681,10 +920,12 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
             }
             return (
               <Select
-                value={selectedReport?.id || ''}
+                value={selectedReport?.id || ""}
                 onValueChange={(val) => setSelectedReportId(val)}
               >
-                <SelectTrigger className={`w-full min-w-0 ${showDomain ? 'sm:w-[300px]' : 'sm:w-[200px]'} h-8 text-xs`}>
+                <SelectTrigger
+                  className={`w-full min-w-0 ${showDomain ? "sm:w-[300px]" : "sm:w-[200px]"} h-8 text-xs`}
+                >
                   <SelectValue placeholder="בחר דוח" />
                 </SelectTrigger>
                 <SelectContent>
@@ -700,16 +941,25 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
                         )}
                         <Calendar className="h-3 w-3" />
                         {r.report_date
-                          ? format(new Date(r.report_date), 'dd MMMM yyyy', { locale: he })
-                          : format(new Date(r.received_at), 'dd MMMM yyyy', { locale: he })
-                        }
+                          ? format(new Date(r.report_date), "dd MMMM yyyy", {
+                              locale: he,
+                            })
+                          : format(new Date(r.received_at), "dd MMMM yyyy", {
+                              locale: he,
+                            })}
                         {r.received_at && (
                           <span className="text-[10px] text-muted-foreground">
-                            (סונכרן {format(new Date(r.received_at), 'dd/MM/yy')})
+                            (סונכרן{" "}
+                            {format(new Date(r.received_at), "dd/MM/yy")})
                           </span>
                         )}
                         {latestReport?.id === r.id && (
-                          <Badge variant="secondary" className="text-[10px] px-1 py-0">אחרון</Badge>
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] px-1 py-0"
+                          >
+                            אחרון
+                          </Badge>
                         )}
                       </div>
                     </SelectItem>
@@ -720,7 +970,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
           })()}
           {campaignStartDate && (
             <Badge variant="secondary">
-              תחילת קידום: {format(new Date(campaignStartDate), 'dd/MM/yyyy')}
+              תחילת קידום: {format(new Date(campaignStartDate), "dd/MM/yyyy")}
             </Badge>
           )}
           <Badge variant="secondary">{validReports.length} דוחות</Badge>
@@ -739,7 +989,6 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       />
 
       {/* Maskyoo calls moved to a separate tab in SeoReportTabs */}
-
 
       {/* Google Search Console Integration — enriches keyword rows silently, no raw table shown here */}
       <GscIntegration
@@ -763,8 +1012,12 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         trackedKeywords={trackedKeywords}
         gscOnlyKeywords={gscOnlyKeywords}
         hasGscData={keywordGscRows.length > 0}
-        show3Month={effectiveComparison.threeMonth.size > 0 || gscThreeMonthMap.size > 0}
-        showYearly={effectiveComparison.yearly.size > 0 || gscYearlyMap.size > 0}
+        show3Month={
+          effectiveComparison.threeMonth.size > 0 || gscThreeMonthMap.size > 0
+        }
+        showYearly={
+          effectiveComparison.yearly.size > 0 || gscYearlyMap.size > 0
+        }
         defaultTab="top10"
         relevancePersistKey={clientId}
         initialLangFilter={initialLangFilter}
@@ -775,9 +1028,21 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       {reportData?.html && (
         <Card>
           <CardContent className="p-4">
-            <div 
+            <div
               className="prose prose-sm dark:prose-invert max-w-none text-right"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(reportData.html || "", { FORBID_TAGS: ["script", "style", "iframe", "object", "embed"], FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"] }) }}
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(reportData.html || "", {
+                  FORBID_TAGS: ["script", "style", "iframe", "object", "embed"],
+                  FORBID_ATTR: [
+                    "onerror",
+                    "onload",
+                    "onclick",
+                    "onmouseover",
+                    "onfocus",
+                    "onblur",
+                  ],
+                }),
+              }}
             />
           </CardContent>
         </Card>
@@ -787,7 +1052,9 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         clientId={clientId}
-        onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] })}
+        onSyncComplete={() =>
+          queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] })
+        }
       />
     </div>
   );

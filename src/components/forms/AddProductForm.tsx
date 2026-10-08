@@ -13,7 +13,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -65,7 +71,7 @@ export default function AddProductForm({ onSuccess }: AddProductFormProps) {
   const createMutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
       if (!tenantId) throw new Error("לא נמצא tenant_id");
-      
+
       const { error } = await supabase.from("products").insert({
         name: values.name,
         description: values.description || null,
@@ -118,12 +124,7 @@ export default function AddProductForm({ onSuccess }: AddProductFormProps) {
               <FormItem>
                 <FormLabel>מחיר *</FormLabel>
                 <FormControl>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    {...field}
-                  />
+                  <Input type="number" step="0.01" min="0" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -137,7 +138,12 @@ export default function AddProductForm({ onSuccess }: AddProductFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>סוכנות (אופציונלי)</FormLabel>
-              <Select onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)} value={field.value || "__none__"}>
+              <Select
+                onValueChange={(value) =>
+                  field.onChange(value === "__none__" ? "" : value)
+                }
+                value={field.value || "__none__"}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="בחר סוכנות או השאר כללי" />

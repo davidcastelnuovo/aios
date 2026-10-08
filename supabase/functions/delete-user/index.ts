@@ -50,7 +50,10 @@ serve(async (req: Request) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseAdmin.auth.getUser(token);
 
     if (userError || !user) {
       throw new Error("Unauthorized");
@@ -66,7 +69,12 @@ serve(async (req: Request) => {
       throw new Error("Only owners and agency owners can delete users");
     }
 
-    const { userId, email, tenantId, removeFromTenantOnly = true }: DeleteUserRequest = await req.json();
+    const {
+      userId,
+      email,
+      tenantId,
+      removeFromTenantOnly = true,
+    }: DeleteUserRequest = await req.json();
 
     if (!userId && !email) {
       throw new Error("User ID or email is required");
@@ -75,7 +83,8 @@ serve(async (req: Request) => {
     let targetUserId = userId;
 
     if (email && !targetUserId) {
-      targetUserId = await findUserIdByEmail(supabaseAdmin, email) ?? undefined;
+      targetUserId =
+        (await findUserIdByEmail(supabaseAdmin, email)) ?? undefined;
       if (!targetUserId) {
         throw new Error(`User with email ${email} not found`);
       }
@@ -115,22 +124,22 @@ serve(async (req: Request) => {
         .eq("user_id", targetUserId)
         .eq("tenant_id", tenantId);
 
-    // Mark unused invitations for this tenant
-    const { data: targetProfile } = await supabaseAdmin
-      .from("profiles")
-      .select("email")
-      .eq("id", targetUserId)
-      .maybeSingle();
+      // Mark unused invitations for this tenant
+      const { data: targetProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("email")
+        .eq("id", targetUserId)
+        .maybeSingle();
 
-    const targetEmail = (email ?? targetProfile?.email)?.trim().toLowerCase();
-    if (targetEmail) {
-      await supabaseAdmin
-        .from("invitation_tokens")
-        .update({ used: true })
-        .eq("email", targetEmail)
-        .eq("tenant_id", tenantId)
-        .eq("used", false);
-    }
+      const targetEmail = (email ?? targetProfile?.email)?.trim().toLowerCase();
+      if (targetEmail) {
+        await supabaseAdmin
+          .from("invitation_tokens")
+          .update({ used: true })
+          .eq("email", targetEmail)
+          .eq("tenant_id", tenantId)
+          .eq("used", false);
+      }
 
       const { count: remainingTenants } = await supabaseAdmin
         .from("tenant_users")
@@ -146,7 +155,10 @@ serve(async (req: Request) => {
           .maybeSingle();
 
         if (profile?.status === "pending") {
-          await supabaseAdmin.from("user_permissions").delete().eq("user_id", targetUserId);
+          await supabaseAdmin
+            .from("user_permissions")
+            .delete()
+            .eq("user_id", targetUserId);
           await supabaseAdmin.from("profiles").delete().eq("id", targetUserId);
           await supabaseAdmin.auth.admin.deleteUser(targetUserId);
         }
@@ -171,10 +183,7 @@ serve(async (req: Request) => {
       .delete()
       .eq("user_id", targetUserId);
 
-    await supabaseAdmin
-      .from("user_roles")
-      .delete()
-      .eq("user_id", targetUserId);
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", targetUserId);
 
     await supabaseAdmin
       .from("user_permissions")
@@ -186,15 +195,16 @@ serve(async (req: Request) => {
       .delete()
       .eq("user_id", targetUserId);
 
-    await supabaseAdmin
-      .from("profiles")
-      .delete()
-      .eq("id", targetUserId);
+    await supabaseAdmin.from("profiles").delete().eq("id", targetUserId);
 
-    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
+    const { error: deleteError } =
+      await supabaseAdmin.auth.admin.deleteUser(targetUserId);
 
     if (deleteError) {
-      if (!deleteError.message?.includes("User not found") && deleteError.status !== 404) {
+      if (
+        !deleteError.message?.includes("User not found") &&
+        deleteError.status !== 404
+      ) {
         console.error("Error deleting user from auth:", deleteError);
         throw deleteError;
       }

@@ -3,10 +3,19 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useBroadcastDomains } from "@/hooks/useBroadcastDomains";
 import { formatSenderEmail } from "@/lib/senderEmailDomain";
-import { EmailRecipientsListEditor, migrateLegacyEmailRecipients } from "./EmailRecipientsListEditor";
+import {
+  EmailRecipientsListEditor,
+  migrateLegacyEmailRecipients,
+} from "./EmailRecipientsListEditor";
 import { EmailWebhookMappingPanel } from "./EmailWebhookMappingPanel";
 
 interface Props {
@@ -54,26 +63,35 @@ export function EmailActionConfig({
   }, [domains.length, defaultDomain?.id]);
 
   const selectedDomain =
-    domains.find((d) => d.id === configuration?.sender_domain_id) || defaultDomain;
+    domains.find((d) => d.id === configuration?.sender_domain_id) ||
+    defaultDomain;
 
   const insertVariable = (fieldKey: string, target: "subject" | "body") => {
     const variable = `{{${fieldKey}}}`;
     if (target === "subject") {
       const current = configuration?.subject_template || "";
       const pos = subjectCursor ?? current.length;
-      onConfigChange("subject_template", current.slice(0, pos) + variable + current.slice(pos));
+      onConfigChange(
+        "subject_template",
+        current.slice(0, pos) + variable + current.slice(pos),
+      );
       return;
     }
     const current = configuration?.body_template || "";
     const pos = bodyCursor ?? current.length;
-    onConfigChange("body_template", current.slice(0, pos) + variable + current.slice(pos));
+    onConfigChange(
+      "body_template",
+      current.slice(0, pos) + variable + current.slice(pos),
+    );
   };
 
   const VariableButtons = ({ target }: { target: "subject" | "body" }) => (
     <div className="space-y-2">
       {systemFields.length > 0 && (
         <div className="space-y-1">
-          <p className="text-[10px] font-medium text-muted-foreground text-right">שדות מערכת</p>
+          <p className="text-[10px] font-medium text-muted-foreground text-right">
+            שדות מערכת
+          </p>
           <div className="flex flex-wrap gap-1 justify-end">
             {systemFields.map((field) => (
               <Button
@@ -92,7 +110,9 @@ export function EmailActionConfig({
       )}
       {fbFields.length > 0 && (
         <div className="space-y-1">
-          <p className="text-[10px] font-medium text-blue-500 text-right">שדות פייסבוק</p>
+          <p className="text-[10px] font-medium text-blue-500 text-right">
+            שדות פייסבוק
+          </p>
           <div className="flex flex-wrap gap-1 justify-end">
             {fbFields.map((field) => (
               <Button
@@ -124,23 +144,32 @@ export function EmailActionConfig({
   return (
     <div className="space-y-4" dir="rtl">
       <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3">
-        <p className="text-xs font-semibold text-sky-700">שליחת אימייל (Resend)</p>
+        <p className="text-xs font-semibold text-sky-700">
+          שליחת אימייל (Resend)
+        </p>
       </div>
 
       <div className="space-y-2 rounded-lg border p-3">
         <Label className="text-right block">כתובת שולח (From)</Label>
         {domainsQuery.isLoading ? (
-          <p className="text-xs text-muted-foreground text-right">טוען דומיינים...</p>
+          <p className="text-xs text-muted-foreground text-right">
+            טוען דומיינים...
+          </p>
         ) : domains.length === 0 ? (
           <p className="text-xs text-destructive text-right">
-            לא הוגדר דומיין שליחה לארגון. הוסף דומיין מאומת בדיוור → הגדרות שולח לפני שליחת אימייל.
+            לא הוגדר דומיין שליחה לארגון. הוסף דומיין מאומת בדיוור → הגדרות שולח
+            לפני שליחת אימייל.
           </p>
         ) : (
           <>
             <div className="space-y-2">
-              <Label className="text-right block text-xs">דומיין מאומת ב-Resend</Label>
+              <Label className="text-right block text-xs">
+                דומיין מאומת ב-Resend
+              </Label>
               <Select
-                value={configuration?.sender_domain_id || selectedDomain?.id || ""}
+                value={
+                  configuration?.sender_domain_id || selectedDomain?.id || ""
+                }
                 onValueChange={(v) => onConfigChange("sender_domain_id", v)}
               >
                 <SelectTrigger className="text-right">
@@ -149,7 +178,9 @@ export function EmailActionConfig({
                 <SelectContent>
                   {domains.map((d) => (
                     <SelectItem key={d.id} value={d.id}>
-                      <span dir="ltr">{formatSenderEmail(d.default_local, d.domain)}</span>
+                      <span dir="ltr">
+                        {formatSenderEmail(d.default_local, d.domain)}
+                      </span>
                       {d.from_name ? ` · ${d.from_name}` : ""}
                       {d.is_default ? " (ברירת מחדל)" : ""}
                     </SelectItem>
@@ -166,7 +197,12 @@ export function EmailActionConfig({
               >
                 ברירת מחדל (
                 <span dir="ltr">
-                  {selectedDomain ? formatSenderEmail(selectedDomain.default_local, selectedDomain.domain) : ""}
+                  {selectedDomain
+                    ? formatSenderEmail(
+                        selectedDomain.default_local,
+                        selectedDomain.domain,
+                      )
+                    : ""}
                 </span>
                 )
               </button>
@@ -189,8 +225,14 @@ export function EmailActionConfig({
                 />
                 <div className="flex items-center gap-1">
                   <Input
-                    value={configuration?.from_local || selectedDomain?.default_local || "noreply"}
-                    onChange={(e) => onConfigChange("from_local", e.target.value)}
+                    value={
+                      configuration?.from_local ||
+                      selectedDomain?.default_local ||
+                      "noreply"
+                    }
+                    onChange={(e) =>
+                      onConfigChange("from_local", e.target.value)
+                    }
                     placeholder="pdpsagot"
                     className="flex-1"
                     dir="ltr"
@@ -204,7 +246,8 @@ export function EmailActionConfig({
                   />
                 </div>
                 <p className="text-xs text-muted-foreground text-right">
-                  דוגמה: <span dir="ltr">pdpsagot@aios.co.il</span> — רק הדומיין מאומת ב-Resend.
+                  דוגמה: <span dir="ltr">pdpsagot@aios.co.il</span> — רק הדומיין
+                  מאומת ב-Resend.
                 </p>
               </div>
             )}
@@ -212,7 +255,9 @@ export function EmailActionConfig({
         )}
 
         <div className="space-y-2 pt-1">
-          <Label className="text-right block text-xs">Reply-To (לאן יגיעו תשובות — אופציונלי)</Label>
+          <Label className="text-right block text-xs">
+            Reply-To (לאן יגיעו תשובות — אופציונלי)
+          </Label>
           <Input
             type="email"
             value={configuration?.reply_to || ""}
@@ -234,13 +279,16 @@ export function EmailActionConfig({
       <div className="space-y-2">
         <Label className="text-right block">נושא האימייל (דינמי)</Label>
         <p className="text-[11px] text-muted-foreground text-right">
-          השתמש ב-<span dir="ltr">{'{{field_name}}'}</span> — לחץ על שדה למטה כדי להוסיף לנושא.
+          השתמש ב-<span dir="ltr">{"{{field_name}}"}</span> — לחץ על שדה למטה
+          כדי להוסיף לנושא.
         </p>
         <Input
           ref={subjectRef}
           value={configuration?.subject_template || ""}
           onChange={(e) => onConfigChange("subject_template", e.target.value)}
-          onSelect={(e) => setSubjectCursor((e.target as HTMLInputElement).selectionStart)}
+          onSelect={(e) =>
+            setSubjectCursor((e.target as HTMLInputElement).selectionStart)
+          }
           placeholder="למשל: עדכון לגבי {{contact_name}}"
           className="text-right"
         />
@@ -253,7 +301,9 @@ export function EmailActionConfig({
           ref={bodyRef}
           value={configuration?.body_template || ""}
           onChange={(e) => onConfigChange("body_template", e.target.value)}
-          onSelect={(e) => setBodyCursor((e.target as HTMLTextAreaElement).selectionStart)}
+          onSelect={(e) =>
+            setBodyCursor((e.target as HTMLTextAreaElement).selectionStart)
+          }
           placeholder="שלום {{contact_name}}, ..."
           className="text-right min-h-[120px]"
           rows={5}

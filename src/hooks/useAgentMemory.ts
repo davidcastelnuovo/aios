@@ -25,14 +25,25 @@ export interface MemoryTreeNode {
 
 // ----- agent_memory (non-Carmen) -----
 
-export function useAgentMemory(agentId: string | null, category?: string, subcategory?: string | null) {
+export function useAgentMemory(
+  agentId: string | null,
+  category?: string,
+  subcategory?: string | null,
+) {
   return useQuery({
-    queryKey: ["agent-memory", agentId, category ?? "all", subcategory ?? "all"],
+    queryKey: [
+      "agent-memory",
+      agentId,
+      category ?? "all",
+      subcategory ?? "all",
+    ],
     enabled: !!agentId,
     queryFn: async (): Promise<MemoryItem[]> => {
       let q = supabase
         .from("agent_memory" as any)
-        .select("id, category, subcategory, path, entity_type, entity_id, title, summary, importance, ref_date, metadata, created_at")
+        .select(
+          "id, category, subcategory, path, entity_type, entity_id, title, summary, importance, ref_date, metadata, created_at",
+        )
         .eq("agent_id", agentId!)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -66,7 +77,10 @@ export function useDeleteAgentMemory(agentId: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("agent_memory" as any).delete().eq("id", id);
+      const { error } = await supabase
+        .from("agent_memory" as any)
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -85,8 +99,13 @@ export function useCarmenMemoryTree() {
     queryKey: ["carmen-memory-tree"],
     queryFn: async () => {
       const [pointers, episodes] = await Promise.all([
-        supabase.from("carmen_memory_pointers" as any).select("category, subcategory").limit(10000),
-        supabase.from("carmen_memory_episodes" as any).select("id", { count: "exact", head: true }),
+        supabase
+          .from("carmen_memory_pointers" as any)
+          .select("category, subcategory")
+          .limit(10000),
+        supabase
+          .from("carmen_memory_episodes" as any)
+          .select("id", { count: "exact", head: true }),
       ]);
       if (pointers.error) throw pointers.error;
       const tree = buildTree((pointers.data ?? []) as any);
@@ -95,14 +114,23 @@ export function useCarmenMemoryTree() {
   });
 }
 
-export function useCarmenMemoryPointers(category?: string, subcategory?: string | null) {
+export function useCarmenMemoryPointers(
+  category?: string,
+  subcategory?: string | null,
+) {
   return useQuery({
-    queryKey: ["carmen-memory-pointers", category ?? "all", subcategory ?? "all"],
+    queryKey: [
+      "carmen-memory-pointers",
+      category ?? "all",
+      subcategory ?? "all",
+    ],
     enabled: category !== "episodes",
     queryFn: async (): Promise<MemoryItem[]> => {
       let q = supabase
         .from("carmen_memory_pointers" as any)
-        .select("id, category, subcategory, path, entity_type, entity_id, title, summary, importance, ref_date, metadata, created_at")
+        .select(
+          "id, category, subcategory, path, entity_type, entity_id, title, summary, importance, ref_date, metadata, created_at",
+        )
         .order("ref_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(500);
@@ -123,7 +151,9 @@ export function useCarmenMemoryEpisodes(enabled = false) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("carmen_memory_episodes" as any)
-        .select("id, topic, topic_tags, summary, source_table, participants, importance, ref_date, access_count, created_at")
+        .select(
+          "id, topic, topic_tags, summary, source_table, participants, importance, ref_date, access_count, created_at",
+        )
         .order("ref_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(300);
@@ -135,7 +165,9 @@ export function useCarmenMemoryEpisodes(enabled = false) {
 
 // ----- shared -----
 
-function buildTree(rows: { category: string | null; subcategory: string | null }[]): MemoryTreeNode[] {
+function buildTree(
+  rows: { category: string | null; subcategory: string | null }[],
+): MemoryTreeNode[] {
   const byCat = new Map<string, Map<string, number>>();
   for (const r of rows) {
     const cat = r.category || "other";

@@ -16,7 +16,10 @@ export function generateWorkdayTimeSlots(
   return slots;
 }
 
-export function workdaySlotIndex(time: string, startHour = TASK_DAY_START_HOUR): number {
+export function workdaySlotIndex(
+  time: string,
+  startHour = TASK_DAY_START_HOUR,
+): number {
   const [hours, minutes] = time.split(":").map(Number);
   return (hours - startHour) * 2 + (minutes >= 30 ? 1 : 0);
 }

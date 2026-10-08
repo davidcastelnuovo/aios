@@ -18,26 +18,40 @@ test("normalizeGoogleCustomerId strips dashes", () => {
 });
 
 test("normalizeMetaAdAccountId ensures act_ prefix", () => {
-  assert.equal(normalizeMetaAdAccountId("651825899520164"), "act_651825899520164");
-  assert.equal(normalizeMetaAdAccountId("act_651825899520164"), "act_651825899520164");
+  assert.equal(
+    normalizeMetaAdAccountId("651825899520164"),
+    "act_651825899520164",
+  );
+  assert.equal(
+    normalizeMetaAdAccountId("act_651825899520164"),
+    "act_651825899520164",
+  );
 });
 
 test("extractAccountIdFromReportTable reads google_ads customer_id", () => {
   assert.equal(
-    extractAccountIdFromReportTable("google_ads", { customer_id: "538-568-6491" }),
+    extractAccountIdFromReportTable("google_ads", {
+      customer_id: "538-568-6491",
+    }),
     "5385686491",
   );
 });
 
 test("extractAccountIdFromReportTable reads facebook ad_account_id", () => {
   assert.equal(
-    extractAccountIdFromReportTable("facebook_insights", { ad_account_id: "act_651825899520164" }),
+    extractAccountIdFromReportTable("facebook_insights", {
+      ad_account_id: "act_651825899520164",
+    }),
     "act_651825899520164",
   );
 });
 
 test("validateReportTableAccountId flags missing google account", () => {
-  const v = validateReportTableAccountId("google_ads", {}, { clientId: "c1", tableId: "t1" });
+  const v = validateReportTableAccountId(
+    "google_ads",
+    {},
+    { clientId: "c1", tableId: "t1" },
+  );
   assert.equal(v.ok, false);
   assert.equal(v.reason, "missing_account_id");
 });
@@ -64,7 +78,10 @@ test("parseMetaAdAccountIdInput rejects invalid ids", () => {
 });
 
 test("metaAdAccountsEqual compares normalized ids", () => {
-  assert.equal(metaAdAccountsEqual("561430705400571", "act_561430705400571"), true);
+  assert.equal(
+    metaAdAccountsEqual("561430705400571", "act_561430705400571"),
+    true,
+  );
   assert.equal(metaAdAccountsEqual("act_111", "act_222"), false);
 });
 

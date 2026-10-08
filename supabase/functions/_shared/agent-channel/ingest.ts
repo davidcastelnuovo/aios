@@ -23,7 +23,12 @@ async function resolveSession(
     const byId = await loadSession(sb, payload.session_id);
     if (byId) return byId;
   }
-  if (!payload.conversation_id || origin === "internal" || origin === "parliament") return null;
+  if (
+    !payload.conversation_id ||
+    origin === "internal" ||
+    origin === "parliament"
+  )
+    return null;
   return await getRunningSession(sb, payload.conversation_id, origin);
 }
 
@@ -31,21 +36,35 @@ async function conversationTenant(
   sb: ReturnType<typeof serviceClient>,
   conversationId: string,
 ): Promise<string | null> {
-  const { data } = await sb.from("ai_conversations").select("tenant_id").eq("id", conversationId).maybeSingle();
+  const { data } = await sb
+    .from("ai_conversations")
+    .select("tenant_id")
+    .eq("id", conversationId)
+    .maybeSingle();
   return (data as { tenant_id?: string } | null)?.tenant_id || null;
 }
 
-export async function ingestChannelReply(payload: CallbackPayload): Promise<{ duplicate: boolean; message_id: string }> {
+export async function ingestChannelReply(
+  payload: CallbackPayload,
+): Promise<{ duplicate: boolean; message_id: string }> {
   const content = String(payload.content || "").trim();
   if (!content) throw new Error("content is required");
   if (!payload.conversation_id) throw new Error("conversation_id is required");
 
   const sb = serviceClient();
-  const hinted = payload.session_id ? await loadSession(sb, payload.session_id) : null;
+  const hinted = payload.session_id
+    ? await loadSession(sb, payload.session_id)
+    : null;
   const origin = resolveCallbackOrigin(payload.origin, hinted?.provider);
-  const session = hinted || await resolveSession(sb, payload, origin);
-  const tenantId = payload.tenant_id || session?.tenant_id || await conversationTenant(sb, payload.conversation_id);
-  if (!tenantId) throw new Error(`conversation ${payload.conversation_id} not found in this AIOS environment`);
+  const session = hinted || (await resolveSession(sb, payload, origin));
+  const tenantId =
+    payload.tenant_id ||
+    session?.tenant_id ||
+    (await conversationTenant(sb, payload.conversation_id));
+  if (!tenantId)
+    throw new Error(
+      `conversation ${payload.conversation_id} not found in this AIOS environment`,
+    );
   if (session && session.conversation_id !== payload.conversation_id) {
     throw new Error("session does not belong to this conversation");
   }
@@ -64,10 +83,12 @@ export async function ingestChannelReply(payload: CallbackPayload): Promise<{ du
     event_type: eventType,
     external_message_id: payload.external_message_id ?? null,
     correlation_id: session?.id ?? null,
-    idempotency_key: payload.idempotency_key ?? payload.external_message_id ?? null,
+    idempotency_key:
+      payload.idempotency_key ?? payload.external_message_id ?? null,
     metadata: {
       origin,
-      parliament_round: payload.parliament_round ?? session?.parliament_round ?? null,
+      parliament_round:
+        payload.parliament_round ?? session?.parliament_round ?? null,
       ...(payload.metadata || {}),
     },
   });
@@ -76,7 +97,10 @@ export async function ingestChannelReply(payload: CallbackPayload): Promise<{ du
     try {
       await persistMeetingSummaryReply(sb, session.metadata, content);
     } catch (e) {
-      console.warn("[agent-channel] meeting summary save:", (e as Error)?.message ?? e);
+      console.warn(
+        "[agent-channel] meeting summary save:",
+        (e as Error)?.message ?? e,
+      );
     }
   }
 
@@ -84,19 +108,32 @@ export async function ingestChannelReply(payload: CallbackPayload): Promise<{ du
     let delivered: boolean | null;
     let error: string | null = null;
     try {
-      delivered = await deliverWhatsAppReply(session.metadata, tenantId, origin, content);
+      delivered = await deliverWhatsAppReply(
+        session.metadata,
+        tenantId,
+        origin,
+        content,
+      );
     } catch (e) {
       delivered = false;
       error = String((e as Error)?.message ?? e);
     }
     if (delivered === false) {
-      console.error("[agent-channel] whatsapp reply not delivered:", error ?? "send-manus-wa-message rejected");
+      console.error(
+        "[agent-channel] whatsapp reply not delivered:",
+        error ?? "send-manus-wa-message rejected",
+      );
       await logChannelAction(sb, {
         tenantId,
         agentId: null,
         action: "whatsapp_reply_failed",
         status: "error",
-        details: { conversation_id: payload.conversation_id, session_id: session.id, origin, error },
+        details: {
+          conversation_id: payload.conversation_id,
+          session_id: session.id,
+          origin,
+          error,
+        },
       });
       await insertMessage(sb, {
         tenant_id: tenantId,
@@ -115,21 +152,31 @@ export async function ingestChannelReply(payload: CallbackPayload): Promise<{ du
   if (duplicate) return { duplicate: true, message_id: row.id };
 
   if (eventType === "message") {
-    const codingOrigins = new Set<ChannelProvider>(["cursor", "claude", "codex", "grok"]);
+    const codingOrigins = new Set<ChannelProvider>([
+      "cursor",
+      "claude",
+      "codex",
+      "grok",
+    ]);
     if (codingOrigins.has(origin)) {
       try {
         await completeDevTaskFromAgentReply(sb, {
           tenantId,
           conversationId: payload.conversation_id,
           content,
-          devTaskIdHint: (payload.metadata?.dev_task_id as string | undefined) ?? null,
+          devTaskIdHint:
+            (payload.metadata?.dev_task_id as string | undefined) ?? null,
           actor: origin,
         });
       } catch (e) {
-        console.warn("[agent-channel] dev task completion:", (e as Error)?.message ?? e);
+        console.warn(
+          "[agent-channel] dev task completion:",
+          (e as Error)?.message ?? e,
+        );
       }
     }
-    const inParliament = !!session?.parliament_run_id || origin === "parliament";
+    const inParliament =
+      !!session?.parliament_run_id || origin === "parliament";
     if (session) await completeSession(sb, session.id, "completed");
     if (inParliament) {
       await onParliamentCallback({
@@ -137,7 +184,9 @@ export async function ingestChannelReply(payload: CallbackPayload): Promise<{ du
         conversationId: payload.conversation_id,
         origin,
         content,
-        parliamentRunId: session?.parliament_run_id || (payload.metadata?.parliament_run_id as string | undefined),
+        parliamentRunId:
+          session?.parliament_run_id ||
+          (payload.metadata?.parliament_run_id as string | undefined),
         round: payload.parliament_round ?? session?.parliament_round,
       });
     } else {
@@ -148,7 +197,10 @@ export async function ingestChannelReply(payload: CallbackPayload): Promise<{ du
   await logChannelAction(sb, {
     tenantId,
     agentId: null,
-    action: eventType === "approval_request" ? "channel_approval_request" : "channel_callback",
+    action:
+      eventType === "approval_request"
+        ? "channel_approval_request"
+        : "channel_callback",
     details: {
       conversation_id: payload.conversation_id,
       session_id: payload.session_id ?? null,

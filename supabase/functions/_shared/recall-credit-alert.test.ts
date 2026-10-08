@@ -28,7 +28,10 @@ function mockSupabase(opts: { existing?: unknown[] }) {
 }
 
 test("empty-credit WhatsApp includes the EU billing dashboard by default region fallback", () => {
-  assert.match(recallCreditEmptyWhatsApp(), /recall\.ai\/dashboard\/billing\/usage/);
+  assert.match(
+    recallCreditEmptyWhatsApp(),
+    /recall\.ai\/dashboard\/billing\/usage/,
+  );
 });
 
 test("notifyRecallCreditEmpty skips WhatsApp when a quota_out already fired recently", async () => {
@@ -42,8 +45,14 @@ test("notifyRecallCreditEmpty writes intel feed + claude_notify_david on first d
   const sb = mockSupabase({ existing: [] });
   const sent = await notifyRecallCreditEmpty(sb as never);
   assert.equal(sent, true);
-  assert.equal(sb.calls.some((c) => c.table === "integration_alerts_log"), true);
+  assert.equal(
+    sb.calls.some((c) => c.table === "integration_alerts_log"),
+    true,
+  );
   const rpc = sb.calls.find((c) => c.rpc === "claude_notify_david");
   assert.ok(rpc);
-  assert.match(String((rpc.payload as { p_message: string }).p_message), /נגמר הקרדיט/);
+  assert.match(
+    String((rpc.payload as { p_message: string }).p_message),
+    /נגמר הקרדיט/,
+  );
 });

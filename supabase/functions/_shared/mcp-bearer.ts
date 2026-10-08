@@ -24,7 +24,10 @@ export function secretForConnectionName(name: string): string | undefined {
 export function isInternalMcpUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    return u.hostname.endsWith(".supabase.co") && u.pathname.includes("/functions/v1/");
+    return (
+      u.hostname.endsWith(".supabase.co") &&
+      u.pathname.includes("/functions/v1/")
+    );
   } catch {
     return false;
   }
@@ -57,7 +60,8 @@ export function repointInternalMcpUrlIfNeeded(
   try {
     const cur = new URL(currentUrl);
     const next = new URL(canonical);
-    if (cur.hostname === next.hostname && cur.pathname === next.pathname) return currentUrl;
+    if (cur.hostname === next.hostname && cur.pathname === next.pathname)
+      return currentUrl;
     return canonical;
   } catch {
     return currentUrl;
@@ -84,7 +88,9 @@ export async function mcpJsonRpc(
   });
   const text = await resp.text();
   if (!resp.ok) {
-    const err = new Error(`MCP ${method} ${resp.status}: ${text.slice(0, 400)}`) as Error & { status?: number };
+    const err = new Error(
+      `MCP ${method} ${resp.status}: ${text.slice(0, 400)}`,
+    ) as Error & { status?: number };
     err.status = resp.status;
     throw err;
   }
@@ -96,7 +102,10 @@ export async function mcpJsonRpc(
   return JSON.parse(text);
 }
 
-export async function probeMcp(url: string, bearer: string | undefined): Promise<McpProbeResult> {
+export async function probeMcp(
+  url: string,
+  bearer: string | undefined,
+): Promise<McpProbeResult> {
   let tools: any[] = [];
   let state: McpProbeResult["state"] = "ready";
   let lastError: string | null = null;
@@ -118,14 +127,25 @@ export async function probeMcp(url: string, bearer: string | undefined): Promise
 export function isMcpAuthError(err: unknown): boolean {
   const msg = String((err as any)?.message ?? err ?? "");
   const status = (err as any)?.status;
-  return status === 401 || status === 403 || /401|403|Unauthorized|invalid or missing bearer/i.test(msg);
+  return (
+    status === 401 ||
+    status === 403 ||
+    /401|403|Unauthorized|invalid or missing bearer/i.test(msg)
+  );
 }
 
 export async function resyncInternalMcpBearer(
   supabase: any,
   conn: { id: string; name: string; url: string; tenant_id?: string | null },
-): Promise<{ bearer: string; tools: any[]; state: McpProbeResult["state"]; lastError: string | null; url?: string } | null> {
-  if (!isInternalMcpUrl(conn.url) && !canonicalInternalMcpUrl(conn.name)) return null;
+): Promise<{
+  bearer: string;
+  tools: any[];
+  state: McpProbeResult["state"];
+  lastError: string | null;
+  url?: string;
+} | null> {
+  if (!isInternalMcpUrl(conn.url) && !canonicalInternalMcpUrl(conn.name))
+    return null;
   const bearer = secretForConnectionName(conn.name);
   if (!bearer) return null;
 
@@ -139,7 +159,10 @@ export async function resyncInternalMcpBearer(
     last_error: lastError,
     updated_at: new Date().toISOString(),
   };
-  let q = supabase.from("agent_mcp_connections").update(update).eq("id", conn.id);
+  let q = supabase
+    .from("agent_mcp_connections")
+    .update(update)
+    .eq("id", conn.id);
   if (conn.tenant_id) q = q.eq("tenant_id", conn.tenant_id);
   const { error } = await q;
   if (error) throw error;

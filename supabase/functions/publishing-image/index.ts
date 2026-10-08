@@ -15,17 +15,24 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const fail = (error: string, status: number) =>
   new Response(JSON.stringify({ error }), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
   });
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (request.method !== "GET" && request.method !== "HEAD") return fail("method_not_allowed", 405);
+  if (request.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
+  if (request.method !== "GET" && request.method !== "HEAD")
+    return fail("method_not_allowed", 405);
 
   const params = new URL(request.url).searchParams;
   const articleId = String(params.get("article_id") ?? "").trim();
@@ -58,8 +65,10 @@ Deno.serve(async (request) => {
   const headers = {
     ...corsHeaders,
     "Content-Type": file.type || "image/webp",
-    "Cache-Control": "public, max-age=3600, s-maxage=31536000, stale-while-revalidate=86400",
+    "Cache-Control":
+      "public, max-age=3600, s-maxage=31536000, stale-while-revalidate=86400",
   };
-  if (request.method === "HEAD") return new Response(null, { status: 200, headers });
+  if (request.method === "HEAD")
+    return new Response(null, { status: 200, headers });
   return new Response(await file.arrayBuffer(), { status: 200, headers });
 });

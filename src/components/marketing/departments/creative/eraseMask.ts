@@ -11,7 +11,9 @@ export const buildErasePrompt = (hint?: string): string => {
   const what = hint?.trim();
   return [
     "INPAINT / ERASE. Delete only the masked (transparent) region.",
-    what ? `The marked content is: «${what}». Remove it completely.` : "Remove whatever sits under the mask.",
+    what
+      ? `The marked content is: «${what}». Remove it completely.`
+      : "Remove whatever sits under the mask.",
     "Reconstruct the photograph underneath from surrounding pixels, lighting, and texture.",
     "Do not add letters, numbers, logos, watermarks, buttons, or new objects.",
     "Keep every unmasked pixel: faces, composition, remaining Hebrew type, crop.",
@@ -19,8 +21,13 @@ export const buildErasePrompt = (hint?: string): string => {
   ].join(" ");
 };
 
-export const createKeepMask = (width: number, height: number): Uint8ClampedArray => {
-  const data = new Uint8ClampedArray(Math.max(1, width) * Math.max(1, height) * 4);
+export const createKeepMask = (
+  width: number,
+  height: number,
+): Uint8ClampedArray => {
+  const data = new Uint8ClampedArray(
+    Math.max(1, width) * Math.max(1, height) * 4,
+  );
   data.fill(255);
   return data;
 };
@@ -32,7 +39,13 @@ export const maskHasCoverage = (data: Uint8ClampedArray): boolean => {
   return false;
 };
 
-const erasePixel = (data: Uint8ClampedArray, width: number, height: number, x: number, y: number) => {
+const erasePixel = (
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+) => {
   if (x < 0 || y < 0 || x >= width || y >= height) return;
   const index = (y * width + x) * 4;
   data[index] = 0;
@@ -51,7 +64,10 @@ const interpolate = (points: ErasePoint[]): ErasePoint[] => {
     const dy = next.y - prev.y;
     const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) * 80));
     for (let step = 1; step <= steps; step += 1) {
-      result.push({ x: prev.x + (dx * step) / steps, y: prev.y + (dy * step) / steps });
+      result.push({
+        x: prev.x + (dx * step) / steps,
+        y: prev.y + (dy * step) / steps,
+      });
     }
   }
   return result;
@@ -59,7 +75,8 @@ const interpolate = (points: ErasePoint[]): ErasePoint[] => {
 
 export const applyEraseMarks = (
   data: Uint8ClampedArray,
-  width: number, height: number,
+  width: number,
+  height: number,
   marks: EraseMark[],
 ): Uint8ClampedArray => {
   for (const mark of marks) {
@@ -69,17 +86,22 @@ export const applyEraseMarks = (
       const right = Math.ceil(clamp01(mark.x + mark.width) * width);
       const bottom = Math.ceil(clamp01(mark.y + mark.height) * height);
       for (let y = top; y < bottom; y += 1) {
-        for (let x = left; x < right; x += 1) erasePixel(data, width, height, x, y);
+        for (let x = left; x < right; x += 1)
+          erasePixel(data, width, height, x, y);
       }
       continue;
     }
-    const radius = Math.max(1, Math.round(mark.radius * Math.min(width, height)));
+    const radius = Math.max(
+      1,
+      Math.round(mark.radius * Math.min(width, height)),
+    );
     for (const point of interpolate(mark.points)) {
       const cx = Math.round(clamp01(point.x) * (width - 1));
       const cy = Math.round(clamp01(point.y) * (height - 1));
       for (let dy = -radius; dy <= radius; dy += 1) {
         for (let dx = -radius; dx <= radius; dx += 1) {
-          if (dx * dx + dy * dy <= radius * radius) erasePixel(data, width, height, cx + dx, cy + dy);
+          if (dx * dx + dy * dy <= radius * radius)
+            erasePixel(data, width, height, cx + dx, cy + dy);
         }
       }
     }

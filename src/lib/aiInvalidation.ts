@@ -6,7 +6,10 @@ const relatedQueryKeys: Record<string, string[]> = {
   communication_logs: ["communication-logs-latest"],
 };
 
-export function invalidateAIEntityQueries(queryClient: QueryClient, entity?: string) {
+export function invalidateAIEntityQueries(
+  queryClient: QueryClient,
+  entity?: string,
+) {
   if (!entity) return;
 
   queryClient.invalidateQueries({ queryKey: [entity] });

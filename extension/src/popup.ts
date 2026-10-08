@@ -11,7 +11,8 @@ interface ClientOption {
   name: string;
 }
 
-const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const el = <T extends HTMLElement>(id: string) =>
+  document.getElementById(id) as T;
 
 const loadingEl = el<HTMLDivElement>("loading");
 const loginEl = el<HTMLFormElement>("login");
@@ -56,12 +57,17 @@ function fillDatalist(list: HTMLDataListElement, names: string[]) {
   }
 }
 
-const findByName = <T extends { name: string }>(items: T[], typed: string): T | null => {
+const findByName = <T extends { name: string }>(
+  items: T[],
+  typed: string,
+): T | null => {
   const q = typed.trim();
   if (!q) return null;
-  return items.find((i) => i.name === q)
-    ?? items.find((i) => i.name.toLowerCase() === q.toLowerCase())
-    ?? null;
+  return (
+    items.find((i) => i.name === q) ??
+    items.find((i) => i.name.toLowerCase() === q.toLowerCase()) ??
+    null
+  );
 };
 
 async function loadTenants(): Promise<TenantOption[]> {
@@ -78,7 +84,9 @@ async function loadTenants(): Promise<TenantOption[]> {
       result.push(t);
     }
   }
-  return result.sort((a, b) => (a.name || "").localeCompare(b.name || "", "he"));
+  return result.sort((a, b) =>
+    (a.name || "").localeCompare(b.name || "", "he"),
+  );
 }
 
 async function loadClients(tenantId: string) {
@@ -96,7 +104,10 @@ async function loadClients(tenantId: string) {
     return;
   }
   clients = (data ?? []).map((c) => ({ id: c.id, name: c.name }));
-  fillDatalist(clientList, clients.map((c) => c.name));
+  fillDatalist(
+    clientList,
+    clients.map((c) => c.name),
+  );
 
   const { lastClientId } = await chrome.storage.local.get("lastClientId");
   const last = clients.find((c) => c.id === lastClientId);
@@ -107,14 +118,18 @@ async function loadClients(tenantId: string) {
 // (get_user_tenant_id), so switching tenants here must persist it — exactly
 // like the SPA's TenantContext does.
 async function persistActiveTenant(tenantId: string) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return;
-  const { error } = await supabase
-    .from("user_active_tenant")
-    .upsert(
-      { user_id: user.id, tenant_id: tenantId, updated_at: new Date().toISOString() },
-      { onConflict: "user_id" }
-    );
+  const { error } = await supabase.from("user_active_tenant").upsert(
+    {
+      user_id: user.id,
+      tenant_id: tenantId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
   if (error) console.error("persistActiveTenant:", error);
 }
 
@@ -139,7 +154,9 @@ tenantInput.addEventListener("change", async () => {
 });
 
 async function initMain() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session) {
     show("login");
     return;
@@ -151,7 +168,11 @@ async function initMain() {
     tenants = await loadTenants();
   } catch (err) {
     show("main");
-    showError(mainError, "שגיאה בטעינת ארגונים: " + (err instanceof Error ? err.message : String(err)));
+    showError(
+      mainError,
+      "שגיאה בטעינת ארגונים: " +
+        (err instanceof Error ? err.message : String(err)),
+    );
     return;
   }
 
@@ -161,7 +182,10 @@ async function initMain() {
     return;
   }
 
-  fillDatalist(tenantList, tenants.map((t) => t.name));
+  fillDatalist(
+    tenantList,
+    tenants.map((t) => t.name),
+  );
 
   // Preselect the org the user is ACTIVE on in the web app (user_active_tenant)
   // — with multiple orgs, an arbitrary default causes RLS clashes with the SPA.
@@ -170,9 +194,10 @@ async function initMain() {
     .select("tenant_id")
     .maybeSingle();
   const { lastTenantId } = await chrome.storage.local.get("lastTenantId");
-  const preferred = tenants.find((t) => t.id === activeRow?.tenant_id)
-    ?? tenants.find((t) => t.id === lastTenantId)
-    ?? (tenants.length === 1 ? tenants[0] : null);
+  const preferred =
+    tenants.find((t) => t.id === activeRow?.tenant_id) ??
+    tenants.find((t) => t.id === lastTenantId) ??
+    (tenants.length === 1 ? tenants[0] : null);
 
   show("main");
   if (preferred) await selectTenant(preferred);
@@ -215,7 +240,10 @@ el<HTMLButtonElement>("start-btn").addEventListener("click", async () => {
   const typedClient = clientInput.value.trim();
   const client = findByName(clients, typedClient);
   if (typedClient && !client) {
-    showError(mainError, `הלקוח "${typedClient}" לא נמצא ברשימת הפעילים — בחר מההשלמות או השאר ריק`);
+    showError(
+      mainError,
+      `הלקוח "${typedClient}" לא נמצא ברשימת הפעילים — בחר מההשלמות או השאר ריק`,
+    );
     return;
   }
   await chrome.storage.local.set({ lastClientId: client?.id ?? "" });

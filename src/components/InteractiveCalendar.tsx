@@ -1,29 +1,50 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import "react-big-calendar/lib/css/react-big-calendar.css";
-import { Calendar, dateFnsLocalizer, Event as BigCalendarEvent } from "react-big-calendar";
+import {
+  Calendar,
+  dateFnsLocalizer,
+  Event as BigCalendarEvent,
+} from "react-big-calendar";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import { he } from "date-fns/locale";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { getCalendarEvents, updateCalendarEvent, deleteCalendarEvent, CalendarProvider } from "@/lib/calendarApi";
+import {
+  getCalendarEvents,
+  updateCalendarEvent,
+  deleteCalendarEvent,
+  CalendarProvider,
+} from "@/lib/calendarApi";
 import { markLinkedTaskDoneForCalendarEvent } from "@/lib/taskCalendarSync";
 
 function getStoredProvider(): CalendarProvider {
-  return (localStorage.getItem("calendar_provider_mode") as CalendarProvider) || "direct";
+  return (
+    (localStorage.getItem("calendar_provider_mode") as CalendarProvider) ||
+    "direct"
+  );
 }
-import { listenForUnifiedConnection, openUnifiedCalendarConnection } from "@/lib/unifiedCalendarConnection";
+import {
+  listenForUnifiedConnection,
+  openUnifiedCalendarConnection,
+} from "@/lib/unifiedCalendarConnection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Loader2, Trash2 } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 const locales = {
-  'he': he,
+  he: he,
 };
 
 const localizer = dateFnsLocalizer({
@@ -48,7 +69,9 @@ export function InteractiveCalendar() {
   const { userId } = useCurrentUser();
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
+    null,
+  );
   const [isEditing, setIsEditing] = useState(false);
   const [editSummary, setEditSummary] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -63,7 +86,7 @@ export function InteractiveCalendar() {
   // Reconnect Google Calendar flow through Unified
   const handleReconnect = async () => {
     if (!tenantId) {
-      toast.error('לא נמצא ארגון פעיל');
+      toast.error("לא נמצא ארגון פעיל");
       return;
     }
 
@@ -71,21 +94,29 @@ export function InteractiveCalendar() {
       listenerCleanupRef.current?.();
       listenerCleanupRef.current = listenForUnifiedConnection(() => {
         listenerCleanupRef.current = null;
-        toast.success('היומן התחבר בהצלחה דרך Unified');
-        queryClient.invalidateQueries({ queryKey: ['calendar-status', userId, tenantId] });
-        queryClient.invalidateQueries({ queryKey: ['calendar-events', userId, tenantId] });
+        toast.success("היומן התחבר בהצלחה דרך Unified");
+        queryClient.invalidateQueries({
+          queryKey: ["calendar-status", userId, tenantId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["calendar-events", userId, tenantId],
+        });
       });
 
       await openUnifiedCalendarConnection({ tenantId });
     } catch (e: any) {
       listenerCleanupRef.current?.();
       listenerCleanupRef.current = null;
-      toast.error(`שגיאה בהתחברות ליומן: ${e?.message || ''}`);
+      toast.error(`שגיאה בהתחברות ליומן: ${e?.message || ""}`);
     }
   };
   // Fetch events
-  const { data: eventsData, isLoading, error } = useQuery({
-    queryKey: ['calendar-events', userId, tenantId],
+  const {
+    data: eventsData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["calendar-events", userId, tenantId],
     queryFn: async () => {
       const now = new Date();
       const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -94,7 +125,7 @@ export function InteractiveCalendar() {
       return await getCalendarEvents(
         oneMonthAgo.toISOString(),
         twoMonthsLater.toISOString(),
-        { tenantId: tenantId!, provider: getStoredProvider() }
+        { tenantId: tenantId!, provider: getStoredProvider() },
       );
     },
     enabled: !!userId && !!tenantId,
@@ -104,17 +135,28 @@ export function InteractiveCalendar() {
 
   // Update event mutation
   const updateMutation = useMutation({
-    mutationFn: async (params: { eventId: string; summary: string; description: string; start: string; end: string }) => {
-      return await updateCalendarEvent(params, { tenantId: tenantId!, provider: getStoredProvider() });
+    mutationFn: async (params: {
+      eventId: string;
+      summary: string;
+      description: string;
+      start: string;
+      end: string;
+    }) => {
+      return await updateCalendarEvent(params, {
+        tenantId: tenantId!,
+        provider: getStoredProvider(),
+      });
     },
     onSuccess: () => {
-      toast.success('האירוע עודכן בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['calendar-events', userId, tenantId] });
+      toast.success("האירוע עודכן בהצלחה");
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-events", userId, tenantId],
+      });
       setIsEditing(false);
       setSelectedEvent(null);
     },
     onError: (error: Error) => {
-      toast.error('שגיאה בעדכון האירוע: ' + error.message);
+      toast.error("שגיאה בעדכון האירוע: " + error.message);
     },
   });
 
@@ -122,46 +164,51 @@ export function InteractiveCalendar() {
   const deleteMutation = useMutation({
     mutationFn: async (eventId: string) => {
       await markLinkedTaskDoneForCalendarEvent(eventId);
-      return await deleteCalendarEvent(eventId, { tenantId: tenantId!, provider: getStoredProvider() });
+      return await deleteCalendarEvent(eventId, {
+        tenantId: tenantId!,
+        provider: getStoredProvider(),
+      });
     },
     onSuccess: () => {
-      toast.success('האירוע נמחק בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['calendar-events', userId, tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['tasks', tenantId] });
+      toast.success("האירוע נמחק בהצלחה");
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-events", userId, tenantId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       setSelectedEvent(null);
     },
     onError: (error: Error) => {
-      toast.error('שגיאה במחיקת האירוע: ' + error.message);
+      toast.error("שגיאה במחיקת האירוע: " + error.message);
     },
   });
 
   // Transform Google Calendar events to react-big-calendar format
   const events: CalendarEvent[] = useMemo(() => {
     if (!eventsData?.events) return [];
-    return (
-      eventsData.events
-        .map((event: any) => {
-          const startStr = event?.start?.dateTime || event?.start?.date;
-          const endStr = event?.end?.dateTime || event?.end?.date;
-          if (!startStr) return null;
-          const start = new Date(startStr);
-          let end = endStr ? new Date(endStr) : new Date(start.getTime() + 60 * 60 * 1000);
-          if (isNaN(start.getTime())) return null;
-          if (isNaN(end.getTime()) || end <= start) {
-            end = new Date(start.getTime() + 60 * 60 * 1000);
-          }
-          return {
-            id: event.id,
-            title: event.summary || 'ללא כותרת',
-            start,
-            end,
-            description: event.description || '',
-            calendarName: event.calendarName,
-            calendarColor: event.calendarColor,
-          } as CalendarEvent;
-        })
-        .filter(Boolean) as CalendarEvent[]
-    );
+    return eventsData.events
+      .map((event: any) => {
+        const startStr = event?.start?.dateTime || event?.start?.date;
+        const endStr = event?.end?.dateTime || event?.end?.date;
+        if (!startStr) return null;
+        const start = new Date(startStr);
+        let end = endStr
+          ? new Date(endStr)
+          : new Date(start.getTime() + 60 * 60 * 1000);
+        if (isNaN(start.getTime())) return null;
+        if (isNaN(end.getTime()) || end <= start) {
+          end = new Date(start.getTime() + 60 * 60 * 1000);
+        }
+        return {
+          id: event.id,
+          title: event.summary || "ללא כותרת",
+          start,
+          end,
+          description: event.description || "",
+          calendarName: event.calendarName,
+          calendarColor: event.calendarColor,
+        } as CalendarEvent;
+      })
+      .filter(Boolean) as CalendarEvent[];
   }, [eventsData]);
 
   const calendars = useMemo(() => {
@@ -171,14 +218,14 @@ export function InteractiveCalendar() {
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
     setSelectedEvent(event);
     setEditSummary(event.title as string);
-    setEditDescription(event.description || '');
+    setEditDescription(event.description || "");
     setEditStart(format(event.start, "yyyy-MM-dd'T'HH:mm"));
     setEditEnd(format(event.end, "yyyy-MM-dd'T'HH:mm"));
   }, []);
 
   const handleUpdateEvent = () => {
     if (!selectedEvent || !editSummary || !editStart) {
-      toast.error('נא למלא את כל השדות הנדרשים');
+      toast.error("נא למלא את כל השדות הנדרשים");
       return;
     }
 
@@ -193,7 +240,7 @@ export function InteractiveCalendar() {
 
   const handleDeleteEvent = () => {
     if (!selectedEvent) return;
-    if (window.confirm('האם אתה בטוח שברצונך למחוק את האירוע?')) {
+    if (window.confirm("האם אתה בטוח שברצונך למחוק את האירוע?")) {
       deleteMutation.mutate(selectedEvent.id);
     }
   };
@@ -214,13 +261,13 @@ export function InteractiveCalendar() {
           <AlertDescription>
             <div className="flex flex-wrap gap-2 mt-2">
               {calendars.map((cal: any) => (
-                <div 
-                  key={cal.id} 
+                <div
+                  key={cal.id}
                   className="flex items-center gap-2 px-3 py-1 rounded-full border bg-background"
                   style={{ borderColor: cal.color }}
                 >
-                  <div 
-                    className="w-3 h-3 rounded-full" 
+                  <div
+                    className="w-3 h-3 rounded-full"
                     style={{ backgroundColor: cal.color }}
                   />
                   <span className="text-sm">{cal.name}</span>
@@ -230,42 +277,57 @@ export function InteractiveCalendar() {
           </AlertDescription>
         </Alert>
       )}
-      {(error as any)?.message && (((error as any).message || '').includes('invalid_grant') || ((error as any).message || '').includes('401')) && (
-        <Alert>
-          <AlertTitle>נדרש להתחבר מחדש ליומן</AlertTitle>
-          <AlertDescription className="flex items-center justify-between gap-2">
-            חיבור היומן פג תוקף או בוטל. התחברו מחדש דרך Unified כדי להציג אירועים.
-            <Button size="sm" onClick={handleReconnect}>התחברות מחדש</Button>
-          </AlertDescription>
-        </Alert>
-      )}
-      <div className="bg-background rounded-lg border p-2 md:p-4 overflow-hidden" style={{ height: 'calc(100vh - 200px)', minHeight: 500, maxHeight: 800 }}>
+      {(error as any)?.message &&
+        (((error as any).message || "").includes("invalid_grant") ||
+          ((error as any).message || "").includes("401")) && (
+          <Alert>
+            <AlertTitle>נדרש להתחבר מחדש ליומן</AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-2">
+              חיבור היומן פג תוקף או בוטל. התחברו מחדש דרך Unified כדי להציג
+              אירועים.
+              <Button size="sm" onClick={handleReconnect}>
+                התחברות מחדש
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+      <div
+        className="bg-background rounded-lg border p-2 md:p-4 overflow-hidden"
+        style={{
+          height: "calc(100vh - 200px)",
+          minHeight: 500,
+          maxHeight: 800,
+        }}
+      >
         <Calendar
           localizer={localizer}
           events={events}
           startAccessor="start"
           endAccessor="end"
           onSelectEvent={handleSelectEvent}
-          views={['month', 'week', 'day']}
+          views={["month", "week", "day"]}
           defaultView="week"
           rtl
           messages={{
-            next: 'הבא',
-            previous: 'הקודם',
-            today: 'היום',
-            month: 'חודש',
-            week: 'שבוע',
-            day: 'יום',
-            agenda: 'סדר יום',
-            date: 'תאריך',
-            time: 'שעה',
-            event: 'אירוע',
-            noEventsInRange: 'אין אירועים בטווח זה',
+            next: "הבא",
+            previous: "הקודם",
+            today: "היום",
+            month: "חודש",
+            week: "שבוע",
+            day: "יום",
+            agenda: "סדר יום",
+            date: "תאריך",
+            time: "שעה",
+            event: "אירוע",
+            noEventsInRange: "אין אירועים בטווח זה",
           }}
         />
       </div>
 
-      <Dialog open={selectedEvent !== null && !isEditing} onOpenChange={() => setSelectedEvent(null)}>
+      <Dialog
+        open={selectedEvent !== null && !isEditing}
+        onOpenChange={() => setSelectedEvent(null)}
+      >
         <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>{selectedEvent?.title}</DialogTitle>
@@ -276,8 +338,8 @@ export function InteractiveCalendar() {
                 <Label>יומן</Label>
                 <div className="flex items-center gap-2 mt-1">
                   {selectedEvent.calendarColor && (
-                    <div 
-                      className="w-3 h-3 rounded-full" 
+                    <div
+                      className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: selectedEvent.calendarColor }}
                     />
                   )}
@@ -288,26 +350,40 @@ export function InteractiveCalendar() {
             {selectedEvent?.description && (
               <div>
                 <Label>תיאור</Label>
-                <p className="text-sm text-muted-foreground">{selectedEvent.description}</p>
+                <p className="text-sm text-muted-foreground">
+                  {selectedEvent.description}
+                </p>
               </div>
             )}
             <div>
               <Label>התחלה</Label>
-              <p className="text-sm">{selectedEvent?.start && format(selectedEvent.start, 'dd/MM/yyyy HH:mm')}</p>
+              <p className="text-sm">
+                {selectedEvent?.start &&
+                  format(selectedEvent.start, "dd/MM/yyyy HH:mm")}
+              </p>
             </div>
             <div>
               <Label>סיום</Label>
-              <p className="text-sm">{selectedEvent?.end && format(selectedEvent.end, 'dd/MM/yyyy HH:mm')}</p>
+              <p className="text-sm">
+                {selectedEvent?.end &&
+                  format(selectedEvent.end, "dd/MM/yyyy HH:mm")}
+              </p>
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="destructive" onClick={handleDeleteEvent} disabled={deleteMutation.isPending}>
-              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Trash2 className="h-4 w-4 ml-2" />}
+            <Button
+              variant="destructive"
+              onClick={handleDeleteEvent}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              ) : (
+                <Trash2 className="h-4 w-4 ml-2" />
+              )}
               מחק אירוע
             </Button>
-            <Button onClick={() => setIsEditing(true)}>
-              ערוך אירוע
-            </Button>
+            <Button onClick={() => setIsEditing(true)}>ערוך אירוע</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -359,8 +435,13 @@ export function InteractiveCalendar() {
             <Button variant="outline" onClick={() => setIsEditing(false)}>
               ביטול
             </Button>
-            <Button onClick={handleUpdateEvent} disabled={updateMutation.isPending}>
-              {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+            <Button
+              onClick={handleUpdateEvent}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              )}
               שמור שינויים
             </Button>
           </DialogFooter>

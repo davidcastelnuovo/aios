@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 /**
@@ -37,17 +38,15 @@ serve(async (req) => {
       console.log("[cron-sync-woocommerce] No sites to sync");
       return new Response(
         JSON.stringify({ message: "No sites to sync", sites_count: 0 }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     console.log(`[cron-sync-woocommerce] Found ${sites.length} sites to sync`);
 
     // Invoke sync function for all sites (no site_id = sync all auto-sync sites)
-    const { data: syncResult, error: syncError } = await supabase.functions.invoke(
-      "sync-woocommerce-data",
-      { body: {} }
-    );
+    const { data: syncResult, error: syncError } =
+      await supabase.functions.invoke("sync-woocommerce-data", { body: {} });
 
     if (syncError) throw syncError;
 
@@ -60,13 +59,13 @@ serve(async (req) => {
         result: syncResult,
         timestamp: new Date().toISOString(),
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error: any) {
     console.error("[cron-sync-woocommerce] Error:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

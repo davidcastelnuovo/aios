@@ -105,10 +105,25 @@ const STAGE_CONFIG: Record<
   },
 };
 
-const APPROVAL_CONFIG: Record<string, { icon: any; label: string; color: string }> = {
-  auto: { icon: Zap, label: "אוטומטי", color: "text-emerald-100 bg-emerald-700/40 border-emerald-300/30" },
-  hybrid: { icon: Clock, label: "חצי אוטומטי", color: "text-amber-100 bg-amber-700/40 border-amber-300/30" },
-  manual: { icon: Hand, label: "ידני", color: "text-gray-100 bg-gray-700/40 border-gray-300/30" },
+const APPROVAL_CONFIG: Record<
+  string,
+  { icon: any; label: string; color: string }
+> = {
+  auto: {
+    icon: Zap,
+    label: "אוטומטי",
+    color: "text-emerald-100 bg-emerald-700/40 border-emerald-300/30",
+  },
+  hybrid: {
+    icon: Clock,
+    label: "חצי אוטומטי",
+    color: "text-amber-100 bg-amber-700/40 border-amber-300/30",
+  },
+  manual: {
+    icon: Hand,
+    label: "ידני",
+    color: "text-gray-100 bg-gray-700/40 border-gray-300/30",
+  },
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -166,7 +181,7 @@ function WorkItemCard({
           <span
             className={cn(
               "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-              statusColor
+              statusColor,
             )}
           >
             {statusLabel}
@@ -236,7 +251,9 @@ function StatusBar({ items }: { items: any[] }) {
           {draft} טיוטה
         </span>
       )}
-      <span className="mr-auto text-muted-foreground">{items.length} פריטים</span>
+      <span className="mr-auto text-muted-foreground">
+        {items.length} פריטים
+      </span>
     </div>
   );
 }
@@ -277,7 +294,8 @@ function DepartmentCard({
 }) {
   const cfg = STAGE_CONFIG[stage.stage_type] ?? STAGE_CONFIG.strategy;
   const Icon = cfg.icon;
-  const approvalCfg = APPROVAL_CONFIG[stage.approval_mode] ?? APPROVAL_CONFIG.manual;
+  const approvalCfg =
+    APPROVAL_CONFIG[stage.approval_mode] ?? APPROVAL_CONFIG.manual;
   const ApprovalIcon = approvalCfg.icon;
 
   return (
@@ -286,7 +304,13 @@ function DepartmentCard({
       dir="rtl"
     >
       {/* Gradient banner */}
-      <div className={cn("relative bg-gradient-to-br p-6 text-white rounded-t-2xl", cfg.gradient)} style={{ minHeight: 140 }}>
+      <div
+        className={cn(
+          "relative bg-gradient-to-br p-6 text-white rounded-t-2xl",
+          cfg.gradient,
+        )}
+        style={{ minHeight: 140 }}
+      >
         <div className="absolute inset-0 bg-black/10 rounded-t-2xl" />
         {/* Settings button */}
         <button
@@ -303,13 +327,15 @@ function DepartmentCard({
           <p className="text-sm opacity-80 mt-0.5 flex items-center gap-1">
             <Bot className="h-3.5 w-3.5 flex-shrink-0" />
             {stage.ai_agents?.name ?? "ללא סוכן"}
-            {stage.ai_agents?.name && <span className="opacity-70">· {cfg.agentRole}</span>}
+            {stage.ai_agents?.name && (
+              <span className="opacity-70">· {cfg.agentRole}</span>
+            )}
           </p>
           {/* Approval mode badge */}
           <span
             className={cn(
               "mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-              approvalCfg.color
+              approvalCfg.color,
             )}
           >
             <ApprovalIcon className="h-2.5 w-2.5" />
@@ -339,7 +365,9 @@ function DepartmentCard({
               <Icon className="h-6 w-6 text-muted-foreground/40" />
             </div>
             <p className="text-xs text-muted-foreground">אין פריטים בשלב זה</p>
-            <p className="text-[11px] text-muted-foreground/60 mt-1">{cfg.emptyHint}</p>
+            <p className="text-[11px] text-muted-foreground/60 mt-1">
+              {cfg.emptyHint}
+            </p>
           </div>
         )}
       </div>
@@ -391,7 +419,9 @@ export function MarketingPipelineBoard({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("marketing_pipeline_stages")
-        .select("id, name, stage_type, sort_order, approval_mode, agent_id, configuration, ai_agents(id, name)")
+        .select(
+          "id, name, stage_type, sort_order, approval_mode, agent_id, configuration, ai_agents(id, name)",
+        )
         .eq("pipeline_id", pipelineId)
         .order("sort_order");
       if (error) {
@@ -426,7 +456,8 @@ export function MarketingPipelineBoard({
     (itemsByStage[sid] ??= []).push(item);
   });
 
-  const openStage = (stages ?? []).find((s: any) => s.id === openStageId) ?? null;
+  const openStage =
+    (stages ?? []).find((s: any) => s.id === openStageId) ?? null;
 
   const handleNewItem = async (stageId: string) => {
     const { data, error } = await supabase
@@ -442,7 +473,11 @@ export function MarketingPipelineBoard({
       .select("id")
       .single();
     if (error) {
-      toast({ title: "שגיאה", description: error.message, variant: "destructive" });
+      toast({
+        title: "שגיאה",
+        description: error.message,
+        variant: "destructive",
+      });
       return;
     }
     refetchItems();
@@ -451,7 +486,11 @@ export function MarketingPipelineBoard({
   const handleRun = async (stageId: string) => {
     const stageItems = itemsByStage[stageId] ?? [];
     if (stageItems.length === 0) {
-      toast({ title: "אין פריטים בשלב זה", description: "הוסף פריט תחילה", variant: "destructive" });
+      toast({
+        title: "אין פריטים בשלב זה",
+        description: "הוסף פריט תחילה",
+        variant: "destructive",
+      });
       return;
     }
     const item = stageItems[0];
@@ -463,9 +502,15 @@ export function MarketingPipelineBoard({
       if (error) throw error;
       toast({ title: "השלב הורץ בהצלחה" });
       refetchItems();
-      queryClient.invalidateQueries({ queryKey: ["marketing-assets", item.id, tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["marketing-assets", item.id, tenantId],
+      });
     } catch (e: any) {
-      toast({ title: "שגיאה בהרצה", description: e.message, variant: "destructive" });
+      toast({
+        title: "שגיאה בהרצה",
+        description: e.message,
+        variant: "destructive",
+      });
     } finally {
       setRunning(null);
     }
@@ -493,7 +538,9 @@ export function MarketingPipelineBoard({
         )}
         {stageList.map((stage: any, i: number) => {
           const stageItems = itemsByStage[stage.id] ?? [];
-          const hasRunning = stageItems.some((item) => item.status === "in_progress");
+          const hasRunning = stageItems.some(
+            (item) => item.status === "in_progress",
+          );
           return (
             <div key={stage.id} className="flex items-stretch">
               {i > 0 && <FlowConnector hasRunning={hasRunning} />}
@@ -520,7 +567,9 @@ export function MarketingPipelineBoard({
         onClose={() => setOpenStageId(null)}
         onSaved={() => {
           refetchStages();
-          queryClient.invalidateQueries({ queryKey: ["marketing-stages", pipelineId, tenantId] });
+          queryClient.invalidateQueries({
+            queryKey: ["marketing-stages", pipelineId, tenantId],
+          });
         }}
       />
 

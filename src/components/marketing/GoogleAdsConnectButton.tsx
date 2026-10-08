@@ -39,9 +39,12 @@ export function GoogleAdsConnectButton({ tenantId, onConnected }: Props) {
   const checkStatus = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("google-ads-auth", {
-        body: { action: "check_status" },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "google-ads-auth",
+        {
+          body: { action: "check_status" },
+        },
+      );
       if (error) throw error;
       setStatus(data);
       if (data?.connected && data?.accounts) {
@@ -75,9 +78,12 @@ export function GoogleAdsConnectButton({ tenantId, onConnected }: Props) {
   const startOAuth = async () => {
     setConnecting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("google-ads-auth", {
-        body: { action: "get_auth_url", origin: window.location.origin },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "google-ads-auth",
+        {
+          body: { action: "get_auth_url", origin: window.location.origin },
+        },
+      );
       if (error) throw error;
       if (!data?.auth_url) throw new Error("לא התקבל URL לאימות");
 
@@ -85,7 +91,7 @@ export function GoogleAdsConnectButton({ tenantId, onConnected }: Props) {
       const popup = window.open(
         data.auth_url,
         "google_ads_oauth",
-        "width=500,height=650,scrollbars=yes,resizable=yes"
+        "width=500,height=650,scrollbars=yes,resizable=yes",
       );
 
       if (!popup) {
@@ -125,21 +131,34 @@ export function GoogleAdsConnectButton({ tenantId, onConnected }: Props) {
 
   if (status?.connected) {
     return (
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2" dir="rtl">
+      <div
+        className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2"
+        dir="rtl"
+      >
         <div className="flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span className="text-sm font-medium text-emerald-800">Google Ads מחובר</span>
+          <span className="text-sm font-medium text-emerald-800">
+            Google Ads מחובר
+          </span>
           {status.email && (
-            <span className="text-xs text-emerald-600 ms-auto">{status.email}</span>
+            <span className="text-xs text-emerald-600 ms-auto">
+              {status.email}
+            </span>
           )}
         </div>
         {status.accounts && status.accounts.length > 0 && (
           <div className="space-y-1">
             {status.accounts.map((acc) => (
-              <div key={acc.customer_id} className="flex items-center gap-2 rounded bg-white border border-emerald-200 px-2 py-1">
+              <div
+                key={acc.customer_id}
+                className="flex items-center gap-2 rounded bg-white border border-emerald-200 px-2 py-1"
+              >
                 <Globe className="h-3 w-3 text-emerald-500" />
                 <span className="text-xs font-medium">{acc.name}</span>
-                <Badge variant="outline" className="ms-auto text-[9px] border-emerald-300 text-emerald-600">
+                <Badge
+                  variant="outline"
+                  className="ms-auto text-[9px] border-emerald-300 text-emerald-600"
+                >
                   {acc.customer_id}
                 </Badge>
               </div>
@@ -175,7 +194,10 @@ export function GoogleAdsConnectButton({ tenantId, onConnected }: Props) {
   }
 
   return (
-    <div className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 text-center space-y-3" dir="rtl">
+    <div
+      className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 text-center space-y-3"
+      dir="rtl"
+    >
       <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
         <AlertTriangle className="h-4 w-4 text-amber-500" />
         Google Ads לא מחובר
@@ -190,14 +212,18 @@ export function GoogleAdsConnectButton({ tenantId, onConnected }: Props) {
         size="sm"
       >
         {connecting ? (
-          <><Loader2 className="ml-2 h-4 w-4 animate-spin" />מתחבר...</>
+          <>
+            <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+            מתחבר...
+          </>
         ) : (
-          <><Globe className="ml-2 h-4 w-4" />חבר Google Ads</>
+          <>
+            <Globe className="ml-2 h-4 w-4" />
+            חבר Google Ads
+          </>
         )}
       </Button>
-      {status?.error && (
-        <p className="text-xs text-red-500">{status.error}</p>
-      )}
+      {status?.error && <p className="text-xs text-red-500">{status.error}</p>}
     </div>
   );
 }

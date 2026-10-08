@@ -4,15 +4,21 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   try {
     const { approval_id, decision, reviewer_id } = await req.json();
-    if (!approval_id || !decision || !["approved", "rejected"].includes(decision)) {
+    if (
+      !approval_id ||
+      !decision ||
+      !["approved", "rejected"].includes(decision)
+    ) {
       return new Response(JSON.stringify({ error: "missing/invalid params" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -32,24 +38,40 @@ Deno.serve(async (req) => {
     if (aErr || !approval) throw aErr ?? new Error("not found");
 
     if (approval.status !== "pending") {
-      return new Response(JSON.stringify({ ok: false, error: "approval already decided", status: approval.status }), {
-        status: 409,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: "approval already decided",
+          status: approval.status,
+        }),
+        {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     let executionResult: any = null;
 
-    if (decision === "approved" && (approval.tool_name === "create_automation" || approval.action_type === "agent_direct_tool")) {
+    if (
+      decision === "approved" &&
+      (approval.tool_name === "create_automation" ||
+        approval.action_type === "agent_direct_tool")
+    ) {
       // Carmen authoring: route to carmen-approval-execute, which materializes the
       // (disabled) flow automation from the approved spec. Direct agent tool calls
       // (carmen-tools-mcp) also execute there. Kept as explicit special-cases so no
       // other tool's behavior changes.
       try {
-        const { data, error } = await supabase.functions.invoke("carmen-approval-execute", {
-          body: { approval_id, approved_by: reviewer_id ?? null },
-        });
-        executionResult = error ? { ok: false, error: String(error?.message ?? error) } : (data ?? { ok: true });
+        const { data, error } = await supabase.functions.invoke(
+          "carmen-approval-execute",
+          {
+            body: { approval_id, approved_by: reviewer_id ?? null },
+          },
+        );
+        executionResult = error
+          ? { ok: false, error: String(error?.message ?? error) }
+          : (data ?? { ok: true });
       } catch (e: any) {
         executionResult = { ok: false, error: String(e?.message ?? e) };
       }
@@ -64,25 +86,35 @@ Deno.serve(async (req) => {
 
       if (tool?.handler_kind === "edge" && tool.handler_ref) {
         try {
-          const { data, error } = await supabase.functions.invoke(tool.handler_ref, {
-            body: {
-              ...(approval.tool_input ?? {}),
-              _approval_id: approval_id,
-              _run_id: approval.run_id,
-              _tenant_id: approval.tenant_id,
-              _agent_id: approval.agent_id,
+          const { data, error } = await supabase.functions.invoke(
+            tool.handler_ref,
+            {
+              body: {
+                ...(approval.tool_input ?? {}),
+                _approval_id: approval_id,
+                _run_id: approval.run_id,
+                _tenant_id: approval.tenant_id,
+                _agent_id: approval.agent_id,
+              },
             },
-          });
+          );
           if (error) throw error;
           executionResult = data ?? { ok: true };
         } catch (e: any) {
           executionResult = { ok: false, error: String(e?.message ?? e) };
         }
       } else {
-        executionResult = { ok: true, note: "no handler — manual or internal tool" };
+        executionResult = {
+          ok: true,
+          note: "no handler — manual or internal tool",
+        };
       }
     } else if (decision === "rejected") {
-      executionResult = { ok: false, rejected: true, reason: "Rejected by reviewer" };
+      executionResult = {
+        ok: false,
+        rejected: true,
+        reason: "Rejected by reviewer",
+      };
     }
 
     // Persist the approval decision
@@ -123,18 +155,29 @@ Deno.serve(async (req) => {
       }
 
       // Continue the ReAct loop
-      const { data: continueResult, error: contErr } = await supabase.functions.invoke(
-        "run-ai-agent-v2",
-        { body: { run_id: approval.run_id, tenant_id: approval.tenant_id } },
-      );
+      const { data: continueResult, error: contErr } =
+        await supabase.functions.invoke("run-ai-agent-v2", {
+          body: { run_id: approval.run_id, tenant_id: approval.tenant_id },
+        });
       if (contErr) {
-        await supabase.from("agent_runs")
-          .update({ status: "failed", error_message: `resume failed: ${contErr.message}` })
+        await supabase
+          .from("agent_runs")
+          .update({
+            status: "failed",
+            error_message: `resume failed: ${contErr.message}`,
+          })
           .eq("id", approval.run_id);
       }
-      return new Response(JSON.stringify({ ok: true, executionResult, continued: continueResult }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          executionResult,
+          continued: continueResult,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Log standalone (legacy approval without run)
@@ -142,7 +185,10 @@ Deno.serve(async (req) => {
       tenant_id: approval.tenant_id,
       agent_id: approval.agent_id,
       action_type: `approval_${decision}`,
-      action_details: { tool_name: approval.tool_name, result: executionResult },
+      action_details: {
+        tool_name: approval.tool_name,
+        result: executionResult,
+      },
       status: executionResult?.ok === false ? "error" : "success",
     });
 

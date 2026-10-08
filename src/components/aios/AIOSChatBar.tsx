@@ -24,7 +24,12 @@ interface AIOSChatBarProps {
   streamingContent: string;
 }
 
-export function AIOSChatBar({ messages, onSend, isLoading, streamingContent }: AIOSChatBarProps) {
+export function AIOSChatBar({
+  messages,
+  onSend,
+  isLoading,
+  streamingContent,
+}: AIOSChatBarProps) {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -58,7 +63,9 @@ export function AIOSChatBar({ messages, onSend, isLoading, streamingContent }: A
           <div className="flex items-center justify-center h-full text-muted-foreground">
             <div className="text-center space-y-2">
               <p className="text-lg font-medium">👋 שלום! אני AIOS</p>
-              <p className="text-sm">שאל אותי כל דבר על המערכת - לידים, משימות, לקוחות, הוצאות...</p>
+              <p className="text-sm">
+                שאל אותי כל דבר על המערכת - לידים, משימות, לקוחות, הוצאות...
+              </p>
             </div>
           </div>
         )}
@@ -75,8 +82,13 @@ export function AIOSChatBar({ messages, onSend, isLoading, streamingContent }: A
               }`}
             >
               {msg.role === "assistant" ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-muted [&_th]:font-semibold [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1" dir="rtl">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                <div
+                  className="prose prose-sm dark:prose-invert max-w-none [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-muted [&_th]:font-semibold [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1"
+                  dir="rtl"
+                >
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {msg.content}
+                  </ReactMarkdown>
                 </div>
               ) : (
                 <p dir="rtl">{msg.content}</p>
@@ -87,8 +99,13 @@ export function AIOSChatBar({ messages, onSend, isLoading, streamingContent }: A
         {streamingContent && (
           <div className="flex justify-start">
             <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-card border border-border text-card-foreground">
-              <div className="prose prose-sm dark:prose-invert max-w-none [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-muted [&_th]:font-semibold [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1" dir="rtl">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
+              <div
+                className="prose prose-sm dark:prose-invert max-w-none [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-muted [&_th]:font-semibold [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1"
+                dir="rtl"
+              >
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {streamingContent}
+                </ReactMarkdown>
               </div>
             </div>
           </div>

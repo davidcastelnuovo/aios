@@ -7,13 +7,18 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
   });
 
 const graphJson = async (
@@ -22,14 +27,17 @@ const graphJson = async (
   init?: RequestInit,
   graphVersion = DEFAULT_META_GRAPH_VERSION,
 ) => {
-  const response = await fetch(`https://graph.facebook.com/${graphVersion}/${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
+  const response = await fetch(
+    `https://graph.facebook.com/${graphVersion}/${path}`,
+    {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
     },
-  });
+  );
   const text = await response.text();
   let data: any = {};
   try {
@@ -39,7 +47,11 @@ const graphJson = async (
   }
   if (!response.ok || data?.error) {
     const error = data?.error ?? {};
-    const err = new Error(error.error_user_msg || error.message || `Meta Graph API error (${response.status})`);
+    const err = new Error(
+      error.error_user_msg ||
+        error.message ||
+        `Meta Graph API error (${response.status})`,
+    );
     (err as Error & { metaError?: Record<string, unknown> }).metaError = error;
     throw err;
   }
@@ -78,7 +90,10 @@ const inspectToken = async (
       wabaIds: unique(
         granular
           .filter((entry: any) =>
-            ["whatsapp_business_management", "whatsapp_business_messaging"].includes(entry?.scope)
+            [
+              "whatsapp_business_management",
+              "whatsapp_business_messaging",
+            ].includes(entry?.scope),
           )
           .flatMap((entry: any) => entry?.target_ids ?? []),
       ),
@@ -88,7 +103,10 @@ const inspectToken = async (
   }
 };
 
-const WABA_EDGES = ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"];
+const WABA_EDGES = [
+  "owned_whatsapp_business_accounts",
+  "client_whatsapp_business_accounts",
+];
 
 type DiscoveryStep = { source: string; found?: string[]; error?: string };
 
@@ -115,7 +133,9 @@ const discoverWabas = async (
           undefined,
           graphVersion,
         );
-        const ids = (accounts?.data ?? []).map((account: any) => account?.id).filter(Boolean);
+        const ids = (accounts?.data ?? [])
+          .map((account: any) => account?.id)
+          .filter(Boolean);
         found.push(...ids);
         steps.push({ source: `${source}:${edge}`, found: ids });
       } catch (error) {
@@ -132,10 +152,18 @@ const discoverWabas = async (
   // A user token exposes the businesses it belongs to; a system user token does not.
   if (!found.length) {
     try {
-      const businesses = await graphJson("me/businesses?limit=50", token, undefined, graphVersion);
-      const ids = (businesses?.data ?? []).map((business: any) => business?.id).filter(Boolean);
+      const businesses = await graphJson(
+        "me/businesses?limit=50",
+        token,
+        undefined,
+        graphVersion,
+      );
+      const ids = (businesses?.data ?? [])
+        .map((business: any) => business?.id)
+        .filter(Boolean);
       steps.push({ source: "me/businesses", found: ids });
-      for (const businessId of ids) await readBusiness(businessId, `me/businesses/${businessId}`);
+      for (const businessId of ids)
+        await readBusiness(businessId, `me/businesses/${businessId}`);
     } catch (error) {
       steps.push({
         source: "me/businesses",
@@ -147,9 +175,17 @@ const discoverWabas = async (
   // A system user belongs to exactly one business, reachable through its own node.
   if (!found.length) {
     try {
-      const me = await graphJson("me?fields=id,name", token, undefined, graphVersion);
+      const me = await graphJson(
+        "me?fields=id,name",
+        token,
+        undefined,
+        graphVersion,
+      );
       steps.push({ source: "me", found: me?.id ? [String(me.id)] : [] });
-      for (const edge of ["assigned_whatsapp_business_accounts", "businesses"]) {
+      for (const edge of [
+        "assigned_whatsapp_business_accounts",
+        "businesses",
+      ]) {
         try {
           const payload = await graphJson(
             `${me.id}/${edge}?limit=50`,
@@ -157,9 +193,14 @@ const discoverWabas = async (
             undefined,
             graphVersion,
           );
-          const ids = (payload?.data ?? []).map((entry: any) => entry?.id).filter(Boolean);
-          if (edge === "assigned_whatsapp_business_accounts") found.push(...ids);
-          else for (const businessId of ids) await readBusiness(businessId, `me/${businessId}`);
+          const ids = (payload?.data ?? [])
+            .map((entry: any) => entry?.id)
+            .filter(Boolean);
+          if (edge === "assigned_whatsapp_business_accounts")
+            found.push(...ids);
+          else
+            for (const businessId of ids)
+              await readBusiness(businessId, `me/${businessId}`);
           steps.push({ source: `me/${edge}`, found: ids });
         } catch (error) {
           steps.push({
@@ -169,16 +210,24 @@ const discoverWabas = async (
         }
       }
     } catch (error) {
-      steps.push({ source: "me", error: error instanceof Error ? error.message : "unknown error" });
+      steps.push({
+        source: "me",
+        error: error instanceof Error ? error.message : "unknown error",
+      });
     }
   }
 
   return { wabaIds: unique(found), steps };
 };
 
-const PHONE_FIELDS = "id,display_phone_number,verified_name,quality_rating,platform_type,is_on_biz_app";
+const PHONE_FIELDS =
+  "id,display_phone_number,verified_name,quality_rating,platform_type,is_on_biz_app";
 
-const listPhoneNumbers = async (wabaId: string, token: string, graphVersion: string) => {
+const listPhoneNumbers = async (
+  wabaId: string,
+  token: string,
+  graphVersion: string,
+) => {
   const payload = await graphJson(
     `${wabaId}/phone_numbers?fields=${PHONE_FIELDS}`,
     token,
@@ -189,26 +238,35 @@ const listPhoneNumbers = async (wabaId: string, token: string, graphVersion: str
 };
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (request.method !== "POST") return reply({ error: "method_not_allowed" }, 405);
+  if (request.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
+  if (request.method !== "POST")
+    return reply({ error: "method_not_allowed" }, 405);
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const appId = Deno.env.get("FACEBOOK_APP_ID") ?? Deno.env.get("META_APP_ID") ?? "";
-    const appSecret = Deno.env.get("META_APP_SECRET") ?? Deno.env.get("FACEBOOK_APP_SECRET") ?? "";
+    const appId =
+      Deno.env.get("FACEBOOK_APP_ID") ?? Deno.env.get("META_APP_ID") ?? "";
+    const appSecret =
+      Deno.env.get("META_APP_SECRET") ??
+      Deno.env.get("FACEBOOK_APP_SECRET") ??
+      "";
     const configurationId = Deno.env.get("META_WHATSAPP_CONFIG_ID") ?? "";
-    const graphVersion = Deno.env.get("META_GRAPH_API_VERSION") ?? DEFAULT_META_GRAPH_VERSION;
+    const graphVersion =
+      Deno.env.get("META_GRAPH_API_VERSION") ?? DEFAULT_META_GRAPH_VERSION;
     const appToken = `${appId}|${appSecret}`;
     const authHeader = request.headers.get("Authorization") ?? "";
     const jwt = authHeader.replace(/^Bearer\s+/i, "");
 
-    if (!supabaseUrl || !serviceKey || !jwt) return reply({ error: "unauthorized" }, 401);
+    if (!supabaseUrl || !serviceKey || !jwt)
+      return reply({ error: "unauthorized" }, 401);
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: authData, error: authError } = await admin.auth.getUser(jwt);
-    if (authError || !authData.user) return reply({ error: "unauthorized" }, 401);
+    if (authError || !authData.user)
+      return reply({ error: "unauthorized" }, 401);
 
     const body = await request.json().catch(() => ({}));
     const action = typeof body.action === "string" ? body.action : "config";
@@ -224,7 +282,8 @@ Deno.serve(async (request) => {
         .maybeSingle(),
       admin.rpc("is_super_admin", { _user_id: authData.user.id }),
     ]);
-    if (!membership && superAdmin !== true) return reply({ error: "forbidden" }, 403);
+    if (!membership && superAdmin !== true)
+      return reply({ error: "forbidden" }, 403);
 
     if (action === "config") {
       if (!appId || !configurationId) {
@@ -253,13 +312,20 @@ Deno.serve(async (request) => {
         return reply({ error: "meta_whatsapp_not_configured" }, 503);
       }
       const checks: Array<Record<string, unknown>> = [];
-      for (const path of [configurationId, `${configurationId}?fields=id,name`]) {
+      for (const path of [
+        configurationId,
+        `${configurationId}?fields=id,name`,
+      ]) {
         try {
           const data = await graphJson(path, appToken, undefined, graphVersion);
           checks.push({ path, ok: true, data });
           break;
         } catch (error) {
-          checks.push({ path, ok: false, error: error instanceof Error ? error.message : "unknown" });
+          checks.push({
+            path,
+            ok: false,
+            error: error instanceof Error ? error.message : "unknown",
+          });
         }
       }
       let whatsappProduct: Record<string, unknown> = { ok: false };
@@ -278,7 +344,10 @@ Deno.serve(async (request) => {
           })),
         };
       } catch (error) {
-        whatsappProduct = { ok: false, error: error instanceof Error ? error.message : "unknown" };
+        whatsappProduct = {
+          ok: false,
+          error: error instanceof Error ? error.message : "unknown",
+        };
       }
       return reply({
         app_id: appId,
@@ -290,8 +359,10 @@ Deno.serve(async (request) => {
     }
 
     if (action === "disconnect") {
-      const integrationId = typeof body.integration_id === "string" ? body.integration_id : "";
-      if (!integrationId) return reply({ error: "integration_id_required" }, 400);
+      const integrationId =
+        typeof body.integration_id === "string" ? body.integration_id : "";
+      if (!integrationId)
+        return reply({ error: "integration_id_required" }, 400);
       const { data: integration } = await admin
         .from("tenant_integrations")
         .select("id,user_id")
@@ -299,22 +370,39 @@ Deno.serve(async (request) => {
         .eq("tenant_id", tenantId)
         .eq("integration_type", "meta_whatsapp")
         .maybeSingle();
-      if (!integration || (integration.user_id !== authData.user.id && superAdmin !== true)) {
+      if (
+        !integration ||
+        (integration.user_id !== authData.user.id && superAdmin !== true)
+      ) {
         return reply({ error: "forbidden" }, 403);
       }
-      const { error } = await admin.from("tenant_integrations").delete().eq("id", integrationId);
+      const { error } = await admin
+        .from("tenant_integrations")
+        .delete()
+        .eq("id", integrationId);
       if (error) throw error;
       return reply({ success: true });
     }
 
     /** One-time Cloud API registration for an already-connected number still ON_PREMISE. */
     if (action === "register_cloud_api") {
-      if (!appId || !appSecret) return reply({ error: "meta_whatsapp_not_configured" }, 503);
-      const integrationId = typeof body.integration_id === "string" ? body.integration_id : "";
-      const pin = typeof body.pin === "string" ? body.pin.replace(/\D/g, "") : "";
-      if (!integrationId) return reply({ error: "integration_id_required" }, 400);
+      if (!appId || !appSecret)
+        return reply({ error: "meta_whatsapp_not_configured" }, 503);
+      const integrationId =
+        typeof body.integration_id === "string" ? body.integration_id : "";
+      const pin =
+        typeof body.pin === "string" ? body.pin.replace(/\D/g, "") : "";
+      if (!integrationId)
+        return reply({ error: "integration_id_required" }, 400);
       if (!/^\d{6}$/.test(pin)) {
-        return reply({ error: "יש להזין PIN בן 6 ספרות מאימות דו-שלבי של WhatsApp Business", code: "pin_required" }, 400);
+        return reply(
+          {
+            error:
+              "יש להזין PIN בן 6 ספרות מאימות דו-שלבי של WhatsApp Business",
+            code: "pin_required",
+          },
+          400,
+        );
       }
 
       const { data: integration } = await admin
@@ -324,13 +412,17 @@ Deno.serve(async (request) => {
         .eq("tenant_id", tenantId)
         .eq("integration_type", "meta_whatsapp")
         .maybeSingle();
-      if (!integration?.is_active || (integration.user_id !== authData.user.id && superAdmin !== true)) {
+      if (
+        !integration?.is_active ||
+        (integration.user_id !== authData.user.id && superAdmin !== true)
+      ) {
         return reply({ error: "forbidden" }, 403);
       }
 
       const settings = (integration.settings ?? {}) as Record<string, unknown>;
       const phoneNumberId = String(settings.phone_number_id ?? "");
-      if (!phoneNumberId) return reply({ error: "phone_number_id_missing" }, 400);
+      if (!phoneNumberId)
+        return reply({ error: "phone_number_id_missing" }, 400);
 
       const { data: tokenRow, error: tokenError } = await admin
         .from("meta_whatsapp_tokens")
@@ -338,24 +430,33 @@ Deno.serve(async (request) => {
         .eq("integration_id", integrationId)
         .maybeSingle();
       if (tokenError) throw tokenError;
-      if (!tokenRow?.access_token) return reply({ error: "meta_whatsapp_token_missing" }, 400);
+      if (!tokenRow?.access_token)
+        return reply({ error: "meta_whatsapp_token_missing" }, 400);
 
       const token = tokenRow.access_token;
       const fetchPhone = async () =>
-        graphJson(`${phoneNumberId}?fields=${PHONE_FIELDS}`, token, undefined, graphVersion);
+        graphJson(
+          `${phoneNumberId}?fields=${PHONE_FIELDS}`,
+          token,
+          undefined,
+          graphVersion,
+        );
 
       let phone = await fetchPhone();
       const platformBefore = String(phone.platform_type ?? "").toUpperCase();
       const onBizApp = phone.is_on_biz_app === true;
       if (platformBefore !== "CLOUD_API" && onBizApp) {
-        return reply({
-          error:
-            "Meta לא מאפשרת רישום Cloud API עם PIN למספר SMB/Coexistence (WhatsApp Business App).",
-          code: "smb_coexistence_register_not_available",
-          guidance: SMB_COEXISTENCE_REGISTER_GUIDANCE,
-          platform_type: platformBefore,
-          is_on_biz_app: true,
-        }, 400);
+        return reply(
+          {
+            error:
+              "Meta לא מאפשרת רישום Cloud API עם PIN למספר SMB/Coexistence (WhatsApp Business App).",
+            code: "smb_coexistence_register_not_available",
+            guidance: SMB_COEXISTENCE_REGISTER_GUIDANCE,
+            platform_type: platformBefore,
+            is_on_biz_app: true,
+          },
+          400,
+        );
       }
       if (platformBefore !== "CLOUD_API") {
         try {
@@ -369,25 +470,36 @@ Deno.serve(async (request) => {
             graphVersion,
           );
         } catch (error) {
-          const message = error instanceof Error ? error.message : "registration failed";
-          const metaError = (error as Error & { metaError?: Record<string, unknown> }).metaError;
+          const message =
+            error instanceof Error ? error.message : "registration failed";
+          const metaError = (
+            error as Error & { metaError?: Record<string, unknown> }
+          ).metaError;
           if (/not available for SMB/i.test(message)) {
-            return reply({
-              error: "Meta לא מאפשרת רישום Cloud API עם PIN למספר SMB/Coexistence.",
-              code: "smb_coexistence_register_not_available",
-              guidance: SMB_COEXISTENCE_REGISTER_GUIDANCE,
-              meta_error: metaError ?? null,
-            }, 400);
+            return reply(
+              {
+                error:
+                  "Meta לא מאפשרת רישום Cloud API עם PIN למספר SMB/Coexistence.",
+                code: "smb_coexistence_register_not_available",
+                guidance: SMB_COEXISTENCE_REGISTER_GUIDANCE,
+                meta_error: metaError ?? null,
+              },
+              400,
+            );
           }
           if (!/already|registered/i.test(message)) {
-            const pinHint = Number(metaError?.error_subcode ?? 0) === 133005
-              ? " הקוד לא תואם — בדקו אימות דו-שלבי ב-WhatsApp Business, או הגדירו קוד חדש שם."
-              : " ודאו שה-PIN הוא מאימות דו-שלבי של WhatsApp Business (לא Facebook).";
-            return reply({
-              error: `רישום Cloud API נכשל: ${message}.${pinHint}`,
-              code: "cloud_api_registration_failed",
-              meta_error: metaError ?? null,
-            }, 400);
+            const pinHint =
+              Number(metaError?.error_subcode ?? 0) === 133005
+                ? " הקוד לא תואם — בדקו אימות דו-שלבי ב-WhatsApp Business, או הגדירו קוד חדש שם."
+                : " ודאו שה-PIN הוא מאימות דו-שלבי של WhatsApp Business (לא Facebook).";
+            return reply(
+              {
+                error: `רישום Cloud API נכשל: ${message}.${pinHint}`,
+                code: "cloud_api_registration_failed",
+                meta_error: metaError ?? null,
+              },
+              400,
+            );
           }
         }
         phone = await fetchPhone();
@@ -397,7 +509,8 @@ Deno.serve(async (request) => {
       const nextSettings = {
         ...settings,
         platform_type: phone.platform_type ?? settings.platform_type ?? null,
-        display_phone_number: phone.display_phone_number ?? settings.display_phone_number ?? null,
+        display_phone_number:
+          phone.display_phone_number ?? settings.display_phone_number ?? null,
         verified_name: phone.verified_name ?? settings.verified_name ?? null,
         quality_rating: phone.quality_rating ?? settings.quality_rating ?? null,
         cloud_api_registered_at: new Date().toISOString(),
@@ -412,9 +525,10 @@ Deno.serve(async (request) => {
         success: true,
         platform_type: platformAfter || phone.platform_type,
         was_on_premise: platformBefore === "ON_PREMISE",
-        message: platformAfter === "CLOUD_API"
-          ? "המספר רשום ל-Cloud API. ניתן ליצור תבניות."
-          : "הרישום הושלם, אך Meta עדיין מדווחת סטטוס שונה מ-CLOUD_API. בדקו אימות מספר ב-WhatsApp Manager.",
+        message:
+          platformAfter === "CLOUD_API"
+            ? "המספר רשום ל-Cloud API. ניתן ליצור תבניות."
+            : "הרישום הושלם, אך Meta עדיין מדווחת סטטוס שונה מ-CLOUD_API. בדקו אימות מספר ב-WhatsApp Manager.",
       });
     }
 
@@ -425,7 +539,8 @@ Deno.serve(async (request) => {
       return reply({ error: "meta_whatsapp_not_configured" }, 503);
     }
 
-    const suppliedToken = typeof body.access_token === "string" ? body.access_token.trim() : "";
+    const suppliedToken =
+      typeof body.access_token === "string" ? body.access_token.trim() : "";
     const pin = typeof body.pin === "string" ? body.pin.replace(/\D/g, "") : "";
 
     // Resolve the token AIOS will act with. Embedded Signup hands back an
@@ -437,7 +552,8 @@ Deno.serve(async (request) => {
       // The JS SDK cross-domain bridge sometimes hands back a "cb=" arbiter id.
       // That is never a usable authorization code.
       const code = rawCode.startsWith("cb=") ? "" : rawCode;
-      if (!code && !suppliedToken) return reply({ error: "exchange_code_required" }, 400);
+      if (!code && !suppliedToken)
+        return reply({ error: "exchange_code_required" }, 400);
 
       if (code) {
         // Facebook Login for Business codes exchange with no redirect_uri at all.
@@ -446,19 +562,28 @@ Deno.serve(async (request) => {
         // null omits the parameter, "" sends it empty.
         const suppliedRedirects = [
           ...(Array.isArray(body.redirect_uris)
-            ? body.redirect_uris.filter((value: unknown) => typeof value === "string")
+            ? body.redirect_uris.filter(
+                (value: unknown) => typeof value === "string",
+              )
             : []),
           ...(typeof body.redirect_uri === "string" ? [body.redirect_uri] : []),
         ].filter(Boolean) as string[];
-        const redirectCandidates: Array<string | null> = [null, "", ...unique(suppliedRedirects)];
+        const redirectCandidates: Array<string | null> = [
+          null,
+          "",
+          ...unique(suppliedRedirects),
+        ];
 
         let lastError: any = null;
         for (const redirectUri of redirectCandidates) {
-          const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
+          const tokenUrl = new URL(
+            `https://graph.facebook.com/${graphVersion}/oauth/access_token`,
+          );
           tokenUrl.searchParams.set("client_id", appId);
           tokenUrl.searchParams.set("client_secret", appSecret);
           tokenUrl.searchParams.set("code", code);
-          if (redirectUri !== null) tokenUrl.searchParams.set("redirect_uri", redirectUri);
+          if (redirectUri !== null)
+            tokenUrl.searchParams.set("redirect_uri", redirectUri);
           const tokenResponse = await fetch(tokenUrl);
           const tokenPayload = await tokenResponse.json().catch(() => ({}));
           if (tokenResponse.ok && tokenPayload?.access_token) {
@@ -468,43 +593,57 @@ Deno.serve(async (request) => {
           lastError = tokenPayload?.error ?? lastError;
           // A code is single use. Once Meta says it was already redeemed there is
           // nothing left to retry, and further attempts only mask the real error.
-          if (String(tokenPayload?.error?.message ?? "").includes("has been used")) break;
+          if (
+            String(tokenPayload?.error?.message ?? "").includes("has been used")
+          )
+            break;
         }
         if (!businessToken && !suppliedToken) {
           const metaMessage = lastError?.message ?? "";
-          const hint = lastError?.error_subcode === 36008
-            ? " Meta דחתה את הקוד. בדקו ש-aios.co.il מופיע ב-Allowed Domains for the JavaScript SDK וב-Valid OAuth Redirect URIs, ושה-Configuration הוא זרימת WhatsApp Embedded Signup. לחלופין חברו את המספר במסלול הידני עם Access Token."
-            : "";
-          return reply({
-            error: `${metaMessage || "Failed to exchange Meta authorization code"}${hint}`,
-            code: "code_exchange_failed",
-            meta_error: lastError ?? null,
-          }, 400);
+          const hint =
+            lastError?.error_subcode === 36008
+              ? " Meta דחתה את הקוד. בדקו ש-aios.co.il מופיע ב-Allowed Domains for the JavaScript SDK וב-Valid OAuth Redirect URIs, ושה-Configuration הוא זרימת WhatsApp Embedded Signup. לחלופין חברו את המספר במסלול הידני עם Access Token."
+              : "";
+          return reply(
+            {
+              error: `${metaMessage || "Failed to exchange Meta authorization code"}${hint}`,
+              code: "code_exchange_failed",
+              meta_error: lastError ?? null,
+            },
+            400,
+          );
         }
       }
 
       if (!businessToken && suppliedToken) {
-        const longLivedUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
+        const longLivedUrl = new URL(
+          `https://graph.facebook.com/${graphVersion}/oauth/access_token`,
+        );
         longLivedUrl.searchParams.set("grant_type", "fb_exchange_token");
         longLivedUrl.searchParams.set("client_id", appId);
         longLivedUrl.searchParams.set("client_secret", appSecret);
         longLivedUrl.searchParams.set("fb_exchange_token", suppliedToken);
         const longLivedResponse = await fetch(longLivedUrl);
-        const longLivedPayload = await longLivedResponse.json().catch(() => ({}));
-        businessToken = longLivedResponse.ok && longLivedPayload?.access_token
-          ? String(longLivedPayload.access_token)
-          : suppliedToken;
+        const longLivedPayload = await longLivedResponse
+          .json()
+          .catch(() => ({}));
+        businessToken =
+          longLivedResponse.ok && longLivedPayload?.access_token
+            ? String(longLivedPayload.access_token)
+            : suppliedToken;
       }
     } else if (suppliedToken) {
       businessToken = suppliedToken;
     } else {
-      const { data: storedCredential, error: storedCredentialError } = await admin
-        .from("meta_whatsapp_tenant_credentials")
-        .select("access_token")
-        .eq("tenant_id", tenantId)
-        .maybeSingle();
+      const { data: storedCredential, error: storedCredentialError } =
+        await admin
+          .from("meta_whatsapp_tenant_credentials")
+          .select("access_token")
+          .eq("tenant_id", tenantId)
+          .maybeSingle();
       if (storedCredentialError) throw storedCredentialError;
-      if (!storedCredential?.access_token) return reply({ error: "access_token_required" }, 400);
+      if (!storedCredential?.access_token)
+        return reply({ error: "access_token_required" }, 400);
       businessToken = String(storedCredential.access_token);
     }
 
@@ -513,15 +652,19 @@ Deno.serve(async (request) => {
     }
 
     const sessionInfo = (body.session_info ?? {}) as MetaWhatsAppSessionInfo;
-    const sessionEvent = typeof body.session_event === "string" ? body.session_event : "";
-    const requestedCoexistence = action === "complete" && isCoexistenceFinishEvent(sessionEvent);
+    const sessionEvent =
+      typeof body.session_event === "string" ? body.session_event : "";
+    const requestedCoexistence =
+      action === "complete" && isCoexistenceFinishEvent(sessionEvent);
 
     const debug = await inspectToken(businessToken, appToken, graphVersion);
 
     // A short-lived user token from the manual path is worth extending; system user
     // tokens are already long-lived and must never be exchanged.
     if (action === "connect_manual" && debug.type === "USER") {
-      const longLivedUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
+      const longLivedUrl = new URL(
+        `https://graph.facebook.com/${graphVersion}/oauth/access_token`,
+      );
       longLivedUrl.searchParams.set("grant_type", "fb_exchange_token");
       longLivedUrl.searchParams.set("client_id", appId);
       longLivedUrl.searchParams.set("client_secret", appSecret);
@@ -533,8 +676,10 @@ Deno.serve(async (request) => {
       }
     }
 
-    const requestedWabaId = typeof body.waba_id === "string" ? body.waba_id.trim() : "";
-    const requestedBusinessId = typeof body.business_id === "string" ? body.business_id.trim() : "";
+    const requestedWabaId =
+      typeof body.waba_id === "string" ? body.waba_id.trim() : "";
+    const requestedBusinessId =
+      typeof body.business_id === "string" ? body.business_id.trim() : "";
     let wabaIds = unique([
       ...(requestedWabaId ? [requestedWabaId] : []),
       ...(Array.isArray(sessionInfo.waba_ids) ? sessionInfo.waba_ids : []),
@@ -548,40 +693,62 @@ Deno.serve(async (request) => {
     // WABAs already known to AIOS if Meta's discovery edge is temporarily
     // unavailable. `business_management` is required by Meta for portfolio-wide
     // discovery, but existing WABAs remain usable with the WhatsApp scopes alone.
-    if (!requestedWabaId && ["list_assets", "connect_manual"].includes(action)) {
-      const { data: knownIntegrations, error: knownIntegrationsError } = await admin
-        .from("tenant_integrations")
-        .select("settings")
-        .eq("tenant_id", tenantId)
-        .eq("integration_type", "meta_whatsapp");
+    if (
+      !requestedWabaId &&
+      ["list_assets", "connect_manual"].includes(action)
+    ) {
+      const { data: knownIntegrations, error: knownIntegrationsError } =
+        await admin
+          .from("tenant_integrations")
+          .select("settings")
+          .eq("tenant_id", tenantId)
+          .eq("integration_type", "meta_whatsapp");
       if (knownIntegrationsError) throw knownIntegrationsError;
       const knownWabaIds = (knownIntegrations ?? [])
         .map((integration: any) => integration?.settings?.waba_id)
-        .filter((value: unknown): value is string => typeof value === "string" && Boolean(value));
-      const discovered = await discoverWabas(businessToken, graphVersion, requestedBusinessId);
+        .filter(
+          (value: unknown): value is string =>
+            typeof value === "string" && Boolean(value),
+        );
+      const discovered = await discoverWabas(
+        businessToken,
+        graphVersion,
+        requestedBusinessId,
+      );
       wabaIds = unique([...wabaIds, ...knownWabaIds, ...discovered.wabaIds]);
       discoverySteps = discovered.steps;
     } else if (!wabaIds.length) {
-      const discovered = await discoverWabas(businessToken, graphVersion, requestedBusinessId);
+      const discovered = await discoverWabas(
+        businessToken,
+        graphVersion,
+        requestedBusinessId,
+      );
       wabaIds = discovered.wabaIds;
       discoverySteps = discovered.steps;
     }
 
     if (!wabaIds.length) {
-      const hasWhatsAppScopes = debug.scopes.some((scope) => scope.startsWith("whatsapp_business"));
+      const hasWhatsAppScopes = debug.scopes.some((scope) =>
+        scope.startsWith("whatsapp_business"),
+      );
       // Meta grants system users unscoped permissions, so the right scopes with
       // no discoverable account means the account was never assigned to the user.
       const guidance = hasWhatsAppScopes
         ? "האסימון כולל את הרשאות ה-WhatsApp, אך Meta לא חשפה דרכו אף חשבון. הקצו את חשבון ה-WhatsApp ל-System User (Add assets → WhatsApp accounts → Full control), או הזינו כאן את ה-WhatsApp Business Account ID ידנית."
         : "ודאו שהאסימון כולל whatsapp_business_management ו-whatsapp_business_messaging ושהוקצה לו חשבון WhatsApp.";
-      const scopeNote = debug.scopes.length ? ` ההרשאות שהתקבלו: ${debug.scopes.join(", ")}.` : "";
-      return reply({
-        error: `Meta לא החזירה חשבון WhatsApp Business. ${guidance}${scopeNote}`,
-        code: "waba_not_granted",
-        granted_scopes: debug.scopes,
-        token_type: debug.type,
-        discovery: discoverySteps,
-      }, 400);
+      const scopeNote = debug.scopes.length
+        ? ` ההרשאות שהתקבלו: ${debug.scopes.join(", ")}.`
+        : "";
+      return reply(
+        {
+          error: `Meta לא החזירה חשבון WhatsApp Business. ${guidance}${scopeNote}`,
+          code: "waba_not_granted",
+          granted_scopes: debug.scopes,
+          token_type: debug.type,
+          discovery: discoverySteps,
+        },
+        400,
+      );
     }
 
     // A validated token is an organization-level discovery credential. Saving it
@@ -590,14 +757,17 @@ Deno.serve(async (request) => {
     if (suppliedToken || action === "complete") {
       const { error: credentialError } = await admin
         .from("meta_whatsapp_tenant_credentials")
-        .upsert({
-          tenant_id: tenantId,
-          access_token: businessToken,
-          token_type: debug.type || null,
-          api_token_last_4: businessToken.slice(-4),
-          updated_by: authData.user.id,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "tenant_id" });
+        .upsert(
+          {
+            tenant_id: tenantId,
+            access_token: businessToken,
+            token_type: debug.type || null,
+            api_token_last_4: businessToken.slice(-4),
+            updated_by: authData.user.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "tenant_id" },
+        );
       if (credentialError) throw credentialError;
     }
 
@@ -610,20 +780,33 @@ Deno.serve(async (request) => {
           // existing provider on the same account means duplicate inbound
           // messages and possibly duplicate automated replies. Show it first.
           const [details, phones, subscribed] = await Promise.all([
-            graphJson(`${wabaId}?fields=id,name,currency,timezone_id`, businessToken, undefined, graphVersion)
-              .catch(() => ({ id: wabaId })),
+            graphJson(
+              `${wabaId}?fields=id,name,currency,timezone_id`,
+              businessToken,
+              undefined,
+              graphVersion,
+            ).catch(() => ({ id: wabaId })),
             listPhoneNumbers(wabaId, businessToken, graphVersion),
-            graphJson(`${wabaId}/subscribed_apps`, businessToken, undefined, graphVersion)
-              .catch(() => null),
+            graphJson(
+              `${wabaId}/subscribed_apps`,
+              businessToken,
+              undefined,
+              graphVersion,
+            ).catch(() => null),
           ]);
           accounts.push({
             waba_id: wabaId,
             name: (details as any)?.name ?? null,
             subscribed_apps: subscribed
               ? ((subscribed as any).data ?? []).map((entry: any) => ({
-                id: String(entry?.whatsapp_business_api_data?.id ?? entry?.id ?? ""),
-                name: entry?.whatsapp_business_api_data?.name ?? entry?.name ?? null,
-              }))
+                  id: String(
+                    entry?.whatsapp_business_api_data?.id ?? entry?.id ?? "",
+                  ),
+                  name:
+                    entry?.whatsapp_business_api_data?.name ??
+                    entry?.name ??
+                    null,
+                }))
               : null,
             phone_numbers: phones.map((phone) => ({
               id: phone.id,
@@ -656,10 +839,16 @@ Deno.serve(async (request) => {
     const requestedPhoneIds = new Set(
       [
         ...(Array.isArray(body.phone_number_ids)
-          ? body.phone_number_ids.filter((value: unknown) => typeof value === "string")
+          ? body.phone_number_ids.filter(
+              (value: unknown) => typeof value === "string",
+            )
           : []),
-        ...(typeof body.phone_number_id === "string" ? [body.phone_number_id] : []),
-        ...(action === "complete" && sessionInfo.phone_number_id ? [sessionInfo.phone_number_id] : []),
+        ...(typeof body.phone_number_id === "string"
+          ? [body.phone_number_id]
+          : []),
+        ...(action === "complete" && sessionInfo.phone_number_id
+          ? [sessionInfo.phone_number_id]
+          : []),
       ].filter(Boolean) as string[],
     );
 
@@ -667,20 +856,36 @@ Deno.serve(async (request) => {
     const warnings: string[] = [];
 
     for (const wabaId of wabaIds) {
-      await graphJson(`${wabaId}/subscribed_apps`, businessToken, { method: "POST" }, graphVersion);
+      await graphJson(
+        `${wabaId}/subscribed_apps`,
+        businessToken,
+        { method: "POST" },
+        graphVersion,
+      );
 
-      const allPhones = await listPhoneNumbers(wabaId, businessToken, graphVersion);
+      const allPhones = await listPhoneNumbers(
+        wabaId,
+        businessToken,
+        graphVersion,
+      );
       const phones = requestedPhoneIds.size
-        ? allPhones.filter((phone: any) => requestedPhoneIds.has(String(phone.id)))
+        ? allPhones.filter((phone: any) =>
+            requestedPhoneIds.has(String(phone.id)),
+          )
         : allPhones;
       // A multi-WABA batch may select numbers from only some accounts. Accounts
       // without a selected phone are not errors; continue to the selected ones.
       if (!phones.length && requestedPhoneIds.size) continue;
-      if (!phones.length) throw new Error("No WhatsApp business phone number was returned by Meta");
+      if (!phones.length)
+        throw new Error(
+          "No WhatsApp business phone number was returned by Meta",
+        );
 
       for (const phone of phones) {
         if (requestedCoexistence && phone.is_on_biz_app !== true) {
-          throw new Error("Meta did not confirm WhatsApp Business App coexistence for this number");
+          throw new Error(
+            "Meta did not confirm WhatsApp Business App coexistence for this number",
+          );
         }
         // Meta's is_on_biz_app is authoritative: a number still used in the
         // WhatsApp Business app must not be re-registered for Cloud API.
@@ -689,16 +894,21 @@ Deno.serve(async (request) => {
         // such as ManyChat) is registered once, WABA-wide. Re-running /register
         // would reset its two-step PIN and can break the other provider, so any
         // app with WABA access simply sends without re-registering.
-        const alreadyOnCloud = String(phone.platform_type ?? "").toUpperCase() === "CLOUD_API";
-        const onPremise = String(phone.platform_type ?? "").toUpperCase() === "ON_PREMISE";
+        const alreadyOnCloud =
+          String(phone.platform_type ?? "").toUpperCase() === "CLOUD_API";
+        const onPremise =
+          String(phone.platform_type ?? "").toUpperCase() === "ON_PREMISE";
         // Coexistence on Cloud API must not be re-registered, but On-Premise numbers
         // still need a one-time Cloud API registration before templates/messaging work.
         if (!alreadyOnCloud && (!coexistence || onPremise)) {
           if (!/^\d{6}$/.test(pin)) {
-            return reply({
-              error: `המספר ${phone.display_phone_number ?? phone.id} דורש רישום ל-Cloud API. הזינו PIN בן 6 ספרות.`,
-              code: "pin_required_for_registration",
-            }, 400);
+            return reply(
+              {
+                error: `המספר ${phone.display_phone_number ?? phone.id} דורש רישום ל-Cloud API. הזינו PIN בן 6 ספרות.`,
+                code: "pin_required_for_registration",
+              },
+              400,
+            );
           }
           try {
             await graphJson(
@@ -715,7 +925,9 @@ Deno.serve(async (request) => {
             // the whole connection.
             const message = error instanceof Error ? error.message : "";
             if (!/already|registered/i.test(message)) throw error;
-            warnings.push(`${phone.display_phone_number || phone.id}: ${message}`);
+            warnings.push(
+              `${phone.display_phone_number || phone.id}: ${message}`,
+            );
           }
         }
 
@@ -729,11 +941,15 @@ Deno.serve(async (request) => {
                 businessToken,
                 {
                   method: "POST",
-                  body: JSON.stringify({ messaging_product: "whatsapp", sync_type: syncType }),
+                  body: JSON.stringify({
+                    messaging_product: "whatsapp",
+                    sync_type: syncType,
+                  }),
                 },
                 graphVersion,
               );
-              if (syncType === "history") historySyncRequestId = sync.request_id ?? null;
+              if (syncType === "history")
+                historySyncRequestId = sync.request_id ?? null;
               else contactsSyncRequestId = sync.request_id ?? null;
             } catch (error) {
               warnings.push(
@@ -755,7 +971,8 @@ Deno.serve(async (request) => {
           platform_type: phone.platform_type ?? "CLOUD_API",
           coexistence_enabled: coexistence,
           already_registered: !coexistence && alreadyOnCloud,
-          onboarding_method: action === "connect_manual" ? "manual_token" : "embedded_signup",
+          onboarding_method:
+            action === "connect_manual" ? "manual_token" : "embedded_signup",
           webhook_subscribed_at: new Date().toISOString(),
           contacts_sync_request_id: contactsSyncRequestId,
           history_sync_request_id: historySyncRequestId,
@@ -769,7 +986,9 @@ Deno.serve(async (request) => {
           .filter("settings->>phone_number_id", "eq", String(phone.id))
           .maybeSingle();
         if (existing && existing.tenant_id !== tenantId) {
-          throw new Error("This WhatsApp number is already connected to another AIOS organization");
+          throw new Error(
+            "This WhatsApp number is already connected to another AIOS organization",
+          );
         }
         const payload = {
           tenant_id: tenantId,
@@ -778,23 +997,34 @@ Deno.serve(async (request) => {
           api_key: null,
           api_token_last_4: businessToken.slice(-4),
           instance_id: String(phone.id),
-          display_name: phone.verified_name || phone.display_phone_number || "Meta WhatsApp",
+          display_name:
+            phone.verified_name ||
+            phone.display_phone_number ||
+            "Meta WhatsApp",
           connection_visibility: "org",
           is_active: true,
           settings,
         };
         const query = existing
-          ? admin.from("tenant_integrations").update(payload).eq("id", existing.id)
+          ? admin
+              .from("tenant_integrations")
+              .update(payload)
+              .eq("id", existing.id)
           : admin.from("tenant_integrations").insert(payload);
-        const { data: saved, error: saveError } = await query.select("id").single();
+        const { data: saved, error: saveError } = await query
+          .select("id")
+          .single();
         if (saveError) throw saveError;
-        const { error: tokenError } = await admin.from("meta_whatsapp_tokens").upsert({
-          integration_id: saved.id,
-          access_token: businessToken,
-          updated_at: new Date().toISOString(),
-        });
+        const { error: tokenError } = await admin
+          .from("meta_whatsapp_tokens")
+          .upsert({
+            integration_id: saved.id,
+            access_token: businessToken,
+            updated_at: new Date().toISOString(),
+          });
         if (tokenError) {
-          if (!existing) await admin.from("tenant_integrations").delete().eq("id", saved.id);
+          if (!existing)
+            await admin.from("tenant_integrations").delete().eq("id", saved.id);
           throw tokenError;
         }
 
@@ -809,12 +1039,17 @@ Deno.serve(async (request) => {
     }
 
     if (!connected.length) {
-      throw new Error("None of the selected WhatsApp phone numbers was returned by Meta");
+      throw new Error(
+        "None of the selected WhatsApp phone numbers was returned by Meta",
+      );
     }
 
     return reply({ success: true, connections: connected, warnings });
   } catch (error) {
     console.error("meta-whatsapp-auth error", error);
-    return reply({ error: error instanceof Error ? error.message : "unknown_error" }, 500);
+    return reply(
+      { error: error instanceof Error ? error.message : "unknown_error" },
+      500,
+    );
   }
 });

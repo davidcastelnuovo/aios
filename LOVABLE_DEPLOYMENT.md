@@ -65,16 +65,17 @@ supabase secrets set LOVABLE_API_KEY=your_lovable_api_key_here
 
 ב-Lovable Dashboard → Project Settings → Environment Variables, הוסיפו:
 
-| משתנה | ערך | הסבר |
-|-------|-----|-------|
-| `VITE_SUPABASE_URL` | `https://xxxx.supabase.co` | כתובת פרויקט Supabase |
-| `VITE_SUPABASE_ANON_KEY` | `eyJ...` | מפתח ציבורי של Supabase |
+| משתנה                    | ערך                        | הסבר                    |
+| ------------------------ | -------------------------- | ----------------------- |
+| `VITE_SUPABASE_URL`      | `https://xxxx.supabase.co` | כתובת פרויקט Supabase   |
+| `VITE_SUPABASE_ANON_KEY` | `eyJ...`                   | מפתח ציבורי של Supabase |
 
 > **חשוב:** משתני `VITE_*` נחשפים ל-frontend. אל תכניסו כאן מפתחות סודיים.
 
 ### 2.3 הגדרת Build
 
 Lovable מזהה אוטומטית את הגדרות ה-build מ-`package.json`:
+
 - **Build command:** `npm run build`
 - **Output directory:** `dist`
 - **Node version:** 18+
@@ -176,6 +177,7 @@ supabase functions deploy social-gantt-generate  # deploy מחדש
 ### Build נכשל ב-Lovable
 
 בדקו את לוג ה-build ב-Lovable Dashboard. בעיות נפוצות:
+
 - חסרים משתני סביבה
 - גרסת Node לא תואמת (השתמשו ב-18+)
 - dependency חסר ב-`package.json`

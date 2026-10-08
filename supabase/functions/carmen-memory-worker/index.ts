@@ -5,14 +5,16 @@ import { svc, upsertPointer, shortText } from "../_shared/carmen-memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const BATCH = 100;
 const MAX_RETRIES = 5;
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
   const supabase = svc();
 
   // Pull a batch of unprocessed outbox rows
@@ -31,7 +33,8 @@ Deno.serve(async (req) => {
     });
   }
 
-  let ok = 0, fail = 0;
+  let ok = 0,
+    fail = 0;
   for (const row of rows ?? []) {
     try {
       await processEvent(supabase, row);
@@ -52,9 +55,12 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({ processed: ok, failed: fail, total: rows?.length ?? 0 }), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ processed: ok, failed: fail, total: rows?.length ?? 0 }),
+    {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 });
 
 async function processEvent(supabase: any, row: any) {
@@ -74,11 +80,16 @@ async function processEvent(supabase: any, row: any) {
   }
 
   switch (entity_type) {
-    case "client": return indexClient(supabase, tenant_id, payload);
-    case "campaigner": return indexCampaigner(supabase, tenant_id, payload);
-    case "task": return indexTask(supabase, tenant_id, payload);
-    case "chat_message": return indexChatMessage(supabase, tenant_id, payload);
-    case "ai_conversation": return indexAiConversation(supabase, tenant_id, payload);
+    case "client":
+      return indexClient(supabase, tenant_id, payload);
+    case "campaigner":
+      return indexCampaigner(supabase, tenant_id, payload);
+    case "task":
+      return indexTask(supabase, tenant_id, payload);
+    case "chat_message":
+      return indexChatMessage(supabase, tenant_id, payload);
+    case "ai_conversation":
+      return indexAiConversation(supabase, tenant_id, payload);
   }
 }
 
@@ -89,7 +100,9 @@ async function indexClient(supabase: any, tenant_id: string, c: any) {
     c.mood_status && `מצב רוח: ${c.mood_status}`,
     c.tier && `דרגה: ${c.tier}`,
     c.contact_name && `איש קשר: ${c.contact_name}`,
-  ].filter(Boolean).join(" · ");
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   await upsertPointer(supabase, {
     tenant_id,
@@ -101,7 +114,11 @@ async function indexClient(supabase: any, tenant_id: string, c: any) {
     title: c.name ?? "לקוח",
     summary,
     importance: c.tier === "premium" ? 80 : 60,
-    metadata: { agency_id: c.agency_id, status: c.status, mood_status: c.mood_status },
+    metadata: {
+      agency_id: c.agency_id,
+      status: c.status,
+      mood_status: c.mood_status,
+    },
   });
 }
 
@@ -114,7 +131,12 @@ async function indexCampaigner(supabase: any, tenant_id: string, c: any) {
     entity_type: "campaigner",
     entity_id: c.id,
     title: c.full_name ?? "חבר צוות",
-    summary: [c.role && `תפקיד: ${Array.isArray(c.role) ? c.role.join(", ") : c.role}`, c.phone && `טלפון: ${c.phone}`].filter(Boolean).join(" · "),
+    summary: [
+      c.role && `תפקיד: ${Array.isArray(c.role) ? c.role.join(", ") : c.role}`,
+      c.phone && `טלפון: ${c.phone}`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
     importance: 60,
     metadata: { active: c.active },
   });
@@ -190,17 +212,26 @@ async function indexChatMessage(supabase: any, tenant_id: string, m: any) {
     path: `messages/${date}/${channel}`,
     entity_type: "chat_message",
     entity_id: m.id,
-    title: `${m.direction ?? ""} ${m.sender_name ?? m.sender_phone ?? ""}`.trim(),
+    title:
+      `${m.direction ?? ""} ${m.sender_name ?? m.sender_phone ?? ""}`.trim(),
     summary: shortText(body, 200),
     ref_date: m.created_at,
     importance: 30,
-    metadata: { direction: m.direction, client_id: m.client_id, lead_id: m.lead_id, group_id: m.group_id, sender_phone: m.sender_phone },
+    metadata: {
+      direction: m.direction,
+      client_id: m.client_id,
+      lead_id: m.lead_id,
+      group_id: m.group_id,
+      sender_phone: m.sender_phone,
+    },
   });
 
   // 2. Cross-link under client/lead communications
   const entity_id = m.client_id || m.lead_id;
   if (entity_id) {
-    const path = m.client_id ? `clients/${entity_id}/communications` : `leads/${entity_id}/communications`;
+    const path = m.client_id
+      ? `clients/${entity_id}/communications`
+      : `leads/${entity_id}/communications`;
     const category = m.client_id ? "clients" : "leads";
     await upsertPointer(supabase, {
       tenant_id,
@@ -221,7 +252,10 @@ async function indexChatMessage(supabase: any, tenant_id: string, m: any) {
 async function indexAiConversation(supabase: any, tenant_id: string, c: any) {
   // Index as episode pointer
   const messages = Array.isArray(c.messages) ? c.messages : [];
-  const summary = messages.slice(-4).map((m: any) => `${m.role}: ${shortText(m.content, 80)}`).join("\n");
+  const summary = messages
+    .slice(-4)
+    .map((m: any) => `${m.role}: ${shortText(m.content, 80)}`)
+    .join("\n");
   const month = (c.created_at ?? new Date().toISOString()).slice(0, 7);
   const topic = c.title ?? "שיחה";
   await upsertPointer(supabase, {

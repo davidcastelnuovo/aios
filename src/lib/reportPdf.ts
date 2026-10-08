@@ -2,21 +2,28 @@ function readBlobAsDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error || new Error("Failed to read report image"));
+    reader.onerror = () =>
+      reject(reader.error || new Error("Failed to read report image"));
     reader.readAsDataURL(blob);
   });
 }
 
-function getImageSize(dataUrl: string): Promise<{ width: number; height: number }> {
+function getImageSize(
+  dataUrl: string,
+): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const image = new Image();
-    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onload = () =>
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
     image.onerror = () => reject(new Error("Failed to load report image"));
     image.src = dataUrl;
   });
 }
 
-export async function downloadReportPdf(image: Blob, filename: string): Promise<void> {
+export async function downloadReportPdf(
+  image: Blob,
+  filename: string,
+): Promise<void> {
   const [{ jsPDF }, dataUrl] = await Promise.all([
     import("jspdf"),
     readBlobAsDataUrl(image),
@@ -48,5 +55,7 @@ export async function downloadReportPdf(image: Blob, filename: string): Promise<
     );
   }
 
-  pdf.save(filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`);
+  pdf.save(
+    filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`,
+  );
 }

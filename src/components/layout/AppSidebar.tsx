@@ -67,8 +67,17 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useUserTenants } from "@/hooks/useUserTenants";
 import { supabase } from "@/integrations/supabase/client";
@@ -78,7 +87,13 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useMenuItems, MenuItem } from "@/hooks/useMenuItems";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,20 +103,62 @@ import {
 
 // ─── Icon map ────────────────────────────────────────────────────────────────
 const iconMap: Record<string, any> = {
-  LayoutDashboard, Users, Building2, CheckSquare,
-  FileText: Target, UserPlus, Calendar: Clock, Package,
-  Settings, Briefcase: Building, TrendingUp, DollarSign,
-  BarChart3, Clock, Megaphone, Target, ShieldCheck, User,
-  UserCheck, Truck, Zap, Building, Palette, Bot, Menu,
-  ListTree, Table, Table2, MessageSquare, MessagesSquare,
-  FolderKanban: Table, Database: Table, Layers: Table,
-  FileSignature: PenLine, Mail, Radar, Plug, Cpu, Share2,
-  CalendarRange, Home, Globe, BarChart2, Wrench,
+  LayoutDashboard,
+  Users,
+  Building2,
+  CheckSquare,
+  FileText: Target,
+  UserPlus,
+  Calendar: Clock,
+  Package,
+  Settings,
+  Briefcase: Building,
+  TrendingUp,
+  DollarSign,
+  BarChart3,
+  Clock,
+  Megaphone,
+  Target,
+  ShieldCheck,
+  User,
+  UserCheck,
+  Truck,
+  Zap,
+  Building,
+  Palette,
+  Bot,
+  Menu,
+  ListTree,
+  Table,
+  Table2,
+  MessageSquare,
+  MessagesSquare,
+  FolderKanban: Table,
+  Database: Table,
+  Layers: Table,
+  FileSignature: PenLine,
+  Mail,
+  Radar,
+  Plug,
+  Cpu,
+  Share2,
+  CalendarRange,
+  Home,
+  Globe,
+  BarChart2,
+  Wrench,
 };
 
 // ─── Menu structure ───────────────────────────────────────────────────────────
 // Imported from a shared module so the Visual Workspace and the sidebar stay in sync.
-import { MENU_TABS as BASE_MENU_TABS, permissionForMenuKey, tabIdForRoute, type MenuTab, type MenuSection, type MenuTabId } from "@/lib/menuStructure";
+import {
+  MENU_TABS as BASE_MENU_TABS,
+  permissionForMenuKey,
+  tabIdForRoute,
+  type MenuTab,
+  type MenuSection,
+  type MenuTabId,
+} from "@/lib/menuStructure";
 import { computeSidebarOverlay } from "@/visual-workspace/hooks/useSitemap";
 
 // Permissions are derived from the menu structure itself — see permissionForMenuKey
@@ -115,7 +172,8 @@ export function AppSidebar() {
   const { logoUrl } = useTheme();
   const { buildPath } = useTenantPath();
   const location = useLocation();
-  const { menuItems: dbMenuItems, isLoading: isLoadingMenuItems } = useMenuItems();
+  const { menuItems: dbMenuItems, isLoading: isLoadingMenuItems } =
+    useMenuItems();
   const isCollapsed = !isMobile && state === "collapsed";
   const [activeTab, setActiveTab] = useState<string>("daily");
 
@@ -135,26 +193,33 @@ export function AppSidebar() {
 
   // Build a set of visible menu_keys from DB
   const visibleKeys = new Set<string>(
-    dbMenuItems.filter(m => m.is_visible).map(m => m.menu_key)
+    dbMenuItems.filter((m) => m.is_visible).map((m) => m.menu_key),
   );
 
   // Custom labels from DB
   const customLabels = new Map<string, string>(
-    dbMenuItems.filter(m => m.custom_label).map(m => [m.menu_key, m.custom_label!])
+    dbMenuItems
+      .filter((m) => m.custom_label)
+      .map((m) => [m.menu_key, m.custom_label!]),
   );
 
   // Apply Visual-Workspace overrides (tab/section labels + module reassignment)
   const overlay = computeSidebarOverlay(dbMenuItems);
-  const effectiveTabs: MenuTab[] = BASE_MENU_TABS.map(tab => ({
+  const effectiveTabs: MenuTab[] = BASE_MENU_TABS.map((tab) => ({
     ...tab,
     label: overlay.tabLabels.get(tab.id) || tab.label,
-    sections: tab.sections.map(section => ({
+    sections: tab.sections.map((section) => ({
       ...section,
-      label: overlay.sectionLabels.get(`${tab.id}:${section.label}`) || section.label,
+      label:
+        overlay.sectionLabels.get(`${tab.id}:${section.label}`) ||
+        section.label,
       // Drop modules that have been reassigned elsewhere via overlay
-      items: section.items.filter(item => {
+      items: section.items.filter((item) => {
         const home = overlay.moduleHome.get(item.key);
-        return !home || (home.tabId === tab.id && home.sectionLabel === section.label);
+        return (
+          !home ||
+          (home.tabId === tab.id && home.sectionLabel === section.label)
+        );
       }),
     })),
   }));
@@ -164,27 +229,31 @@ export function AppSidebar() {
     let original: MenuSection["items"][number] | undefined;
     for (const tab of BASE_MENU_TABS) {
       for (const sec of tab.sections) {
-        const m = sec.items.find(i => i.key === moduleKey);
-        if (m) { original = m; break; }
+        const m = sec.items.find((i) => i.key === moduleKey);
+        if (m) {
+          original = m;
+          break;
+        }
       }
       if (original) break;
     }
     if (!original) continue;
-    const targetTab = effectiveTabs.find(t => t.id === target.tabId);
+    const targetTab = effectiveTabs.find((t) => t.id === target.tabId);
     if (!targetTab) continue;
-    let targetSection = targetTab.sections.find(s =>
-      s.label === target.sectionLabel ||
-      (overlay.sectionLabels.get(`${target.tabId}:${target.sectionLabel}`) === s.label)
+    let targetSection = targetTab.sections.find(
+      (s) =>
+        s.label === target.sectionLabel ||
+        overlay.sectionLabels.get(`${target.tabId}:${target.sectionLabel}`) ===
+          s.label,
     );
     if (!targetSection) {
       targetSection = { label: target.sectionLabel, items: [] };
       targetTab.sections.push(targetSection);
     }
-    if (!targetSection.items.some(i => i.key === moduleKey)) {
+    if (!targetSection.items.some((i) => i.key === moduleKey)) {
       targetSection.items.push(original);
     }
   }
-
 
   const { data: userTenants, isLoading: isLoadingTenants } = useQuery({
     queryKey: ["user-tenants", userId],
@@ -195,7 +264,10 @@ export function AppSidebar() {
         .select("tenant_id, tenants(id, name)")
         .eq("user_id", userId);
       if (error) throw error;
-      return data?.map(tu => tu.tenants).filter(Boolean) as Array<{ id: string; name: string }>;
+      return data?.map((tu) => tu.tenants).filter(Boolean) as Array<{
+        id: string;
+        name: string;
+      }>;
     },
     enabled: !!userId,
   });
@@ -204,10 +276,17 @@ export function AppSidebar() {
     if (!userId) return;
     try {
       const { data: newTenant } = await supabase
-        .from("tenants").select("slug").eq("id", newTenantId).single();
+        .from("tenants")
+        .select("slug")
+        .eq("id", newTenantId)
+        .single();
       await supabase.from("user_active_tenant").upsert(
-        { user_id: userId, tenant_id: newTenantId, updated_at: new Date().toISOString() },
-        { onConflict: "user_id" }
+        {
+          user_id: userId,
+          tenant_id: newTenantId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
       );
       if (newTenant?.slug) {
         const currentPath = window.location.pathname;
@@ -236,13 +315,18 @@ export function AppSidebar() {
 
   // Filter items in a section to only those the user can access and are visible
   const filterItems = (items: MenuSection["items"]) =>
-    items.filter(item => {
+    items.filter((item) => {
       // If DB has this key and it's hidden, skip
-      if (dbMenuItems.some(m => m.menu_key === item.key) && !visibleKeys.has(item.key)) return false;
+      if (
+        dbMenuItems.some((m) => m.menu_key === item.key) &&
+        !visibleKeys.has(item.key)
+      )
+        return false;
       return canAccess(item.key);
     });
 
-  const activeMenuTab = effectiveTabs.find(t => t.id === activeTab) || effectiveTabs[0];
+  const activeMenuTab =
+    effectiveTabs.find((t) => t.id === activeTab) || effectiveTabs[0];
 
   if (isLoadingMenuItems || isLoading) {
     return (
@@ -266,12 +350,16 @@ export function AppSidebar() {
         {isCollapsed ? (
           <div className="flex flex-col items-center gap-2 py-2">
             {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="h-8 w-8 object-contain" />
+              <img
+                src={logoUrl}
+                alt="Logo"
+                className="h-8 w-8 object-contain"
+              />
             ) : (
               <Building2 className="h-8 w-8" />
             )}
             {/* Tab icons in collapsed mode */}
-            {effectiveTabs.map(tab => {
+            {effectiveTabs.map((tab) => {
               const TabIcon = tab.icon;
               return (
                 <Tooltip key={tab.id}>
@@ -298,27 +386,51 @@ export function AppSidebar() {
             <div className="flex items-start justify-end gap-2">
               <div className="flex min-w-0 flex-1 flex-col items-stretch gap-1.5">
                 {userTenants && userTenants.length > 1 && (
-                  <Select value={currentTenantId || undefined} onValueChange={handleTenantChange}>
+                  <Select
+                    value={currentTenantId || undefined}
+                    onValueChange={handleTenantChange}
+                  >
                     <SelectTrigger className="h-8 w-full border-0 shadow-none focus:ring-0 bg-sidebar-accent/50 text-xs font-semibold text-sidebar-foreground">
                       <SelectValue placeholder="בחר ארגון" />
                     </SelectTrigger>
-                    <SelectContent className="bg-popover border border-border shadow-lg z-[9999]" position="popper" sideOffset={4} align="start" side="bottom">
-                      {userTenants.filter(t => t.id).map(t => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                      ))}
+                    <SelectContent
+                      className="bg-popover border border-border shadow-lg z-[9999]"
+                      position="popper"
+                      sideOffset={4}
+                      align="start"
+                      side="bottom"
+                    >
+                      {userTenants
+                        .filter((t) => t.id)
+                        .map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 )}
                 {userTenants && userTenants.length === 1 && (
-                  <span className="truncate text-right text-sm font-semibold text-sidebar-foreground">{userTenants[0].name}</span>
+                  <span className="truncate text-right text-sm font-semibold text-sidebar-foreground">
+                    {userTenants[0].name}
+                  </span>
                 )}
                 {isMobile && agencies && agencies.length > 0 && (
-                  <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                  <Select
+                    value={selectedAgency}
+                    onValueChange={setSelectedAgency}
+                  >
                     <SelectTrigger className="h-8 w-full gap-2 border-0 shadow-none focus:ring-0 bg-sidebar-accent/35 text-xs text-sidebar-foreground">
                       <Building2 className="h-3.5 w-3.5 shrink-0 opacity-80" />
                       <SelectValue placeholder="בחר סוכנות" />
                     </SelectTrigger>
-                    <SelectContent className="bg-popover border border-border shadow-lg z-[9999]" position="popper" sideOffset={4} align="start" side="bottom">
+                    <SelectContent
+                      className="bg-popover border border-border shadow-lg z-[9999]"
+                      position="popper"
+                      sideOffset={4}
+                      align="start"
+                      side="bottom"
+                    >
                       {agencies.length > 1 && (
                         <SelectItem value="all">כל הסוכנויות</SelectItem>
                       )}
@@ -332,7 +444,11 @@ export function AppSidebar() {
                 )}
               </div>
               {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="h-8 w-8 shrink-0 object-contain" />
+                <img
+                  src={logoUrl}
+                  alt="Logo"
+                  className="h-8 w-8 shrink-0 object-contain"
+                />
               ) : (
                 <Building2 className="h-8 w-8 shrink-0" />
               )}
@@ -340,29 +456,31 @@ export function AppSidebar() {
 
             {/* Tab switcher — 3 main tabs */}
             <div className="flex gap-1 bg-sidebar-accent/40 rounded-lg p-1">
-              {effectiveTabs.filter(t => t.id !== "daily").map(tab => {
-                const TabIcon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all ${
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent"
-                    }`}
-                  >
-                    <TabIcon className="h-3.5 w-3.5" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
+              {effectiveTabs
+                .filter((t) => t.id !== "daily")
+                .map((tab) => {
+                  const TabIcon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all ${
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent"
+                      }`}
+                    >
+                      <TabIcon className="h-3.5 w-3.5" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
             </div>
 
             {/* Daily tab — separate row */}
             {(() => {
-              const dailyTab = effectiveTabs.find(t => t.id === "daily")!;
+              const dailyTab = effectiveTabs.find((t) => t.id === "daily")!;
               const DailyIcon = dailyTab.icon;
               const isActive = activeTab === "daily";
               return (
@@ -390,7 +508,10 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip={isCollapsed ? "בית" : undefined}>
+                <SidebarMenuButton
+                  asChild
+                  tooltip={isCollapsed ? "בית" : undefined}
+                >
                   <NavLink
                     to={buildPath("home")}
                     onClick={handleLinkClick}
@@ -401,7 +522,9 @@ export function AppSidebar() {
                     }
                     dir="rtl"
                   >
-                    {!isCollapsed && <span className="flex-1 text-right">בית</span>}
+                    {!isCollapsed && (
+                      <span className="flex-1 text-right">בית</span>
+                    )}
                     <Home className="h-4 w-4" />
                   </NavLink>
                 </SidebarMenuButton>
@@ -411,15 +534,22 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Active tab sections */}
-        {activeMenuTab.sections.map(section => {
+        {activeMenuTab.sections.map((section) => {
           const visibleItems = filterItems(section.items);
           if (visibleItems.length === 0) return null;
           return (
-            <Collapsible key={section.label} defaultOpen className="group/collapsible">
+            <Collapsible
+              key={section.label}
+              defaultOpen
+              className="group/collapsible"
+            >
               <SidebarGroup>
                 {!isCollapsed && (
                   <SidebarGroupLabel asChild>
-                    <CollapsibleTrigger className="flex items-center gap-2 w-full hover:bg-accent/50 rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide" dir="rtl">
+                    <CollapsibleTrigger
+                      className="flex items-center gap-2 w-full hover:bg-accent/50 rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide"
+                      dir="rtl"
+                    >
                       <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]/collapsible:rotate-180 ml-auto" />
                       <span className="flex-1 text-right">{section.label}</span>
                     </CollapsibleTrigger>
@@ -428,12 +558,15 @@ export function AppSidebar() {
                 <CollapsibleContent>
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {visibleItems.map(item => {
+                      {visibleItems.map((item) => {
                         const Icon = item.icon;
                         const label = getLabel(item.key, item.label);
                         return (
                           <SidebarMenuItem key={item.key}>
-                            <SidebarMenuButton asChild tooltip={isCollapsed ? label : undefined}>
+                            <SidebarMenuButton
+                              asChild
+                              tooltip={isCollapsed ? label : undefined}
+                            >
                               <NavLink
                                 to={buildPath(item.route)}
                                 onClick={handleLinkClick}
@@ -444,7 +577,11 @@ export function AppSidebar() {
                                 }
                                 dir="rtl"
                               >
-                                {!isCollapsed && <span className="flex-1 text-right">{label}</span>}
+                                {!isCollapsed && (
+                                  <span className="flex-1 text-right">
+                                    {label}
+                                  </span>
+                                )}
                                 <Icon className="h-4 w-4" />
                               </NavLink>
                             </SidebarMenuButton>
@@ -458,7 +595,6 @@ export function AppSidebar() {
             </Collapsible>
           );
         })}
-
       </SidebarContent>
 
       {/* Install PWA Button */}
@@ -478,7 +614,8 @@ function InstallAppButton({ isCollapsed }: { isCollapsed: boolean }) {
       setDeferredPrompt(e);
     };
     window.addEventListener("beforeinstallprompt", handler);
-    if (window.matchMedia("(display-mode: standalone)").matches) setIsInstalled(true);
+    if (window.matchMedia("(display-mode: standalone)").matches)
+      setIsInstalled(true);
     return () => window.removeEventListener("beforeinstallprompt", handler);
   });
 
@@ -496,7 +633,9 @@ function InstallAppButton({ isCollapsed }: { isCollapsed: boolean }) {
         className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-sidebar-accent transition-colors"
         dir="rtl"
       >
-        {!isCollapsed && <span className="flex-1 text-right">התקן אפליקציה</span>}
+        {!isCollapsed && (
+          <span className="flex-1 text-right">התקן אפליקציה</span>
+        )}
         <Download className="h-4 w-4" />
       </button>
     </div>

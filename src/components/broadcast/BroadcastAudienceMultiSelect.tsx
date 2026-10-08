@@ -4,9 +4,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Search } from "lucide-react";
 
@@ -71,7 +79,10 @@ export function BroadcastAudienceMultiSelect({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <Label>{label}</Label>
-        <Select value={mode} onValueChange={(v) => onModeChange(v as AudienceFilterMode)}>
+        <Select
+          value={mode}
+          onValueChange={(v) => onModeChange(v as AudienceFilterMode)}
+        >
           <SelectTrigger className="h-8 w-[130px] text-xs">
             <SelectValue />
           </SelectTrigger>
@@ -84,14 +95,23 @@ export function BroadcastAudienceMultiSelect({
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" className="w-full justify-between font-normal h-9">
+          <Button
+            variant="outline"
+            role="combobox"
+            className="w-full justify-between font-normal h-9"
+          >
             <span className="truncate text-right">{summary}</span>
             {selected.length > 0 && (
-              <Badge variant="secondary" className="mr-2 shrink-0">{selected.length}</Badge>
+              <Badge variant="secondary" className="mr-2 shrink-0">
+                {selected.length}
+              </Badge>
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 bg-popover z-[200]" align="start">
+        <PopoverContent
+          className="w-[var(--radix-popover-trigger-width)] p-0 bg-popover z-[200]"
+          align="start"
+        >
           <div className="p-2 border-b">
             <div className="relative">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -103,9 +123,14 @@ export function BroadcastAudienceMultiSelect({
               />
             </div>
           </div>
-          <div className="max-h-52 overflow-y-auto p-2 space-y-1" onWheel={handleScrollWheel}>
+          <div
+            className="max-h-52 overflow-y-auto p-2 space-y-1"
+            onWheel={handleScrollWheel}
+          >
             {filtered.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-3">לא נמצאו אפשרויות</p>
+              <p className="text-xs text-muted-foreground text-center py-3">
+                לא נמצאו אפשרויות
+              </p>
             ) : (
               filtered.map((option) => (
                 <label
@@ -123,8 +148,14 @@ export function BroadcastAudienceMultiSelect({
           </div>
           {selected.length > 0 && (
             <div className="border-t p-2 flex justify-between text-xs">
-              <span className="text-muted-foreground">{selected.length} נבחרו</span>
-              <button type="button" className="underline" onClick={() => onSelectedChange([])}>
+              <span className="text-muted-foreground">
+                {selected.length} נבחרו
+              </span>
+              <button
+                type="button"
+                className="underline"
+                onClick={() => onSelectedChange([])}
+              >
                 נקה
               </button>
             </div>

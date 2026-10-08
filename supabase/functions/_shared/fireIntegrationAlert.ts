@@ -58,10 +58,25 @@ function accountLink(provider: string, accountId?: string | null): string {
 
 function internalLinkFor(provider: string, tenantSlug: string | null): string {
   const base = tenantSlug ? `/t/${tenantSlug}` : "";
-  if (["facebook", "meta", "google_ads", "google_analytics", "ga4", "gsc", "google_search_console", "ahrefs"].includes(provider)) {
+  if (
+    [
+      "facebook",
+      "meta",
+      "google_ads",
+      "google_analytics",
+      "ga4",
+      "gsc",
+      "google_search_console",
+      "ahrefs",
+    ].includes(provider)
+  ) {
     return `${base}/integrations`;
   }
-  if (["gmail", "telegram", "green_api", "manychat", "unified_to"].includes(provider)) {
+  if (
+    ["gmail", "telegram", "green_api", "manychat", "unified_to"].includes(
+      provider,
+    )
+  ) {
     return `${base}/integrations`;
   }
   return `${base}/integrations`;
@@ -78,22 +93,27 @@ const REASON_HE: Record<string, string> = {
   webhook_unauthorized: "Webhook לא מאומת",
 };
 
-export async function fireIntegrationAlert(input: FireIntegrationAlertInput): Promise<{ fired: boolean; reason?: string }> {
+export async function fireIntegrationAlert(
+  input: FireIntegrationAlertInput,
+): Promise<{ fired: boolean; reason?: string }> {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   const throttleHours = input.throttleHours ?? 6;
-  const triggerType = input.alert_type === "blocked"
-    ? "ad_account_blocked"
-    : input.alert_type === "reconnected"
-      ? "integration_reconnected"
-      : "integration_disconnected";
+  const triggerType =
+    input.alert_type === "blocked"
+      ? "ad_account_blocked"
+      : input.alert_type === "reconnected"
+        ? "integration_reconnected"
+        : "integration_disconnected";
 
   try {
     // Throttle check
     if (throttleHours > 0) {
-      const since = new Date(Date.now() - throttleHours * 3600 * 1000).toISOString();
+      const since = new Date(
+        Date.now() - throttleHours * 3600 * 1000,
+      ).toISOString();
       let q = supabase
         .from("integration_alerts_log")
         .select("id")
@@ -119,7 +139,8 @@ export async function fireIntegrationAlert(input: FireIntegrationAlertInput): Pr
 
     const provider_label = providerLabel(input.provider);
     const reason = input.reason ?? "";
-    const reason_he = REASON_HE[reason.toLowerCase()] ?? reason ?? "סיבה לא ידועה";
+    const reason_he =
+      REASON_HE[reason.toLowerCase()] ?? reason ?? "סיבה לא ידועה";
     const account_link = accountLink(input.provider, input.account_id);
     const internal_link = internalLinkFor(input.provider, tenant?.slug ?? null);
     const occurred_at = new Date().toISOString();
@@ -152,7 +173,12 @@ export async function fireIntegrationAlert(input: FireIntegrationAlertInput): Pr
         tenant_id: input.tenant_id,
         data,
       }),
-    }).catch((e) => console.error("[fireIntegrationAlert] trigger-automation failed:", e?.message));
+    }).catch((e) =>
+      console.error(
+        "[fireIntegrationAlert] trigger-automation failed:",
+        e?.message,
+      ),
+    );
 
     // Log
     await supabase.from("integration_alerts_log").insert({

@@ -1,21 +1,68 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon, Copy, Loader2, Video, ArrowRight, Menu } from "lucide-react";
+import {
+  User,
+  Phone,
+  PhoneCall,
+  Building2,
+  Clock,
+  Search,
+  Mail,
+  Globe,
+  CheckSquare,
+  Trash2,
+  MessageSquare,
+  FileText,
+  DollarSign,
+  X,
+  Edit,
+  Pencil,
+  Check,
+  Users,
+  Plus,
+  UserPlus,
+  BarChart3,
+  FolderOpen,
+  Link,
+  KeyRound,
+  Calendar as CalendarIcon,
+  Copy,
+  Loader2,
+  Video,
+  ArrowRight,
+  Menu,
+} from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DuplicateClientDialog } from "@/components/forms/DuplicateClientDialog";
 import { CreateOrgForClientDialog } from "@/components/clients/CreateOrgForClientDialog";
 import { AssignPhoneFromWhatsAppDialog } from "@/components/chat/AssignPhoneFromWhatsAppDialog";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
@@ -52,7 +99,7 @@ interface ClientsChatViewProps {
   agencies?: any[];
   canViewFinance?: boolean;
   getClientFinancialData?: (clientId: string) => any;
-  initialClientId?: string;  // deep-link: open this client on mount
+  initialClientId?: string; // deep-link: open this client on mount
   initialTab?: string; // deep-link: open this tab on mount (?tab=recordings)
   onSelectedClientChange?: (clientId: string | null) => void;
 }
@@ -74,7 +121,12 @@ const MOOD_CONFIG: Record<string, { emoji: string; text: string }> = {
 const CLIENT_TAB_OPTIONS = [
   { value: "details", label: "פרטי לקוח", icon: FileText },
   { value: "connections", label: "חיבורים", icon: Link },
-  { value: "business", label: "מידע עסקי", icon: DollarSign, financeOnly: true },
+  {
+    value: "business",
+    label: "מידע עסקי",
+    icon: DollarSign,
+    financeOnly: true,
+  },
   { value: "docs", label: "מסמכים", icon: FolderOpen },
   { value: "credentials", label: "ססמאות", icon: KeyRound },
   { value: "meeting", label: "פגישה", icon: CalendarIcon },
@@ -97,7 +149,7 @@ export function ClientsChatView({
 }: ClientsChatViewProps) {
   const isMobile = useIsMobile();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(
-    initialClientId ?? null
+    initialClientId ?? null,
   );
   const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -123,7 +175,9 @@ export function ClientsChatView({
     }
   }, [activeTab, canViewFinance]);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
-  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
+  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [changeAgencyOpen, setChangeAgencyOpen] = useState(false);
@@ -168,21 +222,37 @@ export function ClientsChatView({
   });
 
   const [addingContact, setAddingContact] = useState(false);
-  const [newContact, setNewContact] = useState({ contact_name: "", phone: "", email: "", role: "" });
+  const [newContact, setNewContact] = useState({
+    contact_name: "",
+    phone: "",
+    email: "",
+    role: "",
+  });
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
-  const [editContactData, setEditContactData] = useState({ contact_name: "", phone: "", email: "", role: "" });
+  const [editContactData, setEditContactData] = useState({
+    contact_name: "",
+    phone: "",
+    email: "",
+    role: "",
+  });
   const [groupSearch, setGroupSearch] = useState("");
   const [showGroupDropdown, setShowGroupDropdown] = useState(false);
 
   const filteredGroups = useMemo(() => {
     if (!groupSearch.trim()) return whatsappGroups;
     const q = groupSearch.toLowerCase();
-    return whatsappGroups.filter((g: any) => g.group_name?.toLowerCase().includes(q));
+    return whatsappGroups.filter((g: any) =>
+      g.group_name?.toLowerCase().includes(q),
+    );
   }, [whatsappGroups, groupSearch]);
 
   const getClientDisplayName = useCallback((client: any) => {
-    const candidates = [client?.name, client?.contact_name, client?.website, client?.phone]
-      .map((value) => (typeof value === "string" ? value.trim() : ""));
+    const candidates = [
+      client?.name,
+      client?.contact_name,
+      client?.website,
+      client?.phone,
+    ].map((value) => (typeof value === "string" ? value.trim() : ""));
 
     const firstNonEmpty = candidates.find((value) => value.length > 0);
     if (firstNonEmpty) return firstNonEmpty;
@@ -193,15 +263,16 @@ export function ClientsChatView({
   const filteredClients = useMemo(() => {
     if (!listSearch.trim()) return clients;
     const q = listSearch.toLowerCase();
-    return clients.filter(c =>
-      getClientDisplayName(c).toLowerCase().includes(q) ||
-      (c.contact_name || "").toLowerCase().includes(q) ||
-      (c.phone || "").includes(q)
+    return clients.filter(
+      (c) =>
+        getClientDisplayName(c).toLowerCase().includes(q) ||
+        (c.contact_name || "").toLowerCase().includes(q) ||
+        (c.phone || "").includes(q),
     );
   }, [clients, listSearch, getClientDisplayName]);
 
   const selectedClient = useMemo(() => {
-    return clients.find(c => c.id === selectedClientId) || null;
+    return clients.find((c) => c.id === selectedClientId) || null;
   }, [clients, selectedClientId]);
 
   // Progressive rendering of the (potentially long) client list: render a growing
@@ -212,7 +283,7 @@ export function ClientsChatView({
   const [visibleCount, setVisibleCount] = useState(LIST_PAGE);
   const visibleClients = useMemo(
     () => filteredClients.slice(0, visibleCount),
-    [filteredClients, visibleCount]
+    [filteredClients, visibleCount],
   );
   // Reset the window when the search narrows/changes the result set.
   useEffect(() => {
@@ -226,10 +297,12 @@ export function ClientsChatView({
     const io = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
-          setVisibleCount((n) => (n < filteredClients.length ? n + LIST_PAGE : n));
+          setVisibleCount((n) =>
+            n < filteredClients.length ? n + LIST_PAGE : n,
+          );
         }
       },
-      { root: listScrollRef.current ?? null, rootMargin: "300px" }
+      { root: listScrollRef.current ?? null, rootMargin: "300px" },
     );
     io.observe(sentinel);
     return () => io.disconnect();
@@ -237,18 +310,22 @@ export function ClientsChatView({
 
   const selectedClientDisplayName = useMemo(
     () => (selectedClient ? getClientDisplayName(selectedClient) : "ללא שם"),
-    [selectedClient, getClientDisplayName]
+    [selectedClient, getClientDisplayName],
   );
 
   const performDelete = async (id: string) => {
     try {
-      const { data, error } = await supabase.from("clients").delete().eq("id", id).select("id");
+      const { data, error } = await supabase
+        .from("clients")
+        .delete()
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
       if (!data?.length) {
         throw new Error("לא ניתן למחוק לקוח — אין הרשאה או שהלקוח כבר נמחק");
       }
       toast.success("לקוח נמחק בהצלחה");
-      const idx = clients.findIndex(c => c.id === id);
+      const idx = clients.findIndex((c) => c.id === id);
       const next = clients[idx + 1] || clients[idx - 1] || null;
       setSelectedClientId(next?.id || null);
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
@@ -260,7 +337,7 @@ export function ClientsChatView({
   };
 
   const toggleClientSelection = useCallback((clientId: string) => {
-    setSelectedClientIds(prev => {
+    setSelectedClientIds((prev) => {
       const next = new Set(prev);
       if (next.has(clientId)) next.delete(clientId);
       else next.add(clientId);
@@ -272,7 +349,7 @@ export function ClientsChatView({
     if (selectedClientIds.size === filteredClients.length) {
       setSelectedClientIds(new Set());
     } else {
-      setSelectedClientIds(new Set(filteredClients.map(c => c.id)));
+      setSelectedClientIds(new Set(filteredClients.map((c) => c.id)));
     }
   }, [filteredClients, selectedClientIds.size]);
 
@@ -287,13 +364,19 @@ export function ClientsChatView({
     setBulkActionLoading(true);
     try {
       const ids = Array.from(selectedClientIds);
-      const { data, error } = await supabase.from("clients").delete().in("id", ids).select("id");
+      const { data, error } = await supabase
+        .from("clients")
+        .delete()
+        .in("id", ids)
+        .select("id");
       if (error) throw error;
       if (!data?.length) {
         throw new Error("לא ניתן למחוק לקוחות — אין הרשאה");
       }
       if (data.length < ids.length) {
-        toast.warning(`נמחקו ${data.length} מתוך ${ids.length} לקוחות (חלקם ללא הרשאה מחיקה)`);
+        toast.warning(
+          `נמחקו ${data.length} מתוך ${ids.length} לקוחות (חלקם ללא הרשאה מחיקה)`,
+        );
       } else {
         toast.success(`${data.length} לקוחות נמחקו בהצלחה`);
       }
@@ -314,7 +397,10 @@ export function ClientsChatView({
     if (selectedClientIds.size === 0) return;
     setBulkActionLoading(true);
     try {
-      const { error } = await supabase.from("clients").update({ status: status as any }).in("id", Array.from(selectedClientIds));
+      const { error } = await supabase
+        .from("clients")
+        .update({ status: status as any })
+        .in("id", Array.from(selectedClientIds));
       if (error) throw error;
       toast.success(`${selectedClientIds.size} לקוחות עודכנו`);
       exitMultiSelect();
@@ -330,7 +416,10 @@ export function ClientsChatView({
     if (selectedClientIds.size === 0) return;
     setBulkActionLoading(true);
     try {
-      const { error } = await supabase.from("clients").update({ mood_status: moodStatus as any }).in("id", Array.from(selectedClientIds));
+      const { error } = await supabase
+        .from("clients")
+        .update({ mood_status: moodStatus as any })
+        .in("id", Array.from(selectedClientIds));
       if (error) throw error;
       toast.success(`${selectedClientIds.size} לקוחות עודכנו`);
       exitMultiSelect();
@@ -344,7 +433,10 @@ export function ClientsChatView({
 
   const handleStatusChange = async (clientId: string, status: string) => {
     try {
-      const { error } = await supabase.from("clients").update({ status: status as any }).eq("id", clientId);
+      const { error } = await supabase
+        .from("clients")
+        .update({ status: status as any })
+        .eq("id", clientId);
       if (error) throw error;
       toast.success("הסטטוס עודכן בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
@@ -355,7 +447,10 @@ export function ClientsChatView({
 
   const handleMoodChange = async (clientId: string, moodStatus: string) => {
     try {
-      const { error } = await supabase.from("clients").update({ mood_status: moodStatus as any }).eq("id", clientId);
+      const { error } = await supabase
+        .from("clients")
+        .update({ mood_status: moodStatus as any })
+        .eq("id", clientId);
       if (error) throw error;
       toast.success("מצב הלקוח עודכן בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
@@ -364,20 +459,33 @@ export function ClientsChatView({
     }
   };
 
-  const getStatusInfo = (status: string) => STATUS_CONFIG[status] || STATUS_CONFIG.active;
-  const getMoodInfo = (mood: string | null) => MOOD_CONFIG[mood || "happy"] || MOOD_CONFIG.happy;
-  const getAgencyName = (agencyId: string) => agencies?.find((a: any) => a.id === agencyId)?.name || "";
+  const getStatusInfo = (status: string) =>
+    STATUS_CONFIG[status] || STATUS_CONFIG.active;
+  const getMoodInfo = (mood: string | null) =>
+    MOOD_CONFIG[mood || "happy"] || MOOD_CONFIG.happy;
+  const getAgencyName = (agencyId: string) =>
+    agencies?.find((a: any) => a.id === agencyId)?.name || "";
 
   const visibleClientTabs = useMemo(
-    () => CLIENT_TAB_OPTIONS.filter((tab) => !tab.financeOnly || canViewFinance),
+    () =>
+      CLIENT_TAB_OPTIONS.filter((tab) => !tab.financeOnly || canViewFinance),
     [canViewFinance],
   );
   const activeTabLabel =
-    visibleClientTabs.find((tab) => tab.value === activeTab)?.label ?? "פרטי לקוח";
+    visibleClientTabs.find((tab) => tab.value === activeTab)?.label ??
+    "פרטי לקוח";
 
-  const updateClientField = async (clientId: string, field: string, value: any) => {
+  const updateClientField = async (
+    clientId: string,
+    field: string,
+    value: any,
+  ) => {
     try {
-      const { error, data } = await supabase.from("clients").update({ [field]: value }).eq("id", clientId).select();
+      const { error, data } = await supabase
+        .from("clients")
+        .update({ [field]: value })
+        .eq("id", clientId)
+        .select();
       if (error) throw error;
       if (!data || data.length === 0) {
         throw new Error("אין הרשאה לעדכן לקוח זה (ייתכן שלקוח בסוכנות משותפת)");
@@ -389,64 +497,136 @@ export function ClientsChatView({
     }
   };
 
-  const EditableField = ({ label, value, field, clientId, type = "text", isLink, linkPrefix }: {
-    label: string; value: string | null; field: string; clientId: string;
-    type?: "text" | "number" | "textarea"; isLink?: boolean; linkPrefix?: string;
+  const EditableField = ({
+    label,
+    value,
+    field,
+    clientId,
+    type = "text",
+    isLink,
+    linkPrefix,
+  }: {
+    label: string;
+    value: string | null;
+    field: string;
+    clientId: string;
+    type?: "text" | "number" | "textarea";
+    isLink?: boolean;
+    linkPrefix?: string;
   }) => {
     const [editing, setEditing] = useState(false);
     const [editValue, setEditValue] = useState(value || "");
 
     const handleSave = () => {
-      const finalValue = type === "number" ? (editValue === "" ? 0 : Number(editValue)) : (editValue || null);
+      const finalValue =
+        type === "number"
+          ? editValue === ""
+            ? 0
+            : Number(editValue)
+          : editValue || null;
       updateClientField(clientId, field, finalValue);
       setEditing(false);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && type !== "textarea") handleSave();
-      if (e.key === "Escape") { setEditValue(value || ""); setEditing(false); }
+      if (e.key === "Escape") {
+        setEditValue(value || "");
+        setEditing(false);
+      }
     };
 
     if (editing) {
       return (
         <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleSave}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0"
+            onClick={handleSave}
+          >
             <Check className="h-3 w-3 text-primary" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => { setEditValue(value || ""); setEditing(false); }}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0"
+            onClick={() => {
+              setEditValue(value || "");
+              setEditing(false);
+            }}
+          >
             <X className="h-3 w-3 text-muted-foreground" />
           </Button>
           {type === "textarea" ? (
-            <Textarea value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={handleKeyDown}
-              className="text-sm h-20 text-right" dir="rtl" autoFocus />
+            <Textarea
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="text-sm h-20 text-right"
+              dir="rtl"
+              autoFocus
+            />
           ) : (
-            <Input value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={handleKeyDown}
-              type={type === "number" ? "number" : "text"} className="text-sm h-7 text-right" dir="rtl" autoFocus />
+            <Input
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              type={type === "number" ? "number" : "text"}
+              className="text-sm h-7 text-right"
+              dir="rtl"
+              autoFocus
+            />
           )}
-          <span className="text-muted-foreground text-sm shrink-0">{label}</span>
+          <span className="text-muted-foreground text-sm shrink-0">
+            {label}
+          </span>
         </div>
       );
     }
 
     return (
-      <div className="flex items-center justify-end gap-2 group cursor-pointer" onClick={() => { setEditValue(value || ""); setEditing(true); }}>
+      <div
+        className="flex items-center justify-end gap-2 group cursor-pointer"
+        onClick={() => {
+          setEditValue(value || "");
+          setEditing(true);
+        }}
+      >
         <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
         {isLink && value ? (
-          <a href={`${linkPrefix || ""}${value}`} target={linkPrefix?.startsWith("http") || linkPrefix === undefined ? "_blank" : undefined}
+          <a
+            href={`${linkPrefix || ""}${value}`}
+            target={
+              linkPrefix?.startsWith("http") || linkPrefix === undefined
+                ? "_blank"
+                : undefined
+            }
             className="font-medium text-primary hover:underline truncate"
-            onClick={e => e.stopPropagation()}>
+            onClick={(e) => e.stopPropagation()}
+          >
             {value}
           </a>
         ) : (
-          <span className="font-medium">{type === "number" && value ? `₪${Number(value).toLocaleString()}` : (value || "—")}</span>
+          <span className="font-medium">
+            {type === "number" && value
+              ? `₪${Number(value).toLocaleString()}`
+              : value || "—"}
+          </span>
         )}
         <span className="text-muted-foreground text-sm shrink-0">{label}</span>
       </div>
     );
   };
 
-  const EditableClientName = ({ clientId, currentName, agencyName }: {
-    clientId: string; currentName: string; agencyName?: string;
+  const EditableClientName = ({
+    clientId,
+    currentName,
+    agencyName,
+  }: {
+    clientId: string;
+    currentName: string;
+    agencyName?: string;
   }) => {
     const [editing, setEditing] = useState(false);
     const [editValue, setEditValue] = useState(currentName);
@@ -458,23 +638,46 @@ export function ClientsChatView({
     };
     const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === "Enter") handleSave();
-      if (e.key === "Escape") { setEditValue(currentName); setEditing(false); }
+      if (e.key === "Escape") {
+        setEditValue(currentName);
+        setEditing(false);
+      }
     };
     if (editing) {
       return (
         <div className="flex items-center gap-2">
-          <Input value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={handleKeyDown} onBlur={handleSave} className="text-sm h-7 font-bold text-right max-w-[200px]" dir="rtl" autoFocus />
+          <Input
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={handleSave}
+            className="text-sm h-7 font-bold text-right max-w-[200px]"
+            dir="rtl"
+            autoFocus
+          />
         </div>
       );
     }
     return (
       <>
-        <h2 className="font-bold text-base truncate cursor-pointer group flex items-center gap-1" onClick={() => { setEditValue(currentName); setEditing(true); }}>
+        <h2
+          className="font-bold text-base truncate cursor-pointer group flex items-center gap-1"
+          onClick={() => {
+            setEditValue(currentName);
+            setEditing(true);
+          }}
+        >
           {currentName}
           <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
         </h2>
         {agencyName && (
-          <p className="text-xs text-muted-foreground truncate cursor-pointer hover:text-primary transition-colors" onClick={(e) => { e.stopPropagation(); setChangeAgencyOpen(true); }}>
+          <p
+            className="text-xs text-muted-foreground truncate cursor-pointer hover:text-primary transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setChangeAgencyOpen(true);
+            }}
+          >
             {agencyName} ✎
           </p>
         )}
@@ -483,1002 +686,1582 @@ export function ClientsChatView({
   };
 
   return (
-    <div className={cn("flex h-full min-h-0 max-h-full overflow-hidden bg-background w-full max-w-full", isMobile ? "border-0 rounded-none" : "border rounded-lg")} dir="rtl">
+    <div
+      className={cn(
+        "flex h-full min-h-0 max-h-full overflow-hidden bg-background w-full max-w-full",
+        isMobile ? "border-0 rounded-none" : "border rounded-lg",
+      )}
+      dir="rtl"
+    >
       {/* Client list — full screen on mobile until a client is selected */}
       {(!isMobile || !selectedClientId) && (
-      <div className={cn("border-s flex flex-col bg-muted/20 overflow-hidden min-h-0", isMobile ? "w-full flex-1" : "w-[25%] min-w-[240px] max-w-[25%]")} dir="rtl">
-        {/* List header with search */}
-        <div className={cn("border-b bg-background/80 backdrop-blur-sm shrink-0", isMobile ? "p-2" : "p-3")}>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="חיפוש לקוח..."
-                value={listSearch}
-                onChange={(e) => setListSearch(e.target.value)}
-                className="pr-9 h-9 text-sm"
-              />
-            </div>
-            <Button
-              variant={multiSelectMode ? "default" : "outline"}
-              size="icon"
-              className="h-9 w-9 shrink-0"
-              onClick={() => multiSelectMode ? exitMultiSelect() : setMultiSelectMode(true)}
-              title={multiSelectMode ? "בטל בחירה" : "בחירה מרובה"}
-            >
-              <CheckSquare className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="mt-2 text-xs text-muted-foreground text-center">
-            {filteredClients.length} לקוחות
-          </div>
-        </div>
-
-        {/* Multi-select toolbar */}
-        {multiSelectMode && (
-          <div className="p-2 border-b bg-primary/5 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={toggleSelectAll}>
-                {selectedClientIds.size === filteredClients.length ? "בטל הכל" : "בחר הכל"}
-              </Button>
-              <span className="text-xs font-medium text-muted-foreground">
-                {selectedClientIds.size} נבחרו
-              </span>
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={exitMultiSelect}>
-                <X className="h-3.5 w-3.5" />
+        <div
+          className={cn(
+            "border-s flex flex-col bg-muted/20 overflow-hidden min-h-0",
+            isMobile ? "w-full flex-1" : "w-[25%] min-w-[240px] max-w-[25%]",
+          )}
+          dir="rtl"
+        >
+          {/* List header with search */}
+          <div
+            className={cn(
+              "border-b bg-background/80 backdrop-blur-sm shrink-0",
+              isMobile ? "p-2" : "p-3",
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="חיפוש לקוח..."
+                  value={listSearch}
+                  onChange={(e) => setListSearch(e.target.value)}
+                  className="pr-9 h-9 text-sm"
+                />
+              </div>
+              <Button
+                variant={multiSelectMode ? "default" : "outline"}
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                onClick={() =>
+                  multiSelectMode ? exitMultiSelect() : setMultiSelectMode(true)
+                }
+                title={multiSelectMode ? "בטל בחירה" : "בחירה מרובה"}
+              >
+                <CheckSquare className="h-4 w-4" />
               </Button>
             </div>
-            {selectedClientIds.size > 0 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                {/* Bulk status change */}
-                <Select onValueChange={handleBulkStatusChange} disabled={bulkActionLoading}>
-                  <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
-                    <SelectValue placeholder="סטטוס" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-[100]">
-                    {Object.entries(STATUS_CONFIG).map(([key, { label, color }]) => (
-                      <SelectItem key={key} value={key} style={{ backgroundColor: color, color: "#fff" }}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="mt-2 text-xs text-muted-foreground text-center">
+              {filteredClients.length} לקוחות
+            </div>
+          </div>
 
-                {/* Bulk mood change */}
-                <Select onValueChange={handleBulkMoodChange} disabled={bulkActionLoading}>
-                  <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
-                    <SelectValue placeholder="מצב רוח" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-[100]">
-                    {Object.entries(MOOD_CONFIG).map(([key, { emoji, text }]) => (
-                      <SelectItem key={key} value={key}>
-                        {emoji} {text}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Bulk delete */}
+          {/* Multi-select toolbar */}
+          {multiSelectMode && (
+            <div className="p-2 border-b bg-primary/5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
                 <Button
                   size="sm"
-                  variant="destructive"
-                  className="h-7 text-[11px] gap-1"
-                  onClick={() => setConfirmingBulkDelete(true)}
-                  disabled={bulkActionLoading}
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={toggleSelectAll}
                 >
-                  <Trash2 className="h-3 w-3" />
-                  מחק
+                  {selectedClientIds.size === filteredClients.length
+                    ? "בטל הכל"
+                    : "בחר הכל"}
+                </Button>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {selectedClientIds.size} נבחרו
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  onClick={exitMultiSelect}
+                >
+                  <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
-            )}
-            {confirmingBulkDelete && selectedClientIds.size > 0 && (
-              <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2">
-                <span className="text-[11px] text-destructive">
-                  למחוק {selectedClientIds.size} לקוחות? פעולה זו אינה הפיכה.
-                </span>
-                <div className="flex gap-1 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-[11px]"
-                    onClick={() => setConfirmingBulkDelete(false)}
+              {selectedClientIds.size > 0 && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  {/* Bulk status change */}
+                  <Select
+                    onValueChange={handleBulkStatusChange}
                     disabled={bulkActionLoading}
                   >
-                    ביטול
-                  </Button>
+                    <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
+                      <SelectValue placeholder="סטטוס" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[100]">
+                      {Object.entries(STATUS_CONFIG).map(
+                        ([key, { label, color }]) => (
+                          <SelectItem
+                            key={key}
+                            value={key}
+                            style={{ backgroundColor: color, color: "#fff" }}
+                          >
+                            {label}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Bulk mood change */}
+                  <Select
+                    onValueChange={handleBulkMoodChange}
+                    disabled={bulkActionLoading}
+                  >
+                    <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
+                      <SelectValue placeholder="מצב רוח" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[100]">
+                      {Object.entries(MOOD_CONFIG).map(
+                        ([key, { emoji, text }]) => (
+                          <SelectItem key={key} value={key}>
+                            {emoji} {text}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Bulk delete */}
                   <Button
                     size="sm"
                     variant="destructive"
                     className="h-7 text-[11px] gap-1"
-                    onClick={handleBulkDelete}
+                    onClick={() => setConfirmingBulkDelete(true)}
                     disabled={bulkActionLoading}
                   >
-                    {bulkActionLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-                    אישור מחיקה
+                    <Trash2 className="h-3 w-3" />
+                    מחק
                   </Button>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Client list */}
-        <div ref={listScrollRef} className="flex-1 overflow-y-auto overflow-x-hidden min-h-0" dir="rtl">
-          <div className="divide-y w-full">
-            {visibleClients.map((client) => {
-              const isSelected = client.id === selectedClientId;
-              const isChecked = selectedClientIds.has(client.id);
-              const statusInfo = getStatusInfo(client.status);
-              const moodInfo = getMoodInfo(client.mood_status);
-              const displayName = getClientDisplayName(client);
-
-              return (
-                <button
-                  key={client.id}
-                  onClick={() => {
-                    if (multiSelectMode) {
-                      toggleClientSelection(client.id);
-                    } else {
-                      setSelectedClientId(client.id);
-                    }
-                  }}
-                  className={cn(
-                    "w-full text-right p-3 hover:bg-muted/50 transition-colors cursor-pointer",
-                    isSelected && !multiSelectMode && "bg-primary/10 border-e-4 border-e-primary",
-                    isChecked && multiSelectMode && "bg-primary/10"
-                  )}
-                >
-                  <div className="flex items-start gap-2">
-                    {/* Avatar - right side in RTL */}
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-                      style={{ backgroundColor: statusInfo.color }}
+              )}
+              {confirmingBulkDelete && selectedClientIds.size > 0 && (
+                <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2">
+                  <span className="text-[11px] text-destructive">
+                    למחוק {selectedClientIds.size} לקוחות? פעולה זו אינה הפיכה.
+                  </span>
+                  <div className="flex gap-1 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-[11px]"
+                      onClick={() => setConfirmingBulkDelete(false)}
+                      disabled={bulkActionLoading}
                     >
-                      {(displayName || "?")[0]}
-                    </div>
-                    <div className="flex-1 min-w-0 text-right">
-                    {multiSelectMode && (
-                      <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={isChecked}
-                          onCheckedChange={() => toggleClientSelection(client.id)}
-                        />
-                      </div>
-                    )}
-                      <div className="flex items-center gap-1">
-                        <span dir="rtl" className="block font-semibold text-sm truncate flex-1 min-w-0 text-right">
-                          {displayName}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                          {moodInfo.emoji}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 mt-1 justify-end flex-wrap">
-                        {client.agencies?.name && (
-                          <span className="text-xs text-muted-foreground truncate">{client.agencies.name}</span>
-                        )}
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] px-1.5 py-0 h-4 border-0 text-white"
-                          style={{ backgroundColor: statusInfo.color }}
-                        >
-                          {statusInfo.label}
-                        </Badge>
-                      </div>
-                    </div>
+                      ביטול
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-7 text-[11px] gap-1"
+                      onClick={handleBulkDelete}
+                      disabled={bulkActionLoading}
+                    >
+                      {bulkActionLoading && (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      )}
+                      אישור מחיקה
+                    </Button>
                   </div>
-                </button>
-              );
-            })}
-            {filteredClients.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground text-sm">
-                לא נמצאו לקוחות
-              </div>
-            )}
-            {/* Sentinel: scrolling near it loads the next page of the list */}
-            {visibleCount < filteredClients.length && (
-              <div ref={listSentinelRef} className="p-3 text-center text-xs text-muted-foreground">
-                טוען עוד… ({visibleClients.length}/{filteredClients.length})
-              </div>
-            )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Client list */}
+          <div
+            ref={listScrollRef}
+            className="flex-1 overflow-y-auto overflow-x-hidden min-h-0"
+            dir="rtl"
+          >
+            <div className="divide-y w-full">
+              {visibleClients.map((client) => {
+                const isSelected = client.id === selectedClientId;
+                const isChecked = selectedClientIds.has(client.id);
+                const statusInfo = getStatusInfo(client.status);
+                const moodInfo = getMoodInfo(client.mood_status);
+                const displayName = getClientDisplayName(client);
+
+                return (
+                  <button
+                    key={client.id}
+                    onClick={() => {
+                      if (multiSelectMode) {
+                        toggleClientSelection(client.id);
+                      } else {
+                        setSelectedClientId(client.id);
+                      }
+                    }}
+                    className={cn(
+                      "w-full text-right p-3 hover:bg-muted/50 transition-colors cursor-pointer",
+                      isSelected &&
+                        !multiSelectMode &&
+                        "bg-primary/10 border-e-4 border-e-primary",
+                      isChecked && multiSelectMode && "bg-primary/10",
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      {/* Avatar - right side in RTL */}
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                        style={{ backgroundColor: statusInfo.color }}
+                      >
+                        {(displayName || "?")[0]}
+                      </div>
+                      <div className="flex-1 min-w-0 text-right">
+                        {multiSelectMode && (
+                          <div
+                            className="pt-1 shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Checkbox
+                              checked={isChecked}
+                              onCheckedChange={() =>
+                                toggleClientSelection(client.id)
+                              }
+                            />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <span
+                            dir="rtl"
+                            className="block font-semibold text-sm truncate flex-1 min-w-0 text-right"
+                          >
+                            {displayName}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                            {moodInfo.emoji}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 mt-1 justify-end flex-wrap">
+                          {client.agencies?.name && (
+                            <span className="text-xs text-muted-foreground truncate">
+                              {client.agencies.name}
+                            </span>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] px-1.5 py-0 h-4 border-0 text-white"
+                            style={{ backgroundColor: statusInfo.color }}
+                          >
+                            {statusInfo.label}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+              {filteredClients.length === 0 && (
+                <div className="p-8 text-center text-muted-foreground text-sm">
+                  לא נמצאו לקוחות
+                </div>
+              )}
+              {/* Sentinel: scrolling near it loads the next page of the list */}
+              {visibleCount < filteredClients.length && (
+                <div
+                  ref={listSentinelRef}
+                  className="p-3 text-center text-xs text-muted-foreground"
+                >
+                  טוען עוד… ({visibleClients.length}/{filteredClients.length})
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
       )}
       {/* Client detail — full screen on mobile after selecting a client */}
       {(!isMobile || selectedClientId) && (
-      <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
-        {selectedClient ? (
-          <>
-            {/* Toolbar */}
-            <div className={cn("flex items-center gap-2 border-b bg-background/95 backdrop-blur-sm shrink-0 flex-wrap", isMobile ? "p-2" : "p-3")}>
-              {isMobile && (
-                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setSelectedClientId(null)} aria-label="חזרה לרשימה">
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
-              )}
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                {!isMobile && (
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-                  style={{ backgroundColor: getStatusInfo(selectedClient.status).color }}
-                >
-                  {(selectedClientDisplayName || "?")[0]}
-                </div>
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
+          {selectedClient ? (
+            <>
+              {/* Toolbar */}
+              <div
+                className={cn(
+                  "flex items-center gap-2 border-b bg-background/95 backdrop-blur-sm shrink-0 flex-wrap",
+                  isMobile ? "p-2" : "p-3",
                 )}
-                <div className="min-w-0 flex-1">
-                  <EditableClientName
-                    clientId={selectedClient.id}
-                    currentName={selectedClientDisplayName}
-                    agencyName={isMobile ? undefined : selectedClient.agencies?.name}
-                  />
-                </div>
-              </div>
-
-              {isMobile && (
-                <Sheet open={tabMenuOpen} onOpenChange={setTabMenuOpen}>
-                  <SheetTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1 max-w-[42vw]">
-                      <span className="truncate text-xs">{activeTabLabel}</span>
-                      <Menu className="h-4 w-4 shrink-0" />
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="right" dir="rtl" className="w-[min(88vw,22rem)] p-4">
-                    <SheetHeader className="text-right">
-                      <SheetTitle>{selectedClientDisplayName}</SheetTitle>
-                    </SheetHeader>
-                    <div className="mt-4 space-y-1">
-                      {visibleClientTabs.map((tab) => {
-                        const Icon = tab.icon;
-                        return (
-                          <Button
-                            key={tab.value}
-                            variant={activeTab === tab.value ? "default" : "ghost"}
-                            className="w-full justify-start gap-2"
-                            onClick={() => {
-                              setActiveTab(tab.value);
-                              setTabMenuOpen(false);
-                            }}
-                          >
-                            <Icon className="h-4 w-4 shrink-0" />
-                            {tab.label}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </SheetContent>
-                </Sheet>
-              )}
-
-              <div className={cn("flex items-center gap-1.5", isMobile ? "hidden" : "flex-wrap")}>
-                {/* Status selector */}
-                <Select
-                  value={selectedClient.status}
-                  onValueChange={(value) => handleStatusChange(selectedClient.id, value)}
-                >
-                  <SelectTrigger
-                    className="h-8 text-xs w-auto min-w-[100px] border-2 font-medium"
-                    style={{
-                      backgroundColor: getStatusInfo(selectedClient.status).color,
-                      color: "#fff",
-                    }}
+              >
+                {isMobile && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => setSelectedClientId(null)}
+                    aria-label="חזרה לרשימה"
                   >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-[100]">
-                    {Object.entries(STATUS_CONFIG).map(([key, { label, color }]) => (
-                      <SelectItem key={key} value={key} style={{ backgroundColor: color, color: "#fff" }}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Mood selector */}
-                <Select
-                  value={selectedClient.mood_status || "happy"}
-                  onValueChange={(value) => handleMoodChange(selectedClient.id, value)}
-                >
-                  <SelectTrigger className="h-8 text-xs w-auto min-w-[100px] border-2 font-medium">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-[100]">
-                    {Object.entries(MOOD_CONFIG).map(([key, { emoji, text }]) => (
-                      <SelectItem key={key} value={key}>
-                        {emoji} {text}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {selectedClient.phone && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                      onClick={() => setCallDialogOpen(true)}
-                      title="התקשר דרך מרכזיה"
-                    >
-                      <PhoneCall className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-8 gap-1" asChild>
-                      <a href={`tel:${selectedClient.phone}`}>
-                        <Phone className="h-3.5 w-3.5" />
-                        {selectedClient.phone}
-                      </a>
-                    </Button>
-                  </>
-                )}
-
-                {selectedClient.email && (
-                  <Button variant="outline" size="sm" className="h-8 gap-1" asChild>
-                    <a href={`mailto:${selectedClient.email}`}>
-                      <Mail className="h-3.5 w-3.5" />
-                    </a>
+                    <ArrowRight className="h-5 w-5" />
                   </Button>
                 )}
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  {!isMobile && (
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                      style={{
+                        backgroundColor: getStatusInfo(selectedClient.status)
+                          .color,
+                      }}
+                    >
+                      {(selectedClientDisplayName || "?")[0]}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <EditableClientName
+                      clientId={selectedClient.id}
+                      currentName={selectedClientDisplayName}
+                      agencyName={
+                        isMobile ? undefined : selectedClient.agencies?.name
+                      }
+                    />
+                  </div>
+                </div>
 
-                <EditClientDialog client={selectedClient} open={editDialogOpen} onOpenChange={setEditDialogOpen} />
+                {isMobile && (
+                  <Sheet open={tabMenuOpen} onOpenChange={setTabMenuOpen}>
+                    <SheetTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 shrink-0 gap-1 max-w-[42vw]"
+                      >
+                        <span className="truncate text-xs">
+                          {activeTabLabel}
+                        </span>
+                        <Menu className="h-4 w-4 shrink-0" />
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent
+                      side="right"
+                      dir="rtl"
+                      className="w-[min(88vw,22rem)] p-4"
+                    >
+                      <SheetHeader className="text-right">
+                        <SheetTitle>{selectedClientDisplayName}</SheetTitle>
+                      </SheetHeader>
+                      <div className="mt-4 space-y-1">
+                        {visibleClientTabs.map((tab) => {
+                          const Icon = tab.icon;
+                          return (
+                            <Button
+                              key={tab.value}
+                              variant={
+                                activeTab === tab.value ? "default" : "ghost"
+                              }
+                              className="w-full justify-start gap-2"
+                              onClick={() => {
+                                setActiveTab(tab.value);
+                                setTabMenuOpen(false);
+                              }}
+                            >
+                              <Icon className="h-4 w-4 shrink-0" />
+                              {tab.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                )}
 
-                <AddTaskForm
-                  clientId={selectedClient.id}
-                  agencyId={selectedClient.agency_id || undefined}
-                  triggerButton={
-                    <Button variant="outline" size="icon" className="h-8 w-8" title="הוסף משימה">
-                      <CheckSquare className="h-4 w-4" />
-                    </Button>
-                  }
-                />
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setDuplicateDialogOpen(true)}
-                  title="שכפל לקוח"
+                <div
+                  className={cn(
+                    "flex items-center gap-1.5",
+                    isMobile ? "hidden" : "flex-wrap",
+                  )}
                 >
-                  <Copy className="h-4 w-4" />
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setCreateOrgOpen(true)}
-                  title="צור ארגון ללקוח"
-                >
-                  <Building2 className="h-4 w-4" />
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={provisioning}
-                  onClick={async () => {
-                    // Chat shortcut always wants the full package (tables + dashboard).
-                    const summary = await provision(selectedClient.id, { createDashboard: true });
-                    const parts: string[] = [];
-                    if (summary.resolved?.length) parts.push(`זוהו: ${summary.resolved.join(", ")}`);
-                    if (summary.created.length) parts.push(`נוצרו: ${summary.created.join(", ")}`);
-                    if (summary.updated.length) parts.push(`עודכנו: ${summary.updated.join(", ")}`);
-                    if (summary.dashboardCreated) parts.push("דשבורד נוצר");
-                    if (summary.skipped.length) parts.push(`דולגו: ${summary.skipped.join(", ")}`);
-                    toast.success(parts.length ? parts.join(" · ") : "אין ערוצים עם מזהים להקמה");
-                    setActiveTab("report");
-                  }}
-                  title="צור טבלאות ודשבורד לכל הערוצים"
-                >
-                  {provisioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => setPendingDeleteId(selectedClient.id)}
-                  title="מחק לקוח"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {isMobile && (
-                <div className="flex items-center gap-1.5 w-full">
+                  {/* Status selector */}
                   <Select
                     value={selectedClient.status}
-                    onValueChange={(value) => handleStatusChange(selectedClient.id, value)}
+                    onValueChange={(value) =>
+                      handleStatusChange(selectedClient.id, value)
+                    }
                   >
                     <SelectTrigger
-                      className="h-8 text-xs flex-1 border-2 font-medium"
+                      className="h-8 text-xs w-auto min-w-[100px] border-2 font-medium"
                       style={{
-                        backgroundColor: getStatusInfo(selectedClient.status).color,
+                        backgroundColor: getStatusInfo(selectedClient.status)
+                          .color,
                         color: "#fff",
                       }}
                     >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-background z-[100]">
-                      {Object.entries(STATUS_CONFIG).map(([key, { label, color }]) => (
-                        <SelectItem key={key} value={key} style={{ backgroundColor: color, color: "#fff" }}>
-                          {label}
-                        </SelectItem>
-                      ))}
+                      {Object.entries(STATUS_CONFIG).map(
+                        ([key, { label, color }]) => (
+                          <SelectItem
+                            key={key}
+                            value={key}
+                            style={{ backgroundColor: color, color: "#fff" }}
+                          >
+                            {label}
+                          </SelectItem>
+                        ),
+                      )}
                     </SelectContent>
                   </Select>
+
+                  {/* Mood selector */}
                   <Select
                     value={selectedClient.mood_status || "happy"}
-                    onValueChange={(value) => handleMoodChange(selectedClient.id, value)}
+                    onValueChange={(value) =>
+                      handleMoodChange(selectedClient.id, value)
+                    }
                   >
-                    <SelectTrigger className="h-8 text-xs flex-1 border-2 font-medium">
+                    <SelectTrigger className="h-8 text-xs w-auto min-w-[100px] border-2 font-medium">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-background z-[100]">
-                      {Object.entries(MOOD_CONFIG).map(([key, { emoji, text }]) => (
-                        <SelectItem key={key} value={key}>
-                          {emoji} {text}
-                        </SelectItem>
-                      ))}
+                      {Object.entries(MOOD_CONFIG).map(
+                        ([key, { emoji, text }]) => (
+                          <SelectItem key={key} value={key}>
+                            {emoji} {text}
+                          </SelectItem>
+                        ),
+                      )}
                     </SelectContent>
                   </Select>
-                </div>
-              )}
-            </div>
 
-            {/* Inline action area — forms/confirmations render here instead of as popups */}
-            {(pendingDeleteId === selectedClient.id || duplicateDialogOpen || changeAgencyOpen || createOrgOpen) && (
-              <div className="px-4 pt-3 space-y-3">
-                {pendingDeleteId === selectedClient.id && (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
-                    <span className="text-sm text-destructive">
-                      למחוק את הלקוח "{selectedClientDisplayName}"? פעולה זו אינה הפיכה.
-                    </span>
-                    <div className="flex gap-2 shrink-0">
-                      <Button size="sm" variant="ghost" onClick={() => setPendingDeleteId(null)}>
-                        ביטול
-                      </Button>
+                  {selectedClient.phone && (
+                    <>
                       <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => performDelete(selectedClient.id)}
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                        onClick={() => setCallDialogOpen(true)}
+                        title="התקשר דרך מרכזיה"
                       >
-                        מחק
+                        <PhoneCall className="h-3.5 w-3.5" />
                       </Button>
-                    </div>
-                  </div>
-                )}
-                <DuplicateClientDialog
-                  inline
-                  open={duplicateDialogOpen}
-                  onOpenChange={setDuplicateDialogOpen}
-                  client={{ id: selectedClient.id, name: selectedClient.name }}
-                />
-                <ChangeAgencyDialog
-                  inline
-                  open={changeAgencyOpen}
-                  onOpenChange={setChangeAgencyOpen}
-                  contactId={selectedClient.id}
-                  contactType="client"
-                  currentAgencyId={selectedClient.agency_id}
-                  contactName={selectedClient.name}
-                  onSuccess={() => queryClient.invalidateQueries({ queryKey: ["clients", tenantId] })}
-                />
-                <CreateOrgForClientDialog
-                  inline
-                  open={createOrgOpen}
-                  onOpenChange={setCreateOrgOpen}
-                  client={{ id: selectedClient.id, name: selectedClient.name, tenant_id: selectedClient.tenant_id }}
-                />
-              </div>
-            )}
-
-            {/* Detail tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              {!isMobile && (
-              <TabsList className={cn("mx-4 mt-3 grid w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto", canViewFinance ? "grid-cols-12" : "grid-cols-11")}>
-                <TabsTrigger value="details" className="text-xs gap-1">
-                  <FileText className="h-3.5 w-3.5" />
-                  פרטי לקוח
-                </TabsTrigger>
-                <TabsTrigger value="connections" className="text-xs gap-1">
-                  <Link className="h-3.5 w-3.5" />
-                  חיבורים
-                </TabsTrigger>
-                {canViewFinance && (
-                  <TabsTrigger value="business" className="text-xs gap-1">
-                    <DollarSign className="h-3.5 w-3.5" />
-                    מידע עסקי
-                  </TabsTrigger>
-                )}
-                <TabsTrigger value="docs" className="text-xs gap-1">
-                  <FolderOpen className="h-3.5 w-3.5" />
-                  מסמכים
-                </TabsTrigger>
-                <TabsTrigger value="credentials" className="text-xs gap-1">
-                  <KeyRound className="h-3.5 w-3.5" />
-                  ססמאות
-                </TabsTrigger>
-                <TabsTrigger value="meeting" className="text-xs gap-1">
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                  פגישה
-                </TabsTrigger>
-                <TabsTrigger value="recordings" className="text-xs gap-1">
-                  <Video className="h-3.5 w-3.5" />
-                  הקלטות
-                </TabsTrigger>
-                <TabsTrigger value="report" className="text-xs gap-1">
-                  <BarChart3 className="h-3.5 w-3.5" />
-                  דוחות
-                </TabsTrigger>
-                <TabsTrigger value="updates" className="text-xs gap-1">
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  עדכונים
-                </TabsTrigger>
-                <TabsTrigger value="calls" className="text-xs gap-1">
-                  <Phone className="h-3.5 w-3.5" />
-                  שיחות
-                </TabsTrigger>
-                <TabsTrigger value="wordpress" className="text-xs gap-1">
-                  <Globe className="h-3.5 w-3.5" />
-                  אתר
-                </TabsTrigger>
-                <TabsTrigger value="whatsapp" className="text-xs gap-1">
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                  WhatsApp
-                </TabsTrigger>
-              </TabsList>
-              )}
-
-              <div
-                className={cn(
-                  "flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain",
-                  isMobile ? "p-2" : "p-4",
-                  (activeTab === "whatsapp" || activeTab === "calls") && "hidden",
-                )}
-              >
-                <TabsContent value="details" className="mt-0 space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Timeline - shown first in DOM but appears on LEFT in RTL layout */}
-                    <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
-                        ציר זמן
-                        <Clock className="h-4 w-4 text-primary" />
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-end gap-2">
-                          <ClientTimelineDatePicker
-                            clientId={selectedClient.id}
-                            field="start_date"
-                            currentDate={selectedClient.start_date}
-                            onUpdate={updateClientField}
-                          />
-                          <span className="text-muted-foreground">:תחילת פעילות</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <ClientTimelineDatePicker
-                            clientId={selectedClient.id}
-                            field="end_date"
-                            currentDate={(selectedClient as any).end_date}
-                            onUpdate={updateClientField}
-                          />
-                          <span className="text-muted-foreground">:סיום פעילות</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">
-                            {selectedClient.created_at
-                              ? format(new Date(selectedClient.created_at), "dd/MM/yyyy HH:mm", { locale: he })
-                              : "—"}
-                          </span>
-                          <span className="text-muted-foreground">:נוצר</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">
-                            {getMoodInfo(selectedClient.mood_status).emoji} {getMoodInfo(selectedClient.mood_status).text}
-                          </span>
-                          <span className="text-muted-foreground">:מצב רוח</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <ClientFollowUpDatePicker
-                            clientId={selectedClient.id}
-                            currentDate={(selectedClient as any).follow_up_date ?? null}
-                            variant="full"
-                          />
-                          <span className="text-muted-foreground">:תאריך לשיחה</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Contact info - shown second in DOM but appears on RIGHT in RTL layout */}
-                    <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
-                        פרטי קשר ראשי
-                        <User className="h-4 w-4 text-primary" />
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        <EditableField label=":איש קשר" value={selectedClient.contact_name} field="contact_name" clientId={selectedClient.id} />
-                        <EditableField label=":טלפון" value={selectedClient.phone} field="phone" clientId={selectedClient.id} isLink linkPrefix="tel:" />
-                        <EditableField label=":אימייל" value={selectedClient.email} field="email" clientId={selectedClient.id} isLink linkPrefix="mailto:" />
-                        <EditableField label=":אתר" value={selectedClient.website} field="website" clientId={selectedClient.id} isLink />
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="text-muted-foreground text-sm flex items-center gap-1">
-                            <Users className="h-3.5 w-3.5" />
-                            :קבוצת WhatsApp
-                          </span>
-                          <div className="relative w-full">
-                            {selectedClient.whatsapp_group_id && !showGroupDropdown ? (
-                              <div className="flex items-center gap-1 h-7 px-2 border rounded-md bg-muted/30">
-                                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => updateClientField(selectedClient.id, "whatsapp_group_id", null)}>
-                                  <X className="h-3 w-3" />
-                                </Button>
-                                <span className="flex-1 text-xs font-medium truncate text-right cursor-pointer" onClick={() => setShowGroupDropdown(true)}>
-                                  {whatsappGroups.find((g: any) => g.id === selectedClient.whatsapp_group_id)?.group_name || "קבוצה מקושרת"}
-                                </span>
-                              </div>
-                            ) : (
-                              <Input
-                                placeholder="חפש קבוצה..."
-                                value={groupSearch}
-                                onChange={(e) => { setGroupSearch(e.target.value); setShowGroupDropdown(true); }}
-                                onFocus={() => setShowGroupDropdown(true)}
-                                onBlur={() => setTimeout(() => setShowGroupDropdown(false), 200)}
-                                className="h-7 text-xs text-right"
-                                dir="rtl"
-                                autoFocus={showGroupDropdown && !!selectedClient.whatsapp_group_id}
-                              />
-                            )}
-                            {showGroupDropdown && (
-                              <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
-                                {filteredGroups.length > 0 ? filteredGroups.map((g: any) => (
-                                  <button
-                                    key={g.id}
-                                    className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors"
-                                    onClick={() => {
-                                      updateClientField(selectedClient.id, "whatsapp_group_id", g.id);
-                                      setGroupSearch("");
-                                      setShowGroupDropdown(false);
-                                    }}
-                                  >
-                                    {g.group_name}
-                                  </button>
-                                )) : (
-                                  <div className="px-3 py-2 text-xs text-muted-foreground text-center">לא נמצאו קבוצות</div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Additional contacts */}
-                  <div className="bg-card border border-border/60 rounded-xl p-4 text-right space-y-3 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => setAddingContact(true)}>
-                        <UserPlus className="h-3.5 w-3.5" />
-                        הוסף איש קשר
-                      </Button>
-                      <h3 className="font-semibold text-sm flex items-center gap-2">
-                        אנשי קשר נוספים
-                        <Users className="h-4 w-4 text-primary" />
-                      </h3>
-                    </div>
-
-                    {addingContact && (
-                      <div className="border border-border/60 rounded-lg p-3 space-y-2 bg-muted/30">
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input placeholder="שם" value={newContact.contact_name} onChange={e => setNewContact(p => ({ ...p, contact_name: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
-                          <Input placeholder="תפקיד" value={newContact.role} onChange={e => setNewContact(p => ({ ...p, role: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
-                          <Input placeholder="טלפון" value={newContact.phone} onChange={e => setNewContact(p => ({ ...p, phone: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
-                          <Input placeholder="אימייל" value={newContact.email} onChange={e => setNewContact(p => ({ ...p, email: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
-                        </div>
-                        <div className="flex gap-2 justify-end">
-                          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setAddingContact(false); setNewContact({ contact_name: "", phone: "", email: "", role: "" }); }}>ביטול</Button>
-                          <Button size="sm" className="h-7 text-xs" disabled={!newContact.contact_name.trim()} onClick={async () => {
-                            try {
-                              const contactTenantId = resolveClientChildTenantId(selectedClient, tenantId);
-                              const { data: inserted, error } = await supabase.from("client_contacts").insert({
-                                client_id: selectedClient.id,
-                                tenant_id: contactTenantId,
-                                contact_name: newContact.contact_name.trim(),
-                                phone: newContact.phone.trim() || null,
-                                email: newContact.email.trim() || null,
-                                role: newContact.role.trim() || null,
-                              }).select("id").maybeSingle();
-                              if (error) throw error;
-                              if (!inserted) throw new Error("איש הקשר נשמר אך אין הרשאת צפייה — נסה לרענן");
-                              toast.success("איש קשר נוסף");
-                              setAddingContact(false);
-                              setNewContact({ contact_name: "", phone: "", email: "", role: "" });
-                              await queryClient.refetchQueries({ queryKey: ["client-contacts", selectedClient.id] });
-                            } catch (err: any) {
-                              toast.error(err?.message ? `שגיאה בהוספת איש קשר: ${err.message}` : "שגיאה בהוספת איש קשר");
-                            }
-                          }}>שמור</Button>
-                        </div>
-                      </div>
-                    )}
-
-                    {clientContacts.length > 0 ? (
-                      <div className="space-y-2">
-                        {clientContacts.map((contact: any) => (
-                          <div key={contact.id} className="border border-border/60 rounded-lg p-3 group bg-muted/20 hover:bg-muted/40 transition-colors">
-                            {editingContactId === contact.id ? (
-                              <div className="space-y-2">
-                                <div className="grid grid-cols-2 gap-2">
-                                  <Input placeholder="שם" value={editContactData.contact_name} onChange={e => setEditContactData(p => ({ ...p, contact_name: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
-                                  <Input placeholder="תפקיד" value={editContactData.role} onChange={e => setEditContactData(p => ({ ...p, role: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
-                                  <Input placeholder="טלפון" value={editContactData.phone} onChange={e => setEditContactData(p => ({ ...p, phone: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
-                                  <Input placeholder="אימייל" value={editContactData.email} onChange={e => setEditContactData(p => ({ ...p, email: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
-                                </div>
-                                <div className="flex gap-2 justify-end">
-                                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingContactId(null)}>ביטול</Button>
-                                  <Button size="sm" className="h-7 text-xs" disabled={!editContactData.contact_name.trim()} onClick={async () => {
-                                    try {
-                                      const { error } = await supabase.from("client_contacts").update({
-                                        contact_name: editContactData.contact_name.trim(),
-                                        phone: editContactData.phone.trim() || null,
-                                        email: editContactData.email.trim() || null,
-                                        role: editContactData.role.trim() || null,
-                                      }).eq("id", contact.id);
-                                      if (error) throw error;
-                                      toast.success("איש קשר עודכן");
-                                      setEditingContactId(null);
-                                      queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
-                                    } catch (err: any) {
-                                      toast.error(err?.message ? `שגיאה בעדכון איש קשר: ${err.message}` : "שגיאה בעדכון איש קשר");
-                                    }
-                                  }}>שמור</Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive"
-                                    onClick={async () => {
-                                      try {
-                                        const { error } = await supabase.from("client_contacts").delete().eq("id", contact.id);
-                                        if (error) throw error;
-                                        toast.success("איש קשר נמחק");
-                                        queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
-                                      } catch (err: any) {
-                                        toast.error(err?.message ? `שגיאה במחיקה: ${err.message}` : "שגיאה במחיקה");
-                                      }
-                                    }}>
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                                    onClick={() => {
-                                      setEditingContactId(contact.id);
-                                      setEditContactData({
-                                        contact_name: contact.contact_name || "",
-                                        phone: contact.phone || "",
-                                        email: contact.email || "",
-                                        role: contact.role || "",
-                                      });
-                                    }}>
-                                    <Pencil className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                                <div className="text-sm space-y-1 text-right flex-1">
-                                  <div className="font-medium flex items-center gap-2 justify-end">
-                                    {contact.role && <Badge variant="outline" className="text-xs">{contact.role}</Badge>}
-                                    <CarmenWhatsAppAccess
-                                      entityType="client_contact"
-                                      entityId={contact.id}
-                                      phone={contact.phone}
-                                      displayName={contact.contact_name}
-                                      roleTitle={contact.role}
-                                      clientId={selectedClient.id}
-                                    />
-                                    {contact.contact_name}
-                                  </div>
-                                  {contact.phone && (
-                                    <div className="flex items-center gap-1 justify-end text-muted-foreground">
-                                      <a href={`tel:${contact.phone}`} className="text-primary hover:underline">{contact.phone}</a>
-                                      <Phone className="h-3 w-3" />
-                                    </div>
-                                  )}
-                                  {contact.email && (
-                                    <div className="flex items-center gap-1 justify-end text-muted-foreground">
-                                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline truncate">{contact.email}</a>
-                                      <Mail className="h-3 w-3" />
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : !addingContact && (
-                      <p className="text-sm text-muted-foreground">אין אנשי קשר נוספים</p>
-                    )}
-                  </div>
-
-                  {/* Team - editable */}
-                  <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
-                    <h3 className="font-semibold text-sm mb-2 flex items-center gap-2 justify-end">
-                      קמפיינרים משויכים
-                      <Users className="h-4 w-4 text-primary" />
-                    </h3>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {selectedClient.client_team?.map((ct: any, i: number) => (
-                        <Badge key={i} variant="secondary" className="flex items-center gap-1">
-                          {ct?.campaigners?.full_name ?? "—"}
-                          <X
-                            className="h-3 w-3 cursor-pointer hover:text-destructive"
-                            onClick={async () => {
-                              const { error } = await supabase
-                                .from("client_team")
-                                .delete()
-                                .eq("client_id", selectedClient.id)
-                                .eq("campaigner_id", ct.campaigner_id);
-                              if (error) {
-                                toast.error("שגיאה בהסרת קמפיינר");
-                              } else {
-                                toast.success("הקמפיינר הוסר");
-                                queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
-                              }
-                            }}
-                          />
-                        </Badge>
-                      ))}
-                    </div>
-                    <CampaignerAssignmentPicker
-                      assignedCampaignerIds={(selectedClient.client_team || []).map(
-                        (assignment: any) => assignment.campaigner_id
-                      )}
-                      triggerClassName="h-7 text-xs"
-                      onAssign={async (campaignerId) => {
-                        const { error } = await supabase
-                          .from("client_team")
-                          .insert({
-                            client_id: selectedClient.id,
-                            campaigner_id: campaignerId,
-                          });
-                        if (error) {
-                          toast.error("שגיאה בשיוך קמפיינר");
-                          throw error;
-                        }
-                        toast.success("הקמפיינר שויך בהצלחה");
-                        await queryClient.invalidateQueries({
-                          queryKey: ["clients", tenantId],
-                        });
-                      }}
-                    />
-                  </div>
-
-                  {/* Notes */}
-                  <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
-                    <h3 className="font-semibold text-sm mb-2">הערות</h3>
-                    <EditableField label="" value={selectedClient.notes} field="notes" clientId={selectedClient.id} type="textarea" />
-                  </div>
-
-                  {/* ── CRM Settings ──────────────────────────────────────────── */}
-                  <CRMSettingsSection client={selectedClient} onUpdate={() => queryClient.invalidateQueries({ queryKey: ["clients", tenantId] })} />
-
-                </TabsContent>
-
-                <TabsContent value="connections" className="mt-0">
-                  {tenantId && <ClientConnectionsTab clientId={selectedClient.id} tenantId={tenantId} onProvisioned={() => setActiveTab("report")} />}
-                </TabsContent>
-
-                {canViewFinance && (
-                  <TabsContent value="business" className="mt-0 space-y-6">
-                    <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
-                        מידע עסקי
-                        <DollarSign className="h-4 w-4 text-primary" />
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setChangeAgencyOpen(true)}>
-                            <Edit className="h-3 w-3 ml-1" />
-                            שנה
-                          </Button>
-                          <span className="font-medium">{selectedClient.agencies?.name || "—"}</span>
-                          <span className="text-muted-foreground">:סוכנות</span>
-                        </div>
-                        <EditableField label=":ריטיינר" value={selectedClient.retainer?.toString() || ""} field="retainer" clientId={selectedClient.id} type="number" />
-                        <EditableField label=":תקציב חודשי" value={selectedClient.monthly_budget?.toString() || ""} field="monthly_budget" clientId={selectedClient.id} type="number" />
-                        <EditableField label=":הוצאות חודשיות קבועות" value={(selectedClient as any).monthly_fixed_expense?.toString() || "0"} field="monthly_fixed_expense" clientId={selectedClient.id} type="number" />
-                        <EditableField label=":תעשייה" value={selectedClient.industry} field="industry" clientId={selectedClient.id} />
-                      </div>
-                    </div>
-                  </TabsContent>
-                )}
-
-                <TabsContent value="docs" className="mt-0 space-y-4" dir="rtl">
-                  <ClientDocsEditor client={selectedClient} tenantId={tenantId || ""} />
-                </TabsContent>
-
-                <TabsContent value="credentials" className="mt-0">
-                  <ClientCredentialsTab
-                    clientId={selectedClient.id}
-                    tenantId={resolveClientChildTenantId(selectedClient, tenantId)}
-                  />
-                </TabsContent>
-
-                <TabsContent value="meeting" className="mt-0">
-                  <ClientMeetingTab client={selectedClient} tenantId={tenantId} />
-                </TabsContent>
-
-                <TabsContent value="recordings" className="mt-0">
-                  <ClientRecordingsTab clientId={selectedClient.id} tenantId={tenantId} />
-                </TabsContent>
-
-                <TabsContent value="report" className="mt-0">
-                  <ClientTablesTab clientId={selectedClient.id} clientName={selectedClientDisplayName || "לקוח"} />
-                </TabsContent>
-
-                <TabsContent value="updates" className="mt-0">
-                  <ClientUpdatesTab
-                    clientId={selectedClient.id}
-                    clientName={selectedClient.name || "לקוח"}
-                    currentMoodStatus={(selectedClient as any).mood_status}
-                  />
-                </TabsContent>
-
-                <TabsContent value="wordpress" className="mt-0">
-                  <ClientWordPressTab clientId={selectedClient.id} />
-                </TabsContent>
-              </div>
-
-              {activeTab === "calls" && (
-                <div className="flex-1 min-h-0 overflow-hidden p-4">
-                  <CallHistoryTab clientId={selectedClient.id} />
-                </div>
-              )}
-
-              {activeTab === "whatsapp" && (
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  {selectedClient.phone ? (
-                    <ChatViewComponent
-                      contactId={selectedClient.id}
-                      contactType="client"
-                      senderPhone={selectedClient.phone}
-                      contactName={selectedClient.name || "לקוח"}
-                    />
-                  ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center gap-3 py-8">
-                      <Phone className="h-10 w-10 text-muted-foreground/30" />
-                      <p className="text-sm text-muted-foreground">אין מספר טלפון ללקוח זה</p>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-2"
-                        onClick={() => setAssignPhoneDialogOpen(true)}
+                        className="h-8 gap-1"
+                        asChild
                       >
-                        <MessageSquare className="h-4 w-4" />
-                        חפש שיחה בוואטסאפ ושייך מספר
+                        <a href={`tel:${selectedClient.phone}`}>
+                          <Phone className="h-3.5 w-3.5" />
+                          {selectedClient.phone}
+                        </a>
                       </Button>
-                      <AssignPhoneFromWhatsAppDialog
-                        inline
-                        open={assignPhoneDialogOpen}
-                        onOpenChange={setAssignPhoneDialogOpen}
-                        clientId={selectedClient.id}
-                        clientName={selectedClient.name || "לקוח"}
-                        onSuccess={() => {
-                          queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+                    </>
+                  )}
+
+                  {selectedClient.email && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1"
+                      asChild
+                    >
+                      <a href={`mailto:${selectedClient.email}`}>
+                        <Mail className="h-3.5 w-3.5" />
+                      </a>
+                    </Button>
+                  )}
+
+                  <EditClientDialog
+                    client={selectedClient}
+                    open={editDialogOpen}
+                    onOpenChange={setEditDialogOpen}
+                  />
+
+                  <AddTaskForm
+                    clientId={selectedClient.id}
+                    agencyId={selectedClient.agency_id || undefined}
+                    triggerButton={
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="הוסף משימה"
+                      >
+                        <CheckSquare className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setDuplicateDialogOpen(true)}
+                    title="שכפל לקוח"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCreateOrgOpen(true)}
+                    title="צור ארגון ללקוח"
+                  >
+                    <Building2 className="h-4 w-4" />
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={provisioning}
+                    onClick={async () => {
+                      // Chat shortcut always wants the full package (tables + dashboard).
+                      const summary = await provision(selectedClient.id, {
+                        createDashboard: true,
+                      });
+                      const parts: string[] = [];
+                      if (summary.resolved?.length)
+                        parts.push(`זוהו: ${summary.resolved.join(", ")}`);
+                      if (summary.created.length)
+                        parts.push(`נוצרו: ${summary.created.join(", ")}`);
+                      if (summary.updated.length)
+                        parts.push(`עודכנו: ${summary.updated.join(", ")}`);
+                      if (summary.dashboardCreated) parts.push("דשבורד נוצר");
+                      if (summary.skipped.length)
+                        parts.push(`דולגו: ${summary.skipped.join(", ")}`);
+                      toast.success(
+                        parts.length
+                          ? parts.join(" · ")
+                          : "אין ערוצים עם מזהים להקמה",
+                      );
+                      setActiveTab("report");
+                    }}
+                    title="צור טבלאות ודשבורד לכל הערוצים"
+                  >
+                    {provisioning ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <BarChart3 className="h-4 w-4" />
+                    )}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => setPendingDeleteId(selectedClient.id)}
+                    title="מחק לקוח"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {isMobile && (
+                  <div className="flex items-center gap-1.5 w-full">
+                    <Select
+                      value={selectedClient.status}
+                      onValueChange={(value) =>
+                        handleStatusChange(selectedClient.id, value)
+                      }
+                    >
+                      <SelectTrigger
+                        className="h-8 text-xs flex-1 border-2 font-medium"
+                        style={{
+                          backgroundColor: getStatusInfo(selectedClient.status)
+                            .color,
+                          color: "#fff",
+                        }}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-[100]">
+                        {Object.entries(STATUS_CONFIG).map(
+                          ([key, { label, color }]) => (
+                            <SelectItem
+                              key={key}
+                              value={key}
+                              style={{ backgroundColor: color, color: "#fff" }}
+                            >
+                              {label}
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={selectedClient.mood_status || "happy"}
+                      onValueChange={(value) =>
+                        handleMoodChange(selectedClient.id, value)
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs flex-1 border-2 font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-[100]">
+                        {Object.entries(MOOD_CONFIG).map(
+                          ([key, { emoji, text }]) => (
+                            <SelectItem key={key} value={key}>
+                              {emoji} {text}
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              {/* Inline action area — forms/confirmations render here instead of as popups */}
+              {(pendingDeleteId === selectedClient.id ||
+                duplicateDialogOpen ||
+                changeAgencyOpen ||
+                createOrgOpen) && (
+                <div className="px-4 pt-3 space-y-3">
+                  {pendingDeleteId === selectedClient.id && (
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+                      <span className="text-sm text-destructive">
+                        למחוק את הלקוח "{selectedClientDisplayName}"? פעולה זו
+                        אינה הפיכה.
+                      </span>
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setPendingDeleteId(null)}
+                        >
+                          ביטול
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => performDelete(selectedClient.id)}
+                        >
+                          מחק
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <DuplicateClientDialog
+                    inline
+                    open={duplicateDialogOpen}
+                    onOpenChange={setDuplicateDialogOpen}
+                    client={{
+                      id: selectedClient.id,
+                      name: selectedClient.name,
+                    }}
+                  />
+                  <ChangeAgencyDialog
+                    inline
+                    open={changeAgencyOpen}
+                    onOpenChange={setChangeAgencyOpen}
+                    contactId={selectedClient.id}
+                    contactType="client"
+                    currentAgencyId={selectedClient.agency_id}
+                    contactName={selectedClient.name}
+                    onSuccess={() =>
+                      queryClient.invalidateQueries({
+                        queryKey: ["clients", tenantId],
+                      })
+                    }
+                  />
+                  <CreateOrgForClientDialog
+                    inline
+                    open={createOrgOpen}
+                    onOpenChange={setCreateOrgOpen}
+                    client={{
+                      id: selectedClient.id,
+                      name: selectedClient.name,
+                      tenant_id: selectedClient.tenant_id,
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Detail tabs */}
+              <Tabs
+                value={activeTab}
+                onValueChange={setActiveTab}
+                className="flex-1 min-h-0 flex flex-col overflow-hidden"
+              >
+                {!isMobile && (
+                  <TabsList
+                    className={cn(
+                      "mx-4 mt-3 grid w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto",
+                      canViewFinance ? "grid-cols-12" : "grid-cols-11",
+                    )}
+                  >
+                    <TabsTrigger value="details" className="text-xs gap-1">
+                      <FileText className="h-3.5 w-3.5" />
+                      פרטי לקוח
+                    </TabsTrigger>
+                    <TabsTrigger value="connections" className="text-xs gap-1">
+                      <Link className="h-3.5 w-3.5" />
+                      חיבורים
+                    </TabsTrigger>
+                    {canViewFinance && (
+                      <TabsTrigger value="business" className="text-xs gap-1">
+                        <DollarSign className="h-3.5 w-3.5" />
+                        מידע עסקי
+                      </TabsTrigger>
+                    )}
+                    <TabsTrigger value="docs" className="text-xs gap-1">
+                      <FolderOpen className="h-3.5 w-3.5" />
+                      מסמכים
+                    </TabsTrigger>
+                    <TabsTrigger value="credentials" className="text-xs gap-1">
+                      <KeyRound className="h-3.5 w-3.5" />
+                      ססמאות
+                    </TabsTrigger>
+                    <TabsTrigger value="meeting" className="text-xs gap-1">
+                      <CalendarIcon className="h-3.5 w-3.5" />
+                      פגישה
+                    </TabsTrigger>
+                    <TabsTrigger value="recordings" className="text-xs gap-1">
+                      <Video className="h-3.5 w-3.5" />
+                      הקלטות
+                    </TabsTrigger>
+                    <TabsTrigger value="report" className="text-xs gap-1">
+                      <BarChart3 className="h-3.5 w-3.5" />
+                      דוחות
+                    </TabsTrigger>
+                    <TabsTrigger value="updates" className="text-xs gap-1">
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      עדכונים
+                    </TabsTrigger>
+                    <TabsTrigger value="calls" className="text-xs gap-1">
+                      <Phone className="h-3.5 w-3.5" />
+                      שיחות
+                    </TabsTrigger>
+                    <TabsTrigger value="wordpress" className="text-xs gap-1">
+                      <Globe className="h-3.5 w-3.5" />
+                      אתר
+                    </TabsTrigger>
+                    <TabsTrigger value="whatsapp" className="text-xs gap-1">
+                      <svg
+                        className="h-3.5 w-3.5"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                      >
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                      </svg>
+                      WhatsApp
+                    </TabsTrigger>
+                  </TabsList>
+                )}
+
+                <div
+                  className={cn(
+                    "flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain",
+                    isMobile ? "p-2" : "p-4",
+                    (activeTab === "whatsapp" || activeTab === "calls") &&
+                      "hidden",
+                  )}
+                >
+                  <TabsContent value="details" className="mt-0 space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Timeline - shown first in DOM but appears on LEFT in RTL layout */}
+                      <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
+                        <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
+                          ציר זמן
+                          <Clock className="h-4 w-4 text-primary" />
+                        </h3>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center justify-end gap-2">
+                            <ClientTimelineDatePicker
+                              clientId={selectedClient.id}
+                              field="start_date"
+                              currentDate={selectedClient.start_date}
+                              onUpdate={updateClientField}
+                            />
+                            <span className="text-muted-foreground">
+                              :תחילת פעילות
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-end gap-2">
+                            <ClientTimelineDatePicker
+                              clientId={selectedClient.id}
+                              field="end_date"
+                              currentDate={(selectedClient as any).end_date}
+                              onUpdate={updateClientField}
+                            />
+                            <span className="text-muted-foreground">
+                              :סיום פעילות
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="font-medium">
+                              {selectedClient.created_at
+                                ? format(
+                                    new Date(selectedClient.created_at),
+                                    "dd/MM/yyyy HH:mm",
+                                    { locale: he },
+                                  )
+                                : "—"}
+                            </span>
+                            <span className="text-muted-foreground">:נוצר</span>
+                          </div>
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="font-medium">
+                              {getMoodInfo(selectedClient.mood_status).emoji}{" "}
+                              {getMoodInfo(selectedClient.mood_status).text}
+                            </span>
+                            <span className="text-muted-foreground">
+                              :מצב רוח
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-end gap-2">
+                            <ClientFollowUpDatePicker
+                              clientId={selectedClient.id}
+                              currentDate={
+                                (selectedClient as any).follow_up_date ?? null
+                              }
+                              variant="full"
+                            />
+                            <span className="text-muted-foreground">
+                              :תאריך לשיחה
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Contact info - shown second in DOM but appears on RIGHT in RTL layout */}
+                      <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
+                        <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
+                          פרטי קשר ראשי
+                          <User className="h-4 w-4 text-primary" />
+                        </h3>
+                        <div className="space-y-2 text-sm">
+                          <EditableField
+                            label=":איש קשר"
+                            value={selectedClient.contact_name}
+                            field="contact_name"
+                            clientId={selectedClient.id}
+                          />
+                          <EditableField
+                            label=":טלפון"
+                            value={selectedClient.phone}
+                            field="phone"
+                            clientId={selectedClient.id}
+                            isLink
+                            linkPrefix="tel:"
+                          />
+                          <EditableField
+                            label=":אימייל"
+                            value={selectedClient.email}
+                            field="email"
+                            clientId={selectedClient.id}
+                            isLink
+                            linkPrefix="mailto:"
+                          />
+                          <EditableField
+                            label=":אתר"
+                            value={selectedClient.website}
+                            field="website"
+                            clientId={selectedClient.id}
+                            isLink
+                          />
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-muted-foreground text-sm flex items-center gap-1">
+                              <Users className="h-3.5 w-3.5" />
+                              :קבוצת WhatsApp
+                            </span>
+                            <div className="relative w-full">
+                              {selectedClient.whatsapp_group_id &&
+                              !showGroupDropdown ? (
+                                <div className="flex items-center gap-1 h-7 px-2 border rounded-md bg-muted/30">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 shrink-0"
+                                    onClick={() =>
+                                      updateClientField(
+                                        selectedClient.id,
+                                        "whatsapp_group_id",
+                                        null,
+                                      )
+                                    }
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                  <span
+                                    className="flex-1 text-xs font-medium truncate text-right cursor-pointer"
+                                    onClick={() => setShowGroupDropdown(true)}
+                                  >
+                                    {whatsappGroups.find(
+                                      (g: any) =>
+                                        g.id ===
+                                        selectedClient.whatsapp_group_id,
+                                    )?.group_name || "קבוצה מקושרת"}
+                                  </span>
+                                </div>
+                              ) : (
+                                <Input
+                                  placeholder="חפש קבוצה..."
+                                  value={groupSearch}
+                                  onChange={(e) => {
+                                    setGroupSearch(e.target.value);
+                                    setShowGroupDropdown(true);
+                                  }}
+                                  onFocus={() => setShowGroupDropdown(true)}
+                                  onBlur={() =>
+                                    setTimeout(
+                                      () => setShowGroupDropdown(false),
+                                      200,
+                                    )
+                                  }
+                                  className="h-7 text-xs text-right"
+                                  dir="rtl"
+                                  autoFocus={
+                                    showGroupDropdown &&
+                                    !!selectedClient.whatsapp_group_id
+                                  }
+                                />
+                              )}
+                              {showGroupDropdown && (
+                                <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
+                                  {filteredGroups.length > 0 ? (
+                                    filteredGroups.map((g: any) => (
+                                      <button
+                                        key={g.id}
+                                        className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors"
+                                        onClick={() => {
+                                          updateClientField(
+                                            selectedClient.id,
+                                            "whatsapp_group_id",
+                                            g.id,
+                                          );
+                                          setGroupSearch("");
+                                          setShowGroupDropdown(false);
+                                        }}
+                                      >
+                                        {g.group_name}
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                                      לא נמצאו קבוצות
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional contacts */}
+                    <div className="bg-card border border-border/60 rounded-xl p-4 text-right space-y-3 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => setAddingContact(true)}
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                          הוסף איש קשר
+                        </Button>
+                        <h3 className="font-semibold text-sm flex items-center gap-2">
+                          אנשי קשר נוספים
+                          <Users className="h-4 w-4 text-primary" />
+                        </h3>
+                      </div>
+
+                      {addingContact && (
+                        <div className="border border-border/60 rounded-lg p-3 space-y-2 bg-muted/30">
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              placeholder="שם"
+                              value={newContact.contact_name}
+                              onChange={(e) =>
+                                setNewContact((p) => ({
+                                  ...p,
+                                  contact_name: e.target.value,
+                                }))
+                              }
+                              className="text-sm h-8 text-right"
+                              dir="rtl"
+                            />
+                            <Input
+                              placeholder="תפקיד"
+                              value={newContact.role}
+                              onChange={(e) =>
+                                setNewContact((p) => ({
+                                  ...p,
+                                  role: e.target.value,
+                                }))
+                              }
+                              className="text-sm h-8 text-right"
+                              dir="rtl"
+                            />
+                            <Input
+                              placeholder="טלפון"
+                              value={newContact.phone}
+                              onChange={(e) =>
+                                setNewContact((p) => ({
+                                  ...p,
+                                  phone: e.target.value,
+                                }))
+                              }
+                              className="text-sm h-8 text-right"
+                              dir="rtl"
+                            />
+                            <Input
+                              placeholder="אימייל"
+                              value={newContact.email}
+                              onChange={(e) =>
+                                setNewContact((p) => ({
+                                  ...p,
+                                  email: e.target.value,
+                                }))
+                              }
+                              className="text-sm h-8 text-right"
+                              dir="rtl"
+                            />
+                          </div>
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                setAddingContact(false);
+                                setNewContact({
+                                  contact_name: "",
+                                  phone: "",
+                                  email: "",
+                                  role: "",
+                                });
+                              }}
+                            >
+                              ביטול
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={!newContact.contact_name.trim()}
+                              onClick={async () => {
+                                try {
+                                  const contactTenantId =
+                                    resolveClientChildTenantId(
+                                      selectedClient,
+                                      tenantId,
+                                    );
+                                  const { data: inserted, error } =
+                                    await supabase
+                                      .from("client_contacts")
+                                      .insert({
+                                        client_id: selectedClient.id,
+                                        tenant_id: contactTenantId,
+                                        contact_name:
+                                          newContact.contact_name.trim(),
+                                        phone: newContact.phone.trim() || null,
+                                        email: newContact.email.trim() || null,
+                                        role: newContact.role.trim() || null,
+                                      })
+                                      .select("id")
+                                      .maybeSingle();
+                                  if (error) throw error;
+                                  if (!inserted)
+                                    throw new Error(
+                                      "איש הקשר נשמר אך אין הרשאת צפייה — נסה לרענן",
+                                    );
+                                  toast.success("איש קשר נוסף");
+                                  setAddingContact(false);
+                                  setNewContact({
+                                    contact_name: "",
+                                    phone: "",
+                                    email: "",
+                                    role: "",
+                                  });
+                                  await queryClient.refetchQueries({
+                                    queryKey: [
+                                      "client-contacts",
+                                      selectedClient.id,
+                                    ],
+                                  });
+                                } catch (err: any) {
+                                  toast.error(
+                                    err?.message
+                                      ? `שגיאה בהוספת איש קשר: ${err.message}`
+                                      : "שגיאה בהוספת איש קשר",
+                                  );
+                                }
+                              }}
+                            >
+                              שמור
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {clientContacts.length > 0 ? (
+                        <div className="space-y-2">
+                          {clientContacts.map((contact: any) => (
+                            <div
+                              key={contact.id}
+                              className="border border-border/60 rounded-lg p-3 group bg-muted/20 hover:bg-muted/40 transition-colors"
+                            >
+                              {editingContactId === contact.id ? (
+                                <div className="space-y-2">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <Input
+                                      placeholder="שם"
+                                      value={editContactData.contact_name}
+                                      onChange={(e) =>
+                                        setEditContactData((p) => ({
+                                          ...p,
+                                          contact_name: e.target.value,
+                                        }))
+                                      }
+                                      className="text-sm h-8 text-right"
+                                      dir="rtl"
+                                    />
+                                    <Input
+                                      placeholder="תפקיד"
+                                      value={editContactData.role}
+                                      onChange={(e) =>
+                                        setEditContactData((p) => ({
+                                          ...p,
+                                          role: e.target.value,
+                                        }))
+                                      }
+                                      className="text-sm h-8 text-right"
+                                      dir="rtl"
+                                    />
+                                    <Input
+                                      placeholder="טלפון"
+                                      value={editContactData.phone}
+                                      onChange={(e) =>
+                                        setEditContactData((p) => ({
+                                          ...p,
+                                          phone: e.target.value,
+                                        }))
+                                      }
+                                      className="text-sm h-8 text-right"
+                                      dir="rtl"
+                                    />
+                                    <Input
+                                      placeholder="אימייל"
+                                      value={editContactData.email}
+                                      onChange={(e) =>
+                                        setEditContactData((p) => ({
+                                          ...p,
+                                          email: e.target.value,
+                                        }))
+                                      }
+                                      className="text-sm h-8 text-right"
+                                      dir="rtl"
+                                    />
+                                  </div>
+                                  <div className="flex gap-2 justify-end">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      onClick={() => setEditingContactId(null)}
+                                    >
+                                      ביטול
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      disabled={
+                                        !editContactData.contact_name.trim()
+                                      }
+                                      onClick={async () => {
+                                        try {
+                                          const { error } = await supabase
+                                            .from("client_contacts")
+                                            .update({
+                                              contact_name:
+                                                editContactData.contact_name.trim(),
+                                              phone:
+                                                editContactData.phone.trim() ||
+                                                null,
+                                              email:
+                                                editContactData.email.trim() ||
+                                                null,
+                                              role:
+                                                editContactData.role.trim() ||
+                                                null,
+                                            })
+                                            .eq("id", contact.id);
+                                          if (error) throw error;
+                                          toast.success("איש קשר עודכן");
+                                          setEditingContactId(null);
+                                          queryClient.invalidateQueries({
+                                            queryKey: [
+                                              "client-contacts",
+                                              selectedClient.id,
+                                            ],
+                                          });
+                                        } catch (err: any) {
+                                          toast.error(
+                                            err?.message
+                                              ? `שגיאה בעדכון איש קשר: ${err.message}`
+                                              : "שגיאה בעדכון איש קשר",
+                                          );
+                                        }
+                                      }}
+                                    >
+                                      שמור
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive"
+                                      onClick={async () => {
+                                        try {
+                                          const { error } = await supabase
+                                            .from("client_contacts")
+                                            .delete()
+                                            .eq("id", contact.id);
+                                          if (error) throw error;
+                                          toast.success("איש קשר נמחק");
+                                          queryClient.invalidateQueries({
+                                            queryKey: [
+                                              "client-contacts",
+                                              selectedClient.id,
+                                            ],
+                                          });
+                                        } catch (err: any) {
+                                          toast.error(
+                                            err?.message
+                                              ? `שגיאה במחיקה: ${err.message}`
+                                              : "שגיאה במחיקה",
+                                          );
+                                        }
+                                      }}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                                      onClick={() => {
+                                        setEditingContactId(contact.id);
+                                        setEditContactData({
+                                          contact_name:
+                                            contact.contact_name || "",
+                                          phone: contact.phone || "",
+                                          email: contact.email || "",
+                                          role: contact.role || "",
+                                        });
+                                      }}
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                  <div className="text-sm space-y-1 text-right flex-1">
+                                    <div className="font-medium flex items-center gap-2 justify-end">
+                                      {contact.role && (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-xs"
+                                        >
+                                          {contact.role}
+                                        </Badge>
+                                      )}
+                                      <CarmenWhatsAppAccess
+                                        entityType="client_contact"
+                                        entityId={contact.id}
+                                        phone={contact.phone}
+                                        displayName={contact.contact_name}
+                                        roleTitle={contact.role}
+                                        clientId={selectedClient.id}
+                                      />
+                                      {contact.contact_name}
+                                    </div>
+                                    {contact.phone && (
+                                      <div className="flex items-center gap-1 justify-end text-muted-foreground">
+                                        <a
+                                          href={`tel:${contact.phone}`}
+                                          className="text-primary hover:underline"
+                                        >
+                                          {contact.phone}
+                                        </a>
+                                        <Phone className="h-3 w-3" />
+                                      </div>
+                                    )}
+                                    {contact.email && (
+                                      <div className="flex items-center gap-1 justify-end text-muted-foreground">
+                                        <a
+                                          href={`mailto:${contact.email}`}
+                                          className="text-primary hover:underline truncate"
+                                        >
+                                          {contact.email}
+                                        </a>
+                                        <Mail className="h-3 w-3" />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        !addingContact && (
+                          <p className="text-sm text-muted-foreground">
+                            אין אנשי קשר נוספים
+                          </p>
+                        )
+                      )}
+                    </div>
+
+                    {/* Team - editable */}
+                    <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
+                      <h3 className="font-semibold text-sm mb-2 flex items-center gap-2 justify-end">
+                        קמפיינרים משויכים
+                        <Users className="h-4 w-4 text-primary" />
+                      </h3>
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {selectedClient.client_team?.map(
+                          (ct: any, i: number) => (
+                            <Badge
+                              key={i}
+                              variant="secondary"
+                              className="flex items-center gap-1"
+                            >
+                              {ct?.campaigners?.full_name ?? "—"}
+                              <X
+                                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                                onClick={async () => {
+                                  const { error } = await supabase
+                                    .from("client_team")
+                                    .delete()
+                                    .eq("client_id", selectedClient.id)
+                                    .eq("campaigner_id", ct.campaigner_id);
+                                  if (error) {
+                                    toast.error("שגיאה בהסרת קמפיינר");
+                                  } else {
+                                    toast.success("הקמפיינר הוסר");
+                                    queryClient.invalidateQueries({
+                                      queryKey: ["clients", tenantId],
+                                    });
+                                  }
+                                }}
+                              />
+                            </Badge>
+                          ),
+                        )}
+                      </div>
+                      <CampaignerAssignmentPicker
+                        assignedCampaignerIds={(
+                          selectedClient.client_team || []
+                        ).map((assignment: any) => assignment.campaigner_id)}
+                        triggerClassName="h-7 text-xs"
+                        onAssign={async (campaignerId) => {
+                          const { error } = await supabase
+                            .from("client_team")
+                            .insert({
+                              client_id: selectedClient.id,
+                              campaigner_id: campaignerId,
+                            });
+                          if (error) {
+                            toast.error("שגיאה בשיוך קמפיינר");
+                            throw error;
+                          }
+                          toast.success("הקמפיינר שויך בהצלחה");
+                          await queryClient.invalidateQueries({
+                            queryKey: ["clients", tenantId],
+                          });
                         }}
                       />
                     </div>
+
+                    {/* Notes */}
+                    <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
+                      <h3 className="font-semibold text-sm mb-2">הערות</h3>
+                      <EditableField
+                        label=""
+                        value={selectedClient.notes}
+                        field="notes"
+                        clientId={selectedClient.id}
+                        type="textarea"
+                      />
+                    </div>
+
+                    {/* ── CRM Settings ──────────────────────────────────────────── */}
+                    <CRMSettingsSection
+                      client={selectedClient}
+                      onUpdate={() =>
+                        queryClient.invalidateQueries({
+                          queryKey: ["clients", tenantId],
+                        })
+                      }
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="connections" className="mt-0">
+                    {tenantId && (
+                      <ClientConnectionsTab
+                        clientId={selectedClient.id}
+                        tenantId={tenantId}
+                        onProvisioned={() => setActiveTab("report")}
+                      />
+                    )}
+                  </TabsContent>
+
+                  {canViewFinance && (
+                    <TabsContent value="business" className="mt-0 space-y-6">
+                      <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
+                        <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
+                          מידע עסקי
+                          <DollarSign className="h-4 w-4 text-primary" />
+                        </h3>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => setChangeAgencyOpen(true)}
+                            >
+                              <Edit className="h-3 w-3 ml-1" />
+                              שנה
+                            </Button>
+                            <span className="font-medium">
+                              {selectedClient.agencies?.name || "—"}
+                            </span>
+                            <span className="text-muted-foreground">
+                              :סוכנות
+                            </span>
+                          </div>
+                          <EditableField
+                            label=":ריטיינר"
+                            value={selectedClient.retainer?.toString() || ""}
+                            field="retainer"
+                            clientId={selectedClient.id}
+                            type="number"
+                          />
+                          <EditableField
+                            label=":תקציב חודשי"
+                            value={
+                              selectedClient.monthly_budget?.toString() || ""
+                            }
+                            field="monthly_budget"
+                            clientId={selectedClient.id}
+                            type="number"
+                          />
+                          <EditableField
+                            label=":הוצאות חודשיות קבועות"
+                            value={
+                              (
+                                selectedClient as any
+                              ).monthly_fixed_expense?.toString() || "0"
+                            }
+                            field="monthly_fixed_expense"
+                            clientId={selectedClient.id}
+                            type="number"
+                          />
+                          <EditableField
+                            label=":תעשייה"
+                            value={selectedClient.industry}
+                            field="industry"
+                            clientId={selectedClient.id}
+                          />
+                        </div>
+                      </div>
+                    </TabsContent>
                   )}
+
+                  <TabsContent
+                    value="docs"
+                    className="mt-0 space-y-4"
+                    dir="rtl"
+                  >
+                    <ClientDocsEditor
+                      client={selectedClient}
+                      tenantId={tenantId || ""}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="credentials" className="mt-0">
+                    <ClientCredentialsTab
+                      clientId={selectedClient.id}
+                      tenantId={resolveClientChildTenantId(
+                        selectedClient,
+                        tenantId,
+                      )}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="meeting" className="mt-0">
+                    <ClientMeetingTab
+                      client={selectedClient}
+                      tenantId={tenantId}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="recordings" className="mt-0">
+                    <ClientRecordingsTab
+                      clientId={selectedClient.id}
+                      tenantId={tenantId}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="report" className="mt-0">
+                    <ClientTablesTab
+                      clientId={selectedClient.id}
+                      clientName={selectedClientDisplayName || "לקוח"}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="updates" className="mt-0">
+                    <ClientUpdatesTab
+                      clientId={selectedClient.id}
+                      clientName={selectedClient.name || "לקוח"}
+                      currentMoodStatus={(selectedClient as any).mood_status}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="wordpress" className="mt-0">
+                    <ClientWordPressTab clientId={selectedClient.id} />
+                  </TabsContent>
                 </div>
-              )}
-            </Tabs>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <div className="text-center space-y-2">
-              <User className="h-12 w-12 mx-auto opacity-30" />
-              <p>בחר לקוח מהרשימה לצפייה בפרטים</p>
+
+                {activeTab === "calls" && (
+                  <div className="flex-1 min-h-0 overflow-hidden p-4">
+                    <CallHistoryTab clientId={selectedClient.id} />
+                  </div>
+                )}
+
+                {activeTab === "whatsapp" && (
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    {selectedClient.phone ? (
+                      <ChatViewComponent
+                        contactId={selectedClient.id}
+                        contactType="client"
+                        senderPhone={selectedClient.phone}
+                        contactName={selectedClient.name || "לקוח"}
+                      />
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center gap-3 py-8">
+                        <Phone className="h-10 w-10 text-muted-foreground/30" />
+                        <p className="text-sm text-muted-foreground">
+                          אין מספר טלפון ללקוח זה
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => setAssignPhoneDialogOpen(true)}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          חפש שיחה בוואטסאפ ושייך מספר
+                        </Button>
+                        <AssignPhoneFromWhatsAppDialog
+                          inline
+                          open={assignPhoneDialogOpen}
+                          onOpenChange={setAssignPhoneDialogOpen}
+                          clientId={selectedClient.id}
+                          clientName={selectedClient.name || "לקוח"}
+                          onSuccess={() => {
+                            queryClient.invalidateQueries({
+                              queryKey: ["clients", tenantId],
+                            });
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Tabs>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              <div className="text-center space-y-2">
+                <User className="h-12 w-12 mx-auto opacity-30" />
+                <p>בחר לקוח מהרשימה לצפייה בפרטים</p>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
       )}
 
       {/* Call dialog */}
@@ -1491,7 +2274,6 @@ export function ClientsChatView({
           clientId={selectedClient.id}
         />
       )}
-
     </div>
   );
 }

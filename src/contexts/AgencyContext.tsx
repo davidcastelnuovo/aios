@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -49,10 +57,13 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
 
   const [selectedAgency, setSelectedAgencyState] = useState<string>("all");
 
-  const setSelectedAgency = useCallback((agencyId: string) => {
-    setSelectedAgencyState(agencyId);
-    writeStoredAgency(currentTenantId, agencyId);
-  }, [currentTenantId]);
+  const setSelectedAgency = useCallback(
+    (agencyId: string) => {
+      setSelectedAgencyState(agencyId);
+      writeStoredAgency(currentTenantId, agencyId);
+    },
+    [currentTenantId],
+  );
 
   // Hydrate per-tenant selection when the active tenant changes (not on every remount).
   useEffect(() => {
@@ -60,8 +71,13 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     if (hydratedTenantRef.current === currentTenantId) return;
     hydratedTenantRef.current = currentTenantId;
     setSelectedAgencyState(readStoredAgency(currentTenantId));
-    if (prevTenantIdRef.current && prevTenantIdRef.current !== currentTenantId) {
-      queryClient.invalidateQueries({ queryKey: ["agencies-filter", currentTenantId] });
+    if (
+      prevTenantIdRef.current &&
+      prevTenantIdRef.current !== currentTenantId
+    ) {
+      queryClient.invalidateQueries({
+        queryKey: ["agencies-filter", currentTenantId],
+      });
     }
     prevTenantIdRef.current = currentTenantId;
   }, [currentTenantId, queryClient]);
@@ -81,8 +97,15 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
         { data: ownedAgencies, error: ownedError },
         { data: sharedAccess, error: sharedError },
       ] = await Promise.all([
-        supabase.from("agencies").select("id, name").eq("tenant_id", currentTenantId).order("name"),
-        supabase.from("agency_tenant_access").select("agency_id, agencies(id, name)").eq("accessing_tenant_id", currentTenantId),
+        supabase
+          .from("agencies")
+          .select("id, name")
+          .eq("tenant_id", currentTenantId)
+          .order("name"),
+        supabase
+          .from("agency_tenant_access")
+          .select("agency_id, agencies(id, name)")
+          .eq("accessing_tenant_id", currentTenantId),
       ]);
 
       if (ownedError) {
@@ -103,7 +126,9 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
         }
       });
 
-      return Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+      return Array.from(uniqueMap.values()).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
     },
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
@@ -128,14 +153,24 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const exists = selectedAgency === "all" || agencies.some((a) => a.id === selectedAgency);
+    const exists =
+      selectedAgency === "all" || agencies.some((a) => a.id === selectedAgency);
     if (!exists) {
       setSelectedAgency("all");
     }
-  }, [agencies, selectedAgency, isLoadingAgencies, isFetchingAgencies, isAgenciesFetched, setSelectedAgency]);
+  }, [
+    agencies,
+    selectedAgency,
+    isLoadingAgencies,
+    isFetchingAgencies,
+    isAgenciesFetched,
+    setSelectedAgency,
+  ]);
 
   return (
-    <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency, agencies, isLoading }}>
+    <AgencyContext.Provider
+      value={{ selectedAgency, setSelectedAgency, agencies, isLoading }}
+    >
       {children}
     </AgencyContext.Provider>
   );

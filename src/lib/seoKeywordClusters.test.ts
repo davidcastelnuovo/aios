@@ -40,13 +40,19 @@ describe("clusterKeywords", () => {
       { keyword: "טיולים לצ'ילה", position: 7 },
     ]);
     expect(clusters.some((c) => c.key === "טיול")).toBe(false);
-    expect(clusters.map((c) => c.key)).toEqual(expect.arrayContaining(["ארגנטינה", "צילה"]));
+    expect(clusters.map((c) => c.key)).toEqual(
+      expect.arrayContaining(["ארגנטינה", "צילה"]),
+    );
   });
 });
 
 describe("clusterTokens", () => {
   it("stems prefixed Hebrew destination names", () => {
-    expect(clusterTokens("טיולים לארגנטינה")).toEqual(expect.arrayContaining(["ארגנטינה"]));
-    expect(clusterTokens("טרקים בצ'ילה")).toEqual(expect.arrayContaining(["צילה", "טרק"]));
+    expect(clusterTokens("טיולים לארגנטינה")).toEqual(
+      expect.arrayContaining(["ארגנטינה"]),
+    );
+    expect(clusterTokens("טרקים בצ'ילה")).toEqual(
+      expect.arrayContaining(["צילה", "טרק"]),
+    );
   });
 });

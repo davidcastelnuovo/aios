@@ -3,15 +3,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface MakeAPIRequest {
-  action: 
-    | "test_connection" 
-    | "list_connections" 
-    | "list_scenarios" 
-    | "run_scenario" 
+  action:
+    | "test_connection"
+    | "list_connections"
+    | "list_scenarios"
+    | "run_scenario"
     | "get_connection_details"
     | "list_google_ads_connections"
     | "list_google_ads_accounts"
@@ -73,28 +74,27 @@ async function makeAPICall(
   region: string,
   endpoint: string,
   method: string = "GET",
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
 ) {
   const baseUrl = MAKE_API_REGIONS[region] || MAKE_API_REGIONS.eu1;
   const url = `${baseUrl}${endpoint}`;
-  
-  
+
   const headers: Record<string, string> = {
-    "Authorization": `Token ${apiToken}`,
+    Authorization: `Token ${apiToken}`,
     "Content-Type": "application/json",
   };
-  
+
   const options: RequestInit = {
     method,
     headers,
   };
-  
+
   if (body && (method === "POST" || method === "PUT" || method === "PATCH")) {
     options.body = JSON.stringify(body);
   }
-  
+
   const response = await fetch(url, options);
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`Make API error: ${response.status} - ${errorText}`);
@@ -106,7 +106,7 @@ async function makeAPICall(
     }
     throw new MakeApiError(response.status, errorText, parsed);
   }
-  
+
   return response.json();
 }
 
@@ -120,27 +120,36 @@ const GOOGLE_ADS_APP_NAMES = [
 ];
 
 function isGoogleAdsConnection(connection: any): boolean {
-  const appName = (connection.accountName || connection.typeName || connection.name || "").toLowerCase();
-  return GOOGLE_ADS_APP_NAMES.some(name => appName.includes(name));
+  const appName = (
+    connection.accountName ||
+    connection.typeName ||
+    connection.name ||
+    ""
+  ).toLowerCase();
+  return GOOGLE_ADS_APP_NAMES.some((name) => appName.includes(name));
 }
 
 // Helper to identify Google Ads modules in blueprints
 function isGoogleAdsModule(moduleName: string): boolean {
   if (!moduleName) return false;
   const lowerName = moduleName.toLowerCase();
-  return lowerName.includes('google-ads') || 
-         lowerName.includes('googleads') ||
-         lowerName.includes('adwords') ||
-         lowerName.includes('google-ads-reports');
+  return (
+    lowerName.includes("google-ads") ||
+    lowerName.includes("googleads") ||
+    lowerName.includes("adwords") ||
+    lowerName.includes("google-ads-reports")
+  );
 }
 
 // Helper to identify HTTP modules in blueprints
 function isHttpModule(moduleName: string): boolean {
   if (!moduleName) return false;
   const lowerName = moduleName.toLowerCase();
-  return lowerName.includes('http:') || 
-         lowerName === 'http:actionmakerequest' ||
-         lowerName.includes('http');
+  return (
+    lowerName.includes("http:") ||
+    lowerName === "http:actionmakerequest" ||
+    lowerName.includes("http")
+  );
 }
 
 serve(async (req) => {
@@ -157,28 +166,31 @@ serve(async (req) => {
         global: {
           headers: { Authorization: req.headers.get("Authorization") ?? "" },
         },
-      }
+      },
     );
 
     // Get current user
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       console.error("Auth error:", userError);
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const body: MakeAPIRequest = await req.json();
-    const { 
-      action, 
-      api_token, 
-      team_id, 
-      region = "eu1", 
-      scenario_id, 
-      connection_id, 
-      data, 
+    const {
+      action,
+      api_token,
+      team_id,
+      region = "eu1",
+      scenario_id,
+      connection_id,
+      data,
       table_id,
       tenant_id,
       customer_id,
@@ -192,11 +204,13 @@ serve(async (req) => {
       end_date,
     } = body;
 
-
     if (!api_token || !team_id) {
       return new Response(
         JSON.stringify({ error: "API token and Team ID are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -209,7 +223,10 @@ serve(async (req) => {
           result = await makeAPICall(api_token, region, "/users/me");
           result = { success: true, user: result };
         } catch (err) {
-          result = { success: false, error: err instanceof Error ? err.message : String(err) };
+          result = {
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          };
         }
         break;
       }
@@ -219,7 +236,11 @@ serve(async (req) => {
         // Make.com API uses query parameter for teamId, not path
         let connections;
         try {
-          connections = await makeAPICall(api_token, region, `/connections?teamId=${team_id}`);
+          connections = await makeAPICall(
+            api_token,
+            region,
+            `/connections?teamId=${team_id}`,
+          );
           result = connections;
         } catch (e) {
           // Fallback: if the provided teamId is not accessible for this token/user, try default scope.
@@ -241,13 +262,16 @@ serve(async (req) => {
         if (!connection_id) {
           return new Response(
             JSON.stringify({ error: "Connection ID is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
         const details = await makeAPICall(
           api_token,
           region,
-          `/connections/${connection_id}`
+          `/connections/${connection_id}`,
         );
         result = details;
         break;
@@ -258,7 +282,11 @@ serve(async (req) => {
         // Make.com API uses query parameter for teamId
         let scenarios;
         try {
-          scenarios = await makeAPICall(api_token, region, `/scenarios?teamId=${team_id}`);
+          scenarios = await makeAPICall(
+            api_token,
+            region,
+            `/scenarios?teamId=${team_id}`,
+          );
           result = scenarios;
         } catch (e) {
           if (e instanceof MakeApiError && e.status === 403) {
@@ -279,7 +307,10 @@ serve(async (req) => {
         if (!scenario_id) {
           return new Response(
             JSON.stringify({ error: "Scenario ID is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
         // Run a specific scenario
@@ -288,7 +319,7 @@ serve(async (req) => {
           region,
           `/scenarios/${scenario_id}/run`,
           "POST",
-          data
+          data,
         );
         result = runResult;
         break;
@@ -298,12 +329,14 @@ serve(async (req) => {
         if (!scenario_id) {
           return new Response(
             JSON.stringify({ error: "Scenario ID is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
         // First, update the scenario scheduling to on-demand (no interval required), then activate
         try {
-          
           // Step 1: Update scenario with on-demand scheduling (avoids IM008 Invalid interval)
           await makeAPICall(
             api_token,
@@ -311,25 +344,35 @@ serve(async (req) => {
             `/scenarios/${scenario_id}`,
             "PATCH",
             {
-              scheduling: JSON.stringify({ type: "on-demand" })
-            }
+              scheduling: JSON.stringify({ type: "on-demand" }),
+            },
           );
-          
-          
+
           // Step 2: Now activate the scenario
           const activateResult = await makeAPICall(
             api_token,
             region,
             `/scenarios/${scenario_id}/start`,
-            "POST"
+            "POST",
           );
-          result = { success: true, message: "Scenario activated successfully", ...activateResult };
+          result = {
+            success: true,
+            message: "Scenario activated successfully",
+            ...activateResult,
+          };
         } catch (activateError) {
           if (activateError instanceof MakeApiError) {
             // IM306 means "Scenario is already running" - treat as success
-            if (activateError.parsedBody?.code === "IM306" || 
-                (typeof activateError.rawBody === "string" && activateError.rawBody.includes("IM306"))) {
-              result = { success: true, message: "Scenario is already running", already_running: true };
+            if (
+              activateError.parsedBody?.code === "IM306" ||
+              (typeof activateError.rawBody === "string" &&
+                activateError.rawBody.includes("IM306"))
+            ) {
+              result = {
+                success: true,
+                message: "Scenario is already running",
+                already_running: true,
+              };
               break;
             }
             throw activateError;
@@ -347,22 +390,32 @@ serve(async (req) => {
         let allConnections;
         let usedFallback = false;
         try {
-          allConnections = await makeAPICall(api_token, region, `/connections?teamId=${team_id}`);
+          allConnections = await makeAPICall(
+            api_token,
+            region,
+            `/connections?teamId=${team_id}`,
+          );
         } catch (e) {
           if (e instanceof MakeApiError && e.status === 403) {
             usedFallback = true;
-            allConnections = await makeAPICall(api_token, region, `/connections`);
+            allConnections = await makeAPICall(
+              api_token,
+              region,
+              `/connections`,
+            );
           } else {
             throw e;
           }
         }
-        
+
         // Filter for Google Ads connections
-        const googleAdsConnections = (allConnections.connections || allConnections || [])
-          .filter((conn: any) => isGoogleAdsConnection(conn));
-        
-        
-        result = { 
+        const googleAdsConnections = (
+          allConnections.connections ||
+          allConnections ||
+          []
+        ).filter((conn: any) => isGoogleAdsConnection(conn));
+
+        result = {
           connections: googleAdsConnections,
           total: googleAdsConnections.length,
           fallback_used: usedFallback,
@@ -375,19 +428,21 @@ serve(async (req) => {
         if (!connection_id) {
           return new Response(
             JSON.stringify({ error: "Connection ID is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
 
         const baseUrl = MAKE_API_REGIONS[region] || MAKE_API_REGIONS.eu1;
         const rpcUrl = `${baseUrl}/rpcs/google-ads/1/listCustomers`;
-        
 
         try {
           const rpcResponse = await fetch(rpcUrl, {
             method: "POST",
             headers: {
-              "Authorization": `Token ${api_token}`,
+              Authorization: `Token ${api_token}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
@@ -399,7 +454,11 @@ serve(async (req) => {
           if (!rpcResponse.ok) {
             const errorText = await rpcResponse.text();
             console.error(`RPC error: ${rpcResponse.status} - ${errorText}`);
-            result = { accounts: [], error: `RPC failed: ${rpcResponse.status}`, fallback: true };
+            result = {
+              accounts: [],
+              error: `RPC failed: ${rpcResponse.status}`,
+              fallback: true,
+            };
             break;
           }
 
@@ -407,11 +466,15 @@ serve(async (req) => {
 
           // Make.com RPC returns an array of { label, value } or similar structure
           // Filter out manager/MCC accounts
-          const accounts = (Array.isArray(rpcData) ? rpcData : []).map((item: any) => ({
-            id: String(item.value || item.id || item.customerId || ''),
-            name: String(item.label || item.name || item.descriptiveName || ''),
-            manager: item.manager === true || item.isManager === true,
-          })).filter((acc: any) => acc.id && !acc.manager);
+          const accounts = (Array.isArray(rpcData) ? rpcData : [])
+            .map((item: any) => ({
+              id: String(item.value || item.id || item.customerId || ""),
+              name: String(
+                item.label || item.name || item.descriptiveName || "",
+              ),
+              manager: item.manager === true || item.isManager === true,
+            }))
+            .filter((acc: any) => acc.id && !acc.manager);
 
           result = { accounts, total: accounts.length };
         } catch (rpcError) {
@@ -426,7 +489,11 @@ serve(async (req) => {
         // Make.com API uses query parameter for teamId
         let allScenarios;
         try {
-          allScenarios = await makeAPICall(api_token, region, `/scenarios?teamId=${team_id}`);
+          allScenarios = await makeAPICall(
+            api_token,
+            region,
+            `/scenarios?teamId=${team_id}`,
+          );
         } catch (e) {
           if (e instanceof MakeApiError && e.status === 403) {
             allScenarios = await makeAPICall(api_token, region, `/scenarios`);
@@ -434,7 +501,7 @@ serve(async (req) => {
             throw e;
           }
         }
-        
+
         // For each scenario, we'd need to check if it uses Google Ads modules
         // For now, return all scenarios and let the frontend filter or display them
         result = allScenarios;
@@ -445,14 +512,20 @@ serve(async (req) => {
         if (!scenario_id) {
           return new Response(
             JSON.stringify({ error: "Scenario ID is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
-        
+
         if (!table_id) {
           return new Response(
             JSON.stringify({ error: "Table ID is required for sync" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
 
@@ -461,19 +534,20 @@ serve(async (req) => {
           ...data,
           table_id,
         };
-        
+
         const runResult = await makeAPICall(
           api_token,
           region,
           `/scenarios/${scenario_id}/run`,
           "POST",
-          syncData
+          syncData,
         );
-        
-        result = { 
-          success: true, 
+
+        result = {
+          success: true,
           execution: runResult,
-          message: "Scenario triggered successfully. Data will be synced via webhook."
+          message:
+            "Scenario triggered successfully. Data will be synced via webhook.",
         };
         break;
       }
@@ -482,38 +556,59 @@ serve(async (req) => {
         // Create a scenario that syncs Google Ads data to our webhook
         if (!connection_id) {
           return new Response(
-            JSON.stringify({ error: "Connection ID is required to create scenario" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({
+              error: "Connection ID is required to create scenario",
+            }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
-        
+
         if (!customer_id) {
           return new Response(
-            JSON.stringify({ error: "Customer ID is required to create scenario" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({
+              error: "Customer ID is required to create scenario",
+            }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
-        
+
         if (!webhook_url) {
           return new Response(
-            JSON.stringify({ error: "Webhook URL is required to create scenario" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({
+              error: "Webhook URL is required to create scenario",
+            }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
-        
+
         if (!table_id) {
           return new Response(
-            JSON.stringify({ error: "Table ID is required to create scenario" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({
+              error: "Table ID is required to create scenario",
+            }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
 
         // Format customer ID (remove dashes if present)
         const formattedCustomerId = customer_id.replace(/-/g, "");
-        
+
         // Build the blueprint for Google Ads sync scenario
         const scenarioBlueprint = {
-          name: scenario_name || `Google Ads Sync - Table ${table_id.slice(0, 8)}`,
+          name:
+            scenario_name || `Google Ads Sync - Table ${table_id.slice(0, 8)}`,
           teamId: parseInt(team_id || "0"),
           scheduling: JSON.stringify({ type: "indefinitely" }),
           blueprint: JSON.stringify({
@@ -524,16 +619,23 @@ serve(async (req) => {
                 module: "google-ads:getReport",
                 version: 1,
                 parameters: {
-                  __IMTCONN__: parseInt(connection_id)
+                  __IMTCONN__: parseInt(connection_id),
                 },
                 mapper: {
                   customerId: formattedCustomerId,
                   resource: "campaign",
                   dateRangeType: date_range || "LAST_30_DAYS",
-                  metrics: ["metrics.impressions", "metrics.clicks", "metrics.cost_micros", "metrics.conversions", "metrics.ctr", "metrics.average_cpc"],
+                  metrics: [
+                    "metrics.impressions",
+                    "metrics.clicks",
+                    "metrics.cost_micros",
+                    "metrics.conversions",
+                    "metrics.ctr",
+                    "metrics.average_cpc",
+                  ],
                   segments: ["segments.date"],
-                  attributes: ["campaign.id", "campaign.name"]
-                }
+                  attributes: ["campaign.id", "campaign.name"],
+                },
               },
               {
                 id: 2,
@@ -545,7 +647,9 @@ serve(async (req) => {
                   method: "POST",
                   headers: [
                     { name: "Content-Type", value: "application/json" },
-                    ...(webhook_secret ? [{ name: "x-webhook-secret", value: webhook_secret }] : [])
+                    ...(webhook_secret
+                      ? [{ name: "x-webhook-secret", value: webhook_secret }]
+                      : []),
                   ],
                   qs: [],
                   bodyType: "raw",
@@ -553,10 +657,11 @@ serve(async (req) => {
                   contentType: "application/json",
                   data: JSON.stringify({
                     table_id: table_id,
-                    records: "{{map(1.results; \"item\"; $merge(item.campaign; item.metrics; item.segments))}}"
-                  })
-                }
-              }
+                    records:
+                      '{{map(1.results; "item"; $merge(item.campaign; item.metrics; item.segments))}}',
+                  }),
+                },
+              },
             ],
             metadata: {
               instant: false,
@@ -570,16 +675,15 @@ serve(async (req) => {
                 confidential: false,
                 dataloss: false,
                 dlq: false,
-                freshVariables: false
+                freshVariables: false,
               },
               designer: {
-                orphans: []
+                orphans: [],
               },
-              zone: region
-            }
-          })
+              zone: region,
+            },
+          }),
         };
-
 
         try {
           const createResult = await makeAPICall(
@@ -587,27 +691,31 @@ serve(async (req) => {
             region,
             `/scenarios`,
             "POST",
-            scenarioBlueprint
+            scenarioBlueprint,
           );
-          
+
           result = {
             success: true,
             scenario: createResult,
             scenario_id: createResult.scenario?.id || createResult.id,
-            message: "Scenario created successfully"
+            message: "Scenario created successfully",
           };
         } catch (createError) {
           console.error("Failed to create scenario:", createError);
           // If blueprint creation fails, provide manual setup instructions
           result = {
             success: false,
-            error: createError instanceof Error ? createError.message : String(createError),
+            error:
+              createError instanceof Error
+                ? createError.message
+                : String(createError),
             fallback: true,
-            message: "לא ניתן ליצור Scenario אוטומטי. נא להגדיר ידנית ב-Make.com",
+            message:
+              "לא ניתן ליצור Scenario אוטומטי. נא להגדיר ידנית ב-Make.com",
             webhook_url: webhook_url,
             table_id: table_id,
             connection_id: connection_id,
-            customer_id: customer_id
+            customer_id: customer_id,
           };
         }
         break;
@@ -618,18 +726,20 @@ serve(async (req) => {
         if (!scenario_id) {
           return new Response(
             JSON.stringify({ error: "Scenario ID is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
-        
-        
+
         try {
           const blueprint = await makeAPICall(
             api_token,
             region,
-            `/scenarios/${scenario_id}/blueprint`
+            `/scenarios/${scenario_id}/blueprint`,
           );
-          
+
           result = {
             success: true,
             blueprint: blueprint,
@@ -638,7 +748,10 @@ serve(async (req) => {
           console.error("Failed to get blueprint:", blueprintError);
           result = {
             success: false,
-            error: blueprintError instanceof Error ? blueprintError.message : String(blueprintError),
+            error:
+              blueprintError instanceof Error
+                ? blueprintError.message
+                : String(blueprintError),
           };
         }
         break;
@@ -649,76 +762,82 @@ serve(async (req) => {
         if (!template_scenario_id) {
           return new Response(
             JSON.stringify({ error: "Template Scenario ID is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
-        
+
         if (!webhook_url) {
           return new Response(
             JSON.stringify({ error: "Webhook URL is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
-        
+
         if (!table_id) {
           return new Response(
             JSON.stringify({ error: "Table ID is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
-        
+
         // customer_id is already extracted from body at the top of the function
         // campaign_type is also extracted from body
-        
-        
+
         try {
           // Step 1: Get the template scenario details
           const templateScenario = await makeAPICall(
             api_token,
             region,
-            `/scenarios/${template_scenario_id}`
+            `/scenarios/${template_scenario_id}`,
           );
-          
-          
+
           // Step 2: Get the blueprint
           const blueprintResponse = await makeAPICall(
             api_token,
             region,
-            `/scenarios/${template_scenario_id}/blueprint`
+            `/scenarios/${template_scenario_id}/blueprint`,
           );
-          
-          
+
           // Step 3: Modify the blueprint
           // Parse the flow and update the HTTP module with new webhook URL and table_id
           // The API returns {code: "OK", response: {blueprint: {...}}} - extract the actual blueprint
           let blueprintData = blueprintResponse;
-          if (typeof blueprintResponse === 'string') {
+          if (typeof blueprintResponse === "string") {
             blueprintData = JSON.parse(blueprintResponse);
           }
-          
+
           // Extract the actual blueprint from the API response wrapper
           if (blueprintData.response?.blueprint) {
             blueprintData = blueprintData.response.blueprint;
           } else if (blueprintData.blueprint) {
             blueprintData = blueprintData.blueprint;
           }
-          
+
           // Remove any unwanted properties that Make.com API doesn't accept
           delete blueprintData.code;
           delete blueprintData.response;
-          
+
           // Find and update modules in the flow
           if (blueprintData.flow && Array.isArray(blueprintData.flow)) {
             // Define metrics based on campaign type
             const metricsForLeads = [
               "metrics.impressions",
-              "metrics.clicks", 
+              "metrics.clicks",
               "metrics.cost_micros",
               "metrics.conversions",
               "metrics.ctr",
-              "metrics.average_cpc"
+              "metrics.average_cpc",
             ];
-            
+
             const metricsForEcommerce = [
               "metrics.impressions",
               "metrics.clicks",
@@ -726,11 +845,14 @@ serve(async (req) => {
               "metrics.conversions",
               "metrics.conversions_value",
               "metrics.all_conversions",
-              "metrics.all_conversions_value"
+              "metrics.all_conversions_value",
             ];
-            
-            const selectedMetrics = campaign_type === "ecommerce" ? metricsForEcommerce : metricsForLeads;
-            
+
+            const selectedMetrics =
+              campaign_type === "ecommerce"
+                ? metricsForEcommerce
+                : metricsForLeads;
+
             for (const module of blueprintData.flow) {
               // Check if this is a Google Ads module - update customer_id, accountId, metrics AND connection
               if (module.module && isGoogleAdsModule(module.module)) {
@@ -743,91 +865,115 @@ serve(async (req) => {
                     module.metadata.connection = { id: parsedConnectionId };
                     module.parameters.__IMTCONN__ = parsedConnectionId;
                   } else {
-                    console.warn(`Invalid connection_id provided: ${connection_id}`);
+                    console.warn(
+                      `Invalid connection_id provided: ${connection_id}`,
+                    );
                   }
                 }
-                
+
                 if (customer_id) {
                   if (module.mapper) {
                     // Format customer ID without dashes
-                    const formattedCustomerId = customer_id.replace(/-/g, '');
+                    const formattedCustomerId = customer_id.replace(/-/g, "");
                     module.mapper.customerId = formattedCustomerId;
                     module.mapper.customer_id = formattedCustomerId;
                     module.mapper.accountId = formattedCustomerId;
                     module.mapper.metrics = selectedMetrics;
-                    if (!module.mapper.segments || !Array.isArray(module.mapper.segments)) {
+                    if (
+                      !module.mapper.segments ||
+                      !Array.isArray(module.mapper.segments)
+                    ) {
                       module.mapper.segments = ["segments.date"];
-                    } else if (!module.mapper.segments.includes("segments.date")) {
+                    } else if (
+                      !module.mapper.segments.includes("segments.date")
+                    ) {
                       module.mapper.segments.push("segments.date");
                     }
-                    if (!module.mapper.attributes || !Array.isArray(module.mapper.attributes)) {
-                      module.mapper.attributes = ["campaign.id", "campaign.name"];
+                    if (
+                      !module.mapper.attributes ||
+                      !Array.isArray(module.mapper.attributes)
+                    ) {
+                      module.mapper.attributes = [
+                        "campaign.id",
+                        "campaign.name",
+                      ];
                     }
                   }
                 }
               }
-              
+
               // Check if this is an HTTP module - update webhook URL and table_id
               if (module.module && isHttpModule(module.module)) {
                 if (module.mapper) {
                   module.mapper.url = webhook_url;
-                  
+
                   // Handle jsonStringBodyContent (Make.com uses this for raw JSON body)
                   // ALWAYS replace with correct field references to ensure proper data mapping
                   // NOTE: Make.com does NOT support toJSON/map/$merge - use direct field references
                   {
-                    const googleAdsModuleId = blueprintData.flow.find((m: any) => m.module && isGoogleAdsModule(m.module))?.id || 3;
+                    const googleAdsModuleId =
+                      blueprintData.flow.find(
+                        (m: any) => m.module && isGoogleAdsModule(m.module),
+                      )?.id || 3;
                     const gid = googleAdsModuleId;
                     // Build body with direct Make.com variable references for each field
-                    const bodyTemplate = `{"table_id":"${table_id}","campaign_type":"${campaign_type || 'leads'}"${tenant_id ? `,"tenant_id":"${tenant_id}"` : ''},"records":[{"date":"{{${gid}.dimensions.date}}","campaign_id":"{{${gid}.dimensions.campaignId}}","campaign_name":"{{${gid}.dimensions.campaignName}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost":"{{${gid}.metrics.cost}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions_value":"{{${gid}.metrics.conversionsValue}}","all_conversions":"{{${gid}.metrics.allConversions}}"}]}`;
+                    const bodyTemplate = `{"table_id":"${table_id}","campaign_type":"${campaign_type || "leads"}"${tenant_id ? `,"tenant_id":"${tenant_id}"` : ""},"records":[{"date":"{{${gid}.dimensions.date}}","campaign_id":"{{${gid}.dimensions.campaignId}}","campaign_name":"{{${gid}.dimensions.campaignName}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost":"{{${gid}.metrics.cost}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions_value":"{{${gid}.metrics.conversionsValue}}","all_conversions":"{{${gid}.metrics.allConversions}}"}]}`;
                     module.mapper.jsonStringBodyContent = bodyTemplate;
                   }
-                  
+
                   // Update the body/data with new table_id (fallback for other template formats)
                   if (module.mapper.data) {
                     try {
-                      let dataObj = typeof module.mapper.data === 'string' 
-                        ? JSON.parse(module.mapper.data) 
-                        : module.mapper.data;
+                      let dataObj =
+                        typeof module.mapper.data === "string"
+                          ? JSON.parse(module.mapper.data)
+                          : module.mapper.data;
                       dataObj.table_id = table_id;
-                      dataObj.campaign_type = campaign_type || dataObj.campaign_type || 'leads';
+                      dataObj.campaign_type =
+                        campaign_type || dataObj.campaign_type || "leads";
                       if (tenant_id) {
                         dataObj.tenant_id = tenant_id;
                       }
                       module.mapper.data = JSON.stringify(dataObj);
                     } catch {
                       // If data is not JSON, try to replace table_id in the string
-                      if (typeof module.mapper.data === 'string') {
+                      if (typeof module.mapper.data === "string") {
                         module.mapper.data = module.mapper.data.replace(
                           /"table_id"\s*:\s*"[^"]*"/,
-                          `"table_id": "${table_id}"`
+                          `"table_id": "${table_id}"`,
                         );
                       }
                     }
                   }
-                  
+
                   // Add webhook secret header if provided
                   if (webhook_secret && module.mapper.headers) {
-                    const existingSecretHeader = module.mapper.headers.findIndex(
-                      (h: any) => h.name === 'x-webhook-secret'
-                    );
+                    const existingSecretHeader =
+                      module.mapper.headers.findIndex(
+                        (h: any) => h.name === "x-webhook-secret",
+                      );
                     if (existingSecretHeader >= 0) {
-                      module.mapper.headers[existingSecretHeader].value = webhook_secret;
+                      module.mapper.headers[existingSecretHeader].value =
+                        webhook_secret;
                     } else {
-                      module.mapper.headers.push({ name: 'x-webhook-secret', value: webhook_secret });
+                      module.mapper.headers.push({
+                        name: "x-webhook-secret",
+                        value: webhook_secret,
+                      });
                     }
                   }
                 }
               }
             }
           }
-          
+
           // Step 4: Create new scenario with modified blueprint
-          const newScenarioName = scenario_name || `חיבור לגוגל - ${table_id.slice(0, 8)}`;
-          
+          const newScenarioName =
+            scenario_name || `חיבור לגוגל - ${table_id.slice(0, 8)}`;
+
           // Update the blueprint name itself (Make.com uses this for display)
           blueprintData.name = newScenarioName;
-          
+
           const createPayload = {
             name: newScenarioName,
             teamId: parseInt(team_id || "0"),
@@ -835,18 +981,17 @@ serve(async (req) => {
             scheduling: JSON.stringify({ type: "on-demand" }),
             blueprint: JSON.stringify(blueprintData),
           };
-          
-          
+
           const createResult = await makeAPICall(
             api_token,
             region,
             `/scenarios`,
             "POST",
-            createPayload
+            createPayload,
           );
-          
+
           const newScenarioId = createResult.scenario?.id || createResult.id;
-          
+
           // Step 5: Activate the new scenario so it can be run
           if (newScenarioId) {
             try {
@@ -854,26 +999,32 @@ serve(async (req) => {
                 api_token,
                 region,
                 `/scenarios/${newScenarioId}/start`,
-                "POST"
+                "POST",
               );
             } catch (activateError) {
-              console.warn("Failed to activate scenario (may need manual activation):", activateError);
+              console.warn(
+                "Failed to activate scenario (may need manual activation):",
+                activateError,
+              );
               // Don't fail the whole operation - scenario was created successfully
             }
           }
-          
+
           result = {
             success: true,
             scenario: createResult,
             scenario_id: newScenarioId,
-            message: "Scenario cloned and activated successfully"
+            message: "Scenario cloned and activated successfully",
           };
         } catch (cloneError) {
           console.error("Failed to clone scenario:", cloneError);
           result = {
             success: false,
-            error: cloneError instanceof Error ? cloneError.message : String(cloneError),
-            message: "לא ניתן לשכפל את ה-Template Scenario"
+            error:
+              cloneError instanceof Error
+                ? cloneError.message
+                : String(cloneError),
+            message: "לא ניתן לשכפל את ה-Template Scenario",
           };
         }
         break;
@@ -884,10 +1035,12 @@ serve(async (req) => {
         if (!scenario_id) {
           return new Response(
             JSON.stringify({ error: "Scenario ID is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
-
 
         try {
           // Run the scenario
@@ -896,21 +1049,22 @@ serve(async (req) => {
             region,
             `/scenarios/${scenario_id}/run`,
             "POST",
-            { data: data || {} }
+            { data: data || {} },
           );
 
           result = {
             success: true,
             execution: runResult,
             execution_id: runResult.executionId || runResult.execution?.id,
-            message: "Scenario executed. Data will sync shortly via webhook."
+            message: "Scenario executed. Data will sync shortly via webhook.",
           };
         } catch (runError) {
           console.error("Failed to run scenario:", runError);
           result = {
             success: false,
-            error: runError instanceof Error ? runError.message : String(runError),
-            message: "Failed to run the sync scenario"
+            error:
+              runError instanceof Error ? runError.message : String(runError),
+            message: "Failed to run the sync scenario",
           };
         }
         break;
@@ -921,56 +1075,63 @@ serve(async (req) => {
         if (!scenario_id) {
           return new Response(
             JSON.stringify({ error: "Scenario ID is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
-        
+
         if (!table_id) {
           return new Response(
             JSON.stringify({ error: "Table ID is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
           );
         }
-        
-        const patchWebhookUrl = webhook_url || `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-google-ads-sync`;
-        
-        
+
+        const patchWebhookUrl =
+          webhook_url ||
+          `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-google-ads-sync`;
+
         try {
           // Step 1: Get the current blueprint
           const blueprintResponse = await makeAPICall(
             api_token,
             region,
-            `/scenarios/${scenario_id}/blueprint`
+            `/scenarios/${scenario_id}/blueprint`,
           );
-          
+
           // Extract the actual blueprint from the API response wrapper
           let blueprintData = blueprintResponse;
-          if (typeof blueprintResponse === 'string') {
+          if (typeof blueprintResponse === "string") {
             blueprintData = JSON.parse(blueprintResponse);
           }
-          
+
           if (blueprintData.response?.blueprint) {
             blueprintData = blueprintData.response.blueprint;
           } else if (blueprintData.blueprint) {
             blueprintData = blueprintData.blueprint;
           }
-          
+
           // Remove any unwanted properties
           delete blueprintData.code;
           delete blueprintData.response;
-          
+
           let patchedHttpModule = false;
-          
+
           // Define metrics based on campaign type
           const metricsForLeads = [
             "metrics.impressions",
-            "metrics.clicks", 
+            "metrics.clicks",
             "metrics.cost_micros",
             "metrics.conversions",
             "metrics.ctr",
-            "metrics.average_cpc"
+            "metrics.average_cpc",
           ];
-          
+
           const metricsForEcommerce = [
             "metrics.impressions",
             "metrics.clicks",
@@ -978,9 +1139,9 @@ serve(async (req) => {
             "metrics.conversions",
             "metrics.conversions_value",
             "metrics.all_conversions",
-            "metrics.all_conversions_value"
+            "metrics.all_conversions_value",
           ];
-          
+
           // Step 2: Update HTTP modules and Google Ads modules in the flow
           if (blueprintData.flow && Array.isArray(blueprintData.flow)) {
             for (const module of blueprintData.flow) {
@@ -994,53 +1155,66 @@ serve(async (req) => {
                     module.metadata.connection = { id: parsedConnectionId };
                     module.parameters.__IMTCONN__ = parsedConnectionId;
                   } else {
-                    console.warn(`Invalid connection_id provided: ${connection_id}`);
+                    console.warn(
+                      `Invalid connection_id provided: ${connection_id}`,
+                    );
                   }
                 }
 
                 if (customer_id && module.mapper) {
-                  const formattedCustomerId = customer_id.replace(/-/g, '');
+                  const formattedCustomerId = customer_id.replace(/-/g, "");
                   module.mapper.customerId = formattedCustomerId;
                   module.mapper.customer_id = formattedCustomerId;
                   module.mapper.accountId = formattedCustomerId;
-                  
+
                   // Update metrics based on campaign type
                   if (campaign_type) {
-                    const selectedMetrics = campaign_type === "ecommerce" ? metricsForEcommerce : metricsForLeads;
+                    const selectedMetrics =
+                      campaign_type === "ecommerce"
+                        ? metricsForEcommerce
+                        : metricsForLeads;
                     module.mapper.metrics = selectedMetrics;
                   }
                 }
-                
+
                 // Always ensure segments.date for daily breakdown
                 if (module.mapper) {
-                  if (!module.mapper.segments || !Array.isArray(module.mapper.segments)) {
+                  if (
+                    !module.mapper.segments ||
+                    !Array.isArray(module.mapper.segments)
+                  ) {
                     module.mapper.segments = ["segments.date"];
-                  } else if (!module.mapper.segments.includes("segments.date")) {
+                  } else if (
+                    !module.mapper.segments.includes("segments.date")
+                  ) {
                     module.mapper.segments.push("segments.date");
                   }
                   // Ensure campaign attributes
-                  if (!module.mapper.attributes || !Array.isArray(module.mapper.attributes)) {
+                  if (
+                    !module.mapper.attributes ||
+                    !Array.isArray(module.mapper.attributes)
+                  ) {
                     module.mapper.attributes = ["campaign.id", "campaign.name"];
                   }
                 }
-                
+
                 // Update date range if start_date and end_date are provided
                 if (start_date && end_date && module.mapper) {
                   // Format dates to DD/MM/YYYY for Make.com Google Ads module
                   const formatForMake = (dateStr: string) => {
                     const d = new Date(dateStr);
-                    const dd = String(d.getDate()).padStart(2, '0');
-                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, "0");
+                    const mm = String(d.getMonth() + 1).padStart(2, "0");
                     const yyyy = d.getFullYear();
                     return `${dd}/${mm}/${yyyy}`;
                   };
-                  
+
                   const formattedStart = formatForMake(start_date);
                   const formattedEnd = formatForMake(end_date);
-                  
+
                   // Always set dateRangeType to CUSTOM when providing custom dates
                   module.mapper.dateRangeType = "CUSTOM";
-                  
+
                   // Set all possible date field variants that Make.com Google Ads module uses
                   module.mapper.startDate = formattedStart;
                   module.mapper.endDate = formattedEnd;
@@ -1048,25 +1222,32 @@ serve(async (req) => {
                   module.mapper.end_date = formattedEnd;
                   module.mapper.dateFrom = formattedStart;
                   module.mapper.dateTo = formattedEnd;
-                  
                 }
               }
-              
+
               if (module.module && isHttpModule(module.module)) {
                 if (module.mapper) {
                   module.mapper.url = patchWebhookUrl;
-                  
+
                   // ALWAYS replace body with correct direct field references
                   // NOTE: Make.com does NOT support toJSON/map/$merge - use direct variable references
-                  const googleAdsModuleId = blueprintData.flow.find((m: any) => m.module && isGoogleAdsModule(m.module))?.id || 3;
+                  const googleAdsModuleId =
+                    blueprintData.flow.find(
+                      (m: any) => m.module && isGoogleAdsModule(m.module),
+                    )?.id || 3;
                   const gid = googleAdsModuleId;
-                  const startDatePart = (start_date && end_date) ? `,"start_date":"${start_date}","end_date":"${end_date}"` : '';
-                  const tenantPart = tenant_id ? `,"tenant_id":"${tenant_id}"` : '';
-                  const bodyTemplate = `{"table_id":"${table_id}","campaign_type":"${campaign_type || 'leads'}"${tenantPart}${startDatePart},"records":[{"date":"{{${gid}.dimensions.date}}","campaign_id":"{{${gid}.dimensions.campaignId}}","campaign_name":"{{${gid}.dimensions.campaignName}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost":"{{${gid}.metrics.cost}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions_value":"{{${gid}.metrics.conversionsValue}}","all_conversions":"{{${gid}.metrics.allConversions}}"}]}`;
-                  
+                  const startDatePart =
+                    start_date && end_date
+                      ? `,"start_date":"${start_date}","end_date":"${end_date}"`
+                      : "";
+                  const tenantPart = tenant_id
+                    ? `,"tenant_id":"${tenant_id}"`
+                    : "";
+                  const bodyTemplate = `{"table_id":"${table_id}","campaign_type":"${campaign_type || "leads"}"${tenantPart}${startDatePart},"records":[{"date":"{{${gid}.dimensions.date}}","campaign_id":"{{${gid}.dimensions.campaignId}}","campaign_name":"{{${gid}.dimensions.campaignName}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost":"{{${gid}.metrics.cost}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions_value":"{{${gid}.metrics.conversionsValue}}","all_conversions":"{{${gid}.metrics.allConversions}}"}]}`;
+
                   module.mapper.jsonStringBodyContent = bodyTemplate;
                   patchedHttpModule = true;
-                  
+
                   // Clear data field if it exists to avoid confusion
                   if (module.mapper.data) {
                     delete module.mapper.data;
@@ -1075,11 +1256,11 @@ serve(async (req) => {
               }
             }
           }
-          
+
           if (!patchedHttpModule) {
             console.warn("Could not find HTTP module to patch in blueprint");
           }
-          
+
           // Step 3: Update the scenario with the patched blueprint
           await makeAPICall(
             api_token,
@@ -1087,11 +1268,10 @@ serve(async (req) => {
             `/scenarios/${scenario_id}`,
             "PATCH",
             {
-              blueprint: JSON.stringify(blueprintData)
-            }
+              blueprint: JSON.stringify(blueprintData),
+            },
           );
-          
-          
+
           result = {
             success: true,
             message: "Scenario blueprint patched successfully",
@@ -1101,8 +1281,11 @@ serve(async (req) => {
           console.error("Failed to patch scenario blueprint:", patchError);
           result = {
             success: false,
-            error: patchError instanceof Error ? patchError.message : String(patchError),
-            message: "Failed to patch scenario blueprint"
+            error:
+              patchError instanceof Error
+                ? patchError.message
+                : String(patchError),
+            message: "Failed to patch scenario blueprint",
           };
         }
         break;
@@ -1111,15 +1294,16 @@ serve(async (req) => {
       default:
         return new Response(
           JSON.stringify({ error: `Unknown action: ${action}` }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
     }
 
-
-    return new Response(
-      JSON.stringify(result),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (err) {
     console.error("Error in make-api function:", err);
 
@@ -1140,13 +1324,21 @@ serve(async (req) => {
           make_error: err.parsedBody ?? err.rawBody,
           hint,
         }),
-        { status: err.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: err.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        error: err instanceof Error ? err.message : String(err),
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

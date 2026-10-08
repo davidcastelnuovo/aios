@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkOutbound, isSafeModeEnabled, parseAllowlist } from "./integrationGuard.ts";
+import {
+  checkOutbound,
+  isSafeModeEnabled,
+  parseAllowlist,
+} from "./integrationGuard.ts";
 
 test("production always allows even if safe mode is set", () => {
   const result = checkOutbound({
@@ -62,5 +66,8 @@ test("staging blocks WhatsApp groups", () => {
 });
 
 test("parseAllowlist splits commas and spaces", () => {
-  assert.deepEqual(parseAllowlist("972501111111, 0502222222"), ["972501111111", "0502222222"]);
+  assert.deepEqual(parseAllowlist("972501111111, 0502222222"), [
+    "972501111111",
+    "0502222222",
+  ]);
 });

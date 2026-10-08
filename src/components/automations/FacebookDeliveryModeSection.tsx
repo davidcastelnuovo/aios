@@ -16,7 +16,11 @@ interface Props {
 
 const CALLBACK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/facebook-lead-webhook`;
 
-export function FacebookDeliveryModeSection({ integrationId, pageId, pageName }: Props) {
+export function FacebookDeliveryModeSection({
+  integrationId,
+  pageId,
+  pageName,
+}: Props) {
   const { toast } = useToast();
   const [mode, setMode] = useState<"pull" | "webhook">("pull");
   const [pageSubs, setPageSubs] = useState<Record<string, any>>({});
@@ -37,7 +41,9 @@ export function FacebookDeliveryModeSection({ integrationId, pageId, pageName }:
     setLoading(false);
   };
 
-  useEffect(() => { loadSettings(); }, [integrationId]);
+  useEffect(() => {
+    loadSettings();
+  }, [integrationId]);
 
   const updateMode = async (newMode: "pull" | "webhook") => {
     if (!integrationId) return;
@@ -52,16 +58,26 @@ export function FacebookDeliveryModeSection({ integrationId, pageId, pageName }:
       .from("tenant_integrations")
       .update({ settings: { ...s, delivery_mode: newMode } })
       .eq("id", integrationId);
-    toast({ title: "מצב נשמר", description: newMode === "webhook" ? "Webhook מיידי" : "משיכה כל דקה" });
+    toast({
+      title: "מצב נשמר",
+      description: newMode === "webhook" ? "Webhook מיידי" : "משיכה כל דקה",
+    });
   };
 
   const subscribePage = async () => {
     if (!integrationId || !pageId) return;
     setSubscribing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("facebook-subscribe-page", {
-        body: { integration_id: integrationId, page_id: pageId, action: "subscribe" },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "facebook-subscribe-page",
+        {
+          body: {
+            integration_id: integrationId,
+            page_id: pageId,
+            action: "subscribe",
+          },
+        },
+      );
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast({ title: "העמוד נרשם ל-Webhook" });
@@ -69,7 +85,8 @@ export function FacebookDeliveryModeSection({ integrationId, pageId, pageName }:
     } catch (e: any) {
       toast({
         title: "שגיאה ברישום העמוד",
-        description: e?.message || "בדוק שה-Access Token כולל pages_manage_metadata",
+        description:
+          e?.message || "בדוק שה-Access Token כולל pages_manage_metadata",
         variant: "destructive",
       });
     } finally {
@@ -115,14 +132,23 @@ export function FacebookDeliveryModeSection({ integrationId, pageId, pageName }:
               העתק את הפרטים האלה ל-Meta App → Webhooks → Page:
             </p>
             <div className="flex items-center gap-1">
-              <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copy(CALLBACK_URL, "Callback URL")}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2"
+                onClick={() => copy(CALLBACK_URL, "Callback URL")}
+              >
                 <Copy className="h-3 w-3" />
               </Button>
-              <code className="text-[10px] flex-1 truncate bg-muted px-2 py-1 rounded">{CALLBACK_URL}</code>
+              <code className="text-[10px] flex-1 truncate bg-muted px-2 py-1 rounded">
+                {CALLBACK_URL}
+              </code>
               <Label className="text-[10px]">Callback URL:</Label>
             </div>
             <p className="text-[10px] text-muted-foreground">
-              Verify Token: השתמש בערך שהוגדר ב-Secret <code>META_WEBHOOK_VERIFY_TOKEN</code>. סמן את השדה <code>leadgen</code>.
+              Verify Token: השתמש בערך שהוגדר ב-Secret{" "}
+              <code>META_WEBHOOK_VERIFY_TOKEN</code>. סמן את השדה{" "}
+              <code>leadgen</code>.
             </p>
           </div>
 
@@ -135,7 +161,9 @@ export function FacebookDeliveryModeSection({ integrationId, pageId, pageName }:
                       <CheckCircle2 className="h-3 w-3" /> רשום
                     </Badge>
                   ) : (
-                    <Badge variant="secondary" className="text-[10px]">לא רשום</Badge>
+                    <Badge variant="secondary" className="text-[10px]">
+                      לא רשום
+                    </Badge>
                   )}
                 </div>
                 <span className="text-xs">{pageName || pageId}</span>
@@ -152,11 +180,14 @@ export function FacebookDeliveryModeSection({ integrationId, pageId, pageName }:
                 ) : (
                   <RefreshCw className="h-3 w-3 me-1" />
                 )}
-                {pageStatus?.status === "subscribed" ? "רשום מחדש את העמוד" : "רשום עמוד ל-Webhook"}
+                {pageStatus?.status === "subscribed"
+                  ? "רשום מחדש את העמוד"
+                  : "רשום עמוד ל-Webhook"}
               </Button>
               {pageStatus?.subscribed_at && (
                 <p className="text-[10px] text-muted-foreground text-right">
-                  נרשם: {new Date(pageStatus.subscribed_at).toLocaleString("he-IL")}
+                  נרשם:{" "}
+                  {new Date(pageStatus.subscribed_at).toLocaleString("he-IL")}
                 </p>
               )}
             </div>

@@ -1,15 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths } from "date-fns";
+import {
+  format,
+  startOfDay,
+  endOfDay,
+  startOfMonth,
+  endOfMonth,
+  subMonths,
+} from "date-fns";
 import { he } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,7 +87,10 @@ function pickSnapshotsPerCategory(
     const eHome = existing.tenant_id === storageTenantId;
     if (sHome && !eHome) {
       m[s.category] = s;
-    } else if (sHome === eHome && new Date(s.synced_at) > new Date(existing.synced_at)) {
+    } else if (
+      sHome === eHome &&
+      new Date(s.synced_at) > new Date(existing.synced_at)
+    ) {
       m[s.category] = s;
     }
   }
@@ -99,16 +117,25 @@ export function MaskyooCallsCard({
   const periodStart = range.from ? format(range.from, "yyyy-MM-dd") : "";
   const periodEnd = range.to ? format(range.to, "yyyy-MM-dd") : periodStart;
 
-  const tenantScope = accessibleTenantIds.length > 0 ? accessibleTenantIds : [storageTenantId];
+  const tenantScope =
+    accessibleTenantIds.length > 0 ? accessibleTenantIds : [storageTenantId];
 
   const { data: snapshots = [], isLoading: snapshotsLoading } = useQuery({
-    queryKey: ["seo-call-snapshots", clientId, periodStart, periodEnd, tenantScope],
+    queryKey: [
+      "seo-call-snapshots",
+      clientId,
+      periodStart,
+      periodEnd,
+      tenantScope,
+    ],
     enabled: !!clientId && !!storageTenantId && !!periodStart && !!periodEnd,
     staleTime: 30_000,
     queryFn: async (): Promise<Snapshot[]> => {
       const { data, error } = await supabase
         .from("seo_call_snapshots")
-        .select("id, tenant_id, category, period_start, period_end, incoming_count, is_manual, note, synced_at")
+        .select(
+          "id, tenant_id, category, period_start, period_end, incoming_count, is_manual, note, synced_at",
+        )
         .eq("client_id", clientId)
         .eq("period_start", periodStart)
         .eq("period_end", periodEnd)
@@ -127,7 +154,10 @@ export function MaskyooCallsCard({
     const m: Record<"organic" | "paid", string[]> = { organic: [], paid: [] };
     for (const n of numbers || []) {
       const last9 = (n.number || "").replace(/\D/g, "").slice(-9);
-      if (last9.length === 9 && (n.category === "organic" || n.category === "paid")) {
+      if (
+        last9.length === 9 &&
+        (n.category === "organic" || n.category === "paid")
+      ) {
         m[n.category].push(last9);
       }
     }
@@ -152,9 +182,14 @@ export function MaskyooCallsCard({
 
       const all = (rows || []) as Array<{ to_number: string | null }>;
       const upserts: Array<{
-        tenant_id: string; client_id: string; category: "organic" | "paid";
-        period_start: string; period_end: string;
-        incoming_count: number; is_manual: boolean; synced_at: string;
+        tenant_id: string;
+        client_id: string;
+        category: "organic" | "paid";
+        period_start: string;
+        period_end: string;
+        incoming_count: number;
+        is_manual: boolean;
+        synced_at: string;
       }> = [];
 
       for (const cat of ["organic", "paid"] as const) {
@@ -182,19 +217,29 @@ export function MaskyooCallsCard({
 
       const { error: upErr } = await supabase
         .from("seo_call_snapshots")
-        .upsert(upserts, { onConflict: "tenant_id,client_id,category,period_start,period_end" });
+        .upsert(upserts, {
+          onConflict: "tenant_id,client_id,category,period_start,period_end",
+        });
       if (upErr) throw upErr;
       return { skipped: false, count: upserts.length };
     },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["seo-call-snapshots", clientId] });
       if (res.skipped) {
-        toast({ title: "אין מספרי מסקיו מחוברים", description: "ערוך ידנית כדי להזין מספרים." });
+        toast({
+          title: "אין מספרי מסקיו מחוברים",
+          description: "ערוך ידנית כדי להזין מספרים.",
+        });
       } else {
         toast({ title: "סונכרן בהצלחה" });
       }
     },
-    onError: (e: any) => toast({ title: "שגיאה בסנכרון", description: e.message, variant: "destructive" }),
+    onError: (e: any) =>
+      toast({
+        title: "שגיאה בסנכרון",
+        description: e.message,
+        variant: "destructive",
+      }),
   });
 
   const formatRange = () => {
@@ -217,7 +262,11 @@ export function MaskyooCallsCard({
           <div className="flex items-center gap-2">
             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5"
+                >
                   <CalendarIcon className="h-3.5 w-3.5" />
                   {formatRange()}
                 </Button>
@@ -274,8 +323,16 @@ export function MaskyooCallsCard({
 }
 
 function Cube({
-  storageTenantId, clientId, category, label, periodStart, periodEnd,
-  snapshot, hasNumbers, isLoading, readOnly,
+  storageTenantId,
+  clientId,
+  category,
+  label,
+  periodStart,
+  periodEnd,
+  snapshot,
+  hasNumbers,
+  isLoading,
+  readOnly,
 }: {
   storageTenantId: string;
   clientId: string;
@@ -293,19 +350,36 @@ function Cube({
   const accent = isOrganic
     ? "bg-emerald-50/80 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900"
     : "bg-blue-50/80 border-blue-200 dark:bg-blue-950/30 dark:border-blue-900";
-  const titleColor = isOrganic ? "text-emerald-800 dark:text-emerald-200" : "text-blue-800 dark:text-blue-200";
+  const titleColor = isOrganic
+    ? "text-emerald-800 dark:text-emerald-200"
+    : "text-blue-800 dark:text-blue-200";
 
   const value = snapshot?.incoming_count ?? 0;
-  const synced = snapshot?.synced_at ? format(new Date(snapshot.synced_at), "d.M.yy") : null;
+  const synced = snapshot?.synced_at
+    ? format(new Date(snapshot.synced_at), "d.M.yy")
+    : null;
 
   return (
     <>
-      <div className={cn("rounded-lg border p-4 relative transition-shadow hover:shadow-sm", accent)}>
+      <div
+        className={cn(
+          "rounded-lg border p-4 relative transition-shadow hover:shadow-sm",
+          accent,
+        )}
+      >
         <div className="flex items-start justify-between mb-2">
-          <div className={cn("text-sm font-semibold flex items-center gap-1.5", titleColor)}>
+          <div
+            className={cn(
+              "text-sm font-semibold flex items-center gap-1.5",
+              titleColor,
+            )}
+          >
             {label}
             {snapshot?.is_manual && (
-              <Badge variant="outline" className="h-4 text-[9px] px-1 py-0 bg-amber-50 text-amber-700 border-amber-300">
+              <Badge
+                variant="outline"
+                className="h-4 text-[9px] px-1 py-0 bg-amber-50 text-amber-700 border-amber-300"
+              >
                 ידני
               </Badge>
             )}
@@ -327,7 +401,11 @@ function Cube({
         </div>
         <div className="text-xs text-muted-foreground mt-1">שיחות נכנסות</div>
         <div className="text-[11px] text-muted-foreground mt-2 min-h-[14px]">
-          {synced ? `סונכרן ${synced}` : hasNumbers ? "טרם סונכרן" : "אין מספר מחובר · ערוך ידנית"}
+          {synced
+            ? `סונכרן ${synced}`
+            : hasNumbers
+              ? "טרם סונכרן"
+              : "אין מספר מחובר · ערוך ידנית"}
         </div>
       </div>
 
@@ -349,8 +427,15 @@ function Cube({
 }
 
 function ManualEditDialog({
-  open, onOpenChange, storageTenantId, clientId, category, label,
-  periodStart, periodEnd, current,
+  open,
+  onOpenChange,
+  storageTenantId,
+  clientId,
+  category,
+  label,
+  periodStart,
+  periodEnd,
+  current,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -364,7 +449,9 @@ function ManualEditDialog({
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [count, setCount] = useState<string>(String(current?.incoming_count ?? 0));
+  const [count, setCount] = useState<string>(
+    String(current?.incoming_count ?? 0),
+  );
   const [note, setNote] = useState<string>(current?.note ?? "");
 
   useEffect(() => {
@@ -377,7 +464,8 @@ function ManualEditDialog({
   const save = useMutation({
     mutationFn: async () => {
       const parsed = parseInt(count, 10);
-      if (!Number.isFinite(parsed) || parsed < 0) throw new Error("מספר לא תקין");
+      if (!Number.isFinite(parsed) || parsed < 0)
+        throw new Error("מספר לא תקין");
       const saveTenantId = storageTenantId;
       const payload = {
         tenant_id: saveTenantId,
@@ -392,7 +480,9 @@ function ManualEditDialog({
       };
       const { error } = await supabase
         .from("seo_call_snapshots")
-        .upsert(payload, { onConflict: "tenant_id,client_id,category,period_start,period_end" });
+        .upsert(payload, {
+          onConflict: "tenant_id,client_id,category,period_start,period_end",
+        });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -400,7 +490,12 @@ function ManualEditDialog({
       toast({ title: "נשמר" });
       onOpenChange(false);
     },
-    onError: (e: any) => toast({ title: "שגיאה בשמירה", description: e.message, variant: "destructive" }),
+    onError: (e: any) =>
+      toast({
+        title: "שגיאה בשמירה",
+        description: e.message,
+        variant: "destructive",
+      }),
   });
 
   return (
@@ -434,9 +529,13 @@ function ManualEditDialog({
           </p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            ביטול
+          </Button>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending && <Loader2 className="h-3.5 w-3.5 ml-2 animate-spin" />}
+            {save.isPending && (
+              <Loader2 className="h-3.5 w-3.5 ml-2 animate-spin" />
+            )}
             שמור
           </Button>
         </DialogFooter>

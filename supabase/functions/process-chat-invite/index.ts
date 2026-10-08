@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 Deno.serve(async (req) => {
@@ -34,10 +35,13 @@ Deno.serve(async (req) => {
       .single();
 
     if (inviteError || !invite) {
-      return new Response(JSON.stringify({ error: "Invalid or expired invite link" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired invite link" }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Prefer the channel's tenant_id over the invite's (in case invite was created with wrong context)
@@ -50,15 +54,18 @@ Deno.serve(async (req) => {
     // ======== SIGNUP via edge function (auto-confirmed) ========
     if (action === "signup") {
       if (!email || !password) {
-        return new Response(JSON.stringify({ error: "Email and password required" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "Email and password required" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       // Check if user already exists
       const { data: existingUsers } = await adminClient.auth.admin.listUsers();
-      const existingUser = existingUsers?.users?.find(u => u.email === email);
+      const existingUser = existingUsers?.users?.find((u) => u.email === email);
 
       if (existingUser) {
         // User exists - add them to the tenant instead of rejecting
@@ -66,40 +73,54 @@ Deno.serve(async (req) => {
         userEmail = email;
 
         // Ensure profile exists
-        await adminClient.from("profiles").upsert({
-          id: userId,
-          email: userEmail,
-          full_name: fullName || existingUser.user_metadata?.full_name || email.split("@")[0],
-          status: "active",
-        }, { onConflict: "id" });
+        await adminClient.from("profiles").upsert(
+          {
+            id: userId,
+            email: userEmail,
+            full_name:
+              fullName ||
+              existingUser.user_metadata?.full_name ||
+              email.split("@")[0],
+            status: "active",
+          },
+          { onConflict: "id" },
+        );
       } else {
         // Create user with admin API (auto-confirmed)
-        const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: { full_name: fullName || email.split("@")[0] },
-        });
+        const { data: newUser, error: createError } =
+          await adminClient.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: { full_name: fullName || email.split("@")[0] },
+          });
 
         if (createError || !newUser.user) {
-          return new Response(JSON.stringify({ error: createError?.message || "Failed to create user" }), {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({
+              error: createError?.message || "Failed to create user",
+            }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
 
         userId = newUser.user.id;
         userEmail = email;
 
         // Create profile
-        await adminClient.from("profiles").upsert({
-          id: userId,
-          email: userEmail,
-          full_name: fullName || email.split("@")[0],
-          status: "active",
-        }, { onConflict: "id" });
+        await adminClient.from("profiles").upsert(
+          {
+            id: userId,
+            email: userEmail,
+            full_name: fullName || email.split("@")[0],
+            status: "active",
+          },
+          { onConflict: "id" },
+        );
       }
-
     } else {
       // ======== EXISTING USER (authenticated) ========
       const authHeader = req.headers.get("Authorization");
@@ -114,7 +135,10 @@ Deno.serve(async (req) => {
       const userClient = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: { user }, error: userError } = await userClient.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await userClient.auth.getUser();
       if (userError || !user) {
         return new Response(JSON.stringify({ error: "Invalid user" }), {
           status: 401,
@@ -126,7 +150,8 @@ Deno.serve(async (req) => {
       userEmail = user.email || "";
 
       // Ensure profile exists
-      const derivedName = user.user_metadata?.full_name || userEmail.split("@")[0] || "";
+      const derivedName =
+        user.user_metadata?.full_name || userEmail.split("@")[0] || "";
       const { data: existingProfile } = await adminClient
         .from("profiles")
         .select("id, full_name")
@@ -141,7 +166,10 @@ Deno.serve(async (req) => {
           status: "active",
         });
       } else if (!existingProfile.full_name && derivedName) {
-        await adminClient.from("profiles").update({ full_name: derivedName }).eq("id", userId);
+        await adminClient
+          .from("profiles")
+          .update({ full_name: derivedName })
+          .eq("id", userId);
       }
     }
 
@@ -168,10 +196,13 @@ Deno.serve(async (req) => {
     }
 
     // 2. Set active tenant
-    await adminClient.from("user_active_tenant").upsert({
-      user_id: userId,
-      tenant_id: tenantId,
-    }, { onConflict: "user_id" });
+    await adminClient.from("user_active_tenant").upsert(
+      {
+        user_id: userId,
+        tenant_id: tenantId,
+      },
+      { onConflict: "user_id" },
+    );
 
     // 3. Add user as channel member if not already
     const { data: existingMember } = await adminClient
@@ -207,15 +238,21 @@ Deno.serve(async (req) => {
     }
 
     // 5. Increment uses count
-    await adminClient.from("team_channel_invites").update({
-      current_uses: (invite.current_uses || 0) + 1,
-    }).eq("id", invite.id);
+    await adminClient
+      .from("team_channel_invites")
+      .update({
+        current_uses: (invite.current_uses || 0) + 1,
+      })
+      .eq("id", invite.id);
 
     // Check if max uses reached
     if (invite.max_uses && (invite.current_uses || 0) + 1 >= invite.max_uses) {
-      await adminClient.from("team_channel_invites").update({
-        is_active: false,
-      }).eq("id", invite.id);
+      await adminClient
+        .from("team_channel_invites")
+        .update({
+          is_active: false,
+        })
+        .eq("id", invite.id);
     }
 
     // Get tenant slug for redirect
@@ -236,7 +273,7 @@ Deno.serve(async (req) => {
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error: any) {
     console.error("process-chat-invite error:", error);

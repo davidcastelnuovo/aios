@@ -31,7 +31,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2, Paperclip, Plus, Trash2, Users, UserPlus, Copy, Plug } from "lucide-react";
+import {
+  Loader2,
+  X,
+  Calendar as CalendarIcon,
+  Clock,
+  CheckCircle2,
+  Paperclip,
+  Plus,
+  Trash2,
+  Users,
+  UserPlus,
+  Copy,
+  Plug,
+} from "lucide-react";
 import { ClientConnectionsTab } from "@/components/clients/ClientConnectionsTab";
 import { FolderLinksField } from "@/components/forms/FolderLinksField";
 import { AttachmentsField } from "@/components/forms/AttachmentsField";
@@ -64,7 +77,9 @@ const formSchema = z.object({
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
   notes: z.string().optional(),
   status: z.enum(["active", "paused", "ended", "onboarding"]),
-  mood_status: z.enum(["happy", "wavering", "churn_risk", "not_progressing"]).optional(),
+  mood_status: z
+    .enum(["happy", "wavering", "churn_risk", "not_progressing"])
+    .optional(),
   is_seo_client: z.boolean().default(false),
   tier: z.enum(["A", "B", "C"]).optional().nullable(),
   services: z.array(z.string()).default([]),
@@ -80,18 +95,31 @@ interface EditClientDialogProps {
   financeExpenseMonth?: string;
 }
 
-export function EditClientDialog({ client, open, onOpenChange, onDuplicate, financeExpenseMonth }: EditClientDialogProps) {
+export function EditClientDialog({
+  client,
+  open,
+  onOpenChange,
+  onDuplicate,
+  financeExpenseMonth,
+}: EditClientDialogProps) {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
-  const { getFieldLabel } = useCustomFieldLabels('client');
+  const { getFieldLabel } = useCustomFieldLabels("client");
   const { t } = useTerminology();
 
   // Shared hooks
-  const { folderLinks, setFolderLinks, attachments, setAttachments, filesCount } =
-    useFolderLinksAndAttachments(client);
+  const {
+    folderLinks,
+    setFolderLinks,
+    attachments,
+    setAttachments,
+    filesCount,
+  } = useFolderLinksAndAttachments(client);
 
   const meetingScheduler = useMeetingScheduler(tenantId);
-  const [selectedMeetingEmails, setSelectedMeetingEmails] = useState<string[]>([]);
+  const [selectedMeetingEmails, setSelectedMeetingEmails] = useState<string[]>(
+    [],
+  );
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
 
   // Team members for meeting invitations - filtered by tenant
@@ -111,7 +139,9 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
 
       if (tenantUsersError) throw tenantUsersError;
 
-      const userIds = (tenantUsersData || []).map((tu) => tu.user_id).filter(Boolean);
+      const userIds = (tenantUsersData || [])
+        .map((tu) => tu.user_id)
+        .filter(Boolean);
       if (userIds.length === 0) return [];
 
       const { data: profilesData, error: profilesError } = await supabase
@@ -123,7 +153,9 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
 
       if (profilesError) throw profilesError;
 
-      return (profilesData || []).filter((p: any) => p.email && p.email.trim() !== "");
+      return (profilesData || []).filter(
+        (p: any) => p.email && p.email.trim() !== "",
+      );
     },
     enabled: !!tenantId && open,
   });
@@ -152,7 +184,7 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
   });
 
   const addContactMutation = useMutation({
-    mutationFn: async (contact: Omit<ClientContact, 'id' | 'is_primary'>) => {
+    mutationFn: async (contact: Omit<ClientContact, "id" | "is_primary">) => {
       const contactTenantId = resolveClientChildTenantId(client, tenantId);
       const { error } = await supabase.from("client_contacts").insert({
         client_id: client.id,
@@ -168,12 +200,20 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
       toast.success("איש קשר נוסף בהצלחה");
       refetchContacts();
     },
-    onError: (error: Error) => toast.error(error.message ? `שגיאה בהוספת איש קשר: ${error.message}` : "שגיאה בהוספת איש קשר"),
+    onError: (error: Error) =>
+      toast.error(
+        error.message
+          ? `שגיאה בהוספת איש קשר: ${error.message}`
+          : "שגיאה בהוספת איש קשר",
+      ),
   });
 
   const deleteContactMutation = useMutation({
     mutationFn: async (contactId: string) => {
-      const { error } = await supabase.from("client_contacts").delete().eq("id", contactId);
+      const { error } = await supabase
+        .from("client_contacts")
+        .delete()
+        .eq("id", contactId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -183,7 +223,12 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     onError: () => toast.error("שגיאה בהסרת איש קשר"),
   });
 
-  const [newContact, setNewContact] = useState({ contact_name: "", phone: "", email: "", role: "" });
+  const [newContact, setNewContact] = useState({
+    contact_name: "",
+    phone: "",
+    email: "",
+    role: "",
+  });
   const [showAddContact, setShowAddContact] = useState(false);
 
   const handleAddContact = () => {
@@ -198,12 +243,21 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
 
   // Get all contacts for meeting invitations (with or without email)
   const allContactEmails = useMemo(() => {
-    const contacts: { email: string | null; name: string; source: string }[] = [];
+    const contacts: { email: string | null; name: string; source: string }[] =
+      [];
     // Always add the primary contact
-    contacts.push({ email: client.email || null, name: client.contact_name || client.name, source: "ראשי" });
+    contacts.push({
+      email: client.email || null,
+      name: client.contact_name || client.name,
+      source: "ראשי",
+    });
     // Add all non-primary contacts
     clientContacts?.forEach((c: any) => {
-      contacts.push({ email: c.email || null, name: c.contact_name, source: c.role || "נוסף" });
+      contacts.push({
+        email: c.email || null,
+        name: c.contact_name,
+        source: c.role || "נוסף",
+      });
     });
     return contacts;
   }, [client.email, client.contact_name, client.name, clientContacts]);
@@ -215,12 +269,14 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     queryFn: async () => {
       const { data, error } = await supabase
         .from("client_team")
-        .select(`
+        .select(
+          `
           id,
           campaigner_id,
           campaigner_payment,
           campaigners (full_name)
-        `)
+        `,
+        )
         .eq("client_id", client.id);
       if (error) throw error;
       return data;
@@ -237,24 +293,26 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
         .maybeSingle();
 
       if (existing) {
-        toast.info(`ה${t('role_campaigner')} כבר משויך ללקוח`);
+        toast.info(`ה${t("role_campaigner")} כבר משויך ללקוח`);
         return;
       }
 
-      const { error } = await supabase
-        .from("client_team")
-        .insert({
-          client_id: client.id,
-          campaigner_id: campaignerId,
-        });
+      const { error } = await supabase.from("client_team").insert({
+        client_id: client.id,
+        campaigner_id: campaignerId,
+      });
 
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success(`ה${t('role_campaigner')} שויך בהצלחה`);
+      toast.success(`ה${t("role_campaigner")} שויך בהצלחה`);
       refetchAssigned();
-      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["accounting-campaigner-payments", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["finance-summary", tenantId],
+      });
     },
     onError: () => {
       toast.error("שגיאה בשיוך הקמפיינר");
@@ -273,8 +331,12 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     onSuccess: () => {
       toast.success("הקמפיינר הוסר בהצלחה");
       refetchAssigned();
-      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["accounting-campaigner-payments", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["finance-summary", tenantId],
+      });
     },
     onError: () => {
       toast.error("שגיאה בהסרת הקמפיינר");
@@ -282,7 +344,13 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
   });
 
   const updateCampaignerPayment = useMutation({
-    mutationFn: async ({ assignmentId, payment }: { assignmentId: string; payment: number }) => {
+    mutationFn: async ({
+      assignmentId,
+      payment,
+    }: {
+      assignmentId: string;
+      payment: number;
+    }) => {
       const { error } = await supabase
         .from("client_team")
         .update({ campaigner_payment: payment })
@@ -292,14 +360,17 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     onSuccess: () => {
       toast.success("עלות הקמפיינר עודכנה");
       refetchAssigned();
-      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["accounting-campaigner-payments", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["finance-summary", tenantId],
+      });
     },
     onError: () => {
       toast.error("שגיאה בעדכון עלות הקמפיינר");
     },
   });
-
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -323,10 +394,10 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
       google_ads_account_id: client.google_ads_account_id || "",
     },
   });
-  
+
   const { canViewFinance } = useUserPermissions();
   const showFinanceFields = canViewFinance();
-  
+
   // Fetch tenant-specific financial data
   const { data: financialData } = useQuery({
     queryKey: ["client-financial-data", client?.id, tenantId],
@@ -338,20 +409,28 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
         .eq("client_id", client.id)
         .eq("tenant_id", tenantId)
         .maybeSingle();
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error && error.code !== "PGRST116") throw error;
       return data;
     },
     enabled: !!client?.id && !!tenantId && open,
   });
 
   const { data: clientFinanceExpenses = [] } = useQuery({
-    queryKey: ["client-finance-expenses", client?.id, tenantId, financeExpenseMonth],
+    queryKey: [
+      "client-finance-expenses",
+      client?.id,
+      tenantId,
+      financeExpenseMonth,
+    ],
     queryFn: async () => {
       if (!client?.id || !tenantId) return [];
       const monthStart = financeExpenseMonth
         ? `${financeExpenseMonth}-01`
         : format(startOfMonth(new Date()), "yyyy-MM-dd");
-      const nextMonthStart = format(addMonths(new Date(monthStart), 1), "yyyy-MM-dd");
+      const nextMonthStart = format(
+        addMonths(new Date(monthStart), 1),
+        "yyyy-MM-dd",
+      );
 
       const { data, error } = await supabase
         .from("finance")
@@ -373,10 +452,13 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
   // selected month. Mirrors the logic in AccountingIntegrations so the dialog
   // shows the recurring SEO expense even when no finance row exists yet.
   const displayedFinanceExpenses = useMemo(() => {
-    const monthForLabel = financeExpenseMonth || format(startOfMonth(new Date()), "yyyy-MM");
-    const isSeo = !!client?.is_seo_client || (Array.isArray(client?.services) && client.services.includes("seo"));
+    const monthForLabel =
+      financeExpenseMonth || format(startOfMonth(new Date()), "yyyy-MM");
+    const isSeo =
+      !!client?.is_seo_client ||
+      (Array.isArray(client?.services) && client.services.includes("seo"));
     const hasSeoRow = (clientFinanceExpenses || []).some(
-      (e: any) => (e.category || "").toUpperCase() === "SEO"
+      (e: any) => (e.category || "").toUpperCase() === "SEO",
     );
     if (!isSeo || hasSeoRow) return clientFinanceExpenses;
     return [
@@ -390,8 +472,14 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
         _auto: true,
       },
     ];
-  }, [clientFinanceExpenses, client?.is_seo_client, client?.services, client?.id, financeExpenseMonth]);
-  
+  }, [
+    clientFinanceExpenses,
+    client?.is_seo_client,
+    client?.services,
+    client?.id,
+    financeExpenseMonth,
+  ]);
+
   // Update financial fields when financialData is loaded
   // IMPORTANT: depend on stable primitives only — depending on `client` (a new
   // object reference on every parent refetch) caused form.setValue to fire on
@@ -399,7 +487,10 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
   useEffect(() => {
     if (financialData) {
       form.setValue("retainer", financialData.retainer?.toString() || "");
-      form.setValue("monthly_budget", financialData.monthly_budget?.toString() || "");
+      form.setValue(
+        "monthly_budget",
+        financialData.monthly_budget?.toString() || "",
+      );
     } else {
       form.setValue("retainer", client.retainer?.toString() || "");
       form.setValue("monthly_budget", client.monthly_budget?.toString() || "");
@@ -410,7 +501,7 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
       if (!tenantId) throw new Error("Tenant ID not found");
-      
+
       // Update client data (without financial fields).
       // Require a returned row — RLS denials often come back as success + 0 rows.
       const { data: updatedRows, error: clientError } = await supabase
@@ -441,32 +532,42 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
       if (!updatedRows?.length) {
         throw new Error("אין הרשאה לעדכן את הלקוח (או שהלקוח לא נמצא)");
       }
-      
+
       // Update or insert tenant-specific financial data
       if (canViewFinance()) {
         const financialPayload = {
           client_id: client.id,
           tenant_id: tenantId,
           retainer: values.retainer ? parseFloat(values.retainer) : null,
-          monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
+          monthly_budget: values.monthly_budget
+            ? parseFloat(values.monthly_budget)
+            : null,
         };
-        
+
         const { error: financialError } = await supabase
           .from("client_tenant_financial_data")
           .upsert(financialPayload, {
             onConflict: "client_id,tenant_id",
           });
-        
+
         if (financialError) throw financialError;
       }
     },
     onSuccess: () => {
       toast.success("הלקוח עודכן בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["client-tenant-financial-data", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["client-financial-data", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["accounting-clients", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["client-tenant-financial-data", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["client-financial-data", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["accounting-clients", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["finance-summary", tenantId],
+      });
       onOpenChange(false);
     },
     onError: (error: any) => {
@@ -481,8 +582,16 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
   // Get available time slots from the meeting scheduler hook
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
   const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
-  const startConflict = !!meetingScheduler.meetingTime && timeSlots.some(s => s.time === meetingScheduler.meetingTime && !s.available);
-  const endConflict = !!meetingScheduler.meetingEndTime && endTimeSlots.some(s => s.time === meetingScheduler.meetingEndTime && !s.available);
+  const startConflict =
+    !!meetingScheduler.meetingTime &&
+    timeSlots.some(
+      (s) => s.time === meetingScheduler.meetingTime && !s.available,
+    );
+  const endConflict =
+    !!meetingScheduler.meetingEndTime &&
+    endTimeSlots.some(
+      (s) => s.time === meetingScheduler.meetingEndTime && !s.available,
+    );
   const meetingHasConflict = startConflict || endConflict;
 
   // Wrapper for scheduling meeting with client details
@@ -491,7 +600,7 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
       contactName: client.name,
       contactEmail: client.email,
       contactId: client.id,
-      contactType: 'client',
+      contactType: "client",
       additionalEmails: [...selectedMeetingEmails, ...selectedTeamMembers],
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
@@ -503,7 +612,10 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-w-3xl h-[95vh] max-h-[95vh] overflow-y-auto flex flex-col">
+      <DialogContent
+        dir="rtl"
+        className="max-w-3xl h-[95vh] max-h-[95vh] overflow-y-auto flex flex-col"
+      >
         <DialogHeader>
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
@@ -530,7 +642,10 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
         <Tabs defaultValue="details" className="w-full">
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
             <TabsTrigger value="details">פרטי לקוח</TabsTrigger>
-            <TabsTrigger value="connections" className="flex items-center gap-1">
+            <TabsTrigger
+              value="connections"
+              className="flex items-center gap-1"
+            >
               <Plug className="h-3 w-3" />
               חיבורים
             </TabsTrigger>
@@ -552,517 +667,662 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
 
           <TabsContent value="details">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="agency_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{getFieldLabel('agency_id', 'סוכנות')} *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="בחר סוכנות" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="bg-background">
-                      {agencies?.map((agency) => (
-                        <SelectItem key={agency.id} value={agency.id}>
-                          {agency.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{getFieldLabel('name', 'שם הלקוח')} *</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="contact_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>שם איש קשר</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{getFieldLabel('phone', 'טלפון')}</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{getFieldLabel('email', 'אימייל')}</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="email" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Additional Contacts Section */}
-            <div className="space-y-3 pt-3 border-t">
-              <div className="flex items-center justify-between">
-                <FormLabel className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  אנשי קשר נוספים
-                  {clientContacts && clientContacts.length > 0 && (
-                    <Badge variant="secondary" className="h-5 px-1.5 text-xs">{clientContacts.length}</Badge>
-                  )}
-                </FormLabel>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowAddContact(!showAddContact)}
-                >
-                  <Plus className="h-3 w-3 ml-1" />
-                  הוסף איש קשר
-                </Button>
-              </div>
-
-              {showAddContact && (
-                <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="שם *"
-                      value={newContact.contact_name}
-                      onChange={(e) => setNewContact(prev => ({ ...prev, contact_name: e.target.value }))}
-                    />
-                    <Input
-                      placeholder="תפקיד"
-                      value={newContact.role}
-                      onChange={(e) => setNewContact(prev => ({ ...prev, role: e.target.value }))}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="טלפון"
-                      value={newContact.phone}
-                      onChange={(e) => setNewContact(prev => ({ ...prev, phone: e.target.value }))}
-                    />
-                    <Input
-                      placeholder="אימייל"
-                      type="email"
-                      value={newContact.email}
-                      onChange={(e) => setNewContact(prev => ({ ...prev, email: e.target.value }))}
-                    />
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddContact(false)}>ביטול</Button>
-                    <Button type="button" size="sm" onClick={handleAddContact} disabled={addContactMutation.isPending}>
-                      {addContactMutation.isPending ? "מוסיף..." : "הוסף"}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {clientContacts && clientContacts.length > 0 && (
-                <div className="space-y-2">
-                  {clientContacts.map((contact: any) => (
-                    <div key={contact.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
-                      <div className="flex-1 grid grid-cols-4 gap-2">
-                        <span className="font-medium">{contact.contact_name}</span>
-                        <span className="text-muted-foreground">{contact.role || "—"}</span>
-                        <span className="text-muted-foreground">{contact.phone || "—"}</span>
-                        <span className="text-muted-foreground">{contact.email || "—"}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => deleteContactMutation.mutate(contact.id)}
-                        className="hover:bg-destructive/20 rounded-full p-1"
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-4"
+              >
+                <FormField
+                  control={form.control}
+                  name="agency_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {getFieldLabel("agency_id", "סוכנות")} *
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
                       >
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר סוכנות" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background">
+                          {agencies?.map((agency) => (
+                            <SelectItem key={agency.id} value={agency.id}>
+                              {agency.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              name="folder_link"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>קישור לתיקייה</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="https://drive.google.com/..." />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {getFieldLabel("name", "שם הלקוח")} *
+                      </FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {showFinanceFields && (
-              <div className="space-y-3">
+                <FormField
+                  control={form.control}
+                  name="contact_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>שם איש קשר</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
-                      control={form.control}
-                      name="retainer"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{getFieldLabel('retainer', 'ריטיינר')} (₪)</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" />
-                          </FormControl>
-                          <FormMessage />
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{getFieldLabel("phone", "טלפון")}</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
 
                   <FormField
                     control={form.control}
-                    name="monthly_budget"
+                    name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{getFieldLabel('monthly_budget', 'תקציב חודשי')} (₪)</FormLabel>
+                        <FormLabel>
+                          {getFieldLabel("email", "אימייל")}
+                        </FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" />
+                          <Input {...field} type="email" />
                         </FormControl>
                         <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
-                {displayedFinanceExpenses.length > 0 && (
-                  <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-                    <FormLabel>הוצאות החודש</FormLabel>
-                    {displayedFinanceExpenses.map((expense: any) => (
-                      <div key={expense.id} className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          {expense.category || "הוצאה"} · {new Date(expense.date).toLocaleDateString("he-IL")}
-                          {expense._auto && <span className="text-xs mr-1">(אוטומטי)</span>}
-                        </span>
-                        <span className="font-medium text-destructive">
-                          ₪{Number(expense.amount || 0).toLocaleString("he-IL")}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <FormField
-              control={form.control}
-              name="website"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{getFieldLabel('website', 'אתר')}</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="https://example.com" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>סטטוס</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background">
-                        <SelectItem value="active">פעיל</SelectItem>
-                        <SelectItem value="onboarding">בקליטה</SelectItem>
-                        <SelectItem value="paused">מושהה</SelectItem>
-                        <SelectItem value="ended">הסתיים</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="mood_status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>מצב רוח לקוח</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || "happy"}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background">
-                        <SelectItem value="happy">
-                          <span className="flex items-center gap-2">
-                            <span>😊</span>
-                            <span className="text-green-600">לקוח מבסוט</span>
-                          </span>
-                        </SelectItem>
-                        <SelectItem value="wavering">
-                          <span className="flex items-center gap-2">
-                            <span>😐</span>
-                            <span className="text-yellow-600">לקוח מתנדנד</span>
-                          </span>
-                        </SelectItem>
-                        <SelectItem value="churn_risk">
-                          <span className="flex items-center gap-2">
-                            <span>😟</span>
-                            <span className="text-red-600">סכנת נטישה</span>
-                          </span>
-                        </SelectItem>
-                        <SelectItem value="not_progressing">
-                          <span className="flex items-center gap-2">
-                            <span>😔</span>
-                            <span className="text-orange-600">לא מתקדם</span>
-                          </span>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>הערות</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} rows={4} placeholder="הוסף הערות כאן..." />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* DMM: Tier + Services */}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="tier"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>דרגת לקוח (Tier)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="בחר דרגה" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background">
-                        <SelectItem value="A"><span className="font-bold text-purple-700">A — עדיפות גבוהה</span></SelectItem>
-                        <SelectItem value="B"><span className="font-bold text-blue-700">B — עדיפות בינונית</span></SelectItem>
-                        <SelectItem value="C"><span className="font-bold text-gray-600">C — עדיפות נמוכה</span></SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="services"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>שירותים פעילים</FormLabel>
-                    <div className="flex flex-col gap-2 mt-1">
-                      {([
-                        { key: "ppc_google", label: "PPC Google" },
-                        { key: "ppc_meta", label: "PPC Meta" },
-                        { key: "seo", label: "SEO" },
-                        { key: "social", label: "Social" },
-                        { key: "full_social", label: "Full Social" },
-                        { key: "social_meta", label: "Social Meta" },
-                        { key: "automation", label: "Automation" },
-                      ] as { key: string; label: string }[]).map((svc) => (
-                        <label key={svc.key} className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox
-                            checked={field.value?.includes(svc.key)}
-                            onCheckedChange={(checked) => {
-                              const current = field.value || [];
-                              field.onChange(
-                                checked ? [...current, svc.key] : current.filter((s: string) => s !== svc.key)
-                              );
-                            }}
-                          />
-                          <span className="text-sm">{svc.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="is_seo_client"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel className="cursor-pointer">
-                      {getFieldLabel('is_seo_client', 'לקוח SEO')}
+                {/* Additional Contacts Section */}
+                <div className="space-y-3 pt-3 border-t">
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      אנשי קשר נוספים
+                      {clientContacts && clientContacts.length > 0 && (
+                        <Badge
+                          variant="secondary"
+                          className="h-5 px-1.5 text-xs"
+                        >
+                          {clientContacts.length}
+                        </Badge>
+                      )}
                     </FormLabel>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAddContact(!showAddContact)}
+                    >
+                      <Plus className="h-3 w-3 ml-1" />
+                      הוסף איש קשר
+                    </Button>
                   </div>
-                </FormItem>
-              )}
-            />
 
-            {/* Ads Account IDs */}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="meta_ads_account_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>חשבון מודעות META</FormLabel>
-                    <FormControl>
-                      <Input placeholder="מזהה חשבון Meta Ads" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="google_ads_account_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>חשבון Google Ads</FormLabel>
-                    <FormControl>
-                      <Input placeholder="מזהה חשבון Google Ads" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                  {showAddContact && (
+                    <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          placeholder="שם *"
+                          value={newContact.contact_name}
+                          onChange={(e) =>
+                            setNewContact((prev) => ({
+                              ...prev,
+                              contact_name: e.target.value,
+                            }))
+                          }
+                        />
+                        <Input
+                          placeholder="תפקיד"
+                          value={newContact.role}
+                          onChange={(e) =>
+                            setNewContact((prev) => ({
+                              ...prev,
+                              role: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          placeholder="טלפון"
+                          value={newContact.phone}
+                          onChange={(e) =>
+                            setNewContact((prev) => ({
+                              ...prev,
+                              phone: e.target.value,
+                            }))
+                          }
+                        />
+                        <Input
+                          placeholder="אימייל"
+                          type="email"
+                          value={newContact.email}
+                          onChange={(e) =>
+                            setNewContact((prev) => ({
+                              ...prev,
+                              email: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowAddContact(false)}
+                        >
+                          ביטול
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleAddContact}
+                          disabled={addContactMutation.isPending}
+                        >
+                          {addContactMutation.isPending ? "מוסיף..." : "הוסף"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
-            <div className="space-y-3 pt-4 border-t">
-              <div>
-                <FormLabel>{t('role_campaigner', true)} משויכים</FormLabel>
-                <div className="space-y-2 mt-2">
-                  {assignedCampaigners && assignedCampaigners.length > 0 ? (
-                    assignedCampaigners.map((assignment: any) => (
-                      <div key={assignment.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
-                        <Badge variant="secondary" className="text-sm flex items-center gap-1">
-                          {assignment.campaigners?.full_name ?? "—"}
+                  {clientContacts && clientContacts.length > 0 && (
+                    <div className="space-y-2">
+                      {clientContacts.map((contact: any) => (
+                        <div
+                          key={contact.id}
+                          className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm"
+                        >
+                          <div className="flex-1 grid grid-cols-4 gap-2">
+                            <span className="font-medium">
+                              {contact.contact_name}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {contact.role || "—"}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {contact.phone || "—"}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {contact.email || "—"}
+                            </span>
+                          </div>
                           <button
                             type="button"
-                            onClick={() => removeCampaignerMutation.mutate(assignment.id)}
-                            className="hover:bg-destructive/20 rounded-full p-0.5"
+                            onClick={() =>
+                              deleteContactMutation.mutate(contact.id)
+                            }
+                            className="hover:bg-destructive/20 rounded-full p-1"
                           >
-                            <X className="h-3 w-3" />
+                            <Trash2 className="h-3 w-3 text-destructive" />
                           </button>
-                        </Badge>
-                        <div className="flex items-center gap-1 mr-auto">
-                          <span className="text-xs text-muted-foreground">₪</span>
-                          <Input
-                            type="number"
-                            className="h-7 w-24 text-sm"
-                            placeholder="עלות"
-                            defaultValue={assignment.campaigner_payment || ""}
-                            onBlur={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              if (val !== (assignment.campaigner_payment || 0)) {
-                                updateCampaignerPayment.mutate({ assignmentId: assignment.id, payment: val });
-                              }
-                            }}
-                          />
                         </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">אין {t('role_campaigner', true)} משויכים</p>
+                      ))}
+                    </div>
                   )}
                 </div>
-              </div>
 
-              <div>
-                <FormLabel>הוסף {t('role_campaigner')}</FormLabel>
-                <CampaignerAssignmentPicker
-                  assignedCampaignerIds={(assignedCampaigners || []).map(
-                    (assignment: any) => assignment.campaigner_id
+                <FormField
+                  name="folder_link"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>קישור לתיקייה</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="https://drive.google.com/..."
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                  triggerClassName="mt-2 w-full"
-                  onAssign={(campaignerId) =>
-                    assignCampaignerMutation.mutateAsync(campaignerId)
-                  }
                 />
-              </div>
-            </div>
 
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                ביטול
-              </Button>
-              <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending && (
-                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                {showFinanceFields && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="retainer"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {getFieldLabel("retainer", "ריטיינר")} (₪)
+                            </FormLabel>
+                            <FormControl>
+                              <Input {...field} type="number" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="monthly_budget"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {getFieldLabel("monthly_budget", "תקציב חודשי")}{" "}
+                              (₪)
+                            </FormLabel>
+                            <FormControl>
+                              <Input {...field} type="number" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {displayedFinanceExpenses.length > 0 && (
+                      <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                        <FormLabel>הוצאות החודש</FormLabel>
+                        {displayedFinanceExpenses.map((expense: any) => (
+                          <div
+                            key={expense.id}
+                            className="flex items-center justify-between text-sm"
+                          >
+                            <span className="text-muted-foreground">
+                              {expense.category || "הוצאה"} ·{" "}
+                              {new Date(expense.date).toLocaleDateString(
+                                "he-IL",
+                              )}
+                              {expense._auto && (
+                                <span className="text-xs mr-1">(אוטומטי)</span>
+                              )}
+                            </span>
+                            <span className="font-medium text-destructive">
+                              ₪
+                              {Number(expense.amount || 0).toLocaleString(
+                                "he-IL",
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
-                שמור שינויים
-              </Button>
-            </div>
-          </form>
-        </Form>
+
+                <FormField
+                  control={form.control}
+                  name="website"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{getFieldLabel("website", "אתר")}</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="https://example.com" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>סטטוס</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background">
+                            <SelectItem value="active">פעיל</SelectItem>
+                            <SelectItem value="onboarding">בקליטה</SelectItem>
+                            <SelectItem value="paused">מושהה</SelectItem>
+                            <SelectItem value="ended">הסתיים</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="mood_status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>מצב רוח לקוח</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || "happy"}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background">
+                            <SelectItem value="happy">
+                              <span className="flex items-center gap-2">
+                                <span>😊</span>
+                                <span className="text-green-600">
+                                  לקוח מבסוט
+                                </span>
+                              </span>
+                            </SelectItem>
+                            <SelectItem value="wavering">
+                              <span className="flex items-center gap-2">
+                                <span>😐</span>
+                                <span className="text-yellow-600">
+                                  לקוח מתנדנד
+                                </span>
+                              </span>
+                            </SelectItem>
+                            <SelectItem value="churn_risk">
+                              <span className="flex items-center gap-2">
+                                <span>😟</span>
+                                <span className="text-red-600">סכנת נטישה</span>
+                              </span>
+                            </SelectItem>
+                            <SelectItem value="not_progressing">
+                              <span className="flex items-center gap-2">
+                                <span>😔</span>
+                                <span className="text-orange-600">
+                                  לא מתקדם
+                                </span>
+                              </span>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>הערות</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          rows={4}
+                          placeholder="הוסף הערות כאן..."
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* DMM: Tier + Services */}
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="tier"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>דרגת לקוח (Tier)</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || ""}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר דרגה" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background">
+                            <SelectItem value="A">
+                              <span className="font-bold text-purple-700">
+                                A — עדיפות גבוהה
+                              </span>
+                            </SelectItem>
+                            <SelectItem value="B">
+                              <span className="font-bold text-blue-700">
+                                B — עדיפות בינונית
+                              </span>
+                            </SelectItem>
+                            <SelectItem value="C">
+                              <span className="font-bold text-gray-600">
+                                C — עדיפות נמוכה
+                              </span>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="services"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>שירותים פעילים</FormLabel>
+                        <div className="flex flex-col gap-2 mt-1">
+                          {(
+                            [
+                              { key: "ppc_google", label: "PPC Google" },
+                              { key: "ppc_meta", label: "PPC Meta" },
+                              { key: "seo", label: "SEO" },
+                              { key: "social", label: "Social" },
+                              { key: "full_social", label: "Full Social" },
+                              { key: "social_meta", label: "Social Meta" },
+                              { key: "automation", label: "Automation" },
+                            ] as { key: string; label: string }[]
+                          ).map((svc) => (
+                            <label
+                              key={svc.key}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={field.value?.includes(svc.key)}
+                                onCheckedChange={(checked) => {
+                                  const current = field.value || [];
+                                  field.onChange(
+                                    checked
+                                      ? [...current, svc.key]
+                                      : current.filter(
+                                          (s: string) => s !== svc.key,
+                                        ),
+                                  );
+                                }}
+                              />
+                              <span className="text-sm">{svc.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="is_seo_client"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel className="cursor-pointer">
+                          {getFieldLabel("is_seo_client", "לקוח SEO")}
+                        </FormLabel>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+
+                {/* Ads Account IDs */}
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="meta_ads_account_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>חשבון מודעות META</FormLabel>
+                        <FormControl>
+                          <Input placeholder="מזהה חשבון Meta Ads" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="google_ads_account_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>חשבון Google Ads</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="מזהה חשבון Google Ads"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-3 pt-4 border-t">
+                  <div>
+                    <FormLabel>{t("role_campaigner", true)} משויכים</FormLabel>
+                    <div className="space-y-2 mt-2">
+                      {assignedCampaigners && assignedCampaigners.length > 0 ? (
+                        assignedCampaigners.map((assignment: any) => (
+                          <div
+                            key={assignment.id}
+                            className="flex items-center gap-2 p-2 rounded-md bg-muted/50"
+                          >
+                            <Badge
+                              variant="secondary"
+                              className="text-sm flex items-center gap-1"
+                            >
+                              {assignment.campaigners?.full_name ?? "—"}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  removeCampaignerMutation.mutate(assignment.id)
+                                }
+                                className="hover:bg-destructive/20 rounded-full p-0.5"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                            <div className="flex items-center gap-1 mr-auto">
+                              <span className="text-xs text-muted-foreground">
+                                ₪
+                              </span>
+                              <Input
+                                type="number"
+                                className="h-7 w-24 text-sm"
+                                placeholder="עלות"
+                                defaultValue={
+                                  assignment.campaigner_payment || ""
+                                }
+                                onBlur={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  if (
+                                    val !== (assignment.campaigner_payment || 0)
+                                  ) {
+                                    updateCampaignerPayment.mutate({
+                                      assignmentId: assignment.id,
+                                      payment: val,
+                                    });
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          אין {t("role_campaigner", true)} משויכים
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <FormLabel>הוסף {t("role_campaigner")}</FormLabel>
+                    <CampaignerAssignmentPicker
+                      assignedCampaignerIds={(assignedCampaigners || []).map(
+                        (assignment: any) => assignment.campaigner_id,
+                      )}
+                      triggerClassName="mt-2 w-full"
+                      onAssign={(campaignerId) =>
+                        assignCampaignerMutation.mutateAsync(campaignerId)
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onOpenChange(false)}
+                  >
+                    ביטול
+                  </Button>
+                  <Button type="submit" disabled={mutation.isPending}>
+                    {mutation.isPending && (
+                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                    )}
+                    שמור שינויים
+                  </Button>
+                </div>
+              </form>
+            </Form>
           </TabsContent>
 
           <TabsContent value="connections" className="mt-4">
-            {tenantId && <ClientConnectionsTab clientId={client.id} tenantId={tenantId} />}
+            {tenantId && (
+              <ClientConnectionsTab clientId={client.id} tenantId={tenantId} />
+            )}
           </TabsContent>
 
           <TabsContent value="meeting" className="mt-4 space-y-4">
@@ -1095,19 +1355,26 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
                       <Clock className="h-4 w-4" />
                       משעה
                     </label>
-                    <Select value={meetingScheduler.meetingTime} onValueChange={meetingScheduler.setMeetingTime}>
+                    <Select
+                      value={meetingScheduler.meetingTime}
+                      onValueChange={meetingScheduler.setMeetingTime}
+                    >
                       <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
                         <SelectValue placeholder="בחר שעה" />
                       </SelectTrigger>
                       <SelectContent className="bg-background z-50 max-h-[200px]">
                         {meetingScheduler.isLoadingCalendar ? (
-                          <SelectItem value="loading" disabled>טוען יומן...</SelectItem>
+                          <SelectItem value="loading" disabled>
+                            טוען יומן...
+                          </SelectItem>
                         ) : (
                           timeSlots.map(({ time, available }) => (
                             <SelectItem
                               key={time}
                               value={time}
-                              className={!available ? "text-amber-600 font-medium" : ""}
+                              className={
+                                !available ? "text-amber-600 font-medium" : ""
+                              }
                             >
                               {time} {!available && "⚠️ (תפוס ביומן)"}
                             </SelectItem>
@@ -1119,23 +1386,34 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium">עד שעה</label>
-                    <Select value={meetingScheduler.meetingEndTime} onValueChange={meetingScheduler.setMeetingEndTime}>
+                    <Select
+                      value={meetingScheduler.meetingEndTime}
+                      onValueChange={meetingScheduler.setMeetingEndTime}
+                    >
                       <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
                         <SelectValue placeholder="בחר שעת סיום" />
                       </SelectTrigger>
                       <SelectContent className="bg-background z-50 max-h-[200px]">
                         {!meetingScheduler.meetingTime ? (
-                          <SelectItem value="no-start" disabled>בחר קודם שעת התחלה</SelectItem>
+                          <SelectItem value="no-start" disabled>
+                            בחר קודם שעת התחלה
+                          </SelectItem>
                         ) : meetingScheduler.isLoadingCalendar ? (
-                          <SelectItem value="loading-end" disabled>טוען יומן...</SelectItem>
+                          <SelectItem value="loading-end" disabled>
+                            טוען יומן...
+                          </SelectItem>
                         ) : endTimeSlots.length === 0 ? (
-                          <SelectItem value="none-end" disabled>אין אפשרויות סיום ליום זה</SelectItem>
+                          <SelectItem value="none-end" disabled>
+                            אין אפשרויות סיום ליום זה
+                          </SelectItem>
                         ) : (
                           endTimeSlots.map(({ time, available }) => (
                             <SelectItem
                               key={`end-${time}`}
                               value={time}
-                              className={!available ? "text-amber-600 font-medium" : ""}
+                              className={
+                                !available ? "text-amber-600 font-medium" : ""
+                              }
                             >
                               {time} {!available && "⚠️ (תפוס ביומן)"}
                             </SelectItem>
@@ -1155,25 +1433,35 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
                     <label className="text-sm font-medium">נושא הפגישה</label>
                     <Input
                       value={meetingScheduler.meetingSubject}
-                      onChange={(e) => meetingScheduler.setMeetingSubject(e.target.value)}
+                      onChange={(e) =>
+                        meetingScheduler.setMeetingSubject(e.target.value)
+                      }
                       placeholder={`פגישה עם ${client.name}`}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">מיקום (אופציונלי)</label>
+                    <label className="text-sm font-medium">
+                      מיקום (אופציונלי)
+                    </label>
                     <Input
                       value={meetingScheduler.meetingLocation}
-                      onChange={(e) => meetingScheduler.setMeetingLocation(e.target.value)}
+                      onChange={(e) =>
+                        meetingScheduler.setMeetingLocation(e.target.value)
+                      }
                       placeholder="Google Meet / משרד / זום"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">הודעה אישית (אופציונלי)</label>
+                    <label className="text-sm font-medium">
+                      הודעה אישית (אופציונלי)
+                    </label>
                     <Textarea
                       value={meetingScheduler.personalMessage}
-                      onChange={(e) => meetingScheduler.setPersonalMessage(e.target.value)}
+                      onChange={(e) =>
+                        meetingScheduler.setPersonalMessage(e.target.value)
+                      }
                       placeholder="הוסף הודעה אישית שתופיע בהזמנה..."
                       rows={3}
                     />
@@ -1188,23 +1476,34 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
                       </label>
                       <div className="space-y-1.5">
                         {allContactEmails.map((contact, idx) => (
-                          <label key={contact.email || `contact-${idx}`} className={`flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm ${contact.email ? 'cursor-pointer' : 'opacity-60'}`}>
+                          <label
+                            key={contact.email || `contact-${idx}`}
+                            className={`flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm ${contact.email ? "cursor-pointer" : "opacity-60"}`}
+                          >
                             <Checkbox
-                              checked={contact.email ? selectedMeetingEmails.includes(contact.email) : false}
+                              checked={
+                                contact.email
+                                  ? selectedMeetingEmails.includes(
+                                      contact.email,
+                                    )
+                                  : false
+                              }
                               disabled={!contact.email}
                               onCheckedChange={(checked) => {
                                 if (!contact.email) return;
-                                setSelectedMeetingEmails(prev =>
+                                setSelectedMeetingEmails((prev) =>
                                   checked
                                     ? [...prev, contact.email!]
-                                    : prev.filter(e => e !== contact.email)
+                                    : prev.filter((e) => e !== contact.email),
                                 );
                               }}
                             />
                             <span className="font-medium">{contact.name}</span>
-                            <span className="text-muted-foreground">({contact.source})</span>
+                            <span className="text-muted-foreground">
+                              ({contact.source})
+                            </span>
                             <span className="text-muted-foreground mr-auto">
-                              {contact.email || 'ללא אימייל'}
+                              {contact.email || "ללא אימייל"}
                             </span>
                           </label>
                         ))}
@@ -1219,32 +1518,47 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
                       הזמן משתמשים מהמערכת:
                     </label>
                     {isLoadingTeamMembers ? (
-                      <p className="text-sm text-muted-foreground">טוען משתמשי צוות...</p>
+                      <p className="text-sm text-muted-foreground">
+                        טוען משתמשי צוות...
+                      </p>
                     ) : teamMembersError ? (
                       <p className="text-sm text-destructive">
-                        {teamMembersError instanceof Error ? teamMembersError.message : "שגיאה בטעינת משתמשי צוות"}
+                        {teamMembersError instanceof Error
+                          ? teamMembersError.message
+                          : "שגיאה בטעינת משתמשי צוות"}
                       </p>
                     ) : teamMembers.length > 0 ? (
                       <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
                         {teamMembers.map((member: any) => (
-                          <label key={member.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm">
+                          <label
+                            key={member.id}
+                            className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm"
+                          >
                             <Checkbox
-                              checked={selectedTeamMembers.includes(member.email)}
+                              checked={selectedTeamMembers.includes(
+                                member.email,
+                              )}
                               onCheckedChange={(checked) => {
-                                setSelectedTeamMembers(prev =>
+                                setSelectedTeamMembers((prev) =>
                                   checked
                                     ? [...prev, member.email]
-                                    : prev.filter(e => e !== member.email)
+                                    : prev.filter((e) => e !== member.email),
                                 );
                               }}
                             />
-                            <span className="font-medium">{member.full_name}</span>
-                            <span className="text-muted-foreground mr-auto">{member.email}</span>
+                            <span className="font-medium">
+                              {member.full_name}
+                            </span>
+                            <span className="text-muted-foreground mr-auto">
+                              {member.email}
+                            </span>
                           </label>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">לא נמצאו משתמשים עם אימייל</p>
+                      <p className="text-sm text-muted-foreground">
+                        לא נמצאו משתמשים עם אימייל
+                      </p>
                     )}
                   </div>
 
@@ -1253,7 +1567,13 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
                       <div className="flex items-center gap-2 text-sm">
                         <CheckCircle2 className="h-4 w-4 text-primary" />
                         <span className="font-medium">
-                          {format(meetingScheduler.meetingDate, 'EEEE, d בMMMM yyyy', { locale: he })} {meetingScheduler.meetingTime} - {meetingScheduler.meetingEndTime}
+                          {format(
+                            meetingScheduler.meetingDate,
+                            "EEEE, d בMMMM yyyy",
+                            { locale: he },
+                          )}{" "}
+                          {meetingScheduler.meetingTime} -{" "}
+                          {meetingScheduler.meetingEndTime}
                         </span>
                       </div>
                     </Card>
@@ -1261,7 +1581,12 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
 
                   <Button
                     onClick={handleScheduleMeeting}
-                    disabled={!meetingScheduler.meetingDate || !meetingScheduler.meetingTime || !meetingScheduler.meetingEndTime || meetingScheduler.isSchedulingMeeting}
+                    disabled={
+                      !meetingScheduler.meetingDate ||
+                      !meetingScheduler.meetingTime ||
+                      !meetingScheduler.meetingEndTime ||
+                      meetingScheduler.isSchedulingMeeting
+                    }
                     className="w-full"
                   >
                     {meetingScheduler.isSchedulingMeeting ? (
@@ -1273,8 +1598,12 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
                       <>
                         <CalendarIcon className="ml-2 h-4 w-4" />
                         {(() => {
-                          const totalInvitees = selectedMeetingEmails.length + selectedTeamMembers.length;
-                          return totalInvitees > 0 ? `קבע פגישה ושלח זימון ל-${totalInvitees} משתתפים` : "קבע פגישה";
+                          const totalInvitees =
+                            selectedMeetingEmails.length +
+                            selectedTeamMembers.length;
+                          return totalInvitees > 0
+                            ? `קבע פגישה ושלח זימון ל-${totalInvitees} משתתפים`
+                            : "קבע פגישה";
                         })()}
                       </>
                     )}
@@ -1285,10 +1614,7 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
           </TabsContent>
 
           <TabsContent value="files" className="mt-4 space-y-6">
-            <FolderLinksField
-              links={folderLinks}
-              onChange={setFolderLinks}
-            />
+            <FolderLinksField links={folderLinks} onChange={setFolderLinks} />
             <AttachmentsField
               attachments={attachments}
               onChange={setAttachments}
@@ -1298,12 +1624,15 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
             {/* Files linked from team chat */}
             <div>
               <h4 className="text-sm font-medium mb-2">קבצים מצ׳אט הצוות</h4>
-              <ClientLinkedFiles clientId={client.id} tenantId={tenantId || ""} />
+              <ClientLinkedFiles
+                clientId={client.id}
+                tenantId={tenantId || ""}
+              />
             </div>
           </TabsContent>
 
           <TabsContent value="updates" className="mt-4">
-            <ClientUpdatesTab 
+            <ClientUpdatesTab
               clientId={client.id}
               clientName={client.name}
               currentMoodStatus={(client as any).mood_status}

@@ -2,7 +2,10 @@ import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { checkCalendarConnection, CalendarProvider } from "@/lib/calendarApi";
-import { listenForUnifiedConnection, openUnifiedCalendarConnection } from "@/lib/unifiedCalendarConnection";
+import {
+  listenForUnifiedConnection,
+  openUnifiedCalendarConnection,
+} from "@/lib/unifiedCalendarConnection";
 import { initDirectGoogleAuth } from "@/lib/calendarApi";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +13,10 @@ import { Calendar as CalendarIcon, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 function getStoredProvider(): CalendarProvider {
-  return (localStorage.getItem("calendar_provider_mode") as CalendarProvider) || "direct";
+  return (
+    (localStorage.getItem("calendar_provider_mode") as CalendarProvider) ||
+    "direct"
+  );
 }
 
 export function CalendarView() {
@@ -20,8 +26,11 @@ export function CalendarView() {
   const { data: calendarStatus, isLoading } = useQuery({
     queryKey: ["calendar-status", currentTenantId, provider],
     queryFn: async () => {
-      if (!currentTenantId) return { connected: false, type: 'none' as const };
-      return await checkCalendarConnection({ tenantId: currentTenantId, provider });
+      if (!currentTenantId) return { connected: false, type: "none" as const };
+      return await checkCalendarConnection({
+        tenantId: currentTenantId,
+        provider,
+      });
     },
     enabled: !!currentTenantId,
   });
@@ -45,7 +54,11 @@ export function CalendarView() {
         await openUnifiedCalendarConnection({ tenantId: currentTenantId });
       } else {
         const { authUrl } = await initDirectGoogleAuth();
-        const popup = window.open(authUrl, "google-calendar-auth", "width=600,height=700");
+        const popup = window.open(
+          authUrl,
+          "google-calendar-auth",
+          "width=600,height=700",
+        );
         const handler = (event: MessageEvent) => {
           if (event.data?.type === "calendar_connected") {
             window.removeEventListener("message", handler);
@@ -58,7 +71,7 @@ export function CalendarView() {
       listenerCleanupRef.current?.();
       listenerCleanupRef.current = null;
       console.error("Error connecting calendar:", error);
-      alert((error as Error).message || 'שגיאה בהתחברות ליומן. אנא נסה שוב.');
+      alert((error as Error).message || "שגיאה בהתחברות ליומן. אנא נסה שוב.");
     }
   };
 

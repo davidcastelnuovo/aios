@@ -9,19 +9,80 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil, ArrowRight, Check, Upload, Sparkles, Camera, Bell, MessageSquare, Reply, Phone, Globe } from "lucide-react";
+import {
+  Plus,
+  Send,
+  Hash,
+  Lock,
+  Users,
+  UserPlus,
+  X,
+  Smile,
+  Trash2,
+  ListTodo,
+  Paperclip,
+  Link2,
+  FileText,
+  Image as ImageIcon,
+  File,
+  Mic,
+  Square,
+  Loader2,
+  Building2,
+  User,
+  Target,
+  Settings,
+  Pencil,
+  ArrowRight,
+  Check,
+  Upload,
+  Sparkles,
+  Camera,
+  Bell,
+  MessageSquare,
+  Reply,
+  Phone,
+  Globe,
+} from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ConvertMessageToTaskDialog } from "@/components/chat/ConvertMessageToTaskDialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useAgency } from "@/contexts/AgencyContext";
@@ -63,7 +124,7 @@ interface TeamChannel {
 interface TeamAttachment {
   name: string;
   url: string;
-  type: 'file' | 'link' | 'image';
+  type: "file" | "link" | "image";
   size?: number;
 }
 
@@ -92,7 +153,13 @@ interface ChannelMember {
 }
 
 // =================== CreateChannelDialog ===================
-function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCreated: () => void }) {
+function CreateChannelDialog({
+  tenantId,
+  onCreated,
+}: {
+  tenantId: string;
+  onCreated: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -113,13 +180,13 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
         .select("user_id")
         .eq("tenant_id", tenantId);
       if (!tuData || tuData.length === 0) return [];
-      
+
       const userIds = tuData.map((tu: any) => tu.user_id);
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, email, avatar_url")
         .in("id", userIds);
-      
+
       return (profiles || []).map((p: any) => ({ profiles: p }));
     },
     enabled: !!tenantId && open,
@@ -129,7 +196,11 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
   const { data: categories = [] } = useQuery({
     queryKey: ["team-channel-categories", tenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("team_channel_categories").select("*").eq("tenant_id", tenantId).order("sort_order");
+      const { data } = await supabase
+        .from("team_channel_categories")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("sort_order");
       return (data || []) as ChannelCategory[];
     },
     enabled: !!tenantId && open,
@@ -139,7 +210,11 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
   const { data: agencies = [] } = useQuery({
     queryKey: ["agencies-for-channel", tenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("agencies").select("id, name").eq("tenant_id", tenantId).order("name");
+      const { data } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .order("name");
       return data || [];
     },
     enabled: !!tenantId && open,
@@ -149,11 +224,18 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
 
   // Fetch clients for selected agency
   const { data: clients = [] } = useQuery({
-    queryKey: ["clients-for-channel", tenantId, selectedAgencyId, crossTenantAgencyIds],
+    queryKey: [
+      "clients-for-channel",
+      tenantId,
+      selectedAgencyId,
+      crossTenantAgencyIds,
+    ],
     queryFn: async () => {
       let q = supabase.from("clients").select("id, name");
       if (crossTenantAgencyIds.length > 0) {
-        q = q.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        q = q.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
         q = q.eq("tenant_id", tenantId);
       }
@@ -168,9 +250,14 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
   const { data: leads = [] } = useQuery({
     queryKey: ["leads-for-channel", tenantId, selectedAgencyId],
     queryFn: async () => {
-      let q = supabase.from("leads").select("id, company_name, contact_name").eq("tenant_id", tenantId);
+      let q = supabase
+        .from("leads")
+        .select("id, company_name, contact_name")
+        .eq("tenant_id", tenantId);
       if (selectedAgencyId) q = q.eq("agency_id", selectedAgencyId);
-      const { data } = await q.order("created_at", { ascending: false }).limit(100);
+      const { data } = await q
+        .order("created_at", { ascending: false })
+        .limit(100);
       return data || [];
     },
     enabled: !!tenantId && open,
@@ -200,10 +287,20 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
 
       // Add creator as admin
       const members = [
-        { channel_id: channel.id, user_id: userId!, role: "admin", tenant_id: tenantId },
+        {
+          channel_id: channel.id,
+          user_id: userId!,
+          role: "admin",
+          tenant_id: tenantId,
+        },
         ...selectedMembers
           .filter((uid) => uid !== userId)
-          .map((uid) => ({ channel_id: channel.id, user_id: uid, role: "member", tenant_id: tenantId })),
+          .map((uid) => ({
+            channel_id: channel.id,
+            user_id: uid,
+            role: "member",
+            tenant_id: tenantId,
+          })),
       ];
 
       const { error: memberError } = await supabase
@@ -228,7 +325,16 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
     onError: (err: any) => toast.error(err.message),
   });
 
-  const colors = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4", "#F97316"];
+  const colors = [
+    "#3B82F6",
+    "#EF4444",
+    "#10B981",
+    "#F59E0B",
+    "#8B5CF6",
+    "#EC4899",
+    "#06B6D4",
+    "#F97316",
+  ];
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -244,11 +350,19 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
         <div className="space-y-4 max-h-[70vh] overflow-y-auto">
           <div>
             <Label>שם הקבוצה</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="למשל: צוות שיווק" />
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="למשל: צוות שיווק"
+            />
           </div>
           <div>
             <Label>תיאור</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="תיאור קצר..." />
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="תיאור קצר..."
+            />
           </div>
           <div>
             <Label>צבע</Label>
@@ -256,7 +370,12 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
               {colors.map((c) => (
                 <button
                   key={c}
-                  className={cn("h-7 w-7 rounded-full border-2 transition-all", color === c ? "border-foreground scale-110" : "border-transparent")}
+                  className={cn(
+                    "h-7 w-7 rounded-full border-2 transition-all",
+                    color === c
+                      ? "border-foreground scale-110"
+                      : "border-transparent",
+                  )}
                   style={{ backgroundColor: c }}
                   onClick={() => setColor(c)}
                 />
@@ -268,14 +387,21 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
           {categories.length > 0 && (
             <div>
               <Label>קטגוריה</Label>
-              <Select value={selectedCategoryId} onValueChange={(v) => setSelectedCategoryId(v === "none" ? "" : v)}>
+              <Select
+                value={selectedCategoryId}
+                onValueChange={(v) =>
+                  setSelectedCategoryId(v === "none" ? "" : v)
+                }
+              >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="ללא קטגוריה" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">ללא קטגוריה</SelectItem>
                   {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.icon} {cat.name}</SelectItem>
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.icon} {cat.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -284,15 +410,26 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
 
           {/* Agency Selector */}
           <div>
-            <Label className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> שייך לסוכנות</Label>
-            <Select value={selectedAgencyId} onValueChange={(v) => { setSelectedAgencyId(v === "none" ? "" : v); setSelectedClientId(""); setSelectedLeadId(""); }}>
+            <Label className="flex items-center gap-1">
+              <Building2 className="h-3.5 w-3.5" /> שייך לסוכנות
+            </Label>
+            <Select
+              value={selectedAgencyId}
+              onValueChange={(v) => {
+                setSelectedAgencyId(v === "none" ? "" : v);
+                setSelectedClientId("");
+                setSelectedLeadId("");
+              }}
+            >
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="ללא שיוך" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">ללא שיוך</SelectItem>
                 {agencies.map((a: any) => (
-                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -300,15 +437,25 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
 
           {/* Client Selector */}
           <div>
-            <Label className="flex items-center gap-1"><User className="h-3.5 w-3.5" /> שייך ללקוח</Label>
-            <Select value={selectedClientId} onValueChange={(v) => { setSelectedClientId(v === "none" ? "" : v); if (v !== "none") setSelectedLeadId(""); }}>
+            <Label className="flex items-center gap-1">
+              <User className="h-3.5 w-3.5" /> שייך ללקוח
+            </Label>
+            <Select
+              value={selectedClientId}
+              onValueChange={(v) => {
+                setSelectedClientId(v === "none" ? "" : v);
+                if (v !== "none") setSelectedLeadId("");
+              }}
+            >
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="ללא שיוך" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">ללא שיוך</SelectItem>
                 {clients.map((c: any) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -316,22 +463,37 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
 
           {/* Lead Selector */}
           <div>
-            <Label className="flex items-center gap-1"><Target className="h-3.5 w-3.5" /> שייך לליד</Label>
-            <Select value={selectedLeadId} onValueChange={(v) => { setSelectedLeadId(v === "none" ? "" : v); if (v !== "none") setSelectedClientId(""); }}>
+            <Label className="flex items-center gap-1">
+              <Target className="h-3.5 w-3.5" /> שייך לליד
+            </Label>
+            <Select
+              value={selectedLeadId}
+              onValueChange={(v) => {
+                setSelectedLeadId(v === "none" ? "" : v);
+                if (v !== "none") setSelectedClientId("");
+              }}
+            >
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="ללא שיוך" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">ללא שיוך</SelectItem>
                 {leads.map((l: any) => (
-                  <SelectItem key={l.id} value={l.id}>{l.company_name || l.contact_name}</SelectItem>
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.company_name || l.contact_name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="flex items-center gap-2">
-            <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} id="private" />
+            <input
+              type="checkbox"
+              checked={isPrivate}
+              onChange={(e) => setIsPrivate(e.target.checked)}
+              id="private"
+            />
             <Label htmlFor="private" className="flex items-center gap-1">
               <Lock className="h-3 w-3" /> קבוצה פרטית
             </Label>
@@ -346,8 +508,19 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
                 return (
                   <button
                     key={profile.id}
-                    className={cn("w-full text-right px-3 py-1.5 rounded text-sm transition-colors", selected ? "bg-primary/10 text-primary" : "hover:bg-muted")}
-                    onClick={() => setSelectedMembers((prev) => selected ? prev.filter((id) => id !== profile.id) : [...prev, profile.id])}
+                    className={cn(
+                      "w-full text-right px-3 py-1.5 rounded text-sm transition-colors",
+                      selected
+                        ? "bg-primary/10 text-primary"
+                        : "hover:bg-muted",
+                    )}
+                    onClick={() =>
+                      setSelectedMembers((prev) =>
+                        selected
+                          ? prev.filter((id) => id !== profile.id)
+                          : [...prev, profile.id],
+                      )
+                    }
                   >
                     {profile.full_name || profile.email}
                   </button>
@@ -355,7 +528,11 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
               })}
             </div>
           </div>
-          <Button className="w-full" onClick={() => createChannel.mutate()} disabled={!name.trim() || createChannel.isPending}>
+          <Button
+            className="w-full"
+            onClick={() => createChannel.mutate()}
+            disabled={!name.trim() || createChannel.isPending}
+          >
             {createChannel.isPending ? "יוצר..." : "צור קבוצה"}
           </Button>
         </div>
@@ -377,7 +554,11 @@ function ManageCategoriesDialog({ tenantId }: { tenantId: string }) {
   const { data: categories = [] } = useQuery({
     queryKey: ["team-channel-categories", tenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("team_channel_categories").select("*").eq("tenant_id", tenantId).order("sort_order");
+      const { data } = await supabase
+        .from("team_channel_categories")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("sort_order");
       return (data || []) as ChannelCategory[];
     },
     enabled: !!tenantId && open,
@@ -396,20 +577,35 @@ function ManageCategoriesDialog({ tenantId }: { tenantId: string }) {
     onSuccess: () => {
       setNewName("");
       setNewIcon("📁");
-      queryClient.invalidateQueries({ queryKey: ["team-channel-categories", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["team-channel-categories", tenantId],
+      });
       toast.success("קטגוריה נוספה");
     },
     onError: (err: any) => toast.error(err.message),
   });
 
   const updateCategory = useMutation({
-    mutationFn: async ({ id, name, icon }: { id: string; name: string; icon: string }) => {
-      const { error } = await supabase.from("team_channel_categories").update({ name, icon }).eq("id", id);
+    mutationFn: async ({
+      id,
+      name,
+      icon,
+    }: {
+      id: string;
+      name: string;
+      icon: string;
+    }) => {
+      const { error } = await supabase
+        .from("team_channel_categories")
+        .update({ name, icon })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       setEditingId(null);
-      queryClient.invalidateQueries({ queryKey: ["team-channel-categories", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["team-channel-categories", tenantId],
+      });
       toast.success("קטגוריה עודכנה");
     },
     onError: (err: any) => toast.error(err.message),
@@ -417,17 +613,35 @@ function ManageCategoriesDialog({ tenantId }: { tenantId: string }) {
 
   const deleteCategory = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("team_channel_categories").delete().eq("id", id);
+      const { error } = await supabase
+        .from("team_channel_categories")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["team-channel-categories", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["team-channel-categories", tenantId],
+      });
       toast.success("קטגוריה נמחקה");
     },
     onError: (err: any) => toast.error(err.message),
   });
 
-  const icons = ["📁", "👥", "👤", "🚀", "⚡", "💬", "📊", "🎯", "🔧", "💡", "📋", "🏢"];
+  const icons = [
+    "📁",
+    "👥",
+    "👤",
+    "🚀",
+    "⚡",
+    "💬",
+    "📊",
+    "🎯",
+    "🔧",
+    "💡",
+    "📋",
+    "🏢",
+  ];
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -444,7 +658,10 @@ function ManageCategoriesDialog({ tenantId }: { tenantId: string }) {
           {/* Existing categories */}
           <div className="space-y-2">
             {categories.map((cat) => (
-              <div key={cat.id} className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30">
+              <div
+                key={cat.id}
+                className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30"
+              >
                 {editingId === cat.id ? (
                   <>
                     <Popover>
@@ -454,23 +671,72 @@ function ManageCategoriesDialog({ tenantId }: { tenantId: string }) {
                       <PopoverContent className="w-auto p-2" dir="rtl">
                         <div className="grid grid-cols-6 gap-1">
                           {icons.map((ic) => (
-                            <button key={ic} className={cn("text-lg p-1 rounded hover:bg-muted", editIcon === ic && "bg-primary/10")} onClick={() => setEditIcon(ic)}>{ic}</button>
+                            <button
+                              key={ic}
+                              className={cn(
+                                "text-lg p-1 rounded hover:bg-muted",
+                                editIcon === ic && "bg-primary/10",
+                              )}
+                              onClick={() => setEditIcon(ic)}
+                            >
+                              {ic}
+                            </button>
                           ))}
                         </div>
                       </PopoverContent>
                     </Popover>
-                    <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-8 flex-1" />
-                    <Button size="sm" variant="ghost" className="h-8" onClick={() => updateCategory.mutate({ id: cat.id, name: editName, icon: editIcon })}>✓</Button>
-                    <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingId(null)}>✕</Button>
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="h-8 flex-1"
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8"
+                      onClick={() =>
+                        updateCategory.mutate({
+                          id: cat.id,
+                          name: editName,
+                          icon: editIcon,
+                        })
+                      }
+                    >
+                      ✓
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8"
+                      onClick={() => setEditingId(null)}
+                    >
+                      ✕
+                    </Button>
                   </>
                 ) : (
                   <>
                     <span className="text-lg">{cat.icon}</span>
-                    <span className="flex-1 text-sm font-medium">{cat.name}</span>
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setEditingId(cat.id); setEditName(cat.name); setEditIcon(cat.icon); }}>
+                    <span className="flex-1 text-sm font-medium">
+                      {cat.name}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
+                      onClick={() => {
+                        setEditingId(cat.id);
+                        setEditName(cat.name);
+                        setEditIcon(cat.icon);
+                      }}
+                    >
                       <Pencil className="h-3 w-3" />
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteCategory.mutate(cat.id)}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                      onClick={() => deleteCategory.mutate(cat.id)}
+                    >
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </>
@@ -478,7 +744,9 @@ function ManageCategoriesDialog({ tenantId }: { tenantId: string }) {
               </div>
             ))}
             {categories.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-4">אין קטגוריות עדיין</p>
+              <p className="text-xs text-muted-foreground text-center py-4">
+                אין קטגוריות עדיין
+              </p>
             )}
           </div>
 
@@ -488,18 +756,38 @@ function ManageCategoriesDialog({ tenantId }: { tenantId: string }) {
           <div className="flex items-center gap-2">
             <Popover>
               <PopoverTrigger asChild>
-                <button className="text-lg border rounded p-1">{newIcon}</button>
+                <button className="text-lg border rounded p-1">
+                  {newIcon}
+                </button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-2" dir="rtl">
                 <div className="grid grid-cols-6 gap-1">
                   {icons.map((ic) => (
-                    <button key={ic} className={cn("text-lg p-1 rounded hover:bg-muted", newIcon === ic && "bg-primary/10")} onClick={() => setNewIcon(ic)}>{ic}</button>
+                    <button
+                      key={ic}
+                      className={cn(
+                        "text-lg p-1 rounded hover:bg-muted",
+                        newIcon === ic && "bg-primary/10",
+                      )}
+                      onClick={() => setNewIcon(ic)}
+                    >
+                      {ic}
+                    </button>
                   ))}
                 </div>
               </PopoverContent>
             </Popover>
-            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="שם קטגוריה חדשה" className="h-9 flex-1" />
-            <Button size="sm" onClick={() => addCategory.mutate()} disabled={!newName.trim() || addCategory.isPending}>
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="שם קטגוריה חדשה"
+              className="h-9 flex-1"
+            />
+            <Button
+              size="sm"
+              onClick={() => addCategory.mutate()}
+              disabled={!newName.trim() || addCategory.isPending}
+            >
               <Plus className="h-4 w-4" />
             </Button>
           </div>
@@ -535,9 +823,11 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
       const userIds = tuData.map((tu: any) => tu.user_id);
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, full_name, email, phone, avatar_url, notification_group_link")
+        .select(
+          "id, full_name, email, phone, avatar_url, notification_group_link",
+        )
         .in("id", userIds);
-      
+
       return (profiles || []) as any[];
     },
     enabled: !!tenantId && open,
@@ -573,14 +863,22 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
     if (!file || !editingUser) return;
     setUploading(true);
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const filePath = `user-avatars/${editingUser.id}-${Date.now()}-${safeName}`;
-      const { error: uploadError } = await supabase.storage.from("team-chat-files").upload(filePath, file);
+      const { error: uploadError } = await supabase.storage
+        .from("team-chat-files")
+        .upload(filePath, file);
       if (uploadError) throw uploadError;
-      const { data: urlData, error: urlError } = await supabase.storage.from("team-chat-files").createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
-      if (urlError || !urlData) throw urlError ?? new Error("Failed to sign URL");
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from("team-chat-files")
+        .createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
+      if (urlError || !urlData)
+        throw urlError ?? new Error("Failed to sign URL");
 
-      const { error } = await supabase.from("profiles").update({ avatar_url: urlData.signedUrl }).eq("id", editingUser.id);
+      const { error } = await supabase
+        .from("profiles")
+        .update({ avatar_url: urlData.signedUrl })
+        .eq("id", editingUser.id);
       if (error) throw error;
 
       toast.success("התמונה עודכנה");
@@ -597,12 +895,22 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
     if (!aiPrompt.trim() || !editingUser) return;
     setGeneratingAi(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-channel-avatar", {
-        body: { prompt: aiPrompt, channelId: `user-${editingUser.id}`, tenantId },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "generate-channel-avatar",
+        {
+          body: {
+            prompt: aiPrompt,
+            channelId: `user-${editingUser.id}`,
+            tenantId,
+          },
+        },
+      );
       if (error) throw error;
       if (data?.avatar_url) {
-        await supabase.from("profiles").update({ avatar_url: data.avatar_url }).eq("id", editingUser.id);
+        await supabase
+          .from("profiles")
+          .update({ avatar_url: data.avatar_url })
+          .eq("id", editingUser.id);
         toast.success("האווטר נוצר בהצלחה!");
         refetchMembers();
         setEditingUser({ ...editingUser, avatar_url: data.avatar_url });
@@ -616,7 +924,10 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
 
   const removeAvatar = async () => {
     if (!editingUser) return;
-    const { error } = await supabase.from("profiles").update({ avatar_url: null }).eq("id", editingUser.id);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: null })
+      .eq("id", editingUser.id);
     if (error) {
       toast.error(error.message);
       return;
@@ -631,10 +942,13 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
     const deletedId = deleteConfirmUser.id;
     const membersQueryKey = ["team-members-manage", tenantId] as const;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session");
-      queryClient.setQueryData<any[]>(membersQueryKey, (old) =>
-        old?.filter((member) => member.id !== deletedId) ?? old,
+      queryClient.setQueryData<any[]>(
+        membersQueryKey,
+        (old) => old?.filter((member) => member.id !== deletedId) ?? old,
       );
       const { data, error } = await supabase.functions.invoke("delete-user", {
         body: { userId: deletedId, tenantId },
@@ -644,7 +958,9 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Delete failed");
-      toast.success(data?.removedFromTenantOnly ? "המשתמש הוסר מהארגון" : "המשתמש נמחק");
+      toast.success(
+        data?.removedFromTenantOnly ? "המשתמש הוסר מהארגון" : "המשתמש נמחק",
+      );
       setDeleteConfirmUser(null);
       queryClient.invalidateQueries({ queryKey: membersQueryKey });
     } catch (err: any) {
@@ -657,19 +973,29 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
     <>
       <Dialog open={open && !editingUser} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-7 w-7" title="ניהול אנשי צוות">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            title="ניהול אנשי צוות"
+          >
             <Users className="h-4 w-4" />
           </Button>
         </DialogTrigger>
         <DialogContent dir="rtl" className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>ניהול אנשי צוות</DialogTitle>
-            <DialogDescription>הגדר טלפון, קישור להתראות ותמונה לכל איש צוות</DialogDescription>
+            <DialogDescription>
+              הגדר טלפון, קישור להתראות ותמונה לכל איש צוות
+            </DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh]">
             <div className="space-y-2 p-1">
               {teamMembers.map((member: any) => (
-                <div key={member.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
+                <div
+                  key={member.id}
+                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                >
                   <Avatar className="h-10 w-10">
                     <AvatarImage src={member.avatar_url || undefined} />
                     <AvatarFallback className="text-sm">
@@ -677,7 +1003,9 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{member.full_name || member.email}</p>
+                    <p className="text-sm font-medium truncate">
+                      {member.full_name || member.email}
+                    </p>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       {member.phone && (
                         <span className="flex items-center gap-1">
@@ -694,17 +1022,29 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(member)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => startEdit(member)}
+                    >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteConfirmUser(member)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteConfirmUser(member)}
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
               ))}
               {teamMembers.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-8">אין אנשי צוות</p>
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  אין אנשי צוות
+                </p>
               )}
             </div>
           </ScrollArea>
@@ -712,11 +1052,20 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
       </Dialog>
 
       {/* Edit Member Dialog */}
-      <Dialog open={!!editingUser} onOpenChange={(o) => { if (!o) setEditingUser(null); }}>
+      <Dialog
+        open={!!editingUser}
+        onOpenChange={(o) => {
+          if (!o) setEditingUser(null);
+        }}
+      >
         <DialogContent dir="rtl" className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>עריכת {editingUser?.full_name || "איש צוות"}</DialogTitle>
-            <DialogDescription>עדכן פרטים, תמונה והגדרות התראות</DialogDescription>
+            <DialogTitle>
+              עריכת {editingUser?.full_name || "איש צוות"}
+            </DialogTitle>
+            <DialogDescription>
+              עדכן פרטים, תמונה והגדרות התראות
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {/* Avatar section */}
@@ -728,13 +1077,33 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex gap-2">
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-                <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4 ml-1" />}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  {uploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4 ml-1" />
+                  )}
                   העלה תמונה
                 </Button>
                 {editingUser?.avatar_url && (
-                  <Button size="sm" variant="outline" className="text-destructive" onClick={removeAvatar}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-destructive"
+                    onClick={removeAvatar}
+                  >
                     <Trash2 className="h-4 w-4 ml-1" /> הסר
                   </Button>
                 )}
@@ -752,8 +1121,16 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
                     placeholder="תאר את האווטר הרצוי..."
                     className="text-sm"
                   />
-                  <Button size="sm" onClick={generateAvatarAI} disabled={!aiPrompt.trim() || generatingAi}>
-                    {generatingAi ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  <Button
+                    size="sm"
+                    onClick={generateAvatarAI}
+                    disabled={!aiPrompt.trim() || generatingAi}
+                  >
+                    {generatingAi ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
               </div>
@@ -773,7 +1150,9 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
                 dir="ltr"
                 className="mt-1"
               />
-              <p className="text-xs text-muted-foreground mt-1">מספר טלפון לשליחת התראות בוואטסאפ</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                מספר טלפון לשליחת התראות בוואטסאפ
+              </p>
             </div>
 
             {/* Notification Group Link */}
@@ -788,11 +1167,15 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
                 dir="ltr"
                 className="mt-1"
               />
-              <p className="text-xs text-muted-foreground mt-1">קישור לקבוצת וואטסאפ שבה ישלחו התראות</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                קישור לקבוצת וואטסאפ שבה ישלחו התראות
+              </p>
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setEditingUser(null)}>ביטול</Button>
+              <Button variant="outline" onClick={() => setEditingUser(null)}>
+                ביטול
+              </Button>
               <Button onClick={saveEdit}>שמור</Button>
             </DialogFooter>
           </div>
@@ -800,15 +1183,27 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
       </Dialog>
 
       {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteConfirmUser} onOpenChange={(o) => { if (!o) setDeleteConfirmUser(null); }}>
+      <AlertDialog
+        open={!!deleteConfirmUser}
+        onOpenChange={(o) => {
+          if (!o) setDeleteConfirmUser(null);
+        }}
+      >
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>מחיקת {deleteConfirmUser?.full_name || "משתמש"}</AlertDialogTitle>
-            <AlertDialogDescription>פעולה זו תמחק את המשתמש לצמיתות. לא ניתן לבטל.</AlertDialogDescription>
+            <AlertDialogTitle>
+              מחיקת {deleteConfirmUser?.full_name || "משתמש"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              פעולה זו תמחק את המשתמש לצמיתות. לא ניתן לבטל.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>ביטול</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteUser}>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={deleteUser}
+            >
               מחק
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -833,12 +1228,18 @@ function ChannelSidebar({
   onCreated: () => void;
   unreadCounts: Record<string, number>;
 }) {
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
+    new Set(),
+  );
 
   const { data: categories = [] } = useQuery({
     queryKey: ["team-channel-categories", tenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("team_channel_categories").select("*").eq("tenant_id", tenantId).order("sort_order");
+      const { data } = await supabase
+        .from("team_channel_categories")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("sort_order");
       return (data || []) as ChannelCategory[];
     },
     enabled: !!tenantId,
@@ -855,12 +1256,14 @@ function ChannelSidebar({
 
   // Group channels: by category_id, uncategorized go into a special group
   const uncategorized = channels.filter((ch) => !ch.category_id);
-  const categorized = categories.map((cat) => ({
-    id: cat.id,
-    icon: cat.icon,
-    label: cat.name,
-    channels: channels.filter((ch) => ch.category_id === cat.id),
-  })).filter((cat) => cat.channels.length > 0);
+  const categorized = categories
+    .map((cat) => ({
+      id: cat.id,
+      icon: cat.icon,
+      label: cat.name,
+      channels: channels.filter((ch) => ch.category_id === cat.id),
+    }))
+    .filter((cat) => cat.channels.length > 0);
 
   const renderChannelItem = (ch: TeamChannel) => {
     const unread = unreadCounts[ch.id] || 0;
@@ -870,14 +1273,24 @@ function ChannelSidebar({
         onClick={() => onSelect(ch.id)}
         className={cn(
           "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-right",
-          activeChannelId === ch.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground",
-          unread > 0 && activeChannelId !== ch.id && "font-bold text-foreground"
+          activeChannelId === ch.id
+            ? "bg-primary/10 text-primary font-medium"
+            : "hover:bg-muted text-muted-foreground",
+          unread > 0 &&
+            activeChannelId !== ch.id &&
+            "font-bold text-foreground",
         )}
       >
         {ch.avatar_url ? (
-          <img src={ch.avatar_url} alt={ch.name} className="h-4 w-4 rounded shrink-0 object-cover" />
+          <img
+            src={ch.avatar_url}
+            alt={ch.name}
+            className="h-4 w-4 rounded shrink-0 object-cover"
+          />
+        ) : ch.is_private ? (
+          <Lock className="h-3.5 w-3.5 shrink-0" />
         ) : (
-          ch.is_private ? <Lock className="h-3.5 w-3.5 shrink-0" /> : <Hash className="h-3.5 w-3.5 shrink-0" />
+          <Hash className="h-3.5 w-3.5 shrink-0" />
         )}
         <span className="flex-1 truncate">{ch.name}</span>
         {unread > 0 && (
@@ -913,7 +1326,9 @@ function ChannelSidebar({
                 <span className="text-[10px]">{uncategorized.length}</span>
               </button>
               {!collapsedCategories.has("__uncategorized") && (
-                <div className="space-y-0.5">{uncategorized.map(renderChannelItem)}</div>
+                <div className="space-y-0.5">
+                  {uncategorized.map(renderChannelItem)}
+                </div>
               )}
             </div>
           )}
@@ -935,13 +1350,17 @@ function ChannelSidebar({
                 <span className="text-[10px]">{cat.channels.length}</span>
               </button>
               {!collapsedCategories.has(cat.id) && (
-                <div className="space-y-0.5">{cat.channels.map(renderChannelItem)}</div>
+                <div className="space-y-0.5">
+                  {cat.channels.map(renderChannelItem)}
+                </div>
               )}
             </div>
           ))}
 
           {channels.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-8">אין ערוצים עדיין. צור קבוצה חדשה!</p>
+            <p className="text-xs text-muted-foreground text-center py-8">
+              אין ערוצים עדיין. צור קבוצה חדשה!
+            </p>
           )}
         </div>
       </ScrollArea>
@@ -950,11 +1369,31 @@ function ChannelSidebar({
 }
 
 // =================== TeamMessageList ===================
-function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessage, onDeleteMessage, onNotifyMessage, onReplyMessage, allMessages }: { messages: TeamMessage[]; currentUserId?: string; onConvertToTask?: (msg: TeamMessage) => void; onEditMessage?: (msg: TeamMessage, newContent: string) => void; onDeleteMessage?: (msg: TeamMessage) => void; onNotifyMessage?: (msg: TeamMessage) => void; onReplyMessage?: (msg: TeamMessage) => void; allMessages?: TeamMessage[] }) {
+function TeamMessageList({
+  messages,
+  currentUserId,
+  onConvertToTask,
+  onEditMessage,
+  onDeleteMessage,
+  onNotifyMessage,
+  onReplyMessage,
+  allMessages,
+}: {
+  messages: TeamMessage[];
+  currentUserId?: string;
+  onConvertToTask?: (msg: TeamMessage) => void;
+  onEditMessage?: (msg: TeamMessage, newContent: string) => void;
+  onDeleteMessage?: (msg: TeamMessage) => void;
+  onNotifyMessage?: (msg: TeamMessage) => void;
+  onReplyMessage?: (msg: TeamMessage) => void;
+  allMessages?: TeamMessage[];
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
-  const [deleteConfirmMsg, setDeleteConfirmMsg] = useState<TeamMessage | null>(null);
+  const [deleteConfirmMsg, setDeleteConfirmMsg] = useState<TeamMessage | null>(
+    null,
+  );
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -963,16 +1402,19 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
     }
   }, [messages.length]);
 
-  const grouped = messages.reduce<{ date: string; msgs: TeamMessage[] }[]>((acc, msg) => {
-    const dateStr = format(new Date(msg.created_at), "yyyy-MM-dd");
-    const last = acc[acc.length - 1];
-    if (last && last.date === dateStr) {
-      last.msgs.push(msg);
-    } else {
-      acc.push({ date: dateStr, msgs: [msg] });
-    }
-    return acc;
-  }, []);
+  const grouped = messages.reduce<{ date: string; msgs: TeamMessage[] }[]>(
+    (acc, msg) => {
+      const dateStr = format(new Date(msg.created_at), "yyyy-MM-dd");
+      const last = acc[acc.length - 1];
+      if (last && last.date === dateStr) {
+        last.msgs.push(msg);
+      } else {
+        acc.push({ date: dateStr, msgs: [msg] });
+      }
+      return acc;
+    },
+    [],
+  );
 
   const startEdit = (msg: TeamMessage) => {
     setEditingId(msg.id);
@@ -994,7 +1436,10 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
 
   return (
     <>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4"
+      >
         {grouped.map((group) => (
           <div key={group.date}>
             <div className="flex items-center gap-2 my-3">
@@ -1013,52 +1458,86 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
 
                 // Generate consistent color for each sender
                 const senderColorPalette = [
-                  'hsl(0 65% 60%)', 'hsl(210 70% 65%)', 'hsl(130 45% 55%)', 'hsl(35 85% 60%)',
-                  'hsl(280 55% 60%)', 'hsl(170 50% 50%)', 'hsl(340 65% 60%)', 'hsl(85 50% 55%)'
+                  "hsl(0 65% 60%)",
+                  "hsl(210 70% 65%)",
+                  "hsl(130 45% 55%)",
+                  "hsl(35 85% 60%)",
+                  "hsl(280 55% 60%)",
+                  "hsl(170 50% 50%)",
+                  "hsl(340 65% 60%)",
+                  "hsl(85 50% 55%)",
                 ];
-                const senderHash = (msg.sender_id || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-                const senderColor = senderColorPalette[senderHash % senderColorPalette.length];
+                const senderHash = (msg.sender_id || "")
+                  .split("")
+                  .reduce((acc, c) => acc + c.charCodeAt(0), 0);
+                const senderColor =
+                  senderColorPalette[senderHash % senderColorPalette.length];
 
                 return (
-                  <div key={msg.id} className={cn(
-                    "group flex items-end gap-2 relative px-2",
-                    isOwn ? "flex-row-reverse" : "flex-row",
-                    sameAuthor ? "pt-0.5" : "pt-3"
-                  )}>
+                  <div
+                    key={msg.id}
+                    className={cn(
+                      "group flex items-end gap-2 relative px-2",
+                      isOwn ? "flex-row-reverse" : "flex-row",
+                      sameAuthor ? "pt-0.5" : "pt-3",
+                    )}
+                  >
                     {/* Avatar - only for others, only when author changes */}
                     <div className="w-7 shrink-0">
                       {!isOwn && !sameAuthor && (
                         <Avatar className="h-7 w-7">
-                          <AvatarImage src={msg.sender_profile?.avatar_url || undefined} />
-                          <AvatarFallback className="text-[10px] text-white" style={{ backgroundColor: senderColor }}>
+                          <AvatarImage
+                            src={msg.sender_profile?.avatar_url || undefined}
+                          />
+                          <AvatarFallback
+                            className="text-[10px] text-white"
+                            style={{ backgroundColor: senderColor }}
+                          >
                             {(msg.sender_profile?.full_name || "?")[0]}
                           </AvatarFallback>
                         </Avatar>
                       )}
                     </div>
                     {/* Bubble */}
-                    <div className={cn(
-                      "max-w-[75%] rounded-xl px-3 py-1.5 shadow-sm relative",
-                      isOwn
-                        ? "bg-green-100 dark:bg-green-900/40 rounded-bl-sm"
-                        : "bg-card border border-border rounded-br-sm"
-                    )}>
+                    <div
+                      className={cn(
+                        "max-w-[75%] rounded-xl px-3 py-1.5 shadow-sm relative",
+                        isOwn
+                          ? "bg-green-100 dark:bg-green-900/40 rounded-bl-sm"
+                          : "bg-card border border-border rounded-br-sm",
+                      )}
+                    >
                       {/* Sender name - only for others, only when author changes */}
                       {!isOwn && !sameAuthor && (
-                        <p className="text-xs font-semibold mb-0.5" style={{ color: senderColor }}>
+                        <p
+                          className="text-xs font-semibold mb-0.5"
+                          style={{ color: senderColor }}
+                        >
                           {msg.sender_profile?.full_name || "משתמש"}
                         </p>
                       )}
                       {/* Reply indicator */}
-                      {msg.parent_message_id && (() => {
-                        const parentMsg = allMessages?.find(m => m.id === msg.parent_message_id);
-                        return parentMsg ? (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1 cursor-pointer hover:text-foreground bg-muted/50 rounded px-2 py-1 border-r-2 border-primary" onClick={() => onReplyMessage?.(parentMsg)}>
-                            <Reply className="h-3 w-3 rotate-180 shrink-0" />
-                            <span className="truncate max-w-[220px]">{parentMsg.sender_profile?.full_name} — {parentMsg.content?.slice(0, 40)}{(parentMsg.content?.length || 0) > 40 ? "..." : ""}</span>
-                          </div>
-                        ) : null;
-                      })()}
+                      {msg.parent_message_id &&
+                        (() => {
+                          const parentMsg = allMessages?.find(
+                            (m) => m.id === msg.parent_message_id,
+                          );
+                          return parentMsg ? (
+                            <div
+                              className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1 cursor-pointer hover:text-foreground bg-muted/50 rounded px-2 py-1 border-r-2 border-primary"
+                              onClick={() => onReplyMessage?.(parentMsg)}
+                            >
+                              <Reply className="h-3 w-3 rotate-180 shrink-0" />
+                              <span className="truncate max-w-[220px]">
+                                {parentMsg.sender_profile?.full_name} —{" "}
+                                {parentMsg.content?.slice(0, 40)}
+                                {(parentMsg.content?.length || 0) > 40
+                                  ? "..."
+                                  : ""}
+                              </span>
+                            </div>
+                          ) : null;
+                        })()}
                       {isEditing ? (
                         <div className="space-y-1">
                           <Textarea
@@ -1067,15 +1546,30 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                             className="min-h-[40px] max-h-32 resize-none text-sm"
                             autoFocus
                             onKeyDown={(e) => {
-                              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(msg); }
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                saveEdit(msg);
+                              }
                               if (e.key === "Escape") cancelEdit();
                             }}
                           />
                           <div className="flex gap-1">
-                            <Button size="sm" variant="default" className="h-6 text-xs px-2" onClick={() => saveEdit(msg)}>
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="h-6 text-xs px-2"
+                              onClick={() => saveEdit(msg)}
+                            >
                               <Check className="h-3 w-3 ml-1" /> שמור
                             </Button>
-                            <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={cancelEdit}>ביטול</Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 text-xs px-2"
+                              onClick={cancelEdit}
+                            >
+                              ביטול
+                            </Button>
                           </div>
                         </div>
                       ) : (
@@ -1090,46 +1584,73 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                       {/* Attachments */}
                       {msg.attachments && msg.attachments.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-1">
-                          {msg.attachments.filter(att => att.type === 'image').length > 0 && (
-                            <div className={cn(
-                              "grid gap-1",
-                              msg.attachments.filter(a => a.type === 'image').length === 1 ? "grid-cols-1" : "grid-cols-2"
-                            )}>
-                              {msg.attachments.filter(att => att.type === 'image').map((att, idx) => (
-                                <button
-                                  key={`img-${idx}`}
-                                  className="relative rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
-                                  onClick={() => setLightboxImage(att.url)}
-                                >
-                                  <img
-                                    src={att.url}
-                                    alt={att.name}
-                                    className="max-w-[220px] max-h-[180px] rounded-lg object-cover"
-                                    loading="lazy"
-                                  />
-                                </button>
-                              ))}
+                          {msg.attachments.filter((att) => att.type === "image")
+                            .length > 0 && (
+                            <div
+                              className={cn(
+                                "grid gap-1",
+                                msg.attachments.filter(
+                                  (a) => a.type === "image",
+                                ).length === 1
+                                  ? "grid-cols-1"
+                                  : "grid-cols-2",
+                              )}
+                            >
+                              {msg.attachments
+                                .filter((att) => att.type === "image")
+                                .map((att, idx) => (
+                                  <button
+                                    key={`img-${idx}`}
+                                    className="relative rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                                    onClick={() => setLightboxImage(att.url)}
+                                  >
+                                    <img
+                                      src={att.url}
+                                      alt={att.name}
+                                      className="max-w-[220px] max-h-[180px] rounded-lg object-cover"
+                                      loading="lazy"
+                                    />
+                                  </button>
+                                ))}
                             </div>
                           )}
-                          {msg.attachments.filter(att => att.type !== 'image').map((att, idx) => (
-                            <a
-                              key={`file-${idx}`}
-                              href={att.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-muted hover:bg-muted/80 text-xs transition-colors border"
-                            >
-                              {att.type === 'link' ? <Link2 className="h-3.5 w-3.5 text-green-500" /> :
-                               <FileText className="h-3.5 w-3.5 text-orange-500" />}
-                              <span className="max-w-[200px] truncate">{att.name}</span>
-                            </a>
-                          ))}
+                          {msg.attachments
+                            .filter((att) => att.type !== "image")
+                            .map((att, idx) => (
+                              <a
+                                key={`file-${idx}`}
+                                href={att.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-muted hover:bg-muted/80 text-xs transition-colors border"
+                              >
+                                {att.type === "link" ? (
+                                  <Link2 className="h-3.5 w-3.5 text-green-500" />
+                                ) : (
+                                  <FileText className="h-3.5 w-3.5 text-orange-500" />
+                                )}
+                                <span className="max-w-[200px] truncate">
+                                  {att.name}
+                                </span>
+                              </a>
+                            ))}
                         </div>
                       )}
                       {/* Timestamp + edited indicator inside bubble */}
-                      <div className={cn("flex items-center gap-1 mt-0.5", isOwn ? "justify-start" : "justify-end")}>
-                        <span className="text-[10px] text-muted-foreground">{format(new Date(msg.created_at), "HH:mm")}</span>
-                        {msg.is_edited && <span className="text-[10px] text-muted-foreground">(נערך)</span>}
+                      <div
+                        className={cn(
+                          "flex items-center gap-1 mt-0.5",
+                          isOwn ? "justify-start" : "justify-end",
+                        )}
+                      >
+                        <span className="text-[10px] text-muted-foreground">
+                          {format(new Date(msg.created_at), "HH:mm")}
+                        </span>
+                        {msg.is_edited && (
+                          <span className="text-[10px] text-muted-foreground">
+                            (נערך)
+                          </span>
+                        )}
                       </div>
                       {/* Reply count indicator */}
                       {(msg.reply_count || 0) > 0 && (
@@ -1143,25 +1664,57 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                       )}
                     </div>
                     {/* Action buttons - visible on hover */}
-                    <div className={cn(
-                      "absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 bg-card border rounded-lg shadow-sm p-0.5",
-                      isOwn ? "right-2" : "left-2"
-                    )}>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" title="הגב להודעה" onClick={() => onReplyMessage?.(msg)}>
+                    <div
+                      className={cn(
+                        "absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 bg-card border rounded-lg shadow-sm p-0.5",
+                        isOwn ? "right-2" : "left-2",
+                      )}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        title="הגב להודעה"
+                        onClick={() => onReplyMessage?.(msg)}
+                      >
                         <MessageSquare className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" title="שלח התראה" onClick={() => onNotifyMessage?.(msg)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        title="שלח התראה"
+                        onClick={() => onNotifyMessage?.(msg)}
+                      >
                         <Bell className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" title="המרה למשימה" onClick={() => onConvertToTask?.(msg)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        title="המרה למשימה"
+                        onClick={() => onConvertToTask?.(msg)}
+                      >
                         <ListTodo className="h-3 w-3" />
                       </Button>
                       {isOwn && !isEditing && (
                         <>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" title="ערוך" onClick={() => startEdit(msg)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            title="ערוך"
+                            onClick={() => startEdit(msg)}
+                          >
                             <Pencil className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" title="מחק" onClick={() => setDeleteConfirmMsg(msg)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-destructive hover:text-destructive"
+                            title="מחק"
+                            onClick={() => setDeleteConfirmMsg(msg)}
+                          >
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </>
@@ -1181,15 +1734,30 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
       </div>
 
       {/* Delete confirmation dialog */}
-      <AlertDialog open={!!deleteConfirmMsg} onOpenChange={(open) => { if (!open) setDeleteConfirmMsg(null); }}>
+      <AlertDialog
+        open={!!deleteConfirmMsg}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirmMsg(null);
+        }}
+      >
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>מחיקת הודעה</AlertDialogTitle>
-            <AlertDialogDescription>האם אתה בטוח שברצונך למחוק את ההודעה? פעולה זו לא ניתנת לביטול.</AlertDialogDescription>
+            <AlertDialogDescription>
+              האם אתה בטוח שברצונך למחוק את ההודעה? פעולה זו לא ניתנת לביטול.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>ביטול</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteConfirmMsg) { onDeleteMessage?.(deleteConfirmMsg); setDeleteConfirmMsg(null); } }}>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteConfirmMsg) {
+                  onDeleteMessage?.(deleteConfirmMsg);
+                  setDeleteConfirmMsg(null);
+                }
+              }}
+            >
               מחק
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1221,7 +1789,19 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
 }
 
 // =================== TeamMessageInput ===================
-function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { channelId: string; tenantId: string; onSent: () => void; onFilesUploaded?: (files: { id: string; file_name: string; file_url: string }[]) => void }) {
+function TeamMessageInput({
+  channelId,
+  tenantId,
+  onSent,
+  onFilesUploaded,
+}: {
+  channelId: string;
+  tenantId: string;
+  onSent: () => void;
+  onFilesUploaded?: (
+    files: { id: string; file_name: string; file_url: string }[],
+  ) => void;
+}) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<TeamAttachment[]>([]);
   const [linkInput, setLinkInput] = useState("");
@@ -1236,14 +1816,20 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
   const { userId } = useCurrentUser();
 
   // Track uploaded file IDs for linking
-  const uploadedFileIdsRef = useRef<{ id: string; file_name: string; file_url: string }[]>([]);
+  const uploadedFileIdsRef = useRef<
+    { id: string; file_name: string; file_url: string }[]
+  >([]);
 
   const canSend = text.trim() || attachments.length > 0;
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4' });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : "audio/mp4",
+      });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -1252,30 +1838,32 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
       };
 
       mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType });
+        stream.getTracks().forEach((t) => t.stop());
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: mediaRecorder.mimeType,
+        });
         if (audioBlob.size < 100) return;
 
         setIsTranscribing(true);
         try {
           const formData = new FormData();
-          formData.append('audio', audioBlob, 'recording.webm');
+          formData.append("audio", audioBlob, "recording.webm");
 
           const res = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-voice`,
             {
-              method: 'POST',
+              method: "POST",
               headers: {
-                'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
               },
               body: formData,
-            }
+            },
           );
           const result = await res.json();
           if (result.error) throw new Error(result.error);
           if (result.text) {
-            setText(prev => prev ? prev + ' ' + result.text : result.text);
+            setText((prev) => (prev ? prev + " " + result.text : result.text));
           }
         } catch (err: any) {
           toast.error("שגיאה בתמלול: " + err.message);
@@ -1292,7 +1880,10 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
       mediaRecorderRef.current.stop();
     }
     setIsRecording(false);
@@ -1306,37 +1897,50 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
     setUploading(true);
     try {
       const newAttachments: TeamAttachment[] = [];
-      const newFileRecords: { id: string; file_name: string; file_url: string }[] = [];
-      
+      const newFileRecords: {
+        id: string;
+        file_name: string;
+        file_url: string;
+      }[] = [];
+
       for (const file of Array.from(files)) {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
         const filePath = `${userId}/${Date.now()}-${safeName}`;
-        const { error: uploadError } = await supabase.storage.from("team-chat-files").upload(filePath, file);
+        const { error: uploadError } = await supabase.storage
+          .from("team-chat-files")
+          .upload(filePath, file);
         if (uploadError) {
           console.error("Storage upload error:", uploadError);
           throw uploadError;
         }
-        const { data: urlData, error: urlError } = await supabase.storage.from("team-chat-files").createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
-        if (urlError || !urlData) throw urlError ?? new Error("Failed to sign URL");
+        const { data: urlData, error: urlError } = await supabase.storage
+          .from("team-chat-files")
+          .createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
+        if (urlError || !urlData)
+          throw urlError ?? new Error("Failed to sign URL");
         const isImage = file.type.startsWith("image/");
-        
+
         newAttachments.push({
           name: file.name,
           url: urlData.signedUrl,
-          type: isImage ? 'image' : 'file',
+          type: isImage ? "image" : "file",
           size: file.size,
         });
 
         // Track in DB
-        const { data: fileRecord, error: dbError } = await supabase.from("team_chat_files").insert({
-          tenant_id: tenantId,
-          channel_id: channelId,
-          uploaded_by: userId,
-          file_name: file.name,
-          file_url: urlData.signedUrl,
-          file_type: isImage ? 'image' : 'file',
-          file_size: file.size,
-        }).select("id, file_name, file_url").single();
+        const { data: fileRecord, error: dbError } = await supabase
+          .from("team_chat_files")
+          .insert({
+            tenant_id: tenantId,
+            channel_id: channelId,
+            uploaded_by: userId,
+            file_name: file.name,
+            file_url: urlData.signedUrl,
+            file_type: isImage ? "image" : "file",
+            file_size: file.size,
+          })
+          .select("id, file_name, file_url")
+          .single();
 
         if (dbError) {
           console.error("DB insert error:", dbError);
@@ -1348,11 +1952,17 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
         }
       }
       setAttachments((prev) => [...prev, ...newAttachments]);
-      uploadedFileIdsRef.current = [...uploadedFileIdsRef.current, ...newFileRecords];
+      uploadedFileIdsRef.current = [
+        ...uploadedFileIdsRef.current,
+        ...newFileRecords,
+      ];
       toast.success(`${Array.from(files).length} קבצים הועלו בהצלחה`);
     } catch (err: any) {
       console.error("Upload error details:", err);
-      toast.error("שגיאה בהעלאת הקובץ: " + (err.message || err.statusCode || JSON.stringify(err)));
+      toast.error(
+        "שגיאה בהעלאת הקובץ: " +
+          (err.message || err.statusCode || JSON.stringify(err)),
+      );
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -1378,21 +1988,27 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
     setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      await uploadFiles(files);
-    }
-  }, [userId, tenantId, channelId]);
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        await uploadFiles(files);
+      }
+    },
+    [userId, tenantId, channelId],
+  );
 
   const addLink = () => {
     const url = linkInput.trim();
     if (!url) return;
     const finalUrl = url.startsWith("http") ? url : `https://${url}`;
-    setAttachments((prev) => [...prev, { name: finalUrl, url: finalUrl, type: 'link' }]);
+    setAttachments((prev) => [
+      ...prev,
+      { name: finalUrl, url: finalUrl, type: "link" },
+    ]);
     setLinkInput("");
     setShowLinkInput(false);
   };
@@ -1412,13 +2028,20 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
       if (attachments.length > 0) {
         insertData.attachments = attachments;
       }
-      const { data: msg, error } = await supabase.from("team_messages").insert(insertData).select("id").single();
+      const { data: msg, error } = await supabase
+        .from("team_messages")
+        .insert(insertData)
+        .select("id")
+        .single();
       if (error) throw error;
 
       // Update file records with message_id
       if (uploadedFileIdsRef.current.length > 0 && msg) {
-        const fileIds = uploadedFileIdsRef.current.map(f => f.id);
-        await supabase.from("team_chat_files").update({ message_id: msg.id }).in("id", fileIds);
+        const fileIds = uploadedFileIdsRef.current.map((f) => f.id);
+        await supabase
+          .from("team_chat_files")
+          .update({ message_id: msg.id })
+          .in("id", fileIds);
       }
 
       return msg;
@@ -1445,7 +2068,10 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
 
   return (
     <div
-      className={cn("p-3 border-t space-y-2 transition-colors shrink-0 sticky bottom-0 bg-background z-10", isDragOver && "bg-primary/5 border-primary")}
+      className={cn(
+        "p-3 border-t space-y-2 transition-colors shrink-0 sticky bottom-0 bg-background z-10",
+        isDragOver && "bg-primary/5 border-primary",
+      )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -1461,12 +2087,22 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {attachments.map((att, idx) => (
-            <div key={idx} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs border">
-              {att.type === 'image' ? <ImageIcon className="h-3 w-3" /> :
-               att.type === 'link' ? <Link2 className="h-3 w-3" /> :
-               <File className="h-3 w-3" />}
+            <div
+              key={idx}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs border"
+            >
+              {att.type === "image" ? (
+                <ImageIcon className="h-3 w-3" />
+              ) : att.type === "link" ? (
+                <Link2 className="h-3 w-3" />
+              ) : (
+                <File className="h-3 w-3" />
+              )}
               <span className="max-w-[150px] truncate">{att.name}</span>
-              <button onClick={() => removeAttachment(idx)} className="hover:text-destructive">
+              <button
+                onClick={() => removeAttachment(idx)}
+                className="hover:text-destructive"
+              >
                 <X className="h-3 w-3" />
               </button>
             </div>
@@ -1482,11 +2118,30 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
             onChange={(e) => setLinkInput(e.target.value)}
             placeholder="הדבק קישור..."
             className="text-sm"
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLink(); } }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addLink();
+              }
+            }}
             autoFocus
           />
-          <Button size="sm" variant="outline" onClick={addLink} disabled={!linkInput.trim()}>הוסף</Button>
-          <Button size="sm" variant="ghost" onClick={() => { setShowLinkInput(false); setLinkInput(""); }}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={addLink}
+            disabled={!linkInput.trim()}
+          >
+            הוסף
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setShowLinkInput(false);
+              setLinkInput("");
+            }}
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -1503,7 +2158,12 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
         />
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" disabled={uploading}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              disabled={uploading}
+            >
               <Plus className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
@@ -1540,9 +2200,21 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
           className="h-9 w-9 shrink-0"
           title={isRecording ? "עצור הקלטה" : "הקלט הודעה קולית"}
         >
-          {isTranscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          {isTranscribing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : isRecording ? (
+            <Square className="h-4 w-4" />
+          ) : (
+            <Mic className="h-4 w-4" />
+          )}
         </Button>
-        <Button size="icon" onClick={() => canSend && sendMessage.mutate()} disabled={!canSend || sendMessage.isPending || uploading || isTranscribing}>
+        <Button
+          size="icon"
+          onClick={() => canSend && sendMessage.mutate()}
+          disabled={
+            !canSend || sendMessage.isPending || uploading || isTranscribing
+          }
+        >
           <Send className="h-4 w-4" />
         </Button>
       </div>
@@ -1559,8 +2231,16 @@ function MemberNotifyRow({
 }: {
   member: ChannelMember;
   profile?: { full_name: string; email: string; avatar_url?: string };
-  settings: { notify_enabled: boolean; notify_override_phone: string; notify_override_group: string };
-  onSettingsChange: (s: { notify_enabled: boolean; notify_override_phone: string; notify_override_group: string }) => void;
+  settings: {
+    notify_enabled: boolean;
+    notify_override_phone: string;
+    notify_override_group: string;
+  };
+  onSettingsChange: (s: {
+    notify_enabled: boolean;
+    notify_override_phone: string;
+    notify_override_group: string;
+  }) => void;
 }) {
   const [showOverrides, setShowOverrides] = useState(false);
   return (
@@ -1572,14 +2252,23 @@ function MemberNotifyRow({
               {(profile?.full_name || "?")[0]}
             </AvatarFallback>
           </Avatar>
-          <span className="text-xs">{profile?.full_name || profile?.email || "משתמש"}</span>
+          <span className="text-xs">
+            {profile?.full_name || profile?.email || "משתמש"}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <Switch
             checked={settings.notify_enabled}
-            onCheckedChange={(checked) => onSettingsChange({ ...settings, notify_enabled: checked })}
+            onCheckedChange={(checked) =>
+              onSettingsChange({ ...settings, notify_enabled: checked })
+            }
           />
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowOverrides(!showOverrides)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => setShowOverrides(!showOverrides)}
+          >
             <Settings className="h-3 w-3" />
           </Button>
         </div>
@@ -1588,14 +2277,24 @@ function MemberNotifyRow({
         <div className="space-y-1 pr-8">
           <Input
             value={settings.notify_override_group}
-            onChange={(e) => onSettingsChange({ ...settings, notify_override_group: e.target.value })}
+            onChange={(e) =>
+              onSettingsChange({
+                ...settings,
+                notify_override_group: e.target.value,
+              })
+            }
             placeholder="קבוצה ספציפית (chatId)"
             className="text-[10px] h-7"
             dir="ltr"
           />
           <Input
             value={settings.notify_override_phone}
-            onChange={(e) => onSettingsChange({ ...settings, notify_override_phone: e.target.value })}
+            onChange={(e) =>
+              onSettingsChange({
+                ...settings,
+                notify_override_phone: e.target.value,
+              })
+            }
             placeholder="טלפון ספציפי"
             className="text-[10px] h-7"
             dir="ltr"
@@ -1672,25 +2371,46 @@ function MemberRow({
                 if (e.key === "Escape") setEditing(false);
               }}
             />
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleSave} disabled={saving}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={handleSave}
+              disabled={saving}
+            >
               <Check className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setEditing(false)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={() => setEditing(false)}
+            >
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
         ) : (
           <div className="flex items-center gap-1 min-w-0">
-            <span className="text-sm truncate">{profile?.full_name || profile?.email || "משתמש"}</span>
+            <span className="text-sm truncate">
+              {profile?.full_name || profile?.email || "משתמש"}
+            </span>
             {role === "admin" && (
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">מנהל</Badge>
+              <Badge
+                variant="secondary"
+                className="text-[10px] px-1.5 py-0 shrink-0"
+              >
+                מנהל
+              </Badge>
             )}
             {isAdmin && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
-                onClick={() => { setNewName(profile?.full_name || ""); setEditing(true); }}
+                onClick={() => {
+                  setNewName(profile?.full_name || "");
+                  setEditing(true);
+                }}
               >
                 <Pencil className="h-3 w-3" />
               </Button>
@@ -1698,17 +2418,20 @@ function MemberRow({
           </div>
         )}
       </div>
-      {isAdmin && !isCreator && member.user_id !== currentUserId && !editing && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
-          onClick={onRemove}
-          disabled={removeDisabled}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      )}
+      {isAdmin &&
+        !isCreator &&
+        member.user_id !== currentUserId &&
+        !editing && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+            onClick={onRemove}
+            disabled={removeDisabled}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
     </div>
   );
 }
@@ -1730,20 +2453,42 @@ function ManageChannelMembersDialog({
   const [open, setOpen] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [channelGroupLink, setChannelGroupLink] = useState(channel.notification_group_link || "");
-  const [memberNotifySettings, setMemberNotifySettings] = useState<Record<string, { notify_enabled: boolean; notify_override_phone: string; notify_override_group: string }>>({});
+  const [channelGroupLink, setChannelGroupLink] = useState(
+    channel.notification_group_link || "",
+  );
+  const [memberNotifySettings, setMemberNotifySettings] = useState<
+    Record<
+      string,
+      {
+        notify_enabled: boolean;
+        notify_override_phone: string;
+        notify_override_group: string;
+      }
+    >
+  >({});
   const queryClient = useQueryClient();
 
-  const isAdmin = members.some((m) => m.user_id === currentUserId && m.role === "admin");
+  const isAdmin = members.some(
+    (m) => m.user_id === currentUserId && m.role === "admin",
+  );
 
   // Load member notification settings
   useEffect(() => {
     if (open && members.length > 0) {
-      const settings: Record<string, { notify_enabled: boolean; notify_override_phone: string; notify_override_group: string }> = {};
+      const settings: Record<
+        string,
+        {
+          notify_enabled: boolean;
+          notify_override_phone: string;
+          notify_override_group: string;
+        }
+      > = {};
       // We need to fetch the actual settings from DB
       supabase
         .from("team_channel_members")
-        .select("user_id, notify_enabled, notify_override_phone, notify_override_group")
+        .select(
+          "user_id, notify_enabled, notify_override_phone, notify_override_group",
+        )
         .eq("channel_id", channel.id)
         .then(({ data }) => {
           if (data) {
@@ -1756,9 +2501,13 @@ function ManageChannelMembersDialog({
             });
           }
           // Fill missing members with defaults
-          members.forEach(m => {
+          members.forEach((m) => {
             if (!settings[m.user_id]) {
-              settings[m.user_id] = { notify_enabled: true, notify_override_phone: "", notify_override_group: "" };
+              settings[m.user_id] = {
+                notify_enabled: true,
+                notify_override_phone: "",
+                notify_override_group: "",
+              };
             }
           });
           setMemberNotifySettings(settings);
@@ -1838,7 +2587,9 @@ function ManageChannelMembersDialog({
     onSuccess: (data) => {
       const link = `${getPublicOrigin()}/chat-invite/${data.token}`;
       setInviteLink(link);
-      queryClient.invalidateQueries({ queryKey: ["team-channel-invite", tenantId, channel.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["team-channel-invite", tenantId, channel.id],
+      });
       toast.success("קישור הזמנה נוצר בהצלחה");
     },
     onError: (err: any) => toast.error(err.message),
@@ -1862,13 +2613,13 @@ function ManageChannelMembersDialog({
         .select("user_id")
         .eq("tenant_id", tenantId);
       if (!tuData || tuData.length === 0) return [];
-      
+
       const userIds = tuData.map((tu: any) => tu.user_id);
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, email, avatar_url")
         .in("id", userIds);
-      
+
       return (profiles || []).map((p: any) => ({ profiles: p }));
     },
     enabled: !!tenantId && open,
@@ -1880,14 +2631,19 @@ function ManageChannelMembersDialog({
     queryFn: async () => {
       const memberIds = members.map((m) => m.user_id);
       if (memberIds.length === 0) return [];
-      const { data } = await supabase.from("profiles").select("id, full_name, email, avatar_url").in("id", memberIds);
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, avatar_url")
+        .in("id", memberIds);
       return data || [];
     },
     enabled: open && members.length > 0,
   });
 
   const memberUserIds = new Set(members.map((m) => m.user_id));
-  const nonMembers = tenantUsers.filter((tu: any) => tu.profiles && !memberUserIds.has(tu.profiles.id));
+  const nonMembers = tenantUsers.filter(
+    (tu: any) => tu.profiles && !memberUserIds.has(tu.profiles.id),
+  );
 
   const addMember = useMutation({
     mutationFn: async (userId: string) => {
@@ -1901,8 +2657,12 @@ function ManageChannelMembersDialog({
     },
     onSuccess: () => {
       toast.success("החבר נוסף בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["team-channel-members", tenantId, channel.id] });
-      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", tenantId, channel.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["team-channel-members", tenantId, channel.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["team-member-profiles", tenantId, channel.id],
+      });
       onChanged();
     },
     onError: (err: any) => toast.error(err.message),
@@ -1919,20 +2679,30 @@ function ManageChannelMembersDialog({
     },
     onSuccess: () => {
       toast.success("החבר הוסר מהקבוצה");
-      queryClient.invalidateQueries({ queryKey: ["team-channel-members", tenantId, channel.id] });
-      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", tenantId, channel.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["team-channel-members", tenantId, channel.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["team-member-profiles", tenantId, channel.id],
+      });
       onChanged();
     },
     onError: (err: any) => toast.error(err.message),
   });
 
-  const getMemberProfile = (userId: string) => memberProfiles.find((p: any) => p.id === userId);
-  const getMemberRole = (userId: string) => members.find((m) => m.user_id === userId)?.role;
+  const getMemberProfile = (userId: string) =>
+    memberProfiles.find((p: any) => p.id === userId);
+  const getMemberRole = (userId: string) =>
+    members.find((m) => m.user_id === userId)?.role;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 text-muted-foreground"
+        >
           <UserPlus className="h-4 w-4" />
           <span className="text-xs">ניהול חברים</span>
         </Button>
@@ -1944,7 +2714,9 @@ function ManageChannelMembersDialog({
         <div className="space-y-4">
           {/* Current Members */}
           <div>
-            <Label className="text-sm font-medium">חברים נוכחיים ({members.length})</Label>
+            <Label className="text-sm font-medium">
+              חברים נוכחיים ({members.length})
+            </Label>
             <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
               {members.map((member) => {
                 const profile = getMemberProfile(member.user_id);
@@ -1962,8 +2734,16 @@ function ManageChannelMembersDialog({
                     onRemove={() => removeMember.mutate(member.user_id)}
                     removeDisabled={removeMember.isPending}
                     onNameUpdated={() => {
-                      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", tenantId, channel.id] });
-                      queryClient.invalidateQueries({ queryKey: ["tenant-users-for-members", tenantId] });
+                      queryClient.invalidateQueries({
+                        queryKey: [
+                          "team-member-profiles",
+                          tenantId,
+                          channel.id,
+                        ],
+                      });
+                      queryClient.invalidateQueries({
+                        queryKey: ["tenant-users-for-members", tenantId],
+                      });
                     }}
                   />
                 );
@@ -1992,7 +2772,9 @@ function ManageChannelMembersDialog({
                             {(profile.full_name || profile.email || "?")[0]}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="text-sm">{profile.full_name || profile.email}</span>
+                        <span className="text-sm">
+                          {profile.full_name || profile.email}
+                        </span>
                       </div>
                       <Plus className="h-4 w-4 text-primary" />
                     </button>
@@ -2003,11 +2785,15 @@ function ManageChannelMembersDialog({
           )}
 
           {isAdmin && nonMembers.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-2">כל חברי הארגון כבר בקבוצה</p>
+            <p className="text-xs text-muted-foreground text-center py-2">
+              כל חברי הארגון כבר בקבוצה
+            </p>
           )}
 
           {!isAdmin && (
-            <p className="text-xs text-muted-foreground text-center py-2">רק מנהלי הקבוצה יכולים להוסיף או להסיר חברים</p>
+            <p className="text-xs text-muted-foreground text-center py-2">
+              רק מנהלי הקבוצה יכולים להוסיף או להסיר חברים
+            </p>
           )}
 
           {/* Notification Settings */}
@@ -2022,7 +2808,9 @@ function ManageChannelMembersDialog({
 
                 {/* Channel-level group */}
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">קבוצת וואטסאפ לערוץ (chatId של הקבוצה)</Label>
+                  <Label className="text-xs text-muted-foreground">
+                    קבוצת וואטסאפ לערוץ (chatId של הקבוצה)
+                  </Label>
                   <Input
                     value={channelGroupLink}
                     onChange={(e) => setChannelGroupLink(e.target.value)}
@@ -2030,21 +2818,34 @@ function ManageChannelMembersDialog({
                     className="text-xs"
                     dir="ltr"
                   />
-                  <p className="text-[10px] text-muted-foreground">אם מוגדר, כל התראות הערוץ ישלחו לקבוצה זו</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    אם מוגדר, כל התראות הערוץ ישלחו לקבוצה זו
+                  </p>
                 </div>
 
                 {/* Per-member notification settings */}
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">הגדרות לכל חבר</Label>
+                  <Label className="text-xs text-muted-foreground">
+                    הגדרות לכל חבר
+                  </Label>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {members.map((member) => (
                       <MemberNotifyRow
                         key={member.id}
                         member={member}
                         profile={getMemberProfile(member.user_id)}
-                        settings={memberNotifySettings[member.user_id] || { notify_enabled: true, notify_override_phone: "", notify_override_group: "" }}
+                        settings={
+                          memberNotifySettings[member.user_id] || {
+                            notify_enabled: true,
+                            notify_override_phone: "",
+                            notify_override_group: "",
+                          }
+                        }
                         onSettingsChange={(s) =>
-                          setMemberNotifySettings(prev => ({ ...prev, [member.user_id]: s }))
+                          setMemberNotifySettings((prev) => ({
+                            ...prev,
+                            [member.user_id]: s,
+                          }))
                         }
                       />
                     ))}
@@ -2057,7 +2858,9 @@ function ManageChannelMembersDialog({
                   onClick={() => saveNotificationSettings.mutate()}
                   disabled={saveNotificationSettings.isPending}
                 >
-                  {saveNotificationSettings.isPending ? "שומר..." : "שמור הגדרות התראות"}
+                  {saveNotificationSettings.isPending
+                    ? "שומר..."
+                    : "שמור הגדרות התראות"}
                 </Button>
               </div>
             </>
@@ -2072,17 +2875,37 @@ function ManageChannelMembersDialog({
                   <Link2 className="h-4 w-4" />
                   קישור הזמנה חיצוני
                 </h4>
-                <p className="text-xs text-muted-foreground">שתף קישור עם אנשים מחוץ למערכת. הם יוכלו להירשם ולקבל גישה לצ׳אט הזה בלבד.</p>
+                <p className="text-xs text-muted-foreground">
+                  שתף קישור עם אנשים מחוץ למערכת. הם יוכלו להירשם ולקבל גישה
+                  לצ׳אט הזה בלבד.
+                </p>
                 {inviteLink ? (
                   <div className="flex gap-2">
-                    <Input value={inviteLink} readOnly className="text-xs" dir="ltr" />
-                    <Button size="sm" variant="outline" onClick={copyInviteLink}>
+                    <Input
+                      value={inviteLink}
+                      readOnly
+                      className="text-xs"
+                      dir="ltr"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={copyInviteLink}
+                    >
                       {copied ? "הועתק!" : "העתק"}
                     </Button>
                   </div>
                 ) : (
-                  <Button size="sm" variant="outline" className="w-full" onClick={() => generateInviteLink.mutate()} disabled={generateInviteLink.isPending}>
-                    {generateInviteLink.isPending ? "יוצר..." : "צור קישור הזמנה"}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => generateInviteLink.mutate()}
+                    disabled={generateInviteLink.isPending}
+                  >
+                    {generateInviteLink.isPending
+                      ? "יוצר..."
+                      : "צור קישור הזמנה"}
                   </Button>
                 )}
               </div>
@@ -2095,9 +2918,17 @@ function ManageChannelMembersDialog({
 }
 
 // =================== ChannelAvatarDialog ===================
-function ChannelAvatarDialog({ channel, tenantId, onUpdated }: { channel: TeamChannel; tenantId: string; onUpdated: () => void }) {
+function ChannelAvatarDialog({
+  channel,
+  tenantId,
+  onUpdated,
+}: {
+  channel: TeamChannel;
+  tenantId: string;
+  onUpdated: () => void;
+}) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<'upload' | 'ai'>('upload');
+  const [tab, setTab] = useState<"upload" | "ai">("upload");
   const [aiPrompt, setAiPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -2108,16 +2939,24 @@ function ChannelAvatarDialog({ channel, tenantId, onUpdated }: { channel: TeamCh
     if (!file) return;
     setUploading(true);
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const filePath = `avatars/${channel.id}-${Date.now()}-${safeName}`;
-      const { error: uploadError } = await supabase.storage.from("team-chat-files").upload(filePath, file);
+      const { error: uploadError } = await supabase.storage
+        .from("team-chat-files")
+        .upload(filePath, file);
       if (uploadError) throw uploadError;
-      const { data: urlData, error: urlError } = await supabase.storage.from("team-chat-files").createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
-      if (urlError || !urlData) throw urlError ?? new Error("Failed to sign URL");
-      
-      const { error } = await supabase.from("team_channels").update({ avatar_url: urlData.signedUrl }).eq("id", channel.id);
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from("team-chat-files")
+        .createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
+      if (urlError || !urlData)
+        throw urlError ?? new Error("Failed to sign URL");
+
+      const { error } = await supabase
+        .from("team_channels")
+        .update({ avatar_url: urlData.signedUrl })
+        .eq("id", channel.id);
       if (error) throw error;
-      
+
       toast.success("האווטר עודכן בהצלחה");
       onUpdated();
       setOpen(false);
@@ -2132,12 +2971,15 @@ function ChannelAvatarDialog({ channel, tenantId, onUpdated }: { channel: TeamCh
     if (!aiPrompt.trim()) return;
     setGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-channel-avatar", {
-        body: { prompt: aiPrompt, channelId: channel.id, tenantId },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "generate-channel-avatar",
+        {
+          body: { prompt: aiPrompt, channelId: channel.id, tenantId },
+        },
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      
+
       toast.success("האווטר נוצר בהצלחה!");
       onUpdated();
       setOpen(false);
@@ -2151,47 +2993,101 @@ function ChannelAvatarDialog({ channel, tenantId, onUpdated }: { channel: TeamCh
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden" style={{ backgroundColor: channel.color }}>
+        <button
+          className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden"
+          style={{ backgroundColor: channel.color }}
+        >
           {channel.avatar_url ? (
-            <img src={channel.avatar_url} alt={channel.name} className="h-full w-full object-cover" />
+            <img
+              src={channel.avatar_url}
+              alt={channel.name}
+              className="h-full w-full object-cover"
+            />
+          ) : channel.is_private ? (
+            <Lock className="h-4 w-4" />
           ) : (
-            channel.is_private ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />
+            <Hash className="h-4 w-4" />
           )}
         </button>
       </DialogTrigger>
       <DialogContent dir="rtl" className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>שנה אווטר ערוץ</DialogTitle>
-          <DialogDescription>העלה תמונה או צור אווטר באמצעות AI</DialogDescription>
+          <DialogDescription>
+            העלה תמונה או צור אווטר באמצעות AI
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex gap-2">
-            <Button variant={tab === 'upload' ? 'default' : 'outline'} size="sm" onClick={() => setTab('upload')} className="flex-1 gap-1.5">
+            <Button
+              variant={tab === "upload" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTab("upload")}
+              className="flex-1 gap-1.5"
+            >
               <Upload className="h-4 w-4" /> העלאת תמונה
             </Button>
-            <Button variant={tab === 'ai' ? 'default' : 'outline'} size="sm" onClick={() => setTab('ai')} className="flex-1 gap-1.5">
+            <Button
+              variant={tab === "ai" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTab("ai")}
+              className="flex-1 gap-1.5"
+            >
               <Sparkles className="h-4 w-4" /> יצירה ב-AI
             </Button>
           </div>
 
-          {tab === 'upload' ? (
+          {tab === "upload" ? (
             <div className="space-y-3">
-              <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" accept="image/*" />
-              <Button variant="outline" className="w-full h-24 border-dashed" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleUpload}
+                className="hidden"
+                accept="image/*"
+              />
+              <Button
+                variant="outline"
+                className="w-full h-24 border-dashed"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                ) : (
                   <div className="flex flex-col items-center gap-1">
                     <Camera className="h-6 w-6 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">לחץ לבחירת תמונה</span>
+                    <span className="text-xs text-muted-foreground">
+                      לחץ לבחירת תמונה
+                    </span>
                   </div>
                 )}
               </Button>
             </div>
           ) : (
             <div className="space-y-3">
-              <Input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="תאר את האווטר שאתה רוצה..." />
-              <p className="text-xs text-muted-foreground">למשל: &quot;לוגו מעוצב לקבוצת שיווק בצבעים כחול וכתום&quot;</p>
-              <Button className="w-full" onClick={generateWithAI} disabled={!aiPrompt.trim() || generating}>
-                {generating ? <><Loader2 className="h-4 w-4 animate-spin ml-2" /> יוצר...</> : <><Sparkles className="h-4 w-4 ml-2" /> צור אווטר</>}
+              <Input
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="תאר את האווטר שאתה רוצה..."
+              />
+              <p className="text-xs text-muted-foreground">
+                למשל: &quot;לוגו מעוצב לקבוצת שיווק בצבעים כחול וכתום&quot;
+              </p>
+              <Button
+                className="w-full"
+                onClick={generateWithAI}
+                disabled={!aiPrompt.trim() || generating}
+              >
+                {generating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin ml-2" /> יוצר...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 ml-2" /> צור אווטר
+                  </>
+                )}
               </Button>
             </div>
           )}
@@ -2200,13 +3096,25 @@ function ChannelAvatarDialog({ channel, tenantId, onUpdated }: { channel: TeamCh
             <div className="space-y-2">
               <Label className="text-xs">אווטר נוכחי:</Label>
               <div className="flex items-center gap-3">
-                <img src={channel.avatar_url} alt="current avatar" className="h-12 w-12 rounded-lg object-cover" />
-                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={async () => {
-                  await supabase.from("team_channels").update({ avatar_url: null }).eq("id", channel.id);
-                  toast.success("האווטר הוסר");
-                  onUpdated();
-                  setOpen(false);
-                }}>
+                <img
+                  src={channel.avatar_url}
+                  alt="current avatar"
+                  className="h-12 w-12 rounded-lg object-cover"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={async () => {
+                    await supabase
+                      .from("team_channels")
+                      .update({ avatar_url: null })
+                      .eq("id", channel.id);
+                    toast.success("האווטר הוסר");
+                    onUpdated();
+                    setOpen(false);
+                  }}
+                >
                   <Trash2 className="h-3.5 w-3.5 ml-1" /> הסר אווטר
                 </Button>
               </div>
@@ -2219,7 +3127,19 @@ function ChannelAvatarDialog({ channel, tenantId, onUpdated }: { channel: TeamCh
 }
 
 // =================== EditChannelDialog ===================
-function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }: { channel: TeamChannel; tenantId: string; isAdmin: boolean; onUpdated: () => void; onDeleted: () => void }) {
+function EditChannelDialog({
+  channel,
+  tenantId,
+  isAdmin,
+  onUpdated,
+  onDeleted,
+}: {
+  channel: TeamChannel;
+  tenantId: string;
+  isAdmin: boolean;
+  onUpdated: () => void;
+  onDeleted: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(channel.name);
   const [description, setDescription] = useState(channel.description || "");
@@ -2238,13 +3158,25 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
     }
   }, [open, channel]);
 
-  const colors = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4", "#F97316"];
+  const colors = [
+    "#3B82F6",
+    "#EF4444",
+    "#10B981",
+    "#F59E0B",
+    "#8B5CF6",
+    "#EC4899",
+    "#06B6D4",
+    "#F97316",
+  ];
 
   // Fetch WhatsApp groups in tenant
   const { data: waGroups = [] } = useQuery({
     queryKey: ["wa-groups-for-link", tenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("whatsapp_groups").select("id, group_name, group_chat_id").eq("tenant_id", tenantId);
+      const { data } = await supabase
+        .from("whatsapp_groups")
+        .select("id, group_name, group_chat_id")
+        .eq("tenant_id", tenantId);
       return data || [];
     },
     enabled: open,
@@ -2265,7 +3197,10 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
 
   const updateChannel = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("team_channels").update({ name, description: description || null, color }).eq("id", channel.id);
+      const { error } = await supabase
+        .from("team_channels")
+        .update({ name, description: description || null, color })
+        .eq("id", channel.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -2277,7 +3212,15 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
   });
 
   const addWaLink = useMutation({
-    mutationFn: async ({ groupId, chatId, displayName }: { groupId?: string; chatId?: string; displayName?: string }) => {
+    mutationFn: async ({
+      groupId,
+      chatId,
+      displayName,
+    }: {
+      groupId?: string;
+      chatId?: string;
+      displayName?: string;
+    }) => {
       const insertData: any = {
         channel_id: channel.id,
         tenant_id: tenantId,
@@ -2289,7 +3232,9 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
       } else if (chatId) {
         insertData.whatsapp_chat_id = chatId;
       }
-      const { error } = await supabase.from("team_channel_whatsapp_links").insert(insertData);
+      const { error } = await supabase
+        .from("team_channel_whatsapp_links")
+        .insert(insertData);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -2303,7 +3248,10 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
 
   const removeWaLink = useMutation({
     mutationFn: async (linkId: string) => {
-      const { error } = await supabase.from("team_channel_whatsapp_links").delete().eq("id", linkId);
+      const { error } = await supabase
+        .from("team_channel_whatsapp_links")
+        .delete()
+        .eq("id", linkId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -2316,10 +3264,22 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
   const deleteChannel = async () => {
     setDeleting(true);
     try {
-      await supabase.from("team_channel_whatsapp_links").delete().eq("channel_id", channel.id);
-      await supabase.from("team_channel_members").delete().eq("channel_id", channel.id);
-      await supabase.from("team_messages").delete().eq("channel_id", channel.id);
-      const { error } = await supabase.from("team_channels").delete().eq("id", channel.id);
+      await supabase
+        .from("team_channel_whatsapp_links")
+        .delete()
+        .eq("channel_id", channel.id);
+      await supabase
+        .from("team_channel_members")
+        .delete()
+        .eq("channel_id", channel.id);
+      await supabase
+        .from("team_messages")
+        .delete()
+        .eq("channel_id", channel.id);
+      const { error } = await supabase
+        .from("team_channels")
+        .delete()
+        .eq("id", channel.id);
       if (error) throw error;
       toast.success("הערוץ נמחק בהצלחה");
       onDeleted();
@@ -2334,21 +3294,37 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
   if (!isAdmin) return null;
 
   // Groups not yet linked
-  const linkedGroupIds = new Set(waLinks.filter((l: any) => l.whatsapp_group_id).map((l: any) => l.whatsapp_group_id));
-  const availableGroups = waGroups.filter((g: any) => !linkedGroupIds.has(g.id));
+  const linkedGroupIds = new Set(
+    waLinks
+      .filter((l: any) => l.whatsapp_group_id)
+      .map((l: any) => l.whatsapp_group_id),
+  );
+  const availableGroups = waGroups.filter(
+    (g: any) => !linkedGroupIds.has(g.id),
+  );
 
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8" title="הגדרות ערוץ">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="הגדרות ערוץ"
+          >
             <Settings className="h-4 w-4" />
           </Button>
         </DialogTrigger>
-        <DialogContent dir="rtl" className="sm:max-w-md max-h-[80vh] overflow-y-auto">
+        <DialogContent
+          dir="rtl"
+          className="sm:max-w-md max-h-[80vh] overflow-y-auto"
+        >
           <DialogHeader>
             <DialogTitle>הגדרות ערוץ</DialogTitle>
-            <DialogDescription>ערוך את פרטי הערוץ או מחק אותו</DialogDescription>
+            <DialogDescription>
+              ערוך את פרטי הערוץ או מחק אותו
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -2357,13 +3333,27 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
             </div>
             <div>
               <Label>תיאור</Label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="תיאור קצר..." />
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="תיאור קצר..."
+              />
             </div>
             <div>
               <Label>צבע</Label>
               <div className="flex gap-2 mt-1">
                 {colors.map((c) => (
-                  <button key={c} className={cn("h-7 w-7 rounded-full border-2 transition-all", color === c ? "border-foreground scale-110" : "border-transparent")} style={{ backgroundColor: c }} onClick={() => setColor(c)} />
+                  <button
+                    key={c}
+                    className={cn(
+                      "h-7 w-7 rounded-full border-2 transition-all",
+                      color === c
+                        ? "border-foreground scale-110"
+                        : "border-transparent",
+                    )}
+                    style={{ backgroundColor: c }}
+                    onClick={() => setColor(c)}
+                  />
                 ))}
               </div>
             </div>
@@ -2375,20 +3365,37 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
                 <Phone className="h-4 w-4" />
                 שיוך וואטסאפ לערוץ
               </h4>
-              <p className="text-[10px] text-muted-foreground">הודעות מקבוצות/צ'אטים משויכים יועברו אוטומטית לערוץ זה</p>
+              <p className="text-[10px] text-muted-foreground">
+                הודעות מקבוצות/צ'אטים משויכים יועברו אוטומטית לערוץ זה
+              </p>
 
               {/* Existing links */}
               {waLinks.length > 0 && (
                 <div className="space-y-1">
                   {waLinks.map((link: any) => {
-                    const group = waGroups.find((g: any) => g.id === link.whatsapp_group_id);
+                    const group = waGroups.find(
+                      (g: any) => g.id === link.whatsapp_group_id,
+                    );
                     return (
-                      <div key={link.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 text-xs">
+                      <div
+                        key={link.id}
+                        className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 text-xs"
+                      >
                         <div className="flex items-center gap-2">
                           <Globe className="h-3.5 w-3.5 text-green-600" />
-                          <span>{link.display_name || group?.group_name || link.whatsapp_chat_id || "צ'אט"}</span>
+                          <span>
+                            {link.display_name ||
+                              group?.group_name ||
+                              link.whatsapp_chat_id ||
+                              "צ'אט"}
+                          </span>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeWaLink.mutate(link.id)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-destructive"
+                          onClick={() => removeWaLink.mutate(link.id)}
+                        >
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -2400,13 +3407,20 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
               {/* Add from existing WhatsApp groups */}
               {availableGroups.length > 0 && (
                 <div>
-                  <Label className="text-xs text-muted-foreground">הוסף קבוצת וואטסאפ</Label>
+                  <Label className="text-xs text-muted-foreground">
+                    הוסף קבוצת וואטסאפ
+                  </Label>
                   <div className="space-y-1 max-h-32 overflow-y-auto mt-1">
                     {availableGroups.map((g: any) => (
                       <button
                         key={g.id}
                         className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-muted transition-colors text-xs"
-                        onClick={() => addWaLink.mutate({ groupId: g.id, displayName: g.group_name })}
+                        onClick={() =>
+                          addWaLink.mutate({
+                            groupId: g.id,
+                            displayName: g.group_name,
+                          })
+                        }
                         disabled={addWaLink.isPending}
                       >
                         <div className="flex items-center gap-2">
@@ -2422,7 +3436,9 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
 
               {/* Add by chatId manually */}
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">או הוסף לפי chatId</Label>
+                <Label className="text-xs text-muted-foreground">
+                  או הוסף לפי chatId
+                </Label>
                 <div className="flex gap-2">
                   <Input
                     value={newChatId}
@@ -2443,7 +3459,12 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
                   variant="outline"
                   className="w-full"
                   disabled={!newChatId.trim() || addWaLink.isPending}
-                  onClick={() => addWaLink.mutate({ chatId: newChatId.trim(), displayName: newDisplayName.trim() || newChatId.trim() })}
+                  onClick={() =>
+                    addWaLink.mutate({
+                      chatId: newChatId.trim(),
+                      displayName: newDisplayName.trim() || newChatId.trim(),
+                    })
+                  }
                 >
                   <Plus className="h-3.5 w-3.5 ml-1" />
                   הוסף צ'אט
@@ -2452,10 +3473,17 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
             </div>
 
             <DialogFooter className="flex gap-2 sm:gap-0">
-              <Button variant="destructive" size="sm" onClick={() => setShowDeleteConfirm(true)}>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
                 <Trash2 className="h-4 w-4 ml-1" /> מחק ערוץ
               </Button>
-              <Button onClick={() => updateChannel.mutate()} disabled={!name.trim() || updateChannel.isPending}>
+              <Button
+                onClick={() => updateChannel.mutate()}
+                disabled={!name.trim() || updateChannel.isPending}
+              >
                 {updateChannel.isPending ? "שומר..." : "שמור שינויים"}
               </Button>
             </DialogFooter>
@@ -2466,12 +3494,21 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>מחיקת ערוץ &quot;{channel.name}&quot;</AlertDialogTitle>
-            <AlertDialogDescription>פעולה זו תמחק את הערוץ, כל ההודעות וכל החברים. לא ניתן לבטל פעולה זו.</AlertDialogDescription>
+            <AlertDialogTitle>
+              מחיקת ערוץ &quot;{channel.name}&quot;
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              פעולה זו תמחק את הערוץ, כל ההודעות וכל החברים. לא ניתן לבטל פעולה
+              זו.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>ביטול</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteChannel} disabled={deleting}>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={deleteChannel}
+              disabled={deleting}
+            >
               {deleting ? "מוחק..." : "מחק לצמיתות"}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -2501,26 +3538,47 @@ function ChannelHeader({
   onChannelUpdated: () => void;
   onChannelDeleted: () => void;
 }) {
-  const isAdmin = members.some((m) => m.user_id === currentUserId && m.role === "admin");
+  const isAdmin = members.some(
+    (m) => m.user_id === currentUserId && m.role === "admin",
+  );
 
   return (
     <div className="h-14 border-b flex items-center gap-3 px-4 shrink-0">
       {onBack && (
-        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onBack}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={onBack}
+        >
           <ArrowRight className="h-4 w-4" />
         </Button>
       )}
-      <ChannelAvatarDialog channel={channel} tenantId={tenantId} onUpdated={onChannelUpdated} />
+      <ChannelAvatarDialog
+        channel={channel}
+        tenantId={tenantId}
+        onUpdated={onChannelUpdated}
+      />
       <div className="flex-1 min-w-0">
         <h2 className="font-semibold text-sm">{channel.name}</h2>
-        {channel.description && <p className="text-xs text-muted-foreground truncate">{channel.description}</p>}
+        {channel.description && (
+          <p className="text-xs text-muted-foreground truncate">
+            {channel.description}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-1 text-muted-foreground text-xs">
           <Users className="h-3.5 w-3.5" />
           {members.length}
         </div>
-        <EditChannelDialog channel={channel} tenantId={tenantId} isAdmin={isAdmin} onUpdated={onChannelUpdated} onDeleted={onChannelDeleted} />
+        <EditChannelDialog
+          channel={channel}
+          tenantId={tenantId}
+          isAdmin={isAdmin}
+          onUpdated={onChannelUpdated}
+          onDeleted={onChannelDeleted}
+        />
         <ManageChannelMembersDialog
           channel={channel}
           members={members}
@@ -2586,11 +3644,18 @@ function ThreadDialog({
       .channel(`thread-${parentMessage.id}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "team_messages", filter: `parent_message_id=eq.${parentMessage.id}` },
-        () => refetchReplies()
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "team_messages",
+          filter: `parent_message_id=eq.${parentMessage.id}`,
+        },
+        () => refetchReplies(),
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [parentMessage?.id, open, refetchReplies]);
 
   useEffect(() => {
@@ -2614,7 +3679,9 @@ function ThreadDialog({
       setReplyText("");
       refetchReplies();
       // Invalidate main messages to update reply_count
-      queryClient.invalidateQueries({ queryKey: ["team-messages", tenantId, channelId] });
+      queryClient.invalidateQueries({
+        queryKey: ["team-messages", tenantId, channelId],
+      });
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -2623,17 +3690,28 @@ function ThreadDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="sm:max-w-lg max-h-[80vh] flex flex-col">
+      <DialogContent
+        dir="rtl"
+        className="sm:max-w-lg max-h-[80vh] flex flex-col"
+      >
         <DialogHeader>
           <DialogTitle className="text-sm">שרשור תגובות</DialogTitle>
-          <DialogDescription className="sr-only">תגובות להודעה</DialogDescription>
+          <DialogDescription className="sr-only">
+            תגובות להודעה
+          </DialogDescription>
         </DialogHeader>
 
         {/* Parent message */}
         <div className="p-3 rounded-lg bg-muted/50 border">
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="font-semibold text-sm">{parentMessage.sender_profile?.full_name || "משתמש"}</span>
-            <span className="text-xs text-muted-foreground">{format(new Date(parentMessage.created_at), "HH:mm dd/MM", { locale: he })}</span>
+            <span className="font-semibold text-sm">
+              {parentMessage.sender_profile?.full_name || "משתמש"}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {format(new Date(parentMessage.created_at), "HH:mm dd/MM", {
+                locale: he,
+              })}
+            </span>
           </div>
           <p className="text-sm whitespace-pre-wrap">{parentMessage.content}</p>
         </div>
@@ -2641,24 +3719,37 @@ function ThreadDialog({
         <Separator />
 
         {/* Replies */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 space-y-2 max-h-[40vh]">
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto min-h-0 space-y-2 max-h-[40vh]"
+        >
           {replies.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-4">אין תגובות עדיין. היה הראשון להגיב!</p>
+            <p className="text-xs text-muted-foreground text-center py-4">
+              אין תגובות עדיין. היה הראשון להגיב!
+            </p>
           )}
           {replies.map((reply) => (
             <div key={reply.id} className="flex gap-2 px-1">
               <Avatar className="h-6 w-6 shrink-0 mt-0.5">
-                <AvatarImage src={reply.sender_profile?.avatar_url || undefined} />
+                <AvatarImage
+                  src={reply.sender_profile?.avatar_url || undefined}
+                />
                 <AvatarFallback className="text-[10px]">
                   {(reply.sender_profile?.full_name || "?")[0]}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2">
-                  <span className="font-medium text-xs">{reply.sender_profile?.full_name || "משתמש"}</span>
-                  <span className="text-[10px] text-muted-foreground">{format(new Date(reply.created_at), "HH:mm")}</span>
+                  <span className="font-medium text-xs">
+                    {reply.sender_profile?.full_name || "משתמש"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {format(new Date(reply.created_at), "HH:mm")}
+                  </span>
                 </div>
-                <p className="text-sm whitespace-pre-wrap break-words">{reply.content}</p>
+                <p className="text-sm whitespace-pre-wrap break-words">
+                  {reply.content}
+                </p>
               </div>
             </div>
           ))}
@@ -2679,7 +3770,11 @@ function ThreadDialog({
               }
             }}
           />
-          <Button size="icon" onClick={() => replyText.trim() && sendReply.mutate()} disabled={!replyText.trim() || sendReply.isPending}>
+          <Button
+            size="icon"
+            onClick={() => replyText.trim() && sendReply.mutate()}
+            disabled={!replyText.trim() || sendReply.isPending}
+          >
             <Send className="h-4 w-4" />
           </Button>
         </div>
@@ -2703,36 +3798,44 @@ function NotifyTargetDialog({
   members: ChannelMember[];
   currentUserId?: string;
   channelHasGroupLink: boolean;
-  onSend: (targetOverride?: { type: 'group' } | { type: 'contact'; phone: string; name: string }) => void;
+  onSend: (
+    targetOverride?:
+      { type: "group" } | { type: "contact"; phone: string; name: string },
+  ) => void;
   isPending: boolean;
 }) {
-  const [target, setTarget] = useState<'group' | 'contact'>('group');
-  const [selectedMemberId, setSelectedMemberId] = useState<string>('');
+  const [target, setTarget] = useState<"group" | "contact">("group");
+  const [selectedMemberId, setSelectedMemberId] = useState<string>("");
 
   // Fetch profiles with phone for all members
-  const otherMembers = members.filter(m => m.user_id !== currentUserId);
-  const memberUserIds = otherMembers.map(m => m.user_id);
+  const otherMembers = members.filter((m) => m.user_id !== currentUserId);
+  const memberUserIds = otherMembers.map((m) => m.user_id);
 
   const { data: memberProfiles = [] } = useQuery({
-    queryKey: ['notify-member-profiles', memberUserIds.join(',')],
+    queryKey: ["notify-member-profiles", memberUserIds.join(",")],
     queryFn: async () => {
       if (memberUserIds.length === 0) return [];
       const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name, phone, campaigner_id, notification_group_link')
-        .in('id', memberUserIds);
-      
+        .from("profiles")
+        .select("id, full_name, phone, campaigner_id, notification_group_link")
+        .in("id", memberUserIds);
+
       // For members without phone, try campaigner phone
       const profiles = data || [];
-      const needCampaigner = profiles.filter(p => !p.phone && p.campaigner_id);
+      const needCampaigner = profiles.filter(
+        (p) => !p.phone && p.campaigner_id,
+      );
       if (needCampaigner.length > 0) {
         const { data: campaigners } = await supabase
-          .from('campaigners')
-          .select('id, phone')
-          .in('id', needCampaigner.map(p => p.campaigner_id!));
+          .from("campaigners")
+          .select("id, phone")
+          .in(
+            "id",
+            needCampaigner.map((p) => p.campaigner_id!),
+          );
         if (campaigners) {
-          const campMap = new Map(campaigners.map(c => [c.id, c.phone]));
-          profiles.forEach(p => {
+          const campMap = new Map(campaigners.map((c) => [c.id, c.phone]));
+          profiles.forEach((p) => {
             if (!p.phone && p.campaigner_id && campMap.has(p.campaigner_id)) {
               (p as any).phone = campMap.get(p.campaigner_id);
             }
@@ -2745,19 +3848,26 @@ function NotifyTargetDialog({
   });
 
   // Check all group link sources: channel level, member override, profile level
-  const memberHasOverrideGroup = members.some(m => m.notify_override_group);
-  const profileHasGroupLink = memberProfiles.some(p => (p as any).notification_group_link);
-  const hasAnyGroupLink = channelHasGroupLink || memberHasOverrideGroup || profileHasGroupLink;
+  const memberHasOverrideGroup = members.some((m) => m.notify_override_group);
+  const profileHasGroupLink = memberProfiles.some(
+    (p) => (p as any).notification_group_link,
+  );
+  const hasAnyGroupLink =
+    channelHasGroupLink || memberHasOverrideGroup || profileHasGroupLink;
 
   const handleSend = () => {
-    if (target === 'group') {
-      onSend({ type: 'group' });
+    if (target === "group") {
+      onSend({ type: "group" });
     } else {
-      const profile = memberProfiles.find(p => p.id === selectedMemberId);
+      const profile = memberProfiles.find((p) => p.id === selectedMemberId);
       if (profile?.phone) {
-        onSend({ type: 'contact', phone: profile.phone, name: profile.full_name || 'איש קשר' });
+        onSend({
+          type: "contact",
+          phone: profile.phone,
+          name: profile.full_name || "איש קשר",
+        });
       } else {
-        toast.error('לא נמצא מספר טלפון לאיש הקשר שנבחר');
+        toast.error("לא נמצא מספר טלפון לאיש הקשר שנבחר");
       }
     }
   };
@@ -2773,40 +3883,62 @@ function NotifyTargetDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <RadioGroup value={target} onValueChange={(v) => setTarget(v as 'group' | 'contact')}>
+          <RadioGroup
+            value={target}
+            onValueChange={(v) => setTarget(v as "group" | "contact")}
+          >
             <div className="flex items-center gap-2">
               <RadioGroupItem value="group" id="notify-group" />
-              <Label htmlFor="notify-group" className="text-sm cursor-pointer flex items-center gap-1.5">
+              <Label
+                htmlFor="notify-group"
+                className="text-sm cursor-pointer flex items-center gap-1.5"
+              >
                 <Users className="h-4 w-4 text-muted-foreground" />
                 שלח לקבוצה משותפת
               </Label>
               {!hasAnyGroupLink && (
-                <span className="text-[10px] text-destructive">(אין קבוצה מקושרת)</span>
+                <span className="text-[10px] text-destructive">
+                  (אין קבוצה מקושרת)
+                </span>
               )}
             </div>
             <div className="flex items-center gap-2">
               <RadioGroupItem value="contact" id="notify-contact" />
-              <Label htmlFor="notify-contact" className="text-sm cursor-pointer flex items-center gap-1.5">
+              <Label
+                htmlFor="notify-contact"
+                className="text-sm cursor-pointer flex items-center gap-1.5"
+              >
                 <User className="h-4 w-4 text-muted-foreground" />
                 שלח לאיש קשר ספציפי
               </Label>
             </div>
           </RadioGroup>
 
-          {target === 'contact' && (
-            <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
+          {target === "contact" && (
+            <Select
+              value={selectedMemberId}
+              onValueChange={setSelectedMemberId}
+            >
               <SelectTrigger className="text-sm">
                 <SelectValue placeholder="בחר חבר ערוץ..." />
               </SelectTrigger>
               <SelectContent>
                 {memberProfiles.map((profile) => (
-                  <SelectItem key={profile.id} value={profile.id} disabled={!profile.phone}>
+                  <SelectItem
+                    key={profile.id}
+                    value={profile.id}
+                    disabled={!profile.phone}
+                  >
                     <span className="flex items-center gap-2">
-                      <span>{profile.full_name || 'ללא שם'}</span>
+                      <span>{profile.full_name || "ללא שם"}</span>
                       {profile.phone ? (
-                        <span className="text-xs text-muted-foreground">{profile.phone}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {profile.phone}
+                        </span>
                       ) : (
-                        <span className="text-xs text-destructive">ללא טלפון</span>
+                        <span className="text-xs text-destructive">
+                          ללא טלפון
+                        </span>
                       )}
                     </span>
                   </SelectItem>
@@ -2819,10 +3951,18 @@ function NotifyTargetDialog({
         <DialogFooter>
           <Button
             onClick={handleSend}
-            disabled={isPending || (target === 'group' && !hasAnyGroupLink) || (target === 'contact' && !selectedMemberId)}
+            disabled={
+              isPending ||
+              (target === "group" && !hasAnyGroupLink) ||
+              (target === "contact" && !selectedMemberId)
+            }
             className="gap-1.5"
           >
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+            {isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Bell className="h-4 w-4" />
+            )}
             שלח התראה
           </Button>
         </DialogFooter>
@@ -2839,7 +3979,9 @@ export default function TeamChat() {
   const isMobile = useIsMobile();
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [taskMessage, setTaskMessage] = useState<TeamMessage | null>(null);
-  const [linkDialogFiles, setLinkDialogFiles] = useState<{ id: string; file_name: string; file_url: string }[]>([]);
+  const [linkDialogFiles, setLinkDialogFiles] = useState<
+    { id: string; file_name: string; file_url: string }[]
+  >([]);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [threadMessage, setThreadMessage] = useState<TeamMessage | null>(null);
 
@@ -2853,10 +3995,10 @@ export default function TeamChat() {
         .eq("user_id", userId!)
         .eq("tenant_id", tenantId);
       if (memError) throw memError;
-      
+
       const channelIds = (memberships || []).map((m: any) => m.channel_id);
       if (channelIds.length === 0) return [];
-      
+
       const { data, error } = await supabase
         .from("team_channels")
         .select("*")
@@ -2869,9 +4011,12 @@ export default function TeamChat() {
   });
 
   // Filter channels by selected agency
-  const channels = selectedAgency === "all"
-    ? allChannels
-    : allChannels.filter((ch) => !ch.agency_id || ch.agency_id === selectedAgency);
+  const channels =
+    selectedAgency === "all"
+      ? allChannels
+      : allChannels.filter(
+          (ch) => !ch.agency_id || ch.agency_id === selectedAgency,
+        );
 
   // Auto-select first channel (only on desktop)
   useEffect(() => {
@@ -2907,7 +4052,8 @@ export default function TeamChat() {
       const replyCounts: Record<string, number> = {};
       allMsgs.forEach((m: any) => {
         if (m.parent_message_id) {
-          replyCounts[m.parent_message_id] = (replyCounts[m.parent_message_id] || 0) + 1;
+          replyCounts[m.parent_message_id] =
+            (replyCounts[m.parent_message_id] || 0) + 1;
         }
       });
 
@@ -2921,7 +4067,7 @@ export default function TeamChat() {
   });
 
   // Filter to top-level messages only for display
-  const topLevelMessages = messages.filter(m => !m.parent_message_id);
+  const topLevelMessages = messages.filter((m) => !m.parent_message_id);
 
   // Fetch members for active channel
   const { data: members = [] } = useQuery({
@@ -2945,8 +4091,13 @@ export default function TeamChat() {
       .channel(`team-messages-${activeChannelId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "team_messages", filter: `channel_id=eq.${activeChannelId}` },
-        () => refetchMessages()
+        {
+          event: "*",
+          schema: "public",
+          table: "team_messages",
+          filter: `channel_id=eq.${activeChannelId}`,
+        },
+        () => refetchMessages(),
       )
       .subscribe();
 
@@ -2958,14 +4109,19 @@ export default function TeamChat() {
   // Play notification gong sound
   const playGongSound = useCallback(() => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
+      const audioCtx = new (
+        window.AudioContext || (window as any).webkitAudioContext
+      )();
+
       // Main tone
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
-      osc.type = 'sine';
+      osc.type = "sine";
       osc.frequency.setValueAtTime(830, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(415, audioCtx.currentTime + 0.8);
+      osc.frequency.exponentialRampToValueAtTime(
+        415,
+        audioCtx.currentTime + 0.8,
+      );
       gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
       osc.connect(gain);
@@ -2976,11 +4132,17 @@ export default function TeamChat() {
       // Harmonic
       const osc2 = audioCtx.createOscillator();
       const gain2 = audioCtx.createGain();
-      osc2.type = 'sine';
+      osc2.type = "sine";
       osc2.frequency.setValueAtTime(1245, audioCtx.currentTime);
-      osc2.frequency.exponentialRampToValueAtTime(622, audioCtx.currentTime + 0.6);
+      osc2.frequency.exponentialRampToValueAtTime(
+        622,
+        audioCtx.currentTime + 0.6,
+      );
       gain2.gain.setValueAtTime(0.1, audioCtx.currentTime);
-      gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+      gain2.gain.exponentialRampToValueAtTime(
+        0.001,
+        audioCtx.currentTime + 0.8,
+      );
       osc2.connect(gain2);
       gain2.connect(audioCtx.destination);
       osc2.start(audioCtx.currentTime);
@@ -2998,14 +4160,21 @@ export default function TeamChat() {
       .channel(`team-unread-${tenantId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "team_messages", filter: `tenant_id=eq.${tenantId}` },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "team_messages",
+          filter: `tenant_id=eq.${tenantId}`,
+        },
         (payload: any) => {
-          queryClient.invalidateQueries({ queryKey: ["team-unread-counts", tenantId, userId] });
+          queryClient.invalidateQueries({
+            queryKey: ["team-unread-counts", tenantId, userId],
+          });
           // Play sound if the message is from someone else
           if (payload.new?.sender_id !== userId) {
             playGongSound();
           }
-        }
+        },
       )
       .subscribe();
 
@@ -3017,7 +4186,10 @@ export default function TeamChat() {
   // Edit message mutation
   const editMessage = useMutation({
     mutationFn: async ({ id, content }: { id: string; content: string }) => {
-      const { error } = await supabase.from("team_messages").update({ content, is_edited: true }).eq("id", id);
+      const { error } = await supabase
+        .from("team_messages")
+        .update({ content, is_edited: true })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => refetchMessages(),
@@ -3027,32 +4199,49 @@ export default function TeamChat() {
   // Delete message mutation
   const deleteMessage = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("team_messages").delete().eq("id", id);
+      const { error } = await supabase
+        .from("team_messages")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { refetchMessages(); toast.success("ההודעה נמחקה"); },
+    onSuccess: () => {
+      refetchMessages();
+      toast.success("ההודעה נמחקה");
+    },
     onError: (err: any) => toast.error("שגיאה במחיקת ההודעה: " + err.message),
   });
 
   // Notify target dialog state
   const [notifyDialogOpen, setNotifyDialogOpen] = useState(false);
-  const [notifyDialogMessage, setNotifyDialogMessage] = useState<TeamMessage | null>(null);
+  const [notifyDialogMessage, setNotifyDialogMessage] =
+    useState<TeamMessage | null>(null);
 
   // Notify message mutation
   const notifyMessage = useMutation({
-    mutationFn: async ({ msg, targetOverride }: { msg: TeamMessage; targetOverride?: { type: 'group' } | { type: 'contact'; phone: string; name: string } }) => {
-      const { data, error } = await supabase.functions.invoke("notify-team-message", {
-        body: {
-          messageId: msg.id,
-          channelId: msg.channel_id,
-          tenantId,
-          messageContent: msg.content,
-          senderName: msg.sender_profile?.full_name || "חבר צוות",
-          channelName: activeChannel?.name || "ערוץ",
-          tenantSlug: tenant?.slug || "",
-          targetOverride,
+    mutationFn: async ({
+      msg,
+      targetOverride,
+    }: {
+      msg: TeamMessage;
+      targetOverride?:
+        { type: "group" } | { type: "contact"; phone: string; name: string };
+    }) => {
+      const { data, error } = await supabase.functions.invoke(
+        "notify-team-message",
+        {
+          body: {
+            messageId: msg.id,
+            channelId: msg.channel_id,
+            tenantId,
+            messageContent: msg.content,
+            senderName: msg.sender_profile?.full_name || "חבר צוות",
+            channelName: activeChannel?.name || "ערוץ",
+            tenantSlug: tenant?.slug || "",
+            targetOverride,
+          },
         },
-      });
+      );
       if (error) throw error;
       return data;
     },
@@ -3065,22 +4254,26 @@ export default function TeamChat() {
         toast.info(data?.reason || "לא נמצאו יעדים לשליחת התראה");
       }
     },
-    onError: (err: any) => toast.error("שגיאה בשליחת התראה: " + (err?.message || err)),
+    onError: (err: any) =>
+      toast.error("שגיאה בשליחת התראה: " + (err?.message || err)),
   });
 
   // Handle bell button click - check member count
-  const handleNotifyClick = useCallback((msg: TeamMessage) => {
-    // Filter members excluding current user
-    const otherMembers = members.filter(m => m.user_id !== userId);
-    if (otherMembers.length <= 1) {
-      // Single member or no members - send directly
-      notifyMessage.mutate({ msg });
-    } else {
-      // Multiple members - open dialog
-      setNotifyDialogMessage(msg);
-      setNotifyDialogOpen(true);
-    }
-  }, [members, userId, notifyMessage]);
+  const handleNotifyClick = useCallback(
+    (msg: TeamMessage) => {
+      // Filter members excluding current user
+      const otherMembers = members.filter((m) => m.user_id !== userId);
+      if (otherMembers.length <= 1) {
+        // Single member or no members - send directly
+        notifyMessage.mutate({ msg });
+      } else {
+        // Multiple members - open dialog
+        setNotifyDialogMessage(msg);
+        setNotifyDialogOpen(true);
+      }
+    },
+    [members, userId, notifyMessage],
+  );
 
   // Unread counts query
   const { data: readStatuses = [] } = useQuery({
@@ -3097,9 +4290,17 @@ export default function TeamChat() {
 
   // Compute unread per channel - count messages after last_read_at
   const { data: unreadCounts = {} } = useQuery<Record<string, number>>({
-    queryKey: ["team-unread-counts", tenantId, userId, allChannels.map(c => c.id).join(","), readStatuses],
+    queryKey: [
+      "team-unread-counts",
+      tenantId,
+      userId,
+      allChannels.map((c) => c.id).join(","),
+      readStatuses,
+    ],
     queryFn: async () => {
-      const readMap = new Map(readStatuses.map((r: any) => [r.channel_id, r.last_read_at]));
+      const readMap = new Map(
+        readStatuses.map((r: any) => [r.channel_id, r.last_read_at]),
+      );
 
       // Run all per-channel count queries in parallel instead of sequentially
       const results = await Promise.all(
@@ -3114,11 +4315,13 @@ export default function TeamChat() {
           if (lastRead) query = query.gt("created_at", lastRead);
           const { count } = await query;
           return { id: ch.id, count: count ?? 0 };
-        })
+        }),
       );
 
       const counts: Record<string, number> = {};
-      results.forEach(({ id, count }) => { if (count > 0) counts[id] = count; });
+      results.forEach(({ id, count }) => {
+        if (count > 0) counts[id] = count;
+      });
       return counts;
     },
     enabled: !!userId && allChannels.length > 0,
@@ -3126,19 +4329,27 @@ export default function TeamChat() {
   });
 
   // Mark channel as read when switching
-  const markAsRead = useCallback(async (channelId: string) => {
-    if (!userId) return;
-    await supabase
-      .from("team_message_read_status")
-      .upsert({
-        channel_id: channelId,
-        user_id: userId,
-        last_read_at: new Date().toISOString(),
-        last_read_message_id: null,
-      }, { onConflict: "channel_id,user_id" });
-    queryClient.invalidateQueries({ queryKey: ["team-read-status", userId, tenantId] });
-    queryClient.invalidateQueries({ queryKey: ["team-unread-counts", tenantId] });
-  }, [userId, tenantId, queryClient]);
+  const markAsRead = useCallback(
+    async (channelId: string) => {
+      if (!userId) return;
+      await supabase.from("team_message_read_status").upsert(
+        {
+          channel_id: channelId,
+          user_id: userId,
+          last_read_at: new Date().toISOString(),
+          last_read_message_id: null,
+        },
+        { onConflict: "channel_id,user_id" },
+      );
+      queryClient.invalidateQueries({
+        queryKey: ["team-read-status", userId, tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["team-unread-counts", tenantId],
+      });
+    },
+    [userId, tenantId, queryClient],
+  );
 
   // Mark as read when channel changes
   useEffect(() => {
@@ -3160,7 +4371,10 @@ export default function TeamChat() {
   const showChat = isMobile ? !!activeChannelId : true;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-background" dir="rtl">
+    <div
+      className="flex h-[calc(100vh-4rem)] overflow-hidden bg-background"
+      dir="rtl"
+    >
       {/* Channel Sidebar */}
       {showSidebar && (
         <ChannelSidebar
@@ -3183,17 +4397,30 @@ export default function TeamChat() {
                 members={members}
                 tenantId={tenantId}
                 currentUserId={userId}
-                onMembersChanged={() => queryClient.invalidateQueries({ queryKey: ["team-channel-members", tenantId, activeChannelId] })}
+                onMembersChanged={() =>
+                  queryClient.invalidateQueries({
+                    queryKey: [
+                      "team-channel-members",
+                      tenantId,
+                      activeChannelId,
+                    ],
+                  })
+                }
                 onBack={isMobile ? () => setActiveChannelId(null) : undefined}
                 onChannelUpdated={() => refetchChannels()}
-                onChannelDeleted={() => { setActiveChannelId(null); refetchChannels(); }}
+                onChannelDeleted={() => {
+                  setActiveChannelId(null);
+                  refetchChannels();
+                }}
               />
               <TeamMessageList
                 messages={topLevelMessages}
                 allMessages={messages}
                 currentUserId={userId}
                 onConvertToTask={(msg) => setTaskMessage(msg)}
-                onEditMessage={(msg, newContent) => editMessage.mutate({ id: msg.id, content: newContent })}
+                onEditMessage={(msg, newContent) =>
+                  editMessage.mutate({ id: msg.id, content: newContent })
+                }
                 onDeleteMessage={(msg) => deleteMessage.mutate(msg.id)}
                 onNotifyMessage={handleNotifyClick}
                 onReplyMessage={(msg) => setThreadMessage(msg)}
@@ -3209,10 +4436,22 @@ export default function TeamChat() {
               />
               <ConvertMessageToTaskDialog
                 open={!!taskMessage}
-                onOpenChange={(open) => { if (!open) setTaskMessage(null); }}
+                onOpenChange={(open) => {
+                  if (!open) setTaskMessage(null);
+                }}
                 messageText={taskMessage?.content || ""}
-                contactId={activeChannel.linked_client_id || activeChannel.linked_lead_id || undefined}
-                contactType={activeChannel.linked_client_id ? 'client' : activeChannel.linked_lead_id ? 'lead' : undefined}
+                contactId={
+                  activeChannel.linked_client_id ||
+                  activeChannel.linked_lead_id ||
+                  undefined
+                }
+                contactType={
+                  activeChannel.linked_client_id
+                    ? "client"
+                    : activeChannel.linked_lead_id
+                      ? "lead"
+                      : undefined
+                }
               />
             </>
           ) : (
@@ -3230,7 +4469,9 @@ export default function TeamChat() {
       <ThreadDialog
         parentMessage={threadMessage}
         open={!!threadMessage}
-        onOpenChange={(open) => { if (!open) setThreadMessage(null); }}
+        onOpenChange={(open) => {
+          if (!open) setThreadMessage(null);
+        }}
         channelId={activeChannelId || ""}
         tenantId={tenantId}
         currentUserId={userId}
@@ -3248,7 +4489,12 @@ export default function TeamChat() {
       {/* Notify target dialog */}
       <NotifyTargetDialog
         open={notifyDialogOpen}
-        onOpenChange={(open) => { if (!open) { setNotifyDialogOpen(false); setNotifyDialogMessage(null); } }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setNotifyDialogOpen(false);
+            setNotifyDialogMessage(null);
+          }
+        }}
         members={members}
         currentUserId={userId}
         channelHasGroupLink={!!activeChannel?.notification_group_link}

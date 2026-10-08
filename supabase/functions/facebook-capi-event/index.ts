@@ -2,30 +2,31 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 async function sha256Hash(data: string): Promise<string> {
   const encoder = new TextEncoder();
   const dataBuffer = encoder.encode(data.toLowerCase().trim());
-  const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", dataBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { 
+    const {
       tenant_id,
       event_name, // Lead, Contact, ViewContent, Purchase
       lead_id,
@@ -36,27 +37,32 @@ serve(async (req) => {
       test_event_code, // For testing
     } = await req.json();
 
-
     if (!tenant_id || !event_name) {
       return new Response(
-        JSON.stringify({ error: 'tenant_id and event_name are required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "tenant_id and event_name are required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Get CAPI integration settings
     const { data: integration, error: intError } = await supabase
-      .from('tenant_integrations')
-      .select('*')
-      .eq('tenant_id', tenant_id)
-      .eq('integration_type', 'facebook_capi')
-      .eq('is_active', true)
+      .from("tenant_integrations")
+      .select("*")
+      .eq("tenant_id", tenant_id)
+      .eq("integration_type", "facebook_capi")
+      .eq("is_active", true)
       .single();
 
     if (intError || !integration) {
       return new Response(
-        JSON.stringify({ error: 'No active CAPI integration found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "No active CAPI integration found" }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -66,8 +72,11 @@ serve(async (req) => {
 
     if (!pixelId || !accessToken) {
       return new Response(
-        JSON.stringify({ error: 'Pixel ID or Access Token not configured' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Pixel ID or Access Token not configured" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -79,7 +88,7 @@ serve(async (req) => {
     }
     if (user_data?.phone) {
       // Remove non-numeric characters and hash
-      const cleanPhone = user_data.phone.replace(/\D/g, '');
+      const cleanPhone = user_data.phone.replace(/\D/g, "");
       hashedUserData.ph = [await sha256Hash(cleanPhone)];
     }
     if (user_data?.first_name) {
@@ -99,7 +108,7 @@ serve(async (req) => {
     const eventData: any = {
       event_name,
       event_time: Math.floor(Date.now() / 1000),
-      action_source: 'website',
+      action_source: "website",
       user_data: hashedUserData,
     };
 
@@ -127,48 +136,52 @@ serve(async (req) => {
       requestBody.test_event_code = effectiveTestCode;
     }
 
-
     // Send to Facebook Conversions API
     const fbResponse = await fetch(
       `https://graph.facebook.com/v21.0/${pixelId}/events?access_token=${accessToken}`,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
-      }
+      },
     );
 
     const fbResult = await fbResponse.json();
 
     if (!fbResponse.ok) {
-      console.error('Facebook CAPI error:', fbResult);
+      console.error("Facebook CAPI error:", fbResult);
       return new Response(
-        JSON.stringify({ error: 'Failed to send event to Facebook', details: fbResult }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error: "Failed to send event to Facebook",
+          details: fbResult,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Update last_sync_at
     await supabase
-      .from('tenant_integrations')
+      .from("tenant_integrations")
       .update({ last_sync_at: new Date().toISOString() })
-      .eq('id', integration.id);
+      .eq("id", integration.id);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         events_received: fbResult.events_received,
         fbtrace_id: fbResult.fbtrace_id,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-
   } catch (error: unknown) {
-    console.error('Error in facebook-capi-event:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error("Error in facebook-capi-event:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

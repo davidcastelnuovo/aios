@@ -51,7 +51,8 @@ export interface SendSignatureResult {
 }
 
 const SIGNATURE_ERROR_MESSAGES: Record<string, string> = {
-  signature_access_denied: "אין גישה למסמך — רענן את העמוד או החלף ארגון ונסה שוב",
+  signature_access_denied:
+    "אין גישה למסמך — רענן את העמוד או החלף ארגון ונסה שוב",
   document_not_signable: "המסמך לא זמין לשליחה (כבר נשלח, הושלם או בוטל)",
   missing_fields: "חסרים שם או אימייל לחותם",
   missing_document_id: "לא נמצא מסמך לשליחה",
@@ -61,8 +62,12 @@ const SIGNATURE_ERROR_MESSAGES: Record<string, string> = {
 function humanizeSignatureError(raw: string | null): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
-  if (SIGNATURE_ERROR_MESSAGES[trimmed]) return SIGNATURE_ERROR_MESSAGES[trimmed];
-  if (trimmed.includes("row-level security") || trimmed.includes("violates row-level security")) {
+  if (SIGNATURE_ERROR_MESSAGES[trimmed])
+    return SIGNATURE_ERROR_MESSAGES[trimmed];
+  if (
+    trimmed.includes("row-level security") ||
+    trimmed.includes("violates row-level security")
+  ) {
     return "אין הרשאה לשמור או לשלוח מסמך בארגון הנוכחי — רענן את העמוד ונסה שוב";
   }
   if (trimmed.includes("new row violates")) {
@@ -105,7 +110,10 @@ export async function sendSignatureDocument(
     fieldRequired,
   } = opts;
 
-  const functionName = mode === "template" ? "send-signature-from-template" : "send-signature-request";
+  const functionName =
+    mode === "template"
+      ? "send-signature-from-template"
+      : "send-signature-request";
   const body =
     mode === "template"
       ? {
@@ -141,7 +149,9 @@ export async function sendSignatureDocument(
           fieldRequired,
         };
 
-  const { data, error } = await supabase.functions.invoke(functionName, { body });
+  const { data, error } = await supabase.functions.invoke(functionName, {
+    body,
+  });
   const invokeError = parseInvokeError(data, error);
   if (!invokeError) {
     return {
@@ -181,7 +191,9 @@ export function openWhatsAppForLinks(
   return { opened, skipped };
 }
 
-export async function copyFirstSigningLink(links: SigningLinkResult[]): Promise<boolean> {
+export async function copyFirstSigningLink(
+  links: SigningLinkResult[],
+): Promise<boolean> {
   if (!links[0]?.url) throw new Error("לא נוצר קישור לחתימה");
   await copySigningUrl(links[0].url);
   return true;

@@ -6,11 +6,11 @@
 
 **APIs used (OpenAI Admin key — not a normal sk- project key):**
 
-| Endpoint | Data |
-|---|---|
-| `GET /v1/organization/costs?bucket_width=1d` | Current-month spend, daily cost trend, line-item breakdown |
-| `GET /v1/organization/usage/completions?bucket_width=1d` | Input/output tokens, model request counts |
-| `GET /v1/organization/spend_limits` (best-effort) | Hard/soft limits when configured |
+| Endpoint                                                 | Data                                                       |
+| -------------------------------------------------------- | ---------------------------------------------------------- |
+| `GET /v1/organization/costs?bucket_width=1d`             | Current-month spend, daily cost trend, line-item breakdown |
+| `GET /v1/organization/usage/completions?bucket_width=1d` | Input/output tokens, model request counts                  |
+| `GET /v1/organization/spend_limits` (best-effort)        | Hard/soft limits when configured                           |
 
 **Not available via public API (never invented):**
 
@@ -37,11 +37,11 @@
 
 ### Recommendation
 
-| Surface | Default | Rationale |
-|---|---|---|
+| Surface             | Default                                                    | Rationale                                                   |
+| ------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- |
 | Command Center chat | Cursor Direct **sticky follow-up** on fixed `bc-…` session | Same thread, no new agent credits; async callback preserved |
-| WhatsApp / tasks | Internal Carmen (`run-ai-agent`) | Tools, approvals, CRM — do not route through Cursor |
-| Dev escalations | Existing `request_dev_task` / dev-task queue | Avoid Carmen↔Cursor ping-pong |
+| WhatsApp / tasks    | Internal Carmen (`run-ai-agent`)                           | Tools, approvals, CRM — do not route through Cursor         |
+| Dev escalations     | Existing `request_dev_task` / dev-task queue               | Avoid Carmen↔Cursor ping-pong                               |
 
 ### Safe implementation (feature flag)
 
@@ -93,23 +93,23 @@ When enabled, Codex Direct returns **inline** reply (no callback wait). Parliame
 
 ### Risks
 
-| Risk | Level | Mitigation |
-|---|---|---|
+| Risk                   | Level                 | Mitigation                                                      |
+| ---------------------- | --------------------- | --------------------------------------------------------------- |
 | No repo access / tools | High for coding tasks | Keep flag off until Codex seat is Q&A-only; use Cursor for code |
-| Model cost on org key | Medium | Default `gpt-4o-mini`; monitor Admin costs widget |
-| Gemini fallback break | Low | Codex path is OpenAI-only; internal Carmen fallbacks unchanged |
-| Carmen↔Codex loops | Low | Sync path; no MCP back to Carmen |
+| Model cost on org key  | Medium                | Default `gpt-4o-mini`; monitor Admin costs widget               |
+| Gemini fallback break  | Low                   | Codex path is OpenAI-only; internal Carmen fallbacks unchanged  |
+| Carmen↔Codex loops     | Low                   | Sync path; no MCP back to Carmen                                |
 
 ### Required env vars summary
 
-| Variable | Purpose |
-|---|---|
-| `OPENAI_ADMIN_KEY` | Command Center billing widget |
-| `CARMEN_LIGHTWEIGHT_BRAIN` | Sticky Cursor Direct reuse |
-| `CODEX_USE_OPENAI_API` | Codex sync API path |
-| `CODEX_API_MODEL` | Model for Codex API path |
-| `CURSOR_DIRECT_AGENT_ID` | Fixed bc- session for sticky reuse |
-| `CURSOR_API_KEY` | Cursor Cloud (when flags off) |
+| Variable                   | Purpose                            |
+| -------------------------- | ---------------------------------- |
+| `OPENAI_ADMIN_KEY`         | Command Center billing widget      |
+| `CARMEN_LIGHTWEIGHT_BRAIN` | Sticky Cursor Direct reuse         |
+| `CODEX_USE_OPENAI_API`     | Codex sync API path                |
+| `CODEX_API_MODEL`          | Model for Codex API path           |
+| `CURSOR_DIRECT_AGENT_ID`   | Fixed bc- session for sticky reuse |
+| `CURSOR_API_KEY`           | Cursor Cloud (when flags off)      |
 
 ---
 

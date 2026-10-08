@@ -16,24 +16,28 @@ export interface LeadPipelineStage {
 export function useLeadPipelineStages() {
   const { tenantId } = useCurrentTenant();
 
-  const { data: stages = [], isLoading, refetch } = useQuery({
+  const {
+    data: stages = [],
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["lead-pipeline-stages", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      
+
       const { data, error } = await supabase
         .from("lead_pipeline_stages")
         .select("*")
         .eq("tenant_id", tenantId)
         .order("sort_order");
-      
+
       if (error) throw error;
       return data as LeadPipelineStage[];
     },
     enabled: !!tenantId,
   });
 
-  const activeStages = stages.filter(s => s.is_active);
+  const activeStages = stages.filter((s) => s.is_active);
 
   return { stages, activeStages, isLoading, refetch };
 }
@@ -43,16 +47,30 @@ export function useLeadPipelineStageMutations() {
   const { tenantId } = useCurrentTenant();
 
   const updateStage = useMutation({
-    mutationFn: async ({ id, label, color, sort_order, is_active }: Partial<LeadPipelineStage> & { id: string }) => {
+    mutationFn: async ({
+      id,
+      label,
+      color,
+      sort_order,
+      is_active,
+    }: Partial<LeadPipelineStage> & { id: string }) => {
       const { error } = await supabase
         .from("lead_pipeline_stages")
-        .update({ label, color, sort_order, is_active, updated_at: new Date().toISOString() })
+        .update({
+          label,
+          color,
+          sort_order,
+          is_active,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["lead-pipeline-stages", tenantId],
+      });
     },
     onError: (error: Error) => {
       toast.error("שגיאה בעדכון שלב: " + error.message);
@@ -73,20 +91,20 @@ export function useLeadPipelineStageMutations() {
       const maxOrder = existing?.[0]?.sort_order ?? 0;
       const stage_key = `custom_${Date.now()}`;
 
-      const { error } = await supabase
-        .from("lead_pipeline_stages")
-        .insert({
-          tenant_id: tenantId,
-          stage_key,
-          label,
-          color,
-          sort_order: maxOrder + 1,
-        });
-      
+      const { error } = await supabase.from("lead_pipeline_stages").insert({
+        tenant_id: tenantId,
+        stage_key,
+        label,
+        color,
+        sort_order: maxOrder + 1,
+      });
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["lead-pipeline-stages", tenantId],
+      });
       toast.success("שלב נוסף בהצלחה");
     },
     onError: (error: Error) => {
@@ -100,11 +118,13 @@ export function useLeadPipelineStageMutations() {
         .from("lead_pipeline_stages")
         .delete()
         .eq("id", id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["lead-pipeline-stages", tenantId],
+      });
       toast.success("שלב נמחק");
     },
     onError: (error: Error) => {
@@ -119,14 +139,16 @@ export function useLeadPipelineStageMutations() {
           supabase
             .from("lead_pipeline_stages")
             .update({ sort_order: update.sort_order })
-            .eq("id", update.id)
+            .eq("id", update.id),
         ),
       );
       const failed = results.find((result) => result.error);
       if (failed?.error) throw failed.error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["lead-pipeline-stages", tenantId],
+      });
     },
   });
 

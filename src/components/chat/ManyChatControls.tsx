@@ -4,7 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Pencil, Check, X, Tag } from "lucide-react";
@@ -16,7 +22,12 @@ interface ManyChatControlsProps {
   tenantId: string;
 }
 
-export function ManyChatControls({ contactId, contactType, subscriberId, tenantId }: ManyChatControlsProps) {
+export function ManyChatControls({
+  contactId,
+  contactType,
+  subscriberId,
+  tenantId,
+}: ManyChatControlsProps) {
   const [isEditingId, setIsEditingId] = useState(false);
   const [editedId, setEditedId] = useState(subscriberId || "");
   const queryClient = useQueryClient();
@@ -25,9 +36,12 @@ export function ManyChatControls({ contactId, contactType, subscriberId, tenantI
   const { data: tags, isError: tagsError } = useQuery({
     queryKey: ["manychat-tags", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("get-manychat-tags", {
-        body: { tenantId },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "get-manychat-tags",
+        {
+          body: { tenantId },
+        },
+      );
       if (error) throw error;
       return data?.tags || [];
     },
@@ -80,7 +94,10 @@ export function ManyChatControls({ contactId, contactType, subscriberId, tenantI
   return (
     <div className="space-y-3 p-3 bg-muted/30 rounded-lg border">
       <div className="flex items-center gap-2 text-sm font-medium">
-        <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400">
+        <Badge
+          variant="outline"
+          className="bg-green-500/10 text-green-700 dark:text-green-400"
+        >
           ManyChat
         </Badge>
       </div>
@@ -137,7 +154,9 @@ export function ManyChatControls({ contactId, contactType, subscriberId, tenantI
             הוסף טאג
           </Label>
           {tagsError ? (
-            <p className="text-xs text-destructive">לא ניתן לטעון תגיות. בדוק שהאינטגרציה פעילה בהגדרות ManyChat.</p>
+            <p className="text-xs text-destructive">
+              לא ניתן לטעון תגיות. בדוק שהאינטגרציה פעילה בהגדרות ManyChat.
+            </p>
           ) : tags && tags.length > 0 ? (
             <Select
               onValueChange={(value) => addTagMutation.mutate(parseInt(value))}

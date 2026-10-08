@@ -73,7 +73,9 @@ const MODULE_ROUTE_PERMISSIONS: Record<string, ModulePermission> = {
   "unified-settings": "lead_integrations",
 };
 
-export function permissionHandleForPathname(pathname: string): ModuleRouteHandle | undefined {
+export function permissionHandleForPathname(
+  pathname: string,
+): ModuleRouteHandle | undefined {
   const match = pathname.match(/^\/t\/[^/]+(?:\/(.*))?$/);
   if (!match) return undefined;
 
@@ -92,7 +94,9 @@ export function isEntityDashboardSubpath(subpath: string): boolean {
   return segments[0] === "dashboard" && segments.length >= 2;
 }
 
-export function permissionForSubpath(subpath: string): ModulePermission | undefined {
+export function permissionForSubpath(
+  subpath: string,
+): ModulePermission | undefined {
   if (Object.prototype.hasOwnProperty.call(MODULE_ROUTE_PERMISSIONS, subpath)) {
     return MODULE_ROUTE_PERMISSIONS[subpath];
   }
@@ -104,7 +108,9 @@ export function permissionForSubpath(subpath: string): ModulePermission | undefi
   const segments = subpath.split("/").filter(Boolean);
   for (let i = segments.length - 1; i > 0; i--) {
     const prefix = segments.slice(0, i).join("/");
-    if (Object.prototype.hasOwnProperty.call(MODULE_ROUTE_PERMISSIONS, prefix)) {
+    if (
+      Object.prototype.hasOwnProperty.call(MODULE_ROUTE_PERMISSIONS, prefix)
+    ) {
       return MODULE_ROUTE_PERMISSIONS[prefix];
     }
   }

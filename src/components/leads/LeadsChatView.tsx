@@ -1,19 +1,52 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
 import { Link } from "react-router-dom";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, FileText, DollarSign, Paperclip, Users, ChevronRight, X, ArrowRight, Pencil, Archive, FolderOpen } from "lucide-react";
+import {
+  User,
+  Phone,
+  PhoneCall,
+  Building2,
+  Clock,
+  Search,
+  Tag,
+  Mail,
+  ExternalLink,
+  CheckSquare,
+  Trash2,
+  Settings2,
+  FileText,
+  DollarSign,
+  Paperclip,
+  Users,
+  ChevronRight,
+  X,
+  ArrowRight,
+  Pencil,
+  Archive,
+  FolderOpen,
+} from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
-import { LeadTagSelector, LeadTagBadges, LeadTagBadgesEditable } from "@/components/leads/LeadTagSelector";
+import {
+  LeadTagSelector,
+  LeadTagBadges,
+  LeadTagBadgesEditable,
+} from "@/components/leads/LeadTagSelector";
 import { LeadUpdatesTab } from "@/components/leads/LeadUpdatesTab";
 import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
 import AddTaskForm from "@/components/forms/AddTaskForm";
@@ -32,18 +65,36 @@ import {
   responseStatusSelectValue,
   unmatchedResponseStatusValue,
 } from "@/lib/leadFields";
-import { LeadCreatedAtLines, LeadSourceLines } from "@/components/leads/LeadOriginLines";
+import {
+  LeadCreatedAtLines,
+  LeadSourceLines,
+} from "@/components/leads/LeadOriginLines";
 import { SendSignatureFromLeadPanel } from "@/components/leads/SendSignatureFromLeadPanel";
 
 interface LeadsChatViewProps {
   leads: any[];
-  pipelineStages: Array<{ id: string; label: string; color: string; bgClass: string; borderColor: string; hexColor?: string }>;
-  leadStatuses: Array<{ status_key: string; label: string; color: string; sort_order: number }>;
+  pipelineStages: Array<{
+    id: string;
+    label: string;
+    color: string;
+    bgClass: string;
+    borderColor: string;
+    hexColor?: string;
+  }>;
+  leadStatuses: Array<{
+    status_key: string;
+    label: string;
+    color: string;
+    sort_order: number;
+  }>;
   allTags: Array<{ id: string; name: string; color: string }>;
   leadsTagsMap: Record<string, string[]>;
   productsLookup: Record<string, { name: string; price: number }>;
   onStatusChange: (leadId: string, newStatus: string) => void;
-  onResponseStatusChange: (leadId: string, responseStatus: string | null) => void;
+  onResponseStatusChange: (
+    leadId: string,
+    responseStatus: string | null,
+  ) => void;
   onFollowUpDateUpdate?: (leadId: string, newDate: string | null) => void;
   isCompanyNameVisible: boolean;
   searchQuery: string;
@@ -56,7 +107,10 @@ interface LeadsChatViewProps {
   loadedCount?: number;
 }
 
-function getStatusColor(statusKey: string | null, statuses: Array<{ status_key: string; color: string; label?: string }>) {
+function getStatusColor(
+  statusKey: string | null,
+  statuses: Array<{ status_key: string; color: string; label?: string }>,
+) {
   return findLeadStatus(statusKey, statuses)?.color;
 }
 
@@ -81,7 +135,9 @@ export function LeadsChatView({
   loadedCount,
 }: LeadsChatViewProps) {
   const isMobile = useIsMobile();
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(initialLeadId ?? null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(
+    initialLeadId ?? null,
+  );
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<any>(null);
   const [editInitialTab, setEditInitialTab] = useState<string>("details");
@@ -89,7 +145,9 @@ export function LeadsChatView({
   const [manageStagesOpen, setManageStagesOpen] = useState(false);
   const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
-  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -106,29 +164,36 @@ export function LeadsChatView({
     if (!searchQuery.trim()) return leads;
     const q = searchQuery.trim();
     const qLower = q.toLowerCase();
-    return leads.filter((l) =>
-      (l.contact_name || "").toLowerCase().includes(qLower) ||
-      (l.company_name || "").toLowerCase().includes(qLower) ||
-      (l.campaign_name || "").toLowerCase().includes(qLower) ||
-      (l.email || "").toLowerCase().includes(qLower) ||
-      leadMatchesPhoneSearch(l.phone, q)
+    return leads.filter(
+      (l) =>
+        (l.contact_name || "").toLowerCase().includes(qLower) ||
+        (l.company_name || "").toLowerCase().includes(qLower) ||
+        (l.campaign_name || "").toLowerCase().includes(qLower) ||
+        (l.email || "").toLowerCase().includes(qLower) ||
+        leadMatchesPhoneSearch(l.phone, q),
     );
   }, [leads, searchQuery]);
 
   const selectedLead = useMemo(() => {
-    return leads.find(l => l.id === selectedLeadId) || null;
+    return leads.find((l) => l.id === selectedLeadId) || null;
   }, [leads, selectedLeadId]);
 
-  const selectedLeadTagIds = selectedLead ? (leadsTagsMap[selectedLead.id] || []) : [];
+  const selectedLeadTagIds = selectedLead
+    ? leadsTagsMap[selectedLead.id] || []
+    : [];
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("להעביר את הליד לארכיון? הוא יישמר ואפשר לשחזר. מחיקה לצמיתות רק מארכיון הלידים.")) {
+    if (
+      !window.confirm(
+        "להעביר את הליד לארכיון? הוא יישמר ואפשר לשחזר. מחיקה לצמיתות רק מארכיון הלידים.",
+      )
+    ) {
       return;
     }
     try {
       await archiveLeads([id]);
       toast.success("הליד הועבר לארכיון");
-      const idx = leads.findIndex(l => l.id === id);
+      const idx = leads.findIndex((l) => l.id === id);
       const next = leads[idx + 1] || leads[idx - 1] || null;
       setSelectedLeadId(next?.id || null);
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
@@ -141,7 +206,7 @@ export function LeadsChatView({
   };
 
   const toggleLeadSelection = useCallback((leadId: string) => {
-    setSelectedLeadIds(prev => {
+    setSelectedLeadIds((prev) => {
       const next = new Set(prev);
       if (next.has(leadId)) next.delete(leadId);
       else next.add(leadId);
@@ -153,7 +218,7 @@ export function LeadsChatView({
     if (selectedLeadIds.size === filteredListLeads.length) {
       setSelectedLeadIds(new Set());
     } else {
-      setSelectedLeadIds(new Set(filteredListLeads.map(l => l.id)));
+      setSelectedLeadIds(new Set(filteredListLeads.map((l) => l.id)));
     }
   }, [filteredListLeads, selectedLeadIds.size]);
 
@@ -191,7 +256,10 @@ export function LeadsChatView({
     if (selectedLeadIds.size === 0) return;
     setBulkActionLoading(true);
     try {
-      const { error } = await supabase.from("leads").update({ status: stageId }).in("id", Array.from(selectedLeadIds));
+      const { error } = await supabase
+        .from("leads")
+        .update({ status: stageId })
+        .in("id", Array.from(selectedLeadIds));
       if (error) throw error;
       toast.success(`${selectedLeadIds.size} לידים עודכנו`);
       exitMultiSelect();
@@ -209,7 +277,10 @@ export function LeadsChatView({
     if (selectedLeadIds.size === 0) return;
     setBulkActionLoading(true);
     try {
-      const { error } = await supabase.from("leads").update({ response_status: statusKey }).in("id", Array.from(selectedLeadIds));
+      const { error } = await supabase
+        .from("leads")
+        .update({ response_status: statusKey })
+        .in("id", Array.from(selectedLeadIds));
       if (error) throw error;
       toast.success(`${selectedLeadIds.size} לידים עודכנו`);
       exitMultiSelect();
@@ -223,653 +294,906 @@ export function LeadsChatView({
     }
   };
 
-  const getStageInfo = (statusKey: string) => pipelineStages.find(s => s.id === statusKey);
-  const getLeadStatusInfo = (statusKey: string) => findLeadStatus(statusKey, leadStatuses);
+  const getStageInfo = (statusKey: string) =>
+    pipelineStages.find((s) => s.id === statusKey);
+  const getLeadStatusInfo = (statusKey: string) =>
+    findLeadStatus(statusKey, leadStatuses);
 
   return (
-    <div className={cn("flex h-full min-h-0 max-h-full overflow-hidden bg-background w-full max-w-full", isMobile ? "border-0 rounded-none" : "border rounded-lg")} dir="rtl">
+    <div
+      className={cn(
+        "flex h-full min-h-0 max-h-full overflow-hidden bg-background w-full max-w-full",
+        isMobile ? "border-0 rounded-none" : "border rounded-lg",
+      )}
+      dir="rtl"
+    >
       {/* Lead list */}
       {(!isMobile || !selectedLeadId) && (
-      <div className={cn("border-s flex flex-col bg-muted/20 overflow-hidden min-h-0", isMobile ? "w-full flex-1" : "w-[25%] min-w-[240px] max-w-[25%]")} dir="rtl">
-        {/* List header with search */}
-        <div className={cn("border-b bg-background/80 backdrop-blur-sm shrink-0", isMobile ? "p-2" : "p-3")}>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="חיפוש לפי שם, טלפון או חברה..."
-                value={searchQuery}
-                onChange={(e) => onSearchQueryChange?.(e.target.value)}
-                className="pr-9 h-9 text-sm text-right"
-              />
-            </div>
-            <Button
-              variant={multiSelectMode ? "default" : "outline"}
-              size="icon"
-              className="h-9 w-9 shrink-0"
-              onClick={() => multiSelectMode ? exitMultiSelect() : setMultiSelectMode(true)}
-              title={multiSelectMode ? "בטל בחירה" : "בחירה מרובה"}
-            >
-              <CheckSquare className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="mt-2 text-xs text-muted-foreground text-center">
-            {filteredListLeads.length} לידים
-          </div>
-        </div>
-
-        {/* Multi-select toolbar */}
-        {multiSelectMode && (
-          <div className="p-2 border-b bg-primary/5 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={toggleSelectAll}>
-                {selectedLeadIds.size === filteredListLeads.length ? "בטל הכל" : "בחר הכל"}
-              </Button>
-              <span className="text-xs font-medium text-muted-foreground">
-                {selectedLeadIds.size} נבחרו
-              </span>
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={exitMultiSelect}>
-                <X className="h-3.5 w-3.5" />
+        <div
+          className={cn(
+            "border-s flex flex-col bg-muted/20 overflow-hidden min-h-0",
+            isMobile ? "w-full flex-1" : "w-[25%] min-w-[240px] max-w-[25%]",
+          )}
+          dir="rtl"
+        >
+          {/* List header with search */}
+          <div
+            className={cn(
+              "border-b bg-background/80 backdrop-blur-sm shrink-0",
+              isMobile ? "p-2" : "p-3",
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="חיפוש לפי שם, טלפון או חברה..."
+                  value={searchQuery}
+                  onChange={(e) => onSearchQueryChange?.(e.target.value)}
+                  className="pr-9 h-9 text-sm text-right"
+                />
+              </div>
+              <Button
+                variant={multiSelectMode ? "default" : "outline"}
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                onClick={() =>
+                  multiSelectMode ? exitMultiSelect() : setMultiSelectMode(true)
+                }
+                title={multiSelectMode ? "בטל בחירה" : "בחירה מרובה"}
+              >
+                <CheckSquare className="h-4 w-4" />
               </Button>
             </div>
-            {selectedLeadIds.size > 0 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                {/* Bulk stage change */}
-                <Select onValueChange={handleBulkStageChange} disabled={bulkActionLoading}>
-                  <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
-                    <SelectValue placeholder="שלב" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-[100]">
-                    {pipelineStages.map((stage) => (
-                      <SelectItem key={stage.id} value={stage.id} style={{ backgroundColor: stage.hexColor, color: "#fff" }}>
-                        {stage.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="mt-2 text-xs text-muted-foreground text-center">
+              {filteredListLeads.length} לידים
+            </div>
+          </div>
 
-                {/* Bulk response status */}
-                <Select onValueChange={(v) => handleBulkResponseStatusChange(v === "none" ? null : v)} disabled={bulkActionLoading}>
-                  <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
-                    <SelectValue placeholder="סטטוס" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-[100]">
-                    <SelectItem value="none">ללא סטטוס</SelectItem>
-                    {leadStatuses.map((s) => (
-                      <SelectItem key={s.status_key} value={s.status_key} style={{ backgroundColor: s.color, color: "#fff" }}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Bulk delete */}
+          {/* Multi-select toolbar */}
+          {multiSelectMode && (
+            <div className="p-2 border-b bg-primary/5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
                 <Button
                   size="sm"
-                  variant="destructive"
-                  className="h-7 text-[11px] gap-1"
-                  onClick={handleBulkDelete}
-                  disabled={bulkActionLoading}
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={toggleSelectAll}
                 >
-                  <Archive className="h-3 w-3" />
-                  לארכיון
+                  {selectedLeadIds.size === filteredListLeads.length
+                    ? "בטל הכל"
+                    : "בחר הכל"}
+                </Button>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {selectedLeadIds.size} נבחרו
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  onClick={exitMultiSelect}
+                >
+                  <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
-            )}
-          </div>
-        )}
+              {selectedLeadIds.size > 0 && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  {/* Bulk stage change */}
+                  <Select
+                    onValueChange={handleBulkStageChange}
+                    disabled={bulkActionLoading}
+                  >
+                    <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
+                      <SelectValue placeholder="שלב" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[100]">
+                      {pipelineStages.map((stage) => (
+                        <SelectItem
+                          key={stage.id}
+                          value={stage.id}
+                          style={{
+                            backgroundColor: stage.hexColor,
+                            color: "#fff",
+                          }}
+                        >
+                          {stage.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-        {/* Lead list */}
-        <div
-          className="flex-1 overflow-y-auto overflow-x-hidden"
-          onScroll={(event) => {
-            if (!hasMore || isLoadingMore || !onLoadMore) return;
-            const el = event.currentTarget;
-            if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
-              onLoadMore();
-            }
-          }}
-        >
-          <div className="divide-y w-full">
-            {filteredListLeads.map((lead) => {
-              const isSelected = lead.id === selectedLeadId;
-              const isChecked = selectedLeadIds.has(lead.id);
-              const stageInfo = getStageInfo(lead.status);
-              const statusInfo = getLeadStatusInfo(lead.response_status);
-              const tagIds = leadsTagsMap[lead.id] || [];
-
-              return (
-                <button
-                  key={lead.id}
-                  onClick={() => {
-                    if (multiSelectMode) {
-                      toggleLeadSelection(lead.id);
-                    } else {
-                      setSelectedLeadId(lead.id);
-                      setActiveTab("details");
+                  {/* Bulk response status */}
+                  <Select
+                    onValueChange={(v) =>
+                      handleBulkResponseStatusChange(v === "none" ? null : v)
                     }
-                  }}
-                   style={{ maxWidth: '100%', boxSizing: 'border-box' }}
-                   className={cn(
-                    "w-full p-3 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden",
-                    isSelected && !multiSelectMode && "bg-primary/10 border-r-4 border-r-primary",
-                    isChecked && multiSelectMode && "bg-primary/10"
-                  )}
-                >
-                  <div className="flex items-start gap-2">
-                    {/* Avatar circle */}
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-                      style={{ backgroundColor: stageInfo?.hexColor || "hsl(var(--primary))" }}
-                    >
-                      {(lead.contact_name || "?")[0]}
-                    </div>
-                    {/* Name & info */}
-                    <div className="flex-1 min-w-0 text-right">
-                      <div className="flex items-center gap-1">
-                        <span dir="rtl" className="block font-semibold text-sm truncate flex-1 min-w-0 text-right">
-                          {lead.contact_name || "ללא שם"}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                          {lead.created_at && format(new Date(lead.created_at), "dd/MM", { locale: he })}
-                        </span>
+                    disabled={bulkActionLoading}
+                  >
+                    <SelectTrigger className="h-7 text-[11px] w-auto min-w-[80px]">
+                      <SelectValue placeholder="סטטוס" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[100]">
+                      <SelectItem value="none">ללא סטטוס</SelectItem>
+                      {leadStatuses.map((s) => (
+                        <SelectItem
+                          key={s.status_key}
+                          value={s.status_key}
+                          style={{ backgroundColor: s.color, color: "#fff" }}
+                        >
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Bulk delete */}
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-7 text-[11px] gap-1"
+                    onClick={handleBulkDelete}
+                    disabled={bulkActionLoading}
+                  >
+                    <Archive className="h-3 w-3" />
+                    לארכיון
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Lead list */}
+          <div
+            className="flex-1 overflow-y-auto overflow-x-hidden"
+            onScroll={(event) => {
+              if (!hasMore || isLoadingMore || !onLoadMore) return;
+              const el = event.currentTarget;
+              if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+                onLoadMore();
+              }
+            }}
+          >
+            <div className="divide-y w-full">
+              {filteredListLeads.map((lead) => {
+                const isSelected = lead.id === selectedLeadId;
+                const isChecked = selectedLeadIds.has(lead.id);
+                const stageInfo = getStageInfo(lead.status);
+                const statusInfo = getLeadStatusInfo(lead.response_status);
+                const tagIds = leadsTagsMap[lead.id] || [];
+
+                return (
+                  <button
+                    key={lead.id}
+                    onClick={() => {
+                      if (multiSelectMode) {
+                        toggleLeadSelection(lead.id);
+                      } else {
+                        setSelectedLeadId(lead.id);
+                        setActiveTab("details");
+                      }
+                    }}
+                    style={{ maxWidth: "100%", boxSizing: "border-box" }}
+                    className={cn(
+                      "w-full p-3 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden",
+                      isSelected &&
+                        !multiSelectMode &&
+                        "bg-primary/10 border-r-4 border-r-primary",
+                      isChecked && multiSelectMode && "bg-primary/10",
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      {/* Avatar circle */}
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                        style={{
+                          backgroundColor:
+                            stageInfo?.hexColor || "hsl(var(--primary))",
+                        }}
+                      >
+                        {(lead.contact_name || "?")[0]}
                       </div>
-                      <LeadSourceLines lead={lead} compact />
-                      {isCompanyNameVisible && lead.company_name && (
-                        <p dir="rtl" className="text-xs text-muted-foreground truncate text-right">{lead.company_name}</p>
-                      )}
-                      <div className="flex items-center gap-1 mt-1 flex-wrap">
-                        {stageInfo && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] px-1.5 py-0 h-4 border-0 text-white"
-                            style={{ backgroundColor: stageInfo.hexColor }}
+                      {/* Name & info */}
+                      <div className="flex-1 min-w-0 text-right">
+                        <div className="flex items-center gap-1">
+                          <span
+                            dir="rtl"
+                            className="block font-semibold text-sm truncate flex-1 min-w-0 text-right"
                           >
-                            {stageInfo.label}
-                          </Badge>
+                            {lead.contact_name || "ללא שם"}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                            {lead.created_at &&
+                              format(new Date(lead.created_at), "dd/MM", {
+                                locale: he,
+                              })}
+                          </span>
+                        </div>
+                        <LeadSourceLines lead={lead} compact />
+                        {isCompanyNameVisible && lead.company_name && (
+                          <p
+                            dir="rtl"
+                            className="text-xs text-muted-foreground truncate text-right"
+                          >
+                            {lead.company_name}
+                          </p>
                         )}
-                        {statusInfo && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] px-1.5 py-0 h-4 border-0 text-white"
-                            style={{ backgroundColor: statusInfo.color }}
-                          >
-                            {statusInfo.label}
-                          </Badge>
+                        <div className="flex items-center gap-1 mt-1 flex-wrap">
+                          {stageInfo && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] px-1.5 py-0 h-4 border-0 text-white"
+                              style={{ backgroundColor: stageInfo.hexColor }}
+                            >
+                              {stageInfo.label}
+                            </Badge>
+                          )}
+                          {statusInfo && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] px-1.5 py-0 h-4 border-0 text-white"
+                              style={{ backgroundColor: statusInfo.color }}
+                            >
+                              {statusInfo.label}
+                            </Badge>
+                          )}
+                        </div>
+                        {tagIds.length > 0 && (
+                          <div className="mt-1">
+                            <LeadTagBadges allTags={allTags} tagIds={tagIds} />
+                          </div>
                         )}
                       </div>
-                      {tagIds.length > 0 && (
-                        <div className="mt-1">
-                          <LeadTagBadges allTags={allTags} tagIds={tagIds} />
+                      {/* Checkbox in multi-select mode */}
+                      {multiSelectMode && (
+                        <div
+                          className="pt-1 shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Checkbox
+                            checked={isChecked}
+                            onCheckedChange={() => toggleLeadSelection(lead.id)}
+                          />
                         </div>
                       )}
                     </div>
-                    {/* Checkbox in multi-select mode */}
-                    {multiSelectMode && (
-                      <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={isChecked}
-                          onCheckedChange={() => toggleLeadSelection(lead.id)}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-            {filteredListLeads.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground text-sm space-y-2">
-                <div>לא נמצאו לידים</div>
-                {searchQuery.trim() && (
-                  <Button variant="link" size="sm" asChild className="h-auto p-0">
-                    <Link to="archive">חפש בארכיון</Link>
+                  </button>
+                );
+              })}
+              {filteredListLeads.length === 0 && (
+                <div className="p-8 text-center text-muted-foreground text-sm space-y-2">
+                  <div>לא נמצאו לידים</div>
+                  {searchQuery.trim() && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      asChild
+                      className="h-auto p-0"
+                    >
+                      <Link to="archive">חפש בארכיון</Link>
+                    </Button>
+                  )}
+                </div>
+              )}
+              {hasMore && (
+                <div className="p-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={onLoadMore}
+                    disabled={isLoadingMore}
+                  >
+                    {isLoadingMore
+                      ? "טוען..."
+                      : `טען עוד לידים${remainingCount > 0 ? ` (${remainingCount.toLocaleString()} נותרו)` : ""}`}
                   </Button>
-                )}
-              </div>
-            )}
-            {hasMore && (
-              <div className="p-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-2"
-                  onClick={onLoadMore}
-                  disabled={isLoadingMore}
-                >
-                  {isLoadingMore ? "טוען..." : `טען עוד לידים${remainingCount > 0 ? ` (${remainingCount.toLocaleString()} נותרו)` : ""}`}
-                </Button>
-                {typeof loadedCount === "number" && loadedCount > 0 && (
-                  <p className="text-[11px] text-muted-foreground text-center mt-2">
-                    מוצגים {loadedCount.toLocaleString()} לידים
-                  </p>
-                )}
-              </div>
-            )}
+                  {typeof loadedCount === "number" && loadedCount > 0 && (
+                    <p className="text-[11px] text-muted-foreground text-center mt-2">
+                      מוצגים {loadedCount.toLocaleString()} לידים
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
       )}
       {/* Lead detail panel */}
       {(!isMobile || selectedLeadId) && (
-      <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
-        {selectedLead ? (
-          <>
-            {/* Toolbar */}
-            <div className={cn("flex items-center gap-2 border-b bg-background/95 backdrop-blur-sm shrink-0 flex-wrap", isMobile ? "p-2" : "p-3")}>
-              {/* Back button on mobile */}
-              {isMobile && (
-                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setSelectedLeadId(null)}>
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
-              )}
-              {/* Lead name & company */}
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-                  style={{ backgroundColor: getStageInfo(selectedLead.status)?.hexColor || "hsl(var(--primary))" }}
-                >
-                  {(selectedLead.contact_name || "?")[0]}
-                </div>
-                <div className="min-w-0 text-right">
-                  <h2 dir="rtl" className="block font-bold text-base truncate text-right">{selectedLead.contact_name || "ללא שם"}</h2>
-                  {isCompanyNameVisible && selectedLead.company_name && (
-                    <p dir="rtl" className="text-xs text-muted-foreground truncate text-right">{selectedLead.company_name}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Quick actions */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {/* Pipeline stage */}
-                <Select
-                  value={selectedLead.status}
-                  onValueChange={(value) => onStatusChange(selectedLead.id, value)}
-                >
-                  <SelectTrigger
-                    className="h-8 text-xs w-auto min-w-[100px] border-2 font-medium"
-                    style={{
-                      backgroundColor: getStageInfo(selectedLead.status)?.hexColor,
-                      color: "#fff",
-                    }}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-[100]">
-                    {pipelineStages.map((stage) => (
-                      <SelectItem key={stage.id} value={stage.id} style={{ backgroundColor: stage.hexColor, color: "#fff" }}>
-                        {stage.label}
-                      </SelectItem>
-                    ))}
-                    <div className="border-t mt-1 pt-1">
-                      <button
-                        type="button"
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
-                        onClick={() => setManageStagesOpen(true)}
-                      >
-                        <Settings2 className="h-4 w-4" />
-                        ניהול שלבים
-                      </button>
-                    </div>
-                  </SelectContent>
-                </Select>
-
-                {/* Response status */}
-                <Select
-                  value={responseStatusSelectValue(selectedLead.response_status, leadStatuses)}
-                  onValueChange={(value) => onResponseStatusChange(selectedLead.id, value === "none" ? null : value)}
-                >
-                  <SelectTrigger
-                    className="h-8 text-xs w-auto min-w-[100px] border-2 font-medium"
-                    style={{
-                      backgroundColor: getStatusColor(selectedLead.response_status, leadStatuses) || undefined,
-                      color: getStatusColor(selectedLead.response_status, leadStatuses) ? "#fff" : undefined,
-                    }}
-                  >
-                    <SelectValue placeholder="סטטוס" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-[100]">
-                    <SelectItem value="none">ללא סטטוס</SelectItem>
-                    {unmatchedResponseStatusValue(selectedLead.response_status, leadStatuses) && (
-                      <SelectItem value={selectedLead.response_status}>
-                        {selectedLead.response_status}
-                      </SelectItem>
-                    )}
-                    {leadStatuses.map((s) => (
-                      <SelectItem key={s.status_key} value={s.status_key} style={{ backgroundColor: s.color, color: "#fff" }}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                    <div className="border-t mt-1 pt-1">
-                      <button
-                        type="button"
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
-                        onClick={() => setManageStatusesOpen(true)}
-                      >
-                        <Settings2 className="h-4 w-4" />
-                        ניהול סטטוסים
-                      </button>
-                    </div>
-                  </SelectContent>
-                </Select>
-
-                <LeadTagSelector leadId={selectedLead.id} initialTagIds={selectedLeadTagIds} />
-
-                <FollowUpDatePicker
-                  leadId={selectedLead.id}
-                  currentDate={selectedLead.follow_up_date}
-                  onOptimisticUpdate={onFollowUpDateUpdate}
-                />
-
-                {selectedLead.phone && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                      onClick={() => setCallDialogOpen(true)}
-                      title="התקשר דרך מרכזיה"
-                    >
-                      <PhoneCall className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-8 gap-1" asChild>
-                      <a href={`tel:${selectedLead.phone}`}>
-                        <Phone className="h-3.5 w-3.5" />
-                        {selectedLead.phone}
-                      </a>
-                    </Button>
-                  </>
-                )}
-
-                {selectedLead.email && (
-                  <Button variant="outline" size="sm" className="h-8 gap-1" asChild>
-                    <a href={`mailto:${selectedLead.email}`}>
-                      <Mail className="h-3.5 w-3.5" />
-                    </a>
-                  </Button>
-                )}
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  title="ערוך ליד"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingLead(selectedLead);
-                    setEditInitialTab("details");
-                    setEditDialogOpen(true);
-                  }}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                {editingLead && (
-                  <EditLeadDialog
-                    key={editingLead.id}
-                    lead={editingLead}
-                    open={editDialogOpen}
-                    onOpenChange={(o) => {
-                      setEditDialogOpen(o);
-                      if (!o) setEditingLead(null);
-                    }}
-                    hideTrigger
-                    initialTab={editInitialTab}
-                  />
-                )}
-
-                <AddTaskForm
-                  leadId={selectedLead.id}
-                  agencyId={selectedLead.agency_id || undefined}
-                  triggerButton={
-                    <Button variant="outline" size="icon" className="h-8 w-8" title="הוסף משימה">
-                      <CheckSquare className="h-4 w-4" />
-                    </Button>
-                  }
-                />
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => handleDelete(selectedLead.id)}
-                  title="העבר לארכיון"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Tags bar */}
-            {selectedLeadTagIds.length > 0 && (
-              <div className="px-4 py-2 border-b bg-muted/20 flex items-center gap-2">
-                <Tag className="h-3.5 w-3.5 text-muted-foreground" />
-                <LeadTagBadgesEditable
-                  leadId={selectedLead.id}
-                  allTags={allTags}
-                  tagIds={selectedLeadTagIds}
-                />
-              </div>
-            )}
-
-            {/* Detail tabs content */}
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value === "updates" ? "details" : value)} className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <TabsList className="mx-4 mt-3 grid grid-cols-7 w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto shrink-0">
-                <TabsTrigger value="details" className="text-xs gap-1.5">
-                  <FileText className="h-3.5 w-3.5" />
-                  פרטי ליד
-                </TabsTrigger>
-                <TabsTrigger value="proposals" className="text-xs gap-1.5">
-                  <DollarSign className="h-3.5 w-3.5" />
-                  הצעות מחיר
-                </TabsTrigger>
-                <TabsTrigger value="docs" className="text-xs gap-1.5">
-                  <FolderOpen className="h-3.5 w-3.5" />
-                  מסמכים
-                </TabsTrigger>
-                <TabsTrigger value="files" className="text-xs gap-1.5">
-                  <Paperclip className="h-3.5 w-3.5" />
-                  קבצים
-                </TabsTrigger>
-                <TabsTrigger value="meeting" className="text-xs gap-1.5">
-                  <Users className="h-3.5 w-3.5" />
-                  קביעת פגישה
-                </TabsTrigger>
-                <TabsTrigger value="calls" className="text-xs gap-1.5">
-                  <Phone className="h-3.5 w-3.5" />
-                  שיחות
-                </TabsTrigger>
-                <TabsTrigger value="whatsapp" className="text-xs gap-1.5">
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                  WhatsApp
-                </TabsTrigger>
-              </TabsList>
-
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
+          {selectedLead ? (
+            <>
+              {/* Toolbar */}
               <div
                 className={cn(
-                  "flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain bg-background",
-                  isMobile ? "p-2" : "p-4",
-                  (activeTab === "whatsapp" || activeTab === "calls") && "hidden",
+                  "flex items-center gap-2 border-b bg-background/95 backdrop-blur-sm shrink-0 flex-wrap",
+                  isMobile ? "p-2" : "p-3",
                 )}
               >
-                <TabsContent value="details" className="mt-0 space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
-                        פרטי קשר
-                        <User className="h-4 w-4 text-primary" />
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{selectedLead.contact_name || "—"}</span>
-                          <span className="text-muted-foreground">:שם</span>
-                        </div>
-                        {isCompanyNameVisible && (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="font-medium">{selectedLead.company_name || "—"}</span>
-                            <span className="text-muted-foreground">:חברה</span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-end gap-2">
-                          {selectedLead.phone ? (
-                            <a href={`tel:${selectedLead.phone}`} className="font-medium text-primary hover:underline">
-                              {selectedLead.phone}
-                            </a>
-                          ) : (
-                            <span>—</span>
-                          )}
-                          <span className="text-muted-foreground">:טלפון</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          {selectedLead.email ? (
-                            <a href={`mailto:${selectedLead.email}`} className="font-medium text-primary hover:underline truncate">
-                              {selectedLead.email}
-                            </a>
-                          ) : (
-                            <span>—</span>
-                          )}
-                          <span className="text-muted-foreground">:אימייל</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Dates & timeline */}
-                    <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
-                        ציר זמן
-                        <Clock className="h-4 w-4 text-primary" />
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        <LeadCreatedAtLines lead={selectedLead} />
-                        <LeadSourceLines lead={selectedLead} />
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{selectedLead.campaign_name || "—"}</span>
-                          <span className="text-muted-foreground">:שם הקמפיין</span>
-                        </div>
-                        {selectedLead.proposal_date && (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="font-medium">
-                              {format(new Date(selectedLead.proposal_date), "dd/MM/yyyy", { locale: he })}
-                            </span>
-                            <span className="text-muted-foreground">:הצעת מחיר</span>
-                          </div>
-                        )}
-                        {selectedLead.sale_date && (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="font-medium">
-                              {format(new Date(selectedLead.sale_date), "dd/MM/yyyy", { locale: he })}
-                            </span>
-                            <span className="text-muted-foreground">:תאריך מכירה</span>
-                          </div>
-                        )}
-                        {selectedLead.follow_up_date && (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="font-medium">
-                              {format(new Date(selectedLead.follow_up_date), "dd/MM/yyyy", { locale: he })}
-                            </span>
-                            <span className="text-muted-foreground">:מעקב</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                {/* Back button on mobile */}
+                {isMobile && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => setSelectedLeadId(null)}
+                  >
+                    <ArrowRight className="h-5 w-5" />
+                  </Button>
+                )}
+                {/* Lead name & company */}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                    style={{
+                      backgroundColor:
+                        getStageInfo(selectedLead.status)?.hexColor ||
+                        "hsl(var(--primary))",
+                    }}
+                  >
+                    {(selectedLead.contact_name || "?")[0]}
                   </div>
-
-                  {/* Notes */}
-                  <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
-                    <h3 className="font-semibold text-sm mb-2">הערות</h3>
-                    {selectedLead.notes ? (
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap text-right" dir="rtl">{selectedLead.notes}</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">אין הערות</p>
+                  <div className="min-w-0 text-right">
+                    <h2
+                      dir="rtl"
+                      className="block font-bold text-base truncate text-right"
+                    >
+                      {selectedLead.contact_name || "ללא שם"}
+                    </h2>
+                    {isCompanyNameVisible && selectedLead.company_name && (
+                      <p
+                        dir="rtl"
+                        className="text-xs text-muted-foreground truncate text-right"
+                      >
+                        {selectedLead.company_name}
+                      </p>
                     )}
                   </div>
+                </div>
 
-                  {/* Updates + tasks in the same details window */}
-                  <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm" dir="rtl">
-                    <h3 className="font-semibold text-sm mb-3">עדכונים ומשימות</h3>
-                    <LeadUpdatesTab leadId={selectedLead.id} leadName={selectedLead.contact_name || selectedLead.company_name || "ליד"} />
-                  </div>
-
-                  {/* Products */}
-                  {selectedLead.products && (() => {
-                    try {
-                      const parsed = JSON.parse(selectedLead.products);
-                      const ids = Array.isArray(parsed) ? parsed : [parsed];
-                      const items = ids.map((id: string) => productsLookup[id]).filter(Boolean);
-                      if (items.length === 0) return null;
-                      return (
-                        <div className="bg-card border border-border/60 rounded-xl p-4 shadow-sm">
-                          <h3 className="font-semibold text-sm mb-2">מוצרים / שירותים</h3>
-                          <div className="flex flex-wrap gap-2">
-                            {items.map((p: any, i: number) => (
-                              <Badge key={i} variant="secondary">
-                                {p.name} {p.price > 0 && `- ₪${p.price.toLocaleString()}`}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    } catch {
-                      return null;
+                {/* Quick actions */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* Pipeline stage */}
+                  <Select
+                    value={selectedLead.status}
+                    onValueChange={(value) =>
+                      onStatusChange(selectedLead.id, value)
                     }
-                  })()}
-                </TabsContent>
+                  >
+                    <SelectTrigger
+                      className="h-8 text-xs w-auto min-w-[100px] border-2 font-medium"
+                      style={{
+                        backgroundColor: getStageInfo(selectedLead.status)
+                          ?.hexColor,
+                        color: "#fff",
+                      }}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[100]">
+                      {pipelineStages.map((stage) => (
+                        <SelectItem
+                          key={stage.id}
+                          value={stage.id}
+                          style={{
+                            backgroundColor: stage.hexColor,
+                            color: "#fff",
+                          }}
+                        >
+                          {stage.label}
+                        </SelectItem>
+                      ))}
+                      <div className="border-t mt-1 pt-1">
+                        <button
+                          type="button"
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                          onClick={() => setManageStagesOpen(true)}
+                        >
+                          <Settings2 className="h-4 w-4" />
+                          ניהול שלבים
+                        </button>
+                      </div>
+                    </SelectContent>
+                  </Select>
 
-                <TabsContent value="docs" className="mt-0" dir="rtl">
-                  <SendSignatureFromLeadPanel lead={selectedLead} tenantId={tenantId} />
-                </TabsContent>
+                  {/* Response status */}
+                  <Select
+                    value={responseStatusSelectValue(
+                      selectedLead.response_status,
+                      leadStatuses,
+                    )}
+                    onValueChange={(value) =>
+                      onResponseStatusChange(
+                        selectedLead.id,
+                        value === "none" ? null : value,
+                      )
+                    }
+                  >
+                    <SelectTrigger
+                      className="h-8 text-xs w-auto min-w-[100px] border-2 font-medium"
+                      style={{
+                        backgroundColor:
+                          getStatusColor(
+                            selectedLead.response_status,
+                            leadStatuses,
+                          ) || undefined,
+                        color: getStatusColor(
+                          selectedLead.response_status,
+                          leadStatuses,
+                        )
+                          ? "#fff"
+                          : undefined,
+                      }}
+                    >
+                      <SelectValue placeholder="סטטוס" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[100]">
+                      <SelectItem value="none">ללא סטטוס</SelectItem>
+                      {unmatchedResponseStatusValue(
+                        selectedLead.response_status,
+                        leadStatuses,
+                      ) && (
+                        <SelectItem value={selectedLead.response_status}>
+                          {selectedLead.response_status}
+                        </SelectItem>
+                      )}
+                      {leadStatuses.map((s) => (
+                        <SelectItem
+                          key={s.status_key}
+                          value={s.status_key}
+                          style={{ backgroundColor: s.color, color: "#fff" }}
+                        >
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                      <div className="border-t mt-1 pt-1">
+                        <button
+                          type="button"
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                          onClick={() => setManageStatusesOpen(true)}
+                        >
+                          <Settings2 className="h-4 w-4" />
+                          ניהול סטטוסים
+                        </button>
+                      </div>
+                    </SelectContent>
+                  </Select>
 
-                {(activeTab === "proposals" || activeTab === "files" || activeTab === "meeting") && (
-                  <TabsContent value={activeTab} forceMount className="mt-0" dir="rtl">
+                  <LeadTagSelector
+                    leadId={selectedLead.id}
+                    initialTagIds={selectedLeadTagIds}
+                  />
+
+                  <FollowUpDatePicker
+                    leadId={selectedLead.id}
+                    currentDate={selectedLead.follow_up_date}
+                    onOptimisticUpdate={onFollowUpDateUpdate}
+                  />
+
+                  {selectedLead.phone && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                        onClick={() => setCallDialogOpen(true)}
+                        title="התקשר דרך מרכזיה"
+                      >
+                        <PhoneCall className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1"
+                        asChild
+                      >
+                        <a href={`tel:${selectedLead.phone}`}>
+                          <Phone className="h-3.5 w-3.5" />
+                          {selectedLead.phone}
+                        </a>
+                      </Button>
+                    </>
+                  )}
+
+                  {selectedLead.email && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1"
+                      asChild
+                    >
+                      <a href={`mailto:${selectedLead.email}`}>
+                        <Mail className="h-3.5 w-3.5" />
+                      </a>
+                    </Button>
+                  )}
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    title="ערוך ליד"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingLead(selectedLead);
+                      setEditInitialTab("details");
+                      setEditDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  {editingLead && (
                     <EditLeadDialog
-                      key={`${selectedLead.id}-${activeTab}`}
-                      lead={selectedLead}
-                      open={true}
-                      onOpenChange={() => {}}
+                      key={editingLead.id}
+                      lead={editingLead}
+                      open={editDialogOpen}
+                      onOpenChange={(o) => {
+                        setEditDialogOpen(o);
+                        if (!o) setEditingLead(null);
+                      }}
                       hideTrigger
-                      inline
-                      initialTab={activeTab}
+                      initialTab={editInitialTab}
                     />
-                  </TabsContent>
-                )}
+                  )}
+
+                  <AddTaskForm
+                    leadId={selectedLead.id}
+                    agencyId={selectedLead.agency_id || undefined}
+                    triggerButton={
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="הוסף משימה"
+                      >
+                        <CheckSquare className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(selectedLead.id)}
+                    title="העבר לארכיון"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
-              {activeTab === "calls" && (
-                <div className="flex-1 min-h-0 p-4">
-                  <CallHistoryTab leadId={selectedLead.id} />
+              {/* Tags bar */}
+              {selectedLeadTagIds.length > 0 && (
+                <div className="px-4 py-2 border-b bg-muted/20 flex items-center gap-2">
+                  <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                  <LeadTagBadgesEditable
+                    leadId={selectedLead.id}
+                    allTags={allTags}
+                    tagIds={selectedLeadTagIds}
+                  />
                 </div>
               )}
 
-              {activeTab === "whatsapp" && (
-                <div className="flex-1 min-h-0">
-                  {selectedLead.phone ? (
-                    <ChatViewComponent
-                      contactId={selectedLead.id}
-                      contactType="lead"
-                      senderPhone={selectedLead.phone}
-                      contactName={selectedLead.contact_name || selectedLead.company_name || "ליד"}
-                    />
-                  ) : (
-                    <div className="text-center py-8 text-sm text-muted-foreground">
-                      אין מספר טלפון לליד זה
+              {/* Detail tabs content */}
+              <Tabs
+                value={activeTab}
+                onValueChange={(value) =>
+                  setActiveTab(value === "updates" ? "details" : value)
+                }
+                className="flex-1 min-h-0 flex flex-col overflow-hidden"
+              >
+                <TabsList className="mx-4 mt-3 grid grid-cols-7 w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto shrink-0">
+                  <TabsTrigger value="details" className="text-xs gap-1.5">
+                    <FileText className="h-3.5 w-3.5" />
+                    פרטי ליד
+                  </TabsTrigger>
+                  <TabsTrigger value="proposals" className="text-xs gap-1.5">
+                    <DollarSign className="h-3.5 w-3.5" />
+                    הצעות מחיר
+                  </TabsTrigger>
+                  <TabsTrigger value="docs" className="text-xs gap-1.5">
+                    <FolderOpen className="h-3.5 w-3.5" />
+                    מסמכים
+                  </TabsTrigger>
+                  <TabsTrigger value="files" className="text-xs gap-1.5">
+                    <Paperclip className="h-3.5 w-3.5" />
+                    קבצים
+                  </TabsTrigger>
+                  <TabsTrigger value="meeting" className="text-xs gap-1.5">
+                    <Users className="h-3.5 w-3.5" />
+                    קביעת פגישה
+                  </TabsTrigger>
+                  <TabsTrigger value="calls" className="text-xs gap-1.5">
+                    <Phone className="h-3.5 w-3.5" />
+                    שיחות
+                  </TabsTrigger>
+                  <TabsTrigger value="whatsapp" className="text-xs gap-1.5">
+                    <svg
+                      className="h-3.5 w-3.5"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                    </svg>
+                    WhatsApp
+                  </TabsTrigger>
+                </TabsList>
+
+                <div
+                  className={cn(
+                    "flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain bg-background",
+                    isMobile ? "p-2" : "p-4",
+                    (activeTab === "whatsapp" || activeTab === "calls") &&
+                      "hidden",
+                  )}
+                >
+                  <TabsContent value="details" className="mt-0 space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
+                        <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
+                          פרטי קשר
+                          <User className="h-4 w-4 text-primary" />
+                        </h3>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="font-medium">
+                              {selectedLead.contact_name || "—"}
+                            </span>
+                            <span className="text-muted-foreground">:שם</span>
+                          </div>
+                          {isCompanyNameVisible && (
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="font-medium">
+                                {selectedLead.company_name || "—"}
+                              </span>
+                              <span className="text-muted-foreground">
+                                :חברה
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-end gap-2">
+                            {selectedLead.phone ? (
+                              <a
+                                href={`tel:${selectedLead.phone}`}
+                                className="font-medium text-primary hover:underline"
+                              >
+                                {selectedLead.phone}
+                              </a>
+                            ) : (
+                              <span>—</span>
+                            )}
+                            <span className="text-muted-foreground">
+                              :טלפון
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-end gap-2">
+                            {selectedLead.email ? (
+                              <a
+                                href={`mailto:${selectedLead.email}`}
+                                className="font-medium text-primary hover:underline truncate"
+                              >
+                                {selectedLead.email}
+                              </a>
+                            ) : (
+                              <span>—</span>
+                            )}
+                            <span className="text-muted-foreground">
+                              :אימייל
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Dates & timeline */}
+                      <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
+                        <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
+                          ציר זמן
+                          <Clock className="h-4 w-4 text-primary" />
+                        </h3>
+                        <div className="space-y-2 text-sm">
+                          <LeadCreatedAtLines lead={selectedLead} />
+                          <LeadSourceLines lead={selectedLead} />
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="font-medium">
+                              {selectedLead.campaign_name || "—"}
+                            </span>
+                            <span className="text-muted-foreground">
+                              :שם הקמפיין
+                            </span>
+                          </div>
+                          {selectedLead.proposal_date && (
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="font-medium">
+                                {format(
+                                  new Date(selectedLead.proposal_date),
+                                  "dd/MM/yyyy",
+                                  { locale: he },
+                                )}
+                              </span>
+                              <span className="text-muted-foreground">
+                                :הצעת מחיר
+                              </span>
+                            </div>
+                          )}
+                          {selectedLead.sale_date && (
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="font-medium">
+                                {format(
+                                  new Date(selectedLead.sale_date),
+                                  "dd/MM/yyyy",
+                                  { locale: he },
+                                )}
+                              </span>
+                              <span className="text-muted-foreground">
+                                :תאריך מכירה
+                              </span>
+                            </div>
+                          )}
+                          {selectedLead.follow_up_date && (
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="font-medium">
+                                {format(
+                                  new Date(selectedLead.follow_up_date),
+                                  "dd/MM/yyyy",
+                                  { locale: he },
+                                )}
+                              </span>
+                              <span className="text-muted-foreground">
+                                :מעקב
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Notes */}
+                    <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
+                      <h3 className="font-semibold text-sm mb-2">הערות</h3>
+                      {selectedLead.notes ? (
+                        <p
+                          className="text-sm text-muted-foreground whitespace-pre-wrap text-right"
+                          dir="rtl"
+                        >
+                          {selectedLead.notes}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          אין הערות
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Updates + tasks in the same details window */}
+                    <div
+                      className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm"
+                      dir="rtl"
+                    >
+                      <h3 className="font-semibold text-sm mb-3">
+                        עדכונים ומשימות
+                      </h3>
+                      <LeadUpdatesTab
+                        leadId={selectedLead.id}
+                        leadName={
+                          selectedLead.contact_name ||
+                          selectedLead.company_name ||
+                          "ליד"
+                        }
+                      />
+                    </div>
+
+                    {/* Products */}
+                    {selectedLead.products &&
+                      (() => {
+                        try {
+                          const parsed = JSON.parse(selectedLead.products);
+                          const ids = Array.isArray(parsed) ? parsed : [parsed];
+                          const items = ids
+                            .map((id: string) => productsLookup[id])
+                            .filter(Boolean);
+                          if (items.length === 0) return null;
+                          return (
+                            <div className="bg-card border border-border/60 rounded-xl p-4 shadow-sm">
+                              <h3 className="font-semibold text-sm mb-2">
+                                מוצרים / שירותים
+                              </h3>
+                              <div className="flex flex-wrap gap-2">
+                                {items.map((p: any, i: number) => (
+                                  <Badge key={i} variant="secondary">
+                                    {p.name}{" "}
+                                    {p.price > 0 &&
+                                      `- ₪${p.price.toLocaleString()}`}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        } catch {
+                          return null;
+                        }
+                      })()}
+                  </TabsContent>
+
+                  <TabsContent value="docs" className="mt-0" dir="rtl">
+                    <SendSignatureFromLeadPanel
+                      lead={selectedLead}
+                      tenantId={tenantId}
+                    />
+                  </TabsContent>
+
+                  {(activeTab === "proposals" ||
+                    activeTab === "files" ||
+                    activeTab === "meeting") && (
+                    <TabsContent
+                      value={activeTab}
+                      forceMount
+                      className="mt-0"
+                      dir="rtl"
+                    >
+                      <EditLeadDialog
+                        key={`${selectedLead.id}-${activeTab}`}
+                        lead={selectedLead}
+                        open={true}
+                        onOpenChange={() => {}}
+                        hideTrigger
+                        inline
+                        initialTab={activeTab}
+                      />
+                    </TabsContent>
                   )}
                 </div>
-              )}
-            </Tabs>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <div className="text-center space-y-2">
-              <User className="h-12 w-12 mx-auto opacity-30" />
-              <p>בחר ליד מהרשימה לצפייה בפרטים</p>
+
+                {activeTab === "calls" && (
+                  <div className="flex-1 min-h-0 p-4">
+                    <CallHistoryTab leadId={selectedLead.id} />
+                  </div>
+                )}
+
+                {activeTab === "whatsapp" && (
+                  <div className="flex-1 min-h-0">
+                    {selectedLead.phone ? (
+                      <ChatViewComponent
+                        contactId={selectedLead.id}
+                        contactType="lead"
+                        senderPhone={selectedLead.phone}
+                        contactName={
+                          selectedLead.contact_name ||
+                          selectedLead.company_name ||
+                          "ליד"
+                        }
+                      />
+                    ) : (
+                      <div className="text-center py-8 text-sm text-muted-foreground">
+                        אין מספר טלפון לליד זה
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Tabs>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              <div className="text-center space-y-2">
+                <User className="h-12 w-12 mx-auto opacity-30" />
+                <p>בחר ליד מהרשימה לצפייה בפרטים</p>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
       )}
 
       {/* Management dialogs */}
-      <ManagePipelineStagesDialog open={manageStagesOpen} onOpenChange={setManageStagesOpen} showTrigger={false} />
-      <ManageLeadStatusesDialog open={manageStatusesOpen} onOpenChange={setManageStatusesOpen} showTrigger={false} />
+      <ManagePipelineStagesDialog
+        open={manageStagesOpen}
+        onOpenChange={setManageStagesOpen}
+        showTrigger={false}
+      />
+      <ManageLeadStatusesDialog
+        open={manageStatusesOpen}
+        onOpenChange={setManageStatusesOpen}
+        showTrigger={false}
+      />
 
       {/* Call dialog */}
       {selectedLead?.phone && (
@@ -877,7 +1201,9 @@ export function LeadsChatView({
           open={callDialogOpen}
           onOpenChange={setCallDialogOpen}
           phoneNumber={selectedLead.phone}
-          contactName={selectedLead.contact_name || selectedLead.company_name || "ליד"}
+          contactName={
+            selectedLead.contact_name || selectedLead.company_name || "ליד"
+          }
           leadId={selectedLead.id}
         />
       )}

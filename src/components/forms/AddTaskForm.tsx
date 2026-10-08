@@ -12,9 +12,15 @@ import { useTerminology } from "@/hooks/useTerminology";
 import { useViewAs } from "@/contexts/ViewAsContext";
 import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
 import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
-import { resolveClientTaskAgency, type TaskClientRow } from "@/lib/taskClientAgency";
+import {
+  resolveClientTaskAgency,
+  type TaskClientRow,
+} from "@/lib/taskClientAgency";
 import { pickTenantHomeAgencyId } from "@/lib/resolveTenantAgency";
-import { ensureLeadHomeAgency, fetchTenantHomeAgencyId } from "@/lib/resolveTenantAgencyDb";
+import {
+  ensureLeadHomeAgency,
+  fetchTenantHomeAgencyId,
+} from "@/lib/resolveTenantAgencyDb";
 import {
   Form,
   FormControl,
@@ -33,7 +39,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TaskRecurrenceFields, type TaskRecurrenceValue } from "@/components/tasks/TaskRecurrenceFields";
+import {
+  TaskRecurrenceFields,
+  type TaskRecurrenceValue,
+} from "@/components/tasks/TaskRecurrenceFields";
 import {
   collectTaskAssigneeIds,
   shouldFanOutRecurringTasks,
@@ -44,7 +53,13 @@ import {
   type RecurrenceFrequency,
 } from "@/lib/taskRecurrence";
 import { toast } from "sonner";
-import { ChevronDown, ChevronUp, Check, ChevronsUpDown, Plus } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Check,
+  ChevronsUpDown,
+  Plus,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { priorityBarColor } from "@/lib/taskPriority";
 import {
@@ -68,60 +83,86 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-const formSchema = z.object({
-  title: z.string().min(1, "שם המשימה הוא שדה חובה"),
-  notes: z.string().optional(),
-  campaigner_id: z.string().optional(), // Optional for quick tasks - will be auto-filled
-  sales_person_id: z.string().optional(),
-  task_category: z.enum(["client", "lead", "quick"]),
-  client_id: z.string().optional(),
-  lead_id: z.string().optional(),
-  agency_id: z.string().optional(),
-  due_date: z.string().optional(),
-  due_time: z.string().optional(),
-  recurrence_frequency: z.enum(["daily", "weekly", "monthly"]).nullable().default(null),
-  recurrence_weekday: z.number().min(0).max(6).nullable().default(null),
-  recurrence_monthday: z.number().min(1).max(31).nullable().default(null),
-  collaborator_ids: z.array(z.string()).default([]),
-  self_reminder_enabled: z.boolean().default(false),
-  self_reminder_at: z.string().optional(),
-  status: z.enum(["open", "in_progress", "done"]),
-  priority: z.number().min(1).max(10),
-}).refine((data) => {
-  // Only require client for client tasks
-  if (data.task_category === "client" && !data.client_id) {
-    return false;
-  }
-  return true;
-}, {
-  message: "יש לבחור לקוח למשימת לקוח",
-  path: ["client_id"],
-}).refine((data) => {
-  // Only require lead for lead tasks
-  if (data.task_category === "lead" && !data.lead_id) {
-    return false;
-  }
-  return true;
-}, {
-  message: "יש לבחור ליד למשימת ליד",
-  path: ["lead_id"],
-}).refine((data) => {
-  // For client/lead tasks, require either campaigner OR sales person
-  if ((data.task_category === "client" || data.task_category === "lead") && !data.campaigner_id && !data.sales_person_id) {
-    return false;
-  }
-  return true;
-}, {
-  message: "יש לבחור איש צוות אחראי",
-  path: ["campaigner_id"],
-}).refine((data) => {
-  return !data.self_reminder_enabled || Boolean(data.self_reminder_at);
-}, {
-  message: "יש לבחור תאריך ושעה לתזכורת",
-  path: ["self_reminder_at"],
-});
+const formSchema = z
+  .object({
+    title: z.string().min(1, "שם המשימה הוא שדה חובה"),
+    notes: z.string().optional(),
+    campaigner_id: z.string().optional(), // Optional for quick tasks - will be auto-filled
+    sales_person_id: z.string().optional(),
+    task_category: z.enum(["client", "lead", "quick"]),
+    client_id: z.string().optional(),
+    lead_id: z.string().optional(),
+    agency_id: z.string().optional(),
+    due_date: z.string().optional(),
+    due_time: z.string().optional(),
+    recurrence_frequency: z
+      .enum(["daily", "weekly", "monthly"])
+      .nullable()
+      .default(null),
+    recurrence_weekday: z.number().min(0).max(6).nullable().default(null),
+    recurrence_monthday: z.number().min(1).max(31).nullable().default(null),
+    collaborator_ids: z.array(z.string()).default([]),
+    self_reminder_enabled: z.boolean().default(false),
+    self_reminder_at: z.string().optional(),
+    status: z.enum(["open", "in_progress", "done"]),
+    priority: z.number().min(1).max(10),
+  })
+  .refine(
+    (data) => {
+      // Only require client for client tasks
+      if (data.task_category === "client" && !data.client_id) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "יש לבחור לקוח למשימת לקוח",
+      path: ["client_id"],
+    },
+  )
+  .refine(
+    (data) => {
+      // Only require lead for lead tasks
+      if (data.task_category === "lead" && !data.lead_id) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "יש לבחור ליד למשימת ליד",
+      path: ["lead_id"],
+    },
+  )
+  .refine(
+    (data) => {
+      // For client/lead tasks, require either campaigner OR sales person
+      if (
+        (data.task_category === "client" || data.task_category === "lead") &&
+        !data.campaigner_id &&
+        !data.sales_person_id
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "יש לבחור איש צוות אחראי",
+      path: ["campaigner_id"],
+    },
+  )
+  .refine(
+    (data) => {
+      return !data.self_reminder_enabled || Boolean(data.self_reminder_at);
+    },
+    {
+      message: "יש לבחור תאריך ושעה לתזכורת",
+      path: ["self_reminder_at"],
+    },
+  );
 
-async function fetchClientById(clientId: string): Promise<TaskClientRow | null> {
+async function fetchClientById(
+  clientId: string,
+): Promise<TaskClientRow | null> {
   const { data, error } = await supabase
     .from("clients")
     .select("id, name, agency_id")
@@ -139,17 +180,29 @@ interface AddTaskFormProps {
   triggerButton?: React.ReactNode;
 }
 
-export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaignerId, triggerButton }: AddTaskFormProps) {
+export default function AddTaskForm({
+  clientId,
+  leadId,
+  agencyId,
+  defaultCampaignerId,
+  triggerButton,
+}: AddTaskFormProps) {
   const [open, setOpen] = useState(false);
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const [leadPopoverOpen, setLeadPopoverOpen] = useState(false);
   const [taskCategory, setTaskCategory] = useState<"client" | "lead" | "quick">(
-    leadId ? "lead" : clientId ? "client" : "client"
+    leadId ? "lead" : clientId ? "client" : "client",
   );
   const queryClient = useQueryClient();
   const { tenantId: currentTenantId } = useCurrentTenant();
-  const { getFieldLabel } = useCustomFieldLabels('task');
-  const { isCampaigner, isTeamManager, isOwner, isSuperAdmin, campaignerId: userCampaignerId } = useUserRole();
+  const { getFieldLabel } = useCustomFieldLabels("task");
+  const {
+    isCampaigner,
+    isTeamManager,
+    isOwner,
+    isSuperAdmin,
+    campaignerId: userCampaignerId,
+  } = useUserRole();
   const { isViewingAs, viewAsUserId, viewAsUserName } = useViewAs();
   const { t } = useTerminology();
 
@@ -197,7 +250,14 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     } else if (userCampaignerId && !form.getValues("campaigner_id")) {
       form.setValue("campaigner_id", userCampaignerId);
     }
-  }, [clientId, leadId, defaultCampaignerId, userCampaignerId, isCampaigner, form]);
+  }, [
+    clientId,
+    leadId,
+    defaultCampaignerId,
+    userCampaignerId,
+    isCampaigner,
+    form,
+  ]);
 
   const { data: campaigners } = useAssignableCampaigners({ activeOnly: true });
   const selectedCampaignerId = useWatch({
@@ -228,7 +288,9 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     control: form.control,
     name: "collaborator_ids",
   });
-  const isSelfAssigned = Boolean(userCampaignerId && selectedCampaignerId === userCampaignerId);
+  const isSelfAssigned = Boolean(
+    userCampaignerId && selectedCampaignerId === userCampaignerId,
+  );
 
   useEffect(() => {
     if (!isSelfAssigned) {
@@ -244,7 +306,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     if (canSelectAnyCampaigner) return campaigners;
     // Campaigners only see themselves
     if (isCampaigner && userCampaignerId) {
-      return campaigners.filter(c => c.id === userCampaignerId);
+      return campaigners.filter((c) => c.id === userCampaignerId);
     }
     return campaigners;
   }, [campaigners, canSelectAnyCampaigner, isCampaigner, userCampaignerId]);
@@ -259,7 +321,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         .select("agency_id")
         .eq("accessing_tenant_id", currentTenantId);
       if (error) throw error;
-      return data?.map(r => r.agency_id) || [];
+      return data?.map((r) => r.agency_id) || [];
     },
     enabled: !!currentTenantId,
   });
@@ -289,13 +351,15 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         .select("*")
         .neq("status", "ended")
         .order("name");
-      
+
       if (crossTenantAgencyIds && crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${currentTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        query = query.or(
+          `tenant_id.eq.${currentTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
         query = query.eq("tenant_id", currentTenantId);
       }
-      
+
       const { data, error } = await query;
       if (error) throw error;
       return data;
@@ -319,8 +383,14 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
   }, [clients, selectedCampaignerId, assignedClientIds]);
 
   const clientOptions = useMemo(() => {
-    const options = assignableClients.map((client) => ({ id: client.id, name: client.name }));
-    if (forcedClient && !options.some((option) => option.id === forcedClient.id)) {
+    const options = assignableClients.map((client) => ({
+      id: client.id,
+      name: client.name,
+    }));
+    if (
+      forcedClient &&
+      !options.some((option) => option.id === forcedClient.id)
+    ) {
       options.unshift({ id: forcedClient.id, name: forcedClient.name });
     }
     return options;
@@ -359,7 +429,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       let selectedLead = null;
       let finalAgencyId: string | null = null;
       let finalCampaignerId = values.campaigner_id;
-      let entityName = 'משימה כללית';
+      let entityName = "משימה כללית";
 
       if (values.task_category === "client") {
         const resolved = await resolveClientTaskAgency({
@@ -381,12 +451,15 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
 
         if (leadError) throw leadError;
         if (!leadRow?.id) {
-          throw new Error("הליד לא נמצא (כנראה נמחק/הומר ללקוח). רענן את הדף ונסה שוב.");
+          throw new Error(
+            "הליד לא נמצא (כנראה נמחק/הומר ללקוח). רענן את הדף ונסה שוב.",
+          );
         }
 
         selectedLead = leadRow;
         finalAgencyId = await ensureLeadHomeAgency(selectedLead, agencies);
-        entityName = selectedLead.company_name || selectedLead.contact_name || 'ליד';
+        entityName =
+          selectedLead.company_name || selectedLead.contact_name || "ליד";
         if (!finalAgencyId) {
           throw new Error("לא נמצאה סוכנות לשיוך המשימה");
         }
@@ -400,7 +473,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
           finalCampaignerId = campaigners[0].id;
         }
         // Quick tasks don't require a campaigner - can proceed without one
-        
+
         // For quick tasks - get agency from the selected campaigner if available
         if (finalCampaignerId) {
           const { data: campaignerAgencies } = await supabase
@@ -408,7 +481,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
             .select("agency_id")
             .eq("campaigner_id", finalCampaignerId)
             .limit(1);
-          
+
           if (campaignerAgencies && campaignerAgencies.length > 0) {
             finalAgencyId = campaignerAgencies[0].agency_id;
           }
@@ -425,16 +498,19 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       }
 
       // Get campaigner name
-      const selectedCampaigner = campaigners?.find(c => c.id === finalCampaignerId);
-      
+      const selectedCampaigner = campaigners?.find(
+        (c) => c.id === finalCampaignerId,
+      );
+
       // ALWAYS use current tenant - tasks should appear where user is working
       if (!currentTenantId) throw new Error("לא נמצא טנט פעיל");
       const tenantId = currentTenantId;
-      
+
       // Get current user ID for created_by field
       const { data: sessionData } = await supabase.auth.getSession();
       const currentUserId = sessionData?.session?.user?.id;
-      const effectiveCreatorId = isViewingAs && viewAsUserId ? viewAsUserId : currentUserId;
+      const effectiveCreatorId =
+        isViewingAs && viewAsUserId ? viewAsUserId : currentUserId;
 
       let dueDate = values.due_date || null;
       let dueTimeValue = values.due_time || null;
@@ -443,7 +519,9 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
           frequency: values.recurrence_frequency as RecurrenceFrequency,
           weekday: values.recurrence_weekday,
           monthday: values.recurrence_monthday,
-          preferredDate: values.due_date ? new Date(`${values.due_date}T12:00:00`) : null,
+          preferredDate: values.due_date
+            ? new Date(`${values.due_date}T12:00:00`)
+            : null,
         });
         dueDate = formatLocalDate(first);
         dueTimeValue = values.due_time || null;
@@ -458,9 +536,15 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         lead_id: values.task_category === "lead" ? values.lead_id : null,
         agency_id: finalAgencyId,
         due_date: dueDate,
-        due_time: dueTimeValue ? (dueTimeValue.length === 5 ? `${dueTimeValue}:00` : dueTimeValue) : null,
+        due_time: dueTimeValue
+          ? dueTimeValue.length === 5
+            ? `${dueTimeValue}:00`
+            : dueTimeValue
+          : null,
         self_reminder_at:
-          isSelfAssigned && values.self_reminder_enabled && values.self_reminder_at
+          isSelfAssigned &&
+          values.self_reminder_enabled &&
+          values.self_reminder_at
             ? new Date(values.self_reminder_at).toISOString()
             : null,
         status: values.status,
@@ -480,13 +564,23 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         taskPayload.recurrence_frequency = values.recurrence_frequency;
         taskPayload.recurrence_interval = 1;
         taskPayload.recurrence_weekday =
-          values.recurrence_frequency === "weekly" ? values.recurrence_weekday : null;
+          values.recurrence_frequency === "weekly"
+            ? values.recurrence_weekday
+            : null;
         taskPayload.recurrence_monthday =
-          values.recurrence_frequency === "monthly" ? values.recurrence_monthday : null;
+          values.recurrence_frequency === "monthly"
+            ? values.recurrence_monthday
+            : null;
       }
 
-      const assigneeIds = collectTaskAssigneeIds(finalCampaignerId, values.collaborator_ids);
-      const fanOut = shouldFanOutRecurringTasks(values.recurrence_frequency, assigneeIds);
+      const assigneeIds = collectTaskAssigneeIds(
+        finalCampaignerId,
+        values.collaborator_ids,
+      );
+      const fanOut = shouldFanOutRecurringTasks(
+        values.recurrence_frequency,
+        assigneeIds,
+      );
 
       if (fanOut) {
         const payloads = assigneeIds.map((campaignerId) => ({
@@ -505,17 +599,23 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         if (error) throw error;
 
         const uniqueCollaborators = Array.from(
-          new Set((values.collaborator_ids || []).filter((id) => id && id !== finalCampaignerId)),
+          new Set(
+            (values.collaborator_ids || []).filter(
+              (id) => id && id !== finalCampaignerId,
+            ),
+          ),
         );
         if (uniqueCollaborators.length > 0 && created?.id) {
-          const { error: collabError } = await supabase.from("task_collaborators").insert(
-            uniqueCollaborators.map((campaignerCollaboratorId) => ({
-              task_id: created.id,
-              campaigner_id: campaignerCollaboratorId,
-              tenant_id: tenantId,
-              added_by: effectiveCreatorId,
-            })),
-          );
+          const { error: collabError } = await supabase
+            .from("task_collaborators")
+            .insert(
+              uniqueCollaborators.map((campaignerCollaboratorId) => ({
+                task_id: created.id,
+                campaigner_id: campaignerCollaboratorId,
+                tenant_id: tenantId,
+                added_by: effectiveCreatorId,
+              })),
+            );
           if (collabError) throw collabError;
         }
       }
@@ -530,7 +630,9 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       queryClient.invalidateQueries({ queryKey: ["lead-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["campaigner-tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["client-onboarding", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["client-onboarding", currentTenantId],
+      });
       const fanOutCount = result?.fanOutCount;
       toast.success(
         fanOutCount
@@ -601,11 +703,11 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>סוג משימה</FormLabel>
-                  <Select 
+                  <Select
                     onValueChange={(value) => {
                       field.onChange(value);
                       setTaskCategory(value as "client" | "lead" | "quick");
-                    }} 
+                    }}
                     value={field.value}
                     disabled={!!clientId || !!leadId}
                   >
@@ -630,24 +732,40 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
               control={form.control}
               name="campaigner_id"
               render={({ field }) => {
-                const [teamMemberPopoverOpen, setTeamMemberPopoverOpen] = useState(false);
-                
+                const [teamMemberPopoverOpen, setTeamMemberPopoverOpen] =
+                  useState(false);
+
                 // Combine campaigners and sales people into one list
                 const allTeamMembers = [
-                  ...(visibleCampaigners?.map(c => ({ id: c.id, prefixedId: `campaigner:${c.id}`, name: c.full_name, type: 'campaigner' as const })) || []),
-                  ...(salesPeople?.map(s => ({ id: s.id, prefixedId: `sales:${s.id}`, name: s.full_name, type: 'sales' as const })) || []),
+                  ...(visibleCampaigners?.map((c) => ({
+                    id: c.id,
+                    prefixedId: `campaigner:${c.id}`,
+                    name: c.full_name,
+                    type: "campaigner" as const,
+                  })) || []),
+                  ...(salesPeople?.map((s) => ({
+                    id: s.id,
+                    prefixedId: `sales:${s.id}`,
+                    name: s.full_name,
+                    type: "sales" as const,
+                  })) || []),
                 ];
-                
+
                 // Find selected member
-                const selectedMember = allTeamMembers.find(m => 
-                  (m.type === 'campaigner' && m.id === field.value) ||
-                  (m.type === 'sales' && m.id === form.getValues('sales_person_id'))
+                const selectedMember = allTeamMembers.find(
+                  (m) =>
+                    (m.type === "campaigner" && m.id === field.value) ||
+                    (m.type === "sales" &&
+                      m.id === form.getValues("sales_person_id")),
                 );
-                
+
                 return (
                   <FormItem className="flex flex-col">
                     <FormLabel>איש צוות אחראי</FormLabel>
-                    <Popover open={teamMemberPopoverOpen} onOpenChange={setTeamMemberPopoverOpen}>
+                    <Popover
+                      open={teamMemberPopoverOpen}
+                      onOpenChange={setTeamMemberPopoverOpen}
+                    >
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -655,59 +773,80 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                             role="combobox"
                             className={cn(
                               "w-full justify-between",
-                              !selectedMember && "text-muted-foreground"
+                              !selectedMember && "text-muted-foreground",
                             )}
                             disabled={isCampaigner && !canSelectAnyCampaigner}
                           >
-                            <span className="text-right flex-1">{selectedMember ? selectedMember.name : "בחר איש צוות"}</span>
+                            <span className="text-right flex-1">
+                              {selectedMember
+                                ? selectedMember.name
+                                : "בחר איש צוות"}
+                            </span>
                             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0 bg-background" align="end" dir="rtl">
+                      <PopoverContent
+                        className="w-[300px] p-0 bg-background"
+                        align="end"
+                        dir="rtl"
+                      >
                         <Command>
                           <CommandInput placeholder="חפש איש צוות..." />
                           <CommandList>
                             <CommandEmpty>לא נמצאו אנשי צוות</CommandEmpty>
-                            {visibleCampaigners && visibleCampaigners.length > 0 && (
-                              <CommandGroup heading={t('role_campaigner', true)}>
-                                {visibleCampaigners.map((campaigner) => (
-                                  <CommandItem
-                                    key={`campaigner:${campaigner.id}`}
-                                    value={campaigner.full_name}
-                                    onSelect={() => {
-                                      field.onChange(campaigner.id);
-                                      form.setValue('sales_person_id', '');
-                                      setTeamMemberPopoverOpen(false);
-                                    }}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        field.value === campaigner.id ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    {campaigner.full_name}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            )}
+                            {visibleCampaigners &&
+                              visibleCampaigners.length > 0 && (
+                                <CommandGroup
+                                  heading={t("role_campaigner", true)}
+                                >
+                                  {visibleCampaigners.map((campaigner) => (
+                                    <CommandItem
+                                      key={`campaigner:${campaigner.id}`}
+                                      value={campaigner.full_name}
+                                      onSelect={() => {
+                                        field.onChange(campaigner.id);
+                                        form.setValue("sales_person_id", "");
+                                        setTeamMemberPopoverOpen(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          field.value === campaigner.id
+                                            ? "opacity-100"
+                                            : "opacity-0",
+                                        )}
+                                      />
+                                      {campaigner.full_name}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              )}
                             {salesPeople && salesPeople.length > 0 && (
-                              <CommandGroup heading={t('role_sales_person', true)}>
+                              <CommandGroup
+                                heading={t("role_sales_person", true)}
+                              >
                                 {salesPeople.map((salesPerson) => (
                                   <CommandItem
                                     key={`sales:${salesPerson.id}`}
                                     value={salesPerson.full_name}
                                     onSelect={() => {
-                                      field.onChange('');
-                                      form.setValue('sales_person_id', salesPerson.id);
+                                      field.onChange("");
+                                      form.setValue(
+                                        "sales_person_id",
+                                        salesPerson.id,
+                                      );
                                       setTeamMemberPopoverOpen(false);
                                     }}
                                   >
                                     <Check
                                       className={cn(
                                         "mr-2 h-4 w-4",
-                                        form.getValues('sales_person_id') === salesPerson.id ? "opacity-100" : "opacity-0"
+                                        form.getValues("sales_person_id") ===
+                                          salesPerson.id
+                                          ? "opacity-100"
+                                          : "opacity-0",
                                       )}
                                     />
                                     {salesPerson.full_name}
@@ -733,8 +872,9 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                     control={form.control}
                     name="priority"
                     render={({ field }) => {
-                      const getPriorityColor = (priority: number) => priorityBarColor(priority);
-                      
+                      const getPriorityColor = (priority: number) =>
+                        priorityBarColor(priority);
+
                       const getPriorityText = (priority: number) => {
                         if (priority >= 8) return "דחיפות גבוהה";
                         if (priority >= 5) return "דחיפות בינונית";
@@ -746,20 +886,37 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                           <FormLabel>דחיפות</FormLabel>
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">{getPriorityText(field.value)}</span>
-                              <span className="text-sm font-medium" style={{ color: getPriorityColor(field.value) }}>
+                              <span className="text-sm text-muted-foreground">
+                                {getPriorityText(field.value)}
+                              </span>
+                              <span
+                                className="text-sm font-medium"
+                                style={{ color: getPriorityColor(field.value) }}
+                              >
                                 {field.value}/10
                               </span>
                             </div>
-                            <div style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}>
+                            <div
+                              style={{
+                                ["--slider-color" as any]: getPriorityColor(
+                                  field.value,
+                                ),
+                              }}
+                            >
                               <Slider
                                 value={[field.value]}
-                                onValueChange={(value) => field.onChange(value[0])}
+                                onValueChange={(value) =>
+                                  field.onChange(value[0])
+                                }
                                 min={1}
                                 max={10}
                                 step={1}
                                 className="cursor-pointer [&_[role=slider]]:border-[var(--slider-color)] [&_.bg-primary]:bg-[var(--slider-color)]"
-                                style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}
+                                style={{
+                                  ["--slider-color" as any]: getPriorityColor(
+                                    field.value,
+                                  ),
+                                }}
                               />
                             </div>
                           </div>
@@ -776,7 +933,10 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel>לקוח</FormLabel>
-                      <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                      <Popover
+                        open={clientPopoverOpen}
+                        onOpenChange={setClientPopoverOpen}
+                      >
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
@@ -785,17 +945,22 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                               disabled={!!clientId}
                               className={cn(
                                 "justify-between",
-                                !field.value && "text-muted-foreground"
+                                !field.value && "text-muted-foreground",
                               )}
                             >
                               {field.value
-                                ? clientOptions.find((client) => client.id === field.value)?.name
+                                ? clientOptions.find(
+                                    (client) => client.id === field.value,
+                                  )?.name
                                 : "בחר לקוח"}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                        <PopoverContent
+                          className="w-[300px] p-0 bg-background"
+                          align="start"
+                        >
                           <Command>
                             <CommandInput placeholder="חפש לקוח..." />
                             <CommandList>
@@ -813,7 +978,9 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                                     <Check
                                       className={cn(
                                         "mr-2 h-4 w-4",
-                                        field.value === client.id ? "opacity-100" : "opacity-0"
+                                        field.value === client.id
+                                          ? "opacity-100"
+                                          : "opacity-0",
                                       )}
                                     />
                                     {client.name}
@@ -839,8 +1006,9 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                     control={form.control}
                     name="priority"
                     render={({ field }) => {
-                      const getPriorityColor = (priority: number) => priorityBarColor(priority);
-                      
+                      const getPriorityColor = (priority: number) =>
+                        priorityBarColor(priority);
+
                       const getPriorityText = (priority: number) => {
                         if (priority >= 8) return "דחיפות גבוהה";
                         if (priority >= 5) return "דחיפות בינונית";
@@ -852,20 +1020,37 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                           <FormLabel>דחיפות</FormLabel>
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">{getPriorityText(field.value)}</span>
-                              <span className="text-sm font-medium" style={{ color: getPriorityColor(field.value) }}>
+                              <span className="text-sm text-muted-foreground">
+                                {getPriorityText(field.value)}
+                              </span>
+                              <span
+                                className="text-sm font-medium"
+                                style={{ color: getPriorityColor(field.value) }}
+                              >
                                 {field.value}/10
                               </span>
                             </div>
-                            <div style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}>
+                            <div
+                              style={{
+                                ["--slider-color" as any]: getPriorityColor(
+                                  field.value,
+                                ),
+                              }}
+                            >
                               <Slider
                                 value={[field.value]}
-                                onValueChange={(value) => field.onChange(value[0])}
+                                onValueChange={(value) =>
+                                  field.onChange(value[0])
+                                }
                                 min={1}
                                 max={10}
                                 step={1}
                                 className="cursor-pointer [&_[role=slider]]:border-[var(--slider-color)] [&_.bg-primary]:bg-[var(--slider-color)]"
-                                style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}
+                                style={{
+                                  ["--slider-color" as any]: getPriorityColor(
+                                    field.value,
+                                  ),
+                                }}
                               />
                             </div>
                           </div>
@@ -882,7 +1067,10 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel>ליד</FormLabel>
-                      <Popover open={leadPopoverOpen} onOpenChange={setLeadPopoverOpen}>
+                      <Popover
+                        open={leadPopoverOpen}
+                        onOpenChange={setLeadPopoverOpen}
+                      >
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
@@ -891,17 +1079,23 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                               disabled={!!leadId}
                               className={cn(
                                 "justify-between",
-                                !field.value && "text-muted-foreground"
+                                !field.value && "text-muted-foreground",
                               )}
                             >
                               {field.value
-                                ? leads?.find((lead) => lead.id === field.value)?.company_name || leads?.find((lead) => lead.id === field.value)?.contact_name
+                                ? leads?.find((lead) => lead.id === field.value)
+                                    ?.company_name ||
+                                  leads?.find((lead) => lead.id === field.value)
+                                    ?.contact_name
                                 : "בחר ליד"}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                        <PopoverContent
+                          className="w-[300px] p-0 bg-background"
+                          align="start"
+                        >
                           <Command>
                             <CommandInput placeholder="חפש ליד..." />
                             <CommandList>
@@ -910,7 +1104,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                                 {leads?.map((lead) => (
                                   <CommandItem
                                     key={lead.id}
-                                    value={`${lead.company_name} ${lead.contact_name || ''}`}
+                                    value={`${lead.company_name} ${lead.contact_name || ""}`}
                                     onSelect={() => {
                                       form.setValue("lead_id", lead.id);
                                       setLeadPopoverOpen(false);
@@ -919,13 +1113,17 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                                     <Check
                                       className={cn(
                                         "mr-2 h-4 w-4",
-                                        field.value === lead.id ? "opacity-100" : "opacity-0"
+                                        field.value === lead.id
+                                          ? "opacity-100"
+                                          : "opacity-0",
                                       )}
                                     />
                                     <div className="flex flex-col">
                                       <span>{lead.company_name}</span>
                                       {lead.contact_name && (
-                                        <span className="text-xs text-muted-foreground">{lead.contact_name}</span>
+                                        <span className="text-xs text-muted-foreground">
+                                          {lead.contact_name}
+                                        </span>
                                       )}
                                     </div>
                                   </CommandItem>
@@ -955,7 +1153,12 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                   <input
                     type="checkbox"
                     checked={Boolean(selfReminderEnabled)}
-                    onChange={(event) => form.setValue("self_reminder_enabled", event.target.checked)}
+                    onChange={(event) =>
+                      form.setValue(
+                        "self_reminder_enabled",
+                        event.target.checked,
+                      )
+                    }
                     className="h-4 w-4 rounded border-input"
                   />
                   הזכר לי על המשימה
@@ -976,7 +1179,8 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                   />
                 )}
                 <p className="text-xs text-muted-foreground">
-                  משימה עצמית לא שולחת התראות אוטומטיות. כרמן תזכיר לך רק אם תבחר מועד.
+                  משימה עצמית לא שולחת התראות אוטומטיות. כרמן תזכיר לך רק אם
+                  תבחר מועד.
                 </p>
               </div>
             )}
@@ -1011,9 +1215,13 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                 <FormLabel>אנשים נוספים על המשימה</FormLabel>
                 <div className="flex flex-wrap gap-1.5 rounded-md border p-2">
                   {visibleCampaigners
-                    .filter((campaigner) => campaigner.id !== selectedCampaignerId)
+                    .filter(
+                      (campaigner) => campaigner.id !== selectedCampaignerId,
+                    )
                     .map((campaigner) => {
-                      const selected = (collaboratorIds || []).includes(campaigner.id);
+                      const selected = (collaboratorIds || []).includes(
+                        campaigner.id,
+                      );
                       return (
                         <button
                           key={campaigner.id}
@@ -1025,7 +1233,8 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                               : "border-border text-muted-foreground hover:border-primary/40",
                           )}
                           onClick={() => {
-                            const current = form.getValues("collaborator_ids") || [];
+                            const current =
+                              form.getValues("collaborator_ids") || [];
                             form.setValue(
                               "collaborator_ids",
                               selected
@@ -1065,21 +1274,44 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>סטטוס</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
-                          <SelectTrigger className={cn(
-                            "border-0 text-white font-medium",
-                            field.value === "open" && "bg-blue-400 hover:bg-blue-500",
-                            field.value === "in_progress" && "bg-yellow-400 hover:bg-yellow-500",
-                            field.value === "done" && "bg-green-400 hover:bg-green-500"
-                          )}>
+                          <SelectTrigger
+                            className={cn(
+                              "border-0 text-white font-medium",
+                              field.value === "open" &&
+                                "bg-blue-400 hover:bg-blue-500",
+                              field.value === "in_progress" &&
+                                "bg-yellow-400 hover:bg-yellow-500",
+                              field.value === "done" &&
+                                "bg-green-400 hover:bg-green-500",
+                            )}
+                          >
                             <SelectValue />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-50">
-                          <SelectItem value="open" className="text-blue-600 focus:text-blue-600 focus:bg-blue-50">פתוח</SelectItem>
-                          <SelectItem value="in_progress" className="text-yellow-600 focus:text-yellow-600 focus:bg-yellow-50">בעבודה</SelectItem>
-                          <SelectItem value="done" className="text-green-600 focus:text-green-600 focus:bg-green-50">הושלם</SelectItem>
+                          <SelectItem
+                            value="open"
+                            className="text-blue-600 focus:text-blue-600 focus:bg-blue-50"
+                          >
+                            פתוח
+                          </SelectItem>
+                          <SelectItem
+                            value="in_progress"
+                            className="text-yellow-600 focus:text-yellow-600 focus:bg-yellow-50"
+                          >
+                            בעבודה
+                          </SelectItem>
+                          <SelectItem
+                            value="done"
+                            className="text-green-600 focus:text-green-600 focus:bg-green-50"
+                          >
+                            הושלם
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -1089,7 +1321,11 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
               </>
             )}
 
-            <Button type="submit" disabled={mutation.isPending} className="w-full">
+            <Button
+              type="submit"
+              disabled={mutation.isPending}
+              className="w-full"
+            >
               {mutation.isPending ? "מוסיף..." : "הוסף משימה"}
             </Button>
           </form>

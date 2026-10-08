@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/triggers/pulse-sanaia-trial'
+      - ".github/triggers/pulse-sanaia-trial"
 
 jobs:
   send:

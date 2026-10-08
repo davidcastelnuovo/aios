@@ -13,36 +13,64 @@ interface ChatMessageRowProps {
   tool?: string;
 }
 
-function AttachmentStrip({ attachments }: { attachments: CommandCenterAttachment[] }) {
+function AttachmentStrip({
+  attachments,
+}: {
+  attachments: CommandCenterAttachment[];
+}) {
   if (!attachments.length) return null;
   return (
     <div className="mt-2 flex flex-col gap-2">
       {attachments.filter((a) => a.type === "image").length > 0 && (
-        <div className={`grid gap-2 ${attachments.filter((a) => a.type === "image").length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-          {attachments.filter((a) => a.type === "image").map((att, idx) => (
-            <a key={`${att.url}-${idx}`} href={att.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-md border border-[var(--cc-line)]">
-              <img src={att.url} alt={att.name} className="max-h-48 w-full object-cover" loading="lazy" />
-            </a>
-          ))}
+        <div
+          className={`grid gap-2 ${attachments.filter((a) => a.type === "image").length > 1 ? "grid-cols-2" : "grid-cols-1"}`}
+        >
+          {attachments
+            .filter((a) => a.type === "image")
+            .map((att, idx) => (
+              <a
+                key={`${att.url}-${idx}`}
+                href={att.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block overflow-hidden rounded-md border border-[var(--cc-line)]"
+              >
+                <img
+                  src={att.url}
+                  alt={att.name}
+                  className="max-h-48 w-full object-cover"
+                  loading="lazy"
+                />
+              </a>
+            ))}
         </div>
       )}
-      {attachments.filter((a) => a.type !== "image").map((att, idx) => (
-        <a
-          key={`${att.url}-file-${idx}`}
-          href={att.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-md border border-[var(--cc-line)] bg-[rgba(5,10,22,0.35)] px-2 py-1 text-xs text-[var(--cc-accent)] hover:underline"
-        >
-          <FileIcon className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{att.name}</span>
-        </a>
-      ))}
+      {attachments
+        .filter((a) => a.type !== "image")
+        .map((att, idx) => (
+          <a
+            key={`${att.url}-file-${idx}`}
+            href={att.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--cc-line)] bg-[rgba(5,10,22,0.35)] px-2 py-1 text-xs text-[var(--cc-accent)] hover:underline"
+          >
+            <FileIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{att.name}</span>
+          </a>
+        ))}
     </div>
   );
 }
 
-export function ChatMessageRow({ role, content, attachments, speaker, channel, tool }: ChatMessageRowProps) {
+export function ChatMessageRow({
+  role,
+  content,
+  attachments,
+  speaker,
+  channel,
+  tool,
+}: ChatMessageRowProps) {
   if (role === "tool_call") {
     return (
       <p className="flex items-center justify-center gap-1.5 py-1 text-xs text-[var(--cc-text-dim)]">
@@ -68,7 +96,9 @@ export function ChatMessageRow({ role, content, attachments, speaker, channel, t
       <div className={`cc-msg-bubble${isUser ? " is-user" : ""}`}>
         {(content || !hasAttachments) && (
           <div className="cc-md prose prose-invert prose-sm max-w-none [&_p]:my-1">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content ?? ""}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {content ?? ""}
+            </ReactMarkdown>
           </div>
         )}
         {hasAttachments && <AttachmentStrip attachments={attachments!} />}

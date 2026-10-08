@@ -6,13 +6,21 @@
 import { titleSimilarity } from "./dev-tasks.ts";
 
 export const EXECUTION_GOAL_STATUSES = [
-  "active", "in_progress", "blocked", "completed", "cancelled", "paused",
+  "active",
+  "in_progress",
+  "blocked",
+  "completed",
+  "cancelled",
+  "paused",
 ] as const;
 
-export type ExecutionGoalStatus = typeof EXECUTION_GOAL_STATUSES[number];
+export type ExecutionGoalStatus = (typeof EXECUTION_GOAL_STATUSES)[number];
 
 export const OPEN_GOAL_STATUSES: ExecutionGoalStatus[] = [
-  "active", "in_progress", "blocked", "paused",
+  "active",
+  "in_progress",
+  "blocked",
+  "paused",
 ];
 
 export type ExecutionGoalRow = {
@@ -102,7 +110,10 @@ export async function findDuplicateGoals(
     .limit(40);
   if (error) throw error;
   return (data || [])
-    .map((row: ExecutionGoalRow) => ({ goal: row, score: titleSimilarity(title, row.title) }))
+    .map((row: ExecutionGoalRow) => ({
+      goal: row,
+      score: titleSimilarity(title, row.title),
+    }))
     .filter((x) => x.score >= threshold)
     .sort((a, b) => b.score - a.score);
 }
@@ -171,7 +182,8 @@ export async function createUnifiedGoal(
   const wantsAutonomous = !!args.autonomous;
 
   if (wantsAutonomous) {
-    const { data, error } = await supabase.from("goals")
+    const { data, error } = await supabase
+      .from("goals")
       .insert(buildExecutionGoalRow(args, true, now))
       .select("*")
       .single();
@@ -179,7 +191,8 @@ export async function createUnifiedGoal(
     if (!error) {
       let criteriaRows: unknown[] = [];
       try {
-        const { seedSuccessCriteria } = await import("./autonomous-goal-engine.ts");
+        const { seedSuccessCriteria } =
+          await import("./autonomous-goal-engine.ts");
         criteriaRows = await seedSuccessCriteria(supabase, {
           tenantId: args.tenantId,
           goalId: data.id,
@@ -190,7 +203,10 @@ export async function createUnifiedGoal(
       } catch (criteriaError) {
         if (!isAutonomousSchemaError(criteriaError)) throw criteriaError;
         await supabase.from("goals").delete().eq("id", data.id);
-        return await createUnifiedGoal(supabase, { ...args, autonomous: false });
+        return await createUnifiedGoal(supabase, {
+          ...args,
+          autonomous: false,
+        });
       }
 
       await logGoalEvent(supabase, {
@@ -198,7 +214,10 @@ export async function createUnifiedGoal(
         tenantId: args.tenantId,
         eventType: "autonomous_goal_created",
         actorUserId: args.actorUserId,
-        detail: { engine_status: "PLANNING", criteria_count: criteriaRows.length },
+        detail: {
+          engine_status: "PLANNING",
+          criteria_count: criteriaRows.length,
+        },
       });
       return { goal: data as ExecutionGoalRow, criteria: criteriaRows };
     }
@@ -206,7 +225,8 @@ export async function createUnifiedGoal(
     if (!isAutonomousSchemaError(error)) throw error;
   }
 
-  const { data, error } = await supabase.from("goals")
+  const { data, error } = await supabase
+    .from("goals")
     .insert(buildExecutionGoalRow(args, false, now))
     .select("*")
     .single();
@@ -217,7 +237,9 @@ export async function createUnifiedGoal(
     tenantId: args.tenantId,
     eventType: "created",
     actorUserId: args.actorUserId,
-    detail: wantsAutonomous ? { autonomous_requested: true, autonomous_deferred: true } : {},
+    detail: wantsAutonomous
+      ? { autonomous_requested: true, autonomous_deferred: true }
+      : {},
   });
 
   return {
@@ -234,7 +256,10 @@ export async function createExecutionGoal(
   supabase: { from: (t: string) => any },
   args: Omit<UnifiedGoalCreateArgs, "autonomous">,
 ): Promise<ExecutionGoalRow> {
-  const { goal } = await createUnifiedGoal(supabase, { ...args, autonomous: false });
+  const { goal } = await createUnifiedGoal(supabase, {
+    ...args,
+    autonomous: false,
+  });
   return goal;
 }
 
@@ -250,15 +275,19 @@ export async function addGoalMilestone(
     actorUserId?: string | null;
   },
 ) {
-  const { data, error } = await supabase.from("goal_milestones").insert({
-    tenant_id: args.tenantId,
-    goal_id: args.goalId,
-    title: args.title.trim(),
-    description: args.description ?? null,
-    due_date: args.dueDate ?? null,
-    sort_order: args.sortOrder ?? 0,
-    status: "pending",
-  }).select("*").single();
+  const { data, error } = await supabase
+    .from("goal_milestones")
+    .insert({
+      tenant_id: args.tenantId,
+      goal_id: args.goalId,
+      title: args.title.trim(),
+      description: args.description ?? null,
+      due_date: args.dueDate ?? null,
+      sort_order: args.sortOrder ?? 0,
+      status: "pending",
+    })
+    .select("*")
+    .single();
   if (error) throw error;
   await logGoalEvent(supabase, {
     goalId: args.goalId,
@@ -280,16 +309,23 @@ export async function addGoalBlocker(
     actorUserId?: string | null;
   },
 ) {
-  const { data, error } = await supabase.from("goal_blockers").insert({
-    tenant_id: args.tenantId,
-    goal_id: args.goalId,
-    title: args.title.trim(),
-    description: args.description ?? null,
-    status: "open",
-  }).select("*").single();
+  const { data, error } = await supabase
+    .from("goal_blockers")
+    .insert({
+      tenant_id: args.tenantId,
+      goal_id: args.goalId,
+      title: args.title.trim(),
+      description: args.description ?? null,
+      status: "open",
+    })
+    .select("*")
+    .single();
   if (error) throw error;
-  await supabase.from("goals").update({ status: "blocked", updated_at: new Date().toISOString() })
-    .eq("id", args.goalId).eq("tenant_id", args.tenantId);
+  await supabase
+    .from("goals")
+    .update({ status: "blocked", updated_at: new Date().toISOString() })
+    .eq("id", args.goalId)
+    .eq("tenant_id", args.tenantId);
   await logGoalEvent(supabase, {
     goalId: args.goalId,
     tenantId: args.tenantId,
@@ -302,9 +338,15 @@ export async function addGoalBlocker(
 
 export async function linkTaskToGoal(
   supabase: { from: (t: string) => any },
-  args: { tenantId: string; goalId: string; taskId: string; actorUserId?: string | null },
+  args: {
+    tenantId: string;
+    goalId: string;
+    taskId: string;
+    actorUserId?: string | null;
+  },
 ) {
-  const { data, error } = await supabase.from("tasks")
+  const { data, error } = await supabase
+    .from("tasks")
     .update({ goal_id: args.goalId, updated_at: new Date().toISOString() })
     .eq("id", args.taskId)
     .eq("tenant_id", args.tenantId)
@@ -329,41 +371,74 @@ export async function getGoalExecutionReport(
 ): Promise<Record<string, unknown>> {
   const since = new Date(Date.now() - sinceHours * 3600_000).toISOString();
 
-  const { data: goal } = await supabase.from("goals").select("*")
-    .eq("id", goalId).eq("tenant_id", tenantId).maybeSingle();
+  const { data: goal } = await supabase
+    .from("goals")
+    .select("*")
+    .eq("id", goalId)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
 
-  const { data: milestones } = await supabase.from("goal_milestones").select("*")
-    .eq("goal_id", goalId).order("sort_order");
+  const { data: milestones } = await supabase
+    .from("goal_milestones")
+    .select("*")
+    .eq("goal_id", goalId)
+    .order("sort_order");
 
-  const { data: blockers } = await supabase.from("goal_blockers").select("*")
-    .eq("goal_id", goalId).order("created_at", { ascending: false });
+  const { data: blockers } = await supabase
+    .from("goal_blockers")
+    .select("*")
+    .eq("goal_id", goalId)
+    .order("created_at", { ascending: false });
 
-  const { data: events } = await supabase.from("goal_events").select("*")
-    .eq("goal_id", goalId).gte("created_at", since).order("created_at", { ascending: false }).limit(30);
+  const { data: events } = await supabase
+    .from("goal_events")
+    .select("*")
+    .eq("goal_id", goalId)
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(30);
 
-  const { data: tasks } = await supabase.from("tasks").select("id, title, status, assigned_agent")
-    .eq("goal_id", goalId).eq("tenant_id", tenantId);
+  const { data: tasks } = await supabase
+    .from("tasks")
+    .select("id, title, status, assigned_agent")
+    .eq("goal_id", goalId)
+    .eq("tenant_id", tenantId);
 
-  const { data: devTasks } = await supabase.from("dev_tasks").select("id, title, status, cursor_session_url, pr_url")
-    .eq("goal_id", goalId).eq("tenant_id", tenantId);
+  const { data: devTasks } = await supabase
+    .from("dev_tasks")
+    .select("id, title, status, cursor_session_url, pr_url")
+    .eq("goal_id", goalId)
+    .eq("tenant_id", tenantId);
 
-  const { data: pendingApprovals } = await supabase.from("agent_approval_queue")
+  const { data: pendingApprovals } = await supabase
+    .from("agent_approval_queue")
     .select("id, tool_name, status, created_at, title, description")
     .eq("tenant_id", tenantId)
     .eq("status", "pending")
     .order("created_at", { ascending: false })
     .limit(10);
 
-  const openBlockers = (blockers || []).filter((b: { status: string }) => b.status === "open");
-  const doneMilestones = (milestones || []).filter((m: { status: string }) => m.status === "done").length;
+  const openBlockers = (blockers || []).filter(
+    (b: { status: string }) => b.status === "open",
+  );
+  const doneMilestones = (milestones || []).filter(
+    (m: { status: string }) => m.status === "done",
+  ).length;
   const totalMilestones = (milestones || []).length;
-  const progress = totalMilestones ? Math.round((doneMilestones / totalMilestones) * 100) : Number(goal?.progress_percent || 0);
+  const progress = totalMilestones
+    ? Math.round((doneMilestones / totalMilestones) * 100)
+    : Number(goal?.progress_percent || 0);
 
   const nextActions: string[] = [];
   if (goal?.next_action) nextActions.push(goal.next_action);
-  const pendingMilestone = (milestones || []).find((m: { status: string }) => m.status === "pending" || m.status === "in_progress");
+  const pendingMilestone = (milestones || []).find(
+    (m: { status: string }) =>
+      m.status === "pending" || m.status === "in_progress",
+  );
   if (pendingMilestone) nextActions.push(`אבן דרך: ${pendingMilestone.title}`);
-  const openTask = (tasks || []).find((t: { status: string }) => t.status !== "done");
+  const openTask = (tasks || []).find(
+    (t: { status: string }) => t.status !== "done",
+  );
   if (openTask) nextActions.push(`משימה: ${openTask.title}`);
 
   const report: Record<string, unknown> = {
@@ -381,8 +456,13 @@ export async function getGoalExecutionReport(
 
   if (goal?.autonomous_mode) {
     try {
-      const { getAutonomousGoalStatus } = await import("./autonomous-goal-engine.ts");
-      report.autonomous_engine = await getAutonomousGoalStatus(supabase, tenantId, goalId);
+      const { getAutonomousGoalStatus } =
+        await import("./autonomous-goal-engine.ts");
+      report.autonomous_engine = await getAutonomousGoalStatus(
+        supabase,
+        tenantId,
+        goalId,
+      );
     } catch {
       report.autonomous_engine = null;
     }

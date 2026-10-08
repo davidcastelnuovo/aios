@@ -42,9 +42,17 @@ export function CreativeBoard({ clientId, onSelectItem }: Props) {
               className="cursor-pointer overflow-hidden p-0 hover:shadow-lg"
               onClick={() => onSelectItem?.(a.item_id)}
             >
-              {a.url && <img src={a.url} alt="" className="aspect-square w-full object-cover" />}
+              {a.url && (
+                <img
+                  src={a.url}
+                  alt=""
+                  className="aspect-square w-full object-cover"
+                />
+              )}
               <div className="p-2 text-xs">
-                <Badge variant="outline" className="text-[10px]">{a.type}</Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {a.type}
+                </Badge>
                 <div className="mt-1 text-muted-foreground">
                   {new Date(a.created_at).toLocaleDateString("he-IL")}
                 </div>

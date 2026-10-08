@@ -1,15 +1,30 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
+import {
+  useAgencyClients,
+  useTableDialogAgencies,
+} from "@/hooks/useAgencyClients";
 import { Loader2, TrendingUp, ExternalLink, Link, Globe } from "lucide-react";
 
 interface AhrefsTableDialogProps {
@@ -18,11 +33,15 @@ interface AhrefsTableDialogProps {
   assignedClientIds?: string[];
 }
 
-export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: AhrefsTableDialogProps) {
+export function AhrefsTableDialog({
+  open,
+  onOpenChange,
+  assignedClientIds,
+}: AhrefsTableDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentTenant, currentTenantId: activeTenantId } = useTenant();
-  
+
   const [mode, setMode] = useState<"domain" | "report">("domain");
   const [tableName, setTableName] = useState("");
   const [category, setCategory] = useState("seo");
@@ -35,33 +54,38 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
 
   // Fetch Ahrefs integration
   const { data: integration, isLoading: integrationLoading } = useQuery({
-    queryKey: ['ahrefs-integration', activeTenantId],
+    queryKey: ["ahrefs-integration", activeTenantId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return null;
-      
+
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', activeTenantId)
-        .eq('integration_type', 'ahrefs')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", activeTenantId)
+        .eq("integration_type", "ahrefs")
+        .eq("user_id", user.id)
+        .eq("is_active", true)
         .maybeSingle();
-      
+
       return data;
     },
     enabled: open && !!activeTenantId,
   });
 
   // Fetch agencies
-  const { data: agencies } = useTableDialogAgencies({ includeShared: true, enabled: open });
+  const { data: agencies } = useTableDialogAgencies({
+    includeShared: true,
+    enabled: open,
+  });
 
   // Fetch clients based on selected agency
   const { data: rawClients } = useAgencyClients(selectedAgency || null);
 
   const clients = assignedClientIds
-    ? (rawClients || []).filter(c => assignedClientIds.includes(c.id))
+    ? (rawClients || []).filter((c) => assignedClientIds.includes(c.id))
     : rawClients;
 
   const parseReportUrl = (url: string) => {
@@ -70,35 +94,39 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
     try {
       const urlObj = new URL(url);
       const path = urlObj.pathname;
-      const target = urlObj.searchParams.get('target') || '';
-      
-      let detectedType = 'site_explorer';
-      
-      if (path.includes('organic-keywords')) detectedType = 'organic_traffic';
-      else if (path.includes('backlinks')) detectedType = 'backlinks';
-      else if (path.includes('referring-domains') || path.includes('refdomains')) detectedType = 'referring_domains';
-      else if (path.includes('domain-rating')) detectedType = 'site_explorer';
-      else if (path.includes('site-explorer')) detectedType = 'site_explorer';
-      
+      const target = urlObj.searchParams.get("target") || "";
+
+      let detectedType = "site_explorer";
+
+      if (path.includes("organic-keywords")) detectedType = "organic_traffic";
+      else if (path.includes("backlinks")) detectedType = "backlinks";
+      else if (
+        path.includes("referring-domains") ||
+        path.includes("refdomains")
+      )
+        detectedType = "referring_domains";
+      else if (path.includes("domain-rating")) detectedType = "site_explorer";
+      else if (path.includes("site-explorer")) detectedType = "site_explorer";
+
       return { target, reportType: detectedType };
     } catch {
-      return { target: '', reportType: 'site_explorer' };
+      return { target: "", reportType: "site_explorer" };
     }
   };
 
   const handleCreate = async () => {
     const isReportMode = mode === "report";
-    
+
     if (!tableName.trim() || !integration) {
       toast({ title: "נא למלא את כל השדות הנדרשים", variant: "destructive" });
       return;
     }
-    
+
     if (isReportMode && !reportUrl) {
       toast({ title: "נא להזין כתובת דוח Ahrefs", variant: "destructive" });
       return;
     }
-    
+
     if (!isReportMode && !targetDomain) {
       toast({ title: "נא להזין דומיין לניתוח", variant: "destructive" });
       return;
@@ -106,40 +134,46 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
 
     setIsCreating(true);
     try {
-      const slug = tableName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      
+      const slug = tableName
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "");
+
       const parsedReport = isReportMode ? parseReportUrl(reportUrl) : null;
-      
+
       if (isReportMode && !parsedReport?.target) {
         toast({
           title: "לא זוהה דומיין בכתובת הדוח",
-          description: "ודא שאתה מדביק את ה-URL המלא מהדפדפן ושמופיע בו target=example.com",
+          description:
+            "ודא שאתה מדביק את ה-URL המלא מהדפדפן ושמופיע בו target=example.com",
           variant: "destructive",
         });
         return;
       }
 
       const normalizeReportType = (t: string) => {
-        if (t === 'organic_keywords') return 'organic_traffic';
-        if (t === 'domain_rating') return 'site_explorer';
+        if (t === "organic_keywords") return "organic_traffic";
+        if (t === "domain_rating") return "site_explorer";
         return t;
       };
 
       const finalTarget = isReportMode ? parsedReport?.target : targetDomain;
-      const finalReportType = isReportMode ? normalizeReportType(parsedReport?.reportType || 'site_explorer') : normalizeReportType(reportType);
+      const finalReportType = isReportMode
+        ? normalizeReportType(parsedReport?.reportType || "site_explorer")
+        : normalizeReportType(reportType);
 
-      const { data, error } = await supabase.functions.invoke('crm-tables', {
+      const { data, error } = await supabase.functions.invoke("crm-tables", {
         body: {
-          action: 'create',
+          action: "create",
           tenantId: activeTenantId,
           name: tableName,
           slug: `ahrefs-${slug}-${Date.now()}`,
           description: `Ahrefs Site Explorer - ${finalTarget}`,
           category,
-          icon: 'TrendingUp',
+          icon: "TrendingUp",
           agencyId: selectedAgency || null,
           clientId: selectedClient || null,
-          integration_type: 'ahrefs',
+          integration_type: "ahrefs",
           integration_settings: {
             integrationId: integration.id,
             targetDomain: finalTarget,
@@ -147,25 +181,33 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
             reportUrl: isReportMode ? reportUrl : null,
             isExistingReport: isReportMode,
           },
-          integrations: [{
-            type: 'ahrefs',
-            integrationId: integration.id,
-            targetDomain: finalTarget,
-            reportType: finalReportType,
-            reportUrl: isReportMode ? reportUrl : null,
-            isExistingReport: isReportMode,
-          }]
-        }
+          integrations: [
+            {
+              type: "ahrefs",
+              integrationId: integration.id,
+              targetDomain: finalTarget,
+              reportType: finalReportType,
+              reportUrl: isReportMode ? reportUrl : null,
+              isExistingReport: isReportMode,
+            },
+          ],
+        },
       });
 
       if (error) throw error;
 
       toast({ title: "טבלת Ahrefs נוצרה בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', activeTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["crm-tables", activeTenantId],
+      });
       onOpenChange(false);
       resetForm();
     } catch (error: any) {
-      toast({ title: "שגיאה ביצירת הטבלה", description: error.message, variant: "destructive" });
+      toast({
+        title: "שגיאה ביצירת הטבלה",
+        description: error.message,
+        variant: "destructive",
+      });
     } finally {
       setIsCreating(false);
     }
@@ -201,9 +243,7 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
           </div>
         ) : !integration ? (
           <div className="text-center py-6 space-y-4">
-            <p className="text-muted-foreground">
-              לא נמצא חיבור Ahrefs פעיל
-            </p>
+            <p className="text-muted-foreground">לא נמצא חיבור Ahrefs פעיל</p>
             <Button variant="outline" asChild>
               <a href={`/t/${currentTenant?.slug}/ahrefs-settings`}>
                 <ExternalLink className="h-4 w-4 ml-2" />
@@ -213,7 +253,10 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
           </div>
         ) : (
           <div className="space-y-4">
-            <Tabs value={mode} onValueChange={(v) => setMode(v as "domain" | "report")}>
+            <Tabs
+              value={mode}
+              onValueChange={(v) => setMode(v as "domain" | "report")}
+            >
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="domain" className="flex items-center gap-2">
                   <Globe className="h-4 w-4" />
@@ -252,10 +295,16 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="site_explorer">סקירת דומיין (Domain Rating)</SelectItem>
-                      <SelectItem value="organic_traffic">מילות מפתח אורגניות</SelectItem>
+                      <SelectItem value="site_explorer">
+                        סקירת דומיין (Domain Rating)
+                      </SelectItem>
+                      <SelectItem value="organic_traffic">
+                        מילות מפתח אורגניות
+                      </SelectItem>
                       <SelectItem value="backlinks">בקלינקים</SelectItem>
-                      <SelectItem value="referring_domains">דומיינים מפנים</SelectItem>
+                      <SelectItem value="referring_domains">
+                        דומיינים מפנים
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -303,7 +352,13 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
 
             <div className="space-y-2">
               <Label>סוכנות (אופציונלי)</Label>
-              <Select value={selectedAgency || "all"} onValueChange={(v) => { setSelectedAgency(v === "all" ? "" : v); setSelectedClient(""); }}>
+              <Select
+                value={selectedAgency || "all"}
+                onValueChange={(v) => {
+                  setSelectedAgency(v === "all" ? "" : v);
+                  setSelectedClient("");
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="כל הסוכנויות" />
                 </SelectTrigger>
@@ -321,7 +376,10 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
             {selectedAgency && (
               <div className="space-y-2">
                 <Label>לקוח (אופציונלי)</Label>
-                <Select value={selectedClient || "all"} onValueChange={(v) => setSelectedClient(v === "all" ? "" : v)}>
+                <Select
+                  value={selectedClient || "all"}
+                  onValueChange={(v) => setSelectedClient(v === "all" ? "" : v)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="כל הלקוחות" />
                   </SelectTrigger>
@@ -338,8 +396,14 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
             )}
 
             <div className="flex gap-2 pt-4">
-              <Button onClick={handleCreate} disabled={isCreating} className="flex-1">
-                {isCreating ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+              <Button
+                onClick={handleCreate}
+                disabled={isCreating}
+                className="flex-1"
+              >
+                {isCreating ? (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                ) : null}
                 צור טבלה
               </Button>
               <Button variant="outline" onClick={() => onOpenChange(false)}>

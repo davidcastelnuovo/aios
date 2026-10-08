@@ -75,7 +75,8 @@ export function EditTenantNameDialog({
         .eq("id", tenant.id);
 
       if (error) {
-        if (error.code === "23505") throw new Error("הסלאג הזה כבר תפוס — בחר אחר");
+        if (error.code === "23505")
+          throw new Error("הסלאג הזה כבר תפוס — בחר אחר");
         throw error;
       }
 
@@ -151,7 +152,9 @@ export function EditTenantNameDialog({
               <Input
                 id="slug"
                 value={slug}
-                onChange={(e) => setSlug(normalizeTenantSlugInput(e.target.value))}
+                onChange={(e) =>
+                  setSlug(normalizeTenantSlugInput(e.target.value))
+                }
                 placeholder="my-organization"
                 dir="ltr"
                 className="font-mono"
