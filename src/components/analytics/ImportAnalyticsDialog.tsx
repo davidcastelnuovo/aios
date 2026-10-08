@@ -81,7 +81,7 @@ export function ImportAnalyticsDialog({ tenantId }: ImportAnalyticsDialogProps) 
 
     setImportResult(null);
 
-    Papa.parse(file, {
+    Papa.parse<Record<string, string>>(file, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {

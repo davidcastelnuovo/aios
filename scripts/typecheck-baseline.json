@@ -186,27 +186,6 @@
       "count": 1
     },
     {
-      "file": "src/components/analytics/ImportAnalyticsDialog.tsx",
-      "code": 7006,
-      "message": "Parameter 'error' implicitly has an 'any' type.",
-      "source": "error",
-      "count": 1
-    },
-    {
-      "file": "src/components/analytics/ImportAnalyticsDialog.tsx",
-      "code": 7006,
-      "message": "Parameter 'results' implicitly has an 'any' type.",
-      "source": "results",
-      "count": 1
-    },
-    {
-      "file": "src/components/analytics/ImportAnalyticsDialog.tsx",
-      "code": 7016,
-      "message": "Could not find a declaration file for module 'papaparse'. './node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
-      "source": "\"papaparse\"",
-      "count": 1
-    },
-    {
       "file": "src/components/automations/AddStepMenu.tsx",
       "code": 2322,
       "message": "Type '{ children: Element[]; align: \"end\"; className: string; dir: string; }' is not assignable to type 'IntrinsicAttributes & Omit<DropdownMenuContentProps & RefAttributes<HTMLDivElement>, \"ref\"> & RefAttributes<...>'.\n  Property 'dir' does not exist on type 'IntrinsicAttributes & Omit<DropdownMenuContentProps & RefAttributes<HTMLDivElement>, \"ref\"> & RefAttributes<...>'.",
@@ -536,20 +515,6 @@
       "count": 1
     },
     {
-      "file": "src/components/dynamic-tables/SearchConsoleDashboard.tsx",
-      "code": 7006,
-      "message": "Parameter 'results' implicitly has an 'any' type.",
-      "source": "results",
-      "count": 1
-    },
-    {
-      "file": "src/components/dynamic-tables/SearchConsoleDashboard.tsx",
-      "code": 7016,
-      "message": "Could not find a declaration file for module 'papaparse'. './node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
-      "source": "\"papaparse\"",
-      "count": 1
-    },
-    {
       "file": "src/components/dynamic-tables/seo/GscIntegration.tsx",
       "code": 2322,
       "message": "Type 'unknown' is not assignable to type 'Key | null | undefined'.",
@@ -760,20 +725,6 @@
       "count": 1
     },
     {
-      "file": "src/components/forms/ImportLeadsCSV.tsx",
-      "code": 7016,
-      "message": "Could not find a declaration file for module 'papaparse'. './node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
-      "source": "\"papaparse\"",
-      "count": 1
-    },
-    {
-      "file": "src/components/forms/ImportLeadsWithMapping.tsx",
-      "code": 7016,
-      "message": "Could not find a declaration file for module 'papaparse'. './node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
-      "source": "\"papaparse\"",
-      "count": 1
-    },
-    {
       "file": "src/components/forms/IntegrationVisibilitySelector.tsx",
       "code": 2322,
       "message": "Type '{ open: boolean; onOpenChange: Dispatch<SetStateAction<boolean>>; integrationId: string; integrationName: string; integrationOwnerId: string; tenantId: string; }' is not assignable to type 'IntrinsicAttributes & ManageIntegrationPermissionsDialogProps'.\n  Property 'tenantId' does not exist on type 'IntrinsicAttributes & ManageIntegrationPermissionsDialogProps'.",
@@ -799,13 +750,6 @@
       "code": 2345,
       "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'.",
       "source": "tenantId",
-      "count": 1
-    },
-    {
-      "file": "src/components/InteractiveCalendar.tsx",
-      "code": 7016,
-      "message": "Could not find a declaration file for module 'react-big-calendar'. './node_modules/.pnpm/react-big-calendar@1.19.4_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/react-big-calendar/lib/index.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/react-big-calendar` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-big-calendar';`",
-      "source": "\"react-big-calendar\"",
       "count": 1
     },
     {
@@ -1226,13 +1170,6 @@
       "code": 2769,
       "message": "No overload matches this call.\n  Overload 1 of 2, '(values: RejectExcessProperties<{ agency_id: string; assignment_notification_sent_at?: string | null | undefined; assigned_agent?: string | null | undefined; attachments?: Json | undefined; campaigner_id?: string | ... 1 more ... | undefined; ... 29 more ...; updated_at?: string | undefined; }, { ...; }>, options?: { ...; } | undefined): PostgrestFilterBuilder<...>', gave the following error.\n    Argument of type '{ campaigner_id: string | null; sales_person_id: string | null; due_date: string; due_time: string; duration_minutes: number; impersonated_by?: string | undefined; title: string; notes: string | null; ... 4 more ...; created_by: string | null; }' is not assignable to parameter of type 'RejectExcessProperties<{ agency_id: string; assignment_notification_sent_at?: string | null | undefined; assigned_agent?: string | null | undefined; attachments?: Json | undefined; campaigner_id?: string | ... 1 more ... | undefined; ... 29 more ...; updated_at?: string | undefined; }, { ...; }>'.\n      Type '{ campaigner_id: string | null; sales_person_id: string | null; due_date: string; due_time: string; duration_minutes: number; impersonated_by?: string | undefined; title: string; notes: string | null; ... 4 more ...; created_by: string | null; }' is not assignable to type '{ impersonated_by: never; }'.\n        Types of property 'impersonated_by' are incompatible.\n          Type 'string | undefined' is not assignable to type 'never'.\n            Type 'undefined' is not assignable to type 'never'.\n  Overload 2 of 2, '(values: RejectExcessProperties<{ agency_id: string; assignment_notification_sent_at?: string | null | undefined; assigned_agent?: string | null | undefined; attachments?: Json | undefined; campaigner_id?: string | ... 1 more ... | undefined; ... 29 more ...; updated_at?: string | undefined; }, { ...; }>[], options?: { ...; } | undefined): PostgrestFilterBuilder<...>', gave the following error.\n    Object literal may only specify known properties, and 'campaigner_id' does not exist in type 'RejectExcessProperties<{ agency_id: string; assignment_notification_sent_at?: string | null | undefined; assigned_agent?: string | null | undefined; attachments?: Json | undefined; campaigner_id?: string | ... 1 more ... | undefined; ... 29 more ...; updated_at?: string | undefined; }, { ...; }>[]'.",
       "source": "insert",
-      "count": 1
-    },
-    {
-      "file": "src/components/tasks/WeeklyTaskBoard.tsx",
-      "code": 7016,
-      "message": "Could not find a declaration file for module 'canvas-confetti'. './node_modules/.pnpm/canvas-confetti@1.9.4/node_modules/canvas-confetti/src/confetti.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/canvas-confetti` if it exists or add a new declaration (.d.ts) file containing `declare module 'canvas-confetti';`",
-      "source": "\"canvas-confetti\"",
       "count": 1
     },
     {
@@ -2251,13 +2188,6 @@
       "count": 3
     },
     {
-      "file": "src/pages/Leads.tsx",
-      "code": 7016,
-      "message": "Could not find a declaration file for module 'canvas-confetti'. './node_modules/.pnpm/canvas-confetti@1.9.4/node_modules/canvas-confetti/src/confetti.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/canvas-confetti` if it exists or add a new declaration (.d.ts) file containing `declare module 'canvas-confetti';`",
-      "source": "\"canvas-confetti\"",
-      "count": 1
-    },
-    {
       "file": "src/pages/ManusWhatsAppSettings.tsx",
       "code": 2322,
       "message": "Type 'string | undefined' is not assignable to type 'string | null'.\n  Type 'undefined' is not assignable to type 'string | null'.",
@@ -2304,20 +2234,6 @@
       "code": 7034,
       "message": "Variable 'sharedProducts' implicitly has type 'any[]' in some locations where its type cannot be determined.",
       "source": "sharedProducts",
-      "count": 1
-    },
-    {
-      "file": "src/pages/RankTrackingProject.tsx",
-      "code": 7006,
-      "message": "Parameter 'results' implicitly has an 'any' type.",
-      "source": "results",
-      "count": 1
-    },
-    {
-      "file": "src/pages/RankTrackingProject.tsx",
-      "code": 7016,
-      "message": "Could not find a declaration file for module 'papaparse'. './node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
-      "source": "\"papaparse\"",
       "count": 1
     },
     {
