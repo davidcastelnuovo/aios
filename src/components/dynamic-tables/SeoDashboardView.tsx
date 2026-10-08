@@ -16,6 +16,7 @@ import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
 // MaskyooSiblingCard moved to SeoReportTabs as a separate tab
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./seo/GscIntegration";
+import { ahrefsPositionsFromReports, displayRank, finiteRank, normalizeGscQuery } from "@/lib/gscPosition";
 import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
@@ -24,6 +25,8 @@ import { ListChecks } from "lucide-react";
 import { filterValidSeoReports } from "./seo/reportValidity";
 import { computeGaOrganicByMonth } from "./seo/computeGaOrganicByMonth";
 import { filterSeoReportsByDomain, sortSeoReportsByRecency } from "@/lib/seoDomain";
+
+const NO_EXTRA_GSC: GscKeywordData[] = [];
 
 interface SeoDashboardViewProps {
   tenantId: string;
@@ -55,9 +58,14 @@ interface SeoDashboardViewProps {
   ahrefsProjectId?: string | number | null;
   ahrefsMode?: string | null;
   ahrefsProtocol?: string | null;
+  /**
+   * Top-20 queries from the Search Console tab (synced table). Merged so a
+   * phrase that tab shows with a position also appears in Top 20.
+   */
+  extraGscRows?: GscKeywordData[];
 }
 
-export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, selectedGscIntegrationId, onGscSiteSelected, initialLangFilter, onLangFilterChange, expectedDomain, ahrefsProjectId, ahrefsMode, ahrefsProtocol }: SeoDashboardViewProps) {
+export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, selectedGscIntegrationId, onGscSiteSelected, initialLangFilter, onLangFilterChange, expectedDomain, ahrefsProjectId, ahrefsMode, ahrefsProtocol, extraGscRows = NO_EXTRA_GSC }: SeoDashboardViewProps) {
   const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
@@ -123,6 +131,37 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     // Also keep gscData in sync with the "current" period so existing aggregations keep working
     setGscData(data.current);
   }, []);
+
+  // Live Search Console rows plus top-20 queries reported by the GSC tab.
+  const keywordGscRows = useMemo(() => {
+    const byKey = new Map<string, GscKeywordData>();
+    const add = (row: GscKeywordData) => {
+      const key = String(row?.keyword || "").toLowerCase().trim();
+      if (!key) return;
+      const prev = byKey.get(key);
+      if (!prev) {
+        byKey.set(key, row);
+        return;
+      }
+      const prevRank = finiteRank(prev.position);
+      const nextRank = finiteRank(row.position);
+      const position = prevRank == null
+        ? (nextRank ?? prev.position)
+        : nextRank == null
+          ? prev.position
+          : Math.min(prevRank, nextRank);
+      byKey.set(key, {
+        keyword: prev.keyword || row.keyword,
+        clicks: Math.max(Number(prev.clicks) || 0, Number(row.clicks) || 0),
+        impressions: Math.max(Number(prev.impressions) || 0, Number(row.impressions) || 0),
+        ctr: prev.ctr || row.ctr || 0,
+        position,
+      });
+    };
+    for (const row of gscData) add(row);
+    for (const row of extraGscRows) add(row);
+    return Array.from(byKey.values());
+  }, [gscData, extraGscRows]);
 
   // Build tenant scope: prefer the explicit shared-agency list when provided,
   // else fall back to the single tenant prop. Without scoping by client_id we
@@ -303,12 +342,12 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   // Build GSC lookup map (current period — used for clicks/impressions/CTR enrichment)
   const gscMap = useMemo(() => {
     const map = new Map<string, GscKeywordData>();
-    for (const row of gscData) {
+    for (const row of keywordGscRows) {
       if (!row.keyword) continue;
       map.set(row.keyword.toLowerCase().trim(), row);
     }
     return map;
-  }, [gscData]);
+  }, [keywordGscRows]);
 
   // GSC historical period maps (for cross-period position comparisons)
   function buildGscMap(rows: GscKeywordData[]): Map<string, GscKeywordData> {
@@ -432,11 +471,24 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     }
     return enriched;
   }, [rawOrganic, rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison]);
-  const trackedKeywords = useMemo(() => rawTracked.map(kw => enrichKeyword(kw, effectiveComparison)), [rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison]);
+  // Latest sync can store the tracked list with no ranks. Earlier reports in the
+  // same series still have the Ahrefs position, including on Staging where the
+  // Search Console integration is not connected.
+  const trackedAhrefsPositions = useMemo(
+    () => ahrefsPositionsFromReports(sortSeoReportsByRecency(validReports)),
+    [validReports],
+  );
+  const trackedKeywords = useMemo(() => rawTracked.map(kw => {
+    const enriched = enrichKeyword(kw, effectiveComparison);
+    if (displayRank(enriched.position) != null) return enriched;
+    const stored = trackedAhrefsPositions.get(normalizeGscQuery(enriched.keyword));
+    if (stored == null) return enriched;
+    return { ...enriched, position: stored, ahrefs_position: stored };
+  }), [rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison, trackedAhrefsPositions]);
 
   // Build GSC-only keywords: keywords in GSC that don't exist in Ahrefs data
   const gscOnlyKeywords = useMemo(() => {
-    if (gscData.length === 0) return [];
+    if (keywordGscRows.length === 0) return [];
     const ahrefsNames = new Set<string>();
     for (const kw of organicKeywords) {
       ahrefsNames.add(String(kw.keyword || '').toLowerCase().trim());
@@ -446,7 +498,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     }
     const gscMetrics: Record<string, { volume: number | null; kd: number | null; cpc: number | null }> =
       (reportData?.gsc_keyword_metrics as any) || {};
-    return gscData
+    return keywordGscRows
       .filter(g => g.keyword && !ahrefsNames.has(g.keyword.toLowerCase().trim()))
       .map(g => {
         const k = g.keyword.toLowerCase().trim();
@@ -473,7 +525,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
           _source: 'gsc' as const,
         };
       });
-  }, [gscData, organicKeywords, trackedKeywords, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, reportData]);
+  }, [keywordGscRows, organicKeywords, trackedKeywords, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, reportData]);
 
   const domain = reportData?.domain || selectedReport?.domain;
 
@@ -503,7 +555,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     setIsFetchingSnapshot(true);
     try {
       const gscKws = Array.from(new Set(
-        gscData.map(g => (g.keyword || '').toLowerCase().trim()).filter(k => k.length > 0)
+        keywordGscRows.map(g => (g.keyword || '').toLowerCase().trim()).filter(k => k.length > 0)
       ));
       const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
         body: {
@@ -525,7 +577,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     } finally {
       setIsFetchingSnapshot(false);
     }
-  }, [clientId, domain, selectedReport, queryClient, gscData, ahrefsProjectId, ahrefsMode, ahrefsProtocol]);
+  }, [clientId, domain, selectedReport, queryClient, keywordGscRows, ahrefsProjectId, ahrefsMode, ahrefsProtocol]);
 
   // First load only — background ahrefs_reports refetches must not unmount the
   // whole SEO dashboard (that made client SEO views look empty after #328).
@@ -683,7 +735,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         gaOrganicSessions={gaOrganicCurrentMonth}
         gaOrganicSessionsPrev={gaOrganicPrevMonth}
         trackedKeywords={trackedKeywords}
-        organicKeywords={organicKeywords}
+        organicKeywords={[...organicKeywords, ...gscOnlyKeywords]}
       />
 
       {/* Maskyoo calls moved to a separate tab in SeoReportTabs */}
@@ -710,7 +762,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         keywords={organicKeywords}
         trackedKeywords={trackedKeywords}
         gscOnlyKeywords={gscOnlyKeywords}
-        hasGscData={gscData.length > 0}
+        hasGscData={keywordGscRows.length > 0}
         show3Month={effectiveComparison.threeMonth.size > 0 || gscThreeMonthMap.size > 0}
         showYearly={effectiveComparison.yearly.size > 0 || gscYearlyMap.size > 0}
         defaultTab="top10"

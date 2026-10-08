@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { aggregateGscQueryRows } from '../_shared/gscPosition.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -296,39 +297,25 @@ Deno.serve(async (req) => {
 
         const scopedRecords = allRecords;
 
-        // Aggregate by query
-        const queryMap = new Map<string, { clicks: number; impressions: number; ctr: number; position: number; count: number }>();
-        
-        scopedRecords.forEach((r: any) => {
-          const query = r.data?.query || '';
-          const existing = queryMap.get(query) || { clicks: 0, impressions: 0, ctr: 0, position: 0, count: 0 };
-          
-          queryMap.set(query, {
-            clicks: existing.clicks + (Number(r.data?.clicks) || 0),
-            impressions: existing.impressions + (Number(r.data?.impressions) || 0),
-            ctr: existing.ctr + (Number(r.data?.ctr) || 0),
-            position: existing.position + (Number(r.data?.position) || 0),
-            count: existing.count + 1,
-          });
-        });
-
-        // Convert to array and calculate averages
-        const queryData = Array.from(queryMap.entries()).map(([query, data]) => ({
-          query,
-          clicks: data.clicks,
-          impressions: data.impressions,
-          ctr: data.count > 0 ? data.ctr / data.count : 0,
-          position: data.count > 0 ? data.position / data.count : 0,
-        }));
+        // Impression-weighted position. A day with position 0 is not a rank and
+        // must not pull the average into the top 20.
+        const queryData = aggregateGscQueryRows(scopedRecords.map((r: any) => ({
+          query: r.data?.query || '',
+          clicks: r.data?.clicks,
+          impressions: r.data?.impressions,
+          position: r.data?.position,
+        })));
 
         // Sort by impressions desc — return ALL queries (client filters/searches in UI)
         queryData.sort((a, b) => b.impressions - a.impressions);
 
         // Calculate totals
+        const totalClicks = queryData.reduce((sum, q) => sum + q.clicks, 0);
+        const totalImpressions = queryData.reduce((sum, q) => sum + q.impressions, 0);
         const totals = {
-          clicks: queryData.reduce((sum, q) => sum + q.clicks, 0),
-          impressions: queryData.reduce((sum, q) => sum + q.impressions, 0),
-          avgCtr: queryData.length > 0 ? queryData.reduce((sum, q) => sum + q.ctr, 0) / queryData.length : 0,
+          clicks: totalClicks,
+          impressions: totalImpressions,
+          avgCtr: totalImpressions > 0 ? totalClicks / totalImpressions : 0,
           firstPageQueries: queryData.filter(q => q.position <= 10 && q.position > 0).length,
           totalQueries: queryData.length,
         };

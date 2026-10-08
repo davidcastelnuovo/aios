@@ -1,0 +1,6 @@
+# Copy to .envrc when using direnv, then replace the placeholders with
+# values from the AIOS Staging project's API settings.
+export VITE_SUPABASE_URL="https://<SUPABASE_STAGING_PROJECT_ID>.supabase.co"
+export VITE_SUPABASE_PUBLISHABLE_KEY="<SUPABASE_STAGING_PUBLISHABLE_KEY>"
+export VITE_SUPABASE_PROJECT_ID="<SUPABASE_STAGING_PROJECT_ID>"
+export VITE_APP_ENV="staging"
