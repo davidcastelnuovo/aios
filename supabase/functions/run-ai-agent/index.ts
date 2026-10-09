@@ -8375,12 +8375,12 @@ async function handleDirectTool(bodyJson: any): Promise<Response> {
     const { data: row } = await supabase.from('agent_approval_queue').select('*').eq('id', req.approval_id).maybeSingle()
     if (!row || row.action_type !== 'agent_direct_tool') return json({ error: 'approval_not_found' }, 404)
     if (row.status === 'executed' || row.status === 'rejected') return json({ error: `approval_${row.status}` }, 409)
-    const scope = await resolveDirectCaller(supabase, row.requested_by)
+    const scope = await resolveDirectCaller(supabase, row.tenant_id, row.requested_by)
     let result: any
     let failed = false
     try {
       result = await executeTool(row.tool_name, row.tool_input || {}, supabase, row.tenant_id, scope.userId, scope.campaignerId, row.agent_id, scope.role, scope.managedAgencyIds, null, null, 'agent_direct', null)
-      failed = !!result?.error
+      failed = !!result?.error || !!result?.pending_approval
     } catch (e: any) {
       failed = true
       result = { error: String(e?.message ?? e) }
@@ -8402,7 +8402,7 @@ async function handleDirectTool(bodyJson: any): Promise<Response> {
     .eq('tenant_id', tenantId).or('name.ilike.%carmen%,name.ilike.%כרמן%').eq('active', true)
     .order('created_at', { ascending: true }).limit(1).maybeSingle()
   if (!agent) return json({ error: 'No active Carmen agent for tenant' }, 404)
-  const scope = await resolveDirectCaller(supabase, userId)
+  const scope = await resolveDirectCaller(supabase, tenantId, userId)
   const pool = directToolPool(ALL_TOOLS as any[], {
     allowedTools: agent.allowed_tools || [],
     disabledTools: agent.disabled_tools || [],
@@ -8452,10 +8452,11 @@ async function handleDirectTool(bodyJson: any): Promise<Response> {
   }
 }
 
-async function resolveDirectCaller(supabase: any, userId: string | null) {
+async function resolveDirectCaller(supabase: any, tenantId: string, userId: string | null) {
   if (!userId) return { userId: null, role: null, campaignerId: null, managedAgencyIds: [] as string[] }
   const [{ data: roles }, { data: prof }] = await Promise.all([
-    supabase.from('user_roles').select('role').eq('user_id', userId),
+    // Roles in this tenant plus global (tenant_id null) roles only — never another tenant's.
+    supabase.from('user_roles').select('role').eq('user_id', userId).or(`tenant_id.eq.${tenantId},tenant_id.is.null`),
     supabase.from('profiles').select('campaigner_id').eq('id', userId).maybeSingle(),
   ])
   const roleList = (roles || []).map((r: any) => r.role)
