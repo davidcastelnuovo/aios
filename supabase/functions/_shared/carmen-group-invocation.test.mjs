@@ -72,6 +72,7 @@ test('Manus group identity reads senderLid and semantically deduplicates retries
     /payload\.author,\s*payload\.participant,\s*payload\.senderLid,\s*key\.participant/,
   );
   assert.match(webhookSource, /authorCandidates\.find\(\(c\) => c\.endsWith\('@c\.us'\)\)/);
+  assert.match(webhookSource, /pickGroupAuthorLidDigits/);
   assert.match(webhookSource, /isUnresolvedGroupAuthor/);
   assert.match(webhookSource, /provider:\s*'carmen_group_turn'/);
   assert.match(webhookSource, /dedup:\s*'group_fingerprint'/);

@@ -7,6 +7,7 @@ export {
   looksLikeRealPhone,
   isUsableLidKey,
   pickInboundLidDigits,
+  pickGroupAuthorLidDigits,
   pickPayloadRealPhone,
   resolveInboundLidToPhone,
   shouldMarkResolvedLidAsOutgoing,
