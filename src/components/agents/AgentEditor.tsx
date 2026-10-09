@@ -136,6 +136,7 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
       items: [
         { value: "skins", label: "🎭 סקינז" },
         { value: "access", label: "🛡️ גישות" },
+        ...(carmen ? [{ value: "conversation-access", label: "💬 הרשאות שיחה" as const }] : []),
         { value: "learning", label: "🧬 למידה עצמית" },
       ],
     },

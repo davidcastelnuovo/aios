@@ -64,23 +64,46 @@ export function repointInternalMcpUrlIfNeeded(
   }
 }
 
+/** Short RPC (initialize / tools/list). tools/call uses the longer budget below. */
+export const MCP_RPC_TIMEOUT_DEFAULT_MS = 12_000;
+/**
+ * Cursor/Claude/Grok agent create + sticky follow-up often exceeds 12s.
+ * A short client abort made Carmen report "Cursor didn't receive" while the
+ * edge function kept running and successfully opened a bc- session.
+ */
+export const MCP_RPC_TIMEOUT_TOOLS_CALL_MS = 90_000;
+
+export function mcpRpcTimeoutMs(method: string, overrideMs?: number): number {
+  if (typeof overrideMs === "number" && overrideMs > 0) return overrideMs;
+  return method === "tools/call" ? MCP_RPC_TIMEOUT_TOOLS_CALL_MS : MCP_RPC_TIMEOUT_DEFAULT_MS;
+}
+
+export function isMcpTimeoutError(err: unknown): boolean {
+  const name = String((err as any)?.name ?? "");
+  const msg = String((err as any)?.message ?? err ?? "").toLowerCase();
+  return name === "TimeoutError" || name === "AbortError" ||
+    msg.includes("timed out") || msg.includes("timeout") || msg.includes("aborted");
+}
+
 export async function mcpJsonRpc(
   url: string,
   bearer: string | undefined,
   method: string,
   params: any = {},
   id = 1,
+  timeoutMs?: number,
 ): Promise<any> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json, text/event-stream",
   };
   if (bearer) headers.Authorization = `Bearer ${bearer}`;
+  const ms = mcpRpcTimeoutMs(method, timeoutMs);
   const resp = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
-    signal: AbortSignal.timeout(12_000),
+    signal: AbortSignal.timeout(ms),
   });
   const text = await resp.text();
   if (!resp.ok) {

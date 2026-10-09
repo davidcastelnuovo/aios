@@ -121,8 +121,9 @@ export type ReconciledCursorDelivery = {
   source: "cursor_dispatches" | "cursor_task_sessions";
 };
 
-const RECONCILE_POLL_MS = 2_000;
-const RECONCILE_ATTEMPTS = 4;
+const RECONCILE_POLL_MS = 2_500;
+/** After a client timeout, Cursor may still finish writing cursor_dispatches. */
+const RECONCILE_ATTEMPTS = 10;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -234,11 +235,12 @@ function buildDispatchUserStatus(args: {
   }
   if (args.verificationFailed && args.dispatchToolError) {
     return (
-      `לא הצלחתי לאמת שהמשימה הגיעה ל-Cursor. שגיאת dispatch: ${args.dispatchToolError}. ` +
-      `אם נפתח סשן bc- — קשרי עם attach_dev_task_session.`
+      `לא הצלחתי לאמת שהמשימה הגיעה ל-Cursor (ייתכן שעדיין נשלחה — אל תגידי שקרסר לא קיבל). ` +
+      `שגיאת dispatch: ${args.dispatchToolError}. ` +
+      `בדקי list_dev_tasks / סשנים אחרונים; אם נפתח bc- — קשרי עם attach_dev_task_session.`
     );
   }
-  return "שליחה ל-Cursor נכשלה.";
+  return "שליחה ל-Cursor נכשלה (בלי אימות הגעה — אל תגידי בוודאות שקרסר לא קיבל).";
 }
 
 /** Jaccard word overlap — simple dedup without embeddings. */

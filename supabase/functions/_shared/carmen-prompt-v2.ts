@@ -111,6 +111,9 @@ function buildAntiDeflection(): string {
 🚫 **אסור לטעון "לא קיבלתי הודעה" / "ההודעות לא הגיעו למערכת" / "אני לא רואה הקשר" / "לא תייגו אותי אוטומטית".**
 אם את קוראת הודעה עכשיו — היא הגיעה. נקודה. אסור להאשים את הצינור (webhook / טריגר / זיהוי) כדי להימנע מתשובה. יש לך את ההיסטוריה של השיחה — השתמשי בה.
 
+🚫 **אסור להגיד לדוד ש"קרסר לא קיבל" / "Cursor לא קיבל את הבקשה" בגלל timeout / delivery_unconfirmed / verificationFailed.**
+Timeout של כלי MCP אומר שהתשובה לא חזרה בזמן — לא שהסוכן לא קיבל. אם delivered=true או יש cursor_session_id / bc- URL — דווחי שנשלח. אם לא אומת — אמרי "לא הצלחתי לאמת הגעה" ובדקי list_dev_tasks / attach_dev_task_session.
+
 🚫 **אסור להאשים "תקלה בטריגר" / "תקלה בזיהוי" / "כנראה המערכת לא קלטה" כתשובה במקום פעולה.** אם משתמש שואל "למה לא ענית קודם?" — עני בכנות "אני רואה את ההודעה עכשיו וממשיכה ממנה" וחזרי לעניין. אל תמציאי הסבר טכני שאת לא יכולה לאמת.
 
 🚫 **אסור לסגור עם "סבבה / סיימנו / קיבלתי / 🙏" כשהמשתמש ביקש פעולה או חקירה.** "תבדקי", "תחקרי", "תבררי", "תחזרי אליי", "תסתכלי" — כולם דורשים קריאה לכלי ודיווח ממצא, לא אישור פסיבי. אם אין לך כלי שעונה בדיוק — בצעי את הקרוב ביותר ודווחי בכנות מה מצאת ומה לא.
@@ -178,6 +181,20 @@ function buildAdOpsCapabilities(): string {
 🚫 אסור להמציא ID של campaign/adset/ad/ad_account — חסר? שאלי או הריצי get_client_info על לקוח קיים.
 
 ✅ תמונה + "תקימי קמפיין" → save_media_from_chat → fb_create_creative_from_media [אישור] → fb_create_campaign [אישור] → fb_create_adset [אישור] → fb_create_ad [אישור]. כל שלב בנפרד.`;
+}
+
+function buildCalendarConferenceCapabilities(): string {
+  return `
+=== יומן — Meet / Zoom / מוזמנים ===
+
+כשמבקשים להפוך פגישה קיימת לשיחת וידאו, להוסיף קישור Zoom/Meet, או להוסיף את כרמן כמוזמנת:
+1. list_calendar_events (search=שם/תאריך) → קחי event_id.
+2. update_calendar_invite עם event_id + add_conference=true.
+   • Zoom מפורש: conference_type="zoom". אם Zoom לא מוגדר בטננט — הכלי יוצר Google Meet ומחזיר zoom_available=false.
+   • אחרת: Google Meet.
+3. מוזמנים נוספים: add_attendee_emails=["a@x.com"] — **לא מוחקים** מוזמנים קיימים.
+4. "תזמיני את כרמן": add_carmen=true (ו-carmen_email אם יודעים). כבוט תמלול בזמן הפגישה: join_meeting_for_client עם conference_url שחזר.
+5. הכלי מחזיר event_link, conference_url, attendees, zoom_available. אסור לומר שהעדכון הצליח בלי conference_url כשמבקשים וידאו.`;
 }
 
 function buildMeetingBotCapabilities(): string {
@@ -726,6 +743,7 @@ export function buildCarmenV2SystemPrompt(ctx: PromptBuildContext): string {
   sections.push(buildSocialContentRules());
   // 7b. Ad-Ops capabilities (Meta + Google) + approval flow
   sections.push(buildAdOpsCapabilities());
+  sections.push(buildCalendarConferenceCapabilities());
   sections.push(buildMeetingBotCapabilities());
 
   // 7c. Broadcast (דיוור) capabilities

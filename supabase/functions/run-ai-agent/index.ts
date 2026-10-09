@@ -32,6 +32,21 @@ import { fireTaskPeerNotification } from '../_shared/notify-task-peers.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
 import { loadDevEscalationTierFromDb } from '../_shared/carmen-access-policy.ts'
 import {
+  applyZoomLinkToEvent,
+  buildMeetConferenceData,
+  collectExtraAttendeeEmails,
+  createZoomMeeting,
+  eventDurationMinutes,
+  extractConferenceUrl,
+  fetchZoomAccessToken,
+  conferenceKindFromUrl,
+  mergeNamedPrimaryAttendee,
+  resolveCarmenAttendeeEmail,
+  resolveRequestedConference,
+  summarizeEventResult,
+  updateExistingCalendarEvent,
+} from '../_shared/calendar-conference.ts'
+import {
   buildDevEscalationPromptRule,
   DEV_ESCALATION_REFUSAL_HE,
   DEV_ESCALATION_BUGFIX_ONLY_REFUSAL_HE,
@@ -656,6 +671,43 @@ async function resolveCalendarAccessToken(supabase: any, tenantId: string, calle
   return { accessToken }
 }
 
+async function resolveCalendarConferenceExtras(
+  supabase: any,
+  tenantId: string,
+  args: Record<string, unknown>,
+) {
+  const extraEmails = collectExtraAttendeeEmails(args)
+  const extraNamed: Array<{ email: string; displayName?: string }> = []
+  let carmen_attendee: Record<string, unknown> | null = null
+  if (args.add_carmen === true) {
+    const resolved = await resolveCarmenAttendeeEmail(supabase, tenantId, args.carmen_email)
+    if (resolved.email) {
+      extraEmails.push(resolved.email)
+      extraNamed.push({ email: resolved.email, displayName: 'כרמן' })
+      carmen_attendee = { added: true, email: resolved.email, source: resolved.source }
+    } else {
+      carmen_attendee = { added: false, error: resolved.error }
+    }
+  }
+  const conferenceType = resolveRequestedConference(args)
+  return { extraEmails: [...new Set(extraEmails)], extraNamed, carmen_attendee, conferenceType }
+}
+
+async function makeZoomMeetingCreator(supabase: any, tenantId: string, titleHint?: string) {
+  return async (existing: any) => {
+    const zoomAuth = await fetchZoomAccessToken(supabase, tenantId)
+    if (!zoomAuth.accessToken) {
+      return { error: zoomAuth.error, configured: zoomAuth.configured === true }
+    }
+    return createZoomMeeting({
+      accessToken: zoomAuth.accessToken,
+      topic: titleHint || existing?.summary || 'Meeting',
+      startDateTime: existing?.start?.dateTime || new Date().toISOString(),
+      durationMinutes: eventDurationMinutes(existing),
+    })
+  }
+}
+
 // ===========================
 // ALL AVAILABLE TOOLS
 // ===========================
@@ -831,7 +883,7 @@ const ALL_TOOLS = [
   { name: 'find_dev_task_duplicates', description: 'חיפוש משימות פיתוח פתוחות דומות לפי כותרת (דדופ לפני יצירה/שליחה).', parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] } },
   { name: 'create_dev_task', description: 'יצירת משימת פיתוח מובנית (טיוטה). כולל brief: title, problem, expected/current behavior, scope, acceptance criteria. תמיד בדקי duplicates קודם.', parameters: { type: 'object', properties: { title: { type: 'string' }, problem: { type: 'string' }, expected_behavior: { type: 'string' }, current_behavior: { type: 'string' }, scope: { type: 'string' }, affected_areas: { type: 'string' }, constraints: { type: 'string' }, acceptance_criteria: { type: 'string' }, base_branch: { type: 'string', description: 'ברירת מחדל develop' }, environment: { type: 'string', description: 'ברירת מחדל staging' }, requested_by: { type: 'string' }, priority: { type: 'string', enum: ['urgent', 'high', 'normal', 'low'] }, assigned_agent: { type: 'string', enum: ['cursor', 'grok', 'manus', 'claude'] }, dedup_of: { type: 'string', description: 'מזהה משימה קיימת לעדכון במקום חדשה' }, goal_id: { type: 'string', description: 'קישור ליעד ביצוע' }, source_message: { type: 'string' } }, required: ['title'] } },
   { name: 'approve_dev_task', description: 'אישור משימת פיתוח לפני שליחה לסוכן קוד.', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' } }, required: ['dev_task_id'] } },
-  { name: 'dispatch_dev_task', description: 'שליחת משימת פיתוח מאושרת ל-Cursor. מחזיר delivered/userStatus — אם delivered=true דווחי שנשלח גם כשיש dispatchToolError (reconciled). אם verificationFailed=true — לא אומתה הגעה; צייני dispatchToolError ו/או attach_dev_task_session.', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' } }, required: ['dev_task_id'] } },
+  { name: 'dispatch_dev_task', description: 'שליחת משימת פיתוח מאושרת ל-Cursor. מחזיר delivered/userStatus — אם delivered=true דווחי שנשלח גם כשיש dispatchToolError (reconciled). אם verificationFailed=true או timeout/delivery_unconfirmed — אמרי שלא אומתה הגעה (ייתכן שנשלח); אסור להגיד שקרסר לא קיבל. צייני dispatchToolError ו/או attach_dev_task_session.', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' } }, required: ['dev_task_id'] } },
   { name: 'list_dev_tasks', description: 'רשימת משימות פיתוח מה-Dev Task Command Center.', parameters: { type: 'object', properties: { status: { type: 'string' }, priority: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'update_dev_task', description: 'עדכון משימת פיתוח: PR URL, סטטוס, עדיפות, הערות.', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' }, pr_url: { type: 'string' }, status: { type: 'string' }, priority: { type: 'string' }, problem: { type: 'string' }, acceptance_criteria: { type: 'string' } }, required: ['dev_task_id'] } },
   { name: 'attach_dev_task_session', description: 'קישור סשן Cursor קיים למשימת פיתוח (reconcile אחרי timeout).', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' }, cursor_session_id: { type: 'string', description: 'bc-…' }, cursor_session_url: { type: 'string' } }, required: ['dev_task_id', 'cursor_session_id'] } },
@@ -938,9 +990,9 @@ const ALL_TOOLS = [
   // ===========================
   // CALENDAR INVITES
   // ===========================
-  { name: 'send_calendar_invite', description: 'שליחת זימון Google Calendar (ICS) דרך מייל לנמען חיצוני — האירוע נוצר ביומן הארגון עם הנמען כמשתתף, וגוגל שולחת לו מייל אוטומטי עם כפתורי אישור/דחייה. השתמש כשהמשתמש רוצה לזמן פגישה עם אדם חיצוני.', parameters: { type: 'object', properties: { attendee_email: { type: 'string', description: 'כתובת המייל של המוזמן' }, attendee_name: { type: 'string', description: 'שם המוזמן (אופציונלי)' }, title: { type: 'string', description: 'שם הפגישה/האירוע' }, date: { type: 'string', description: 'תאריך בפורמט YYYY-MM-DD' }, time: { type: 'string', description: 'שעת התחלה בפורמט HH:MM' }, duration_minutes: { type: 'integer', description: 'משך בדקות (ברירת מחדל 60)' }, notes: { type: 'string', description: 'הערות / תיאור הפגישה (אופציונלי)' } }, required: ['attendee_email', 'title', 'date', 'time'] } },
+  { name: 'send_calendar_invite', description: 'שליחת זימון Google Calendar דרך מייל. אפשר להוסיף Google Meet (ברירת מחדל כש-add_conference=true) או Zoom אם האינטגרציה מוגדרת, ומוזמנים נוספים. גוגל שולחת מייל עם אישור/דחייה.', parameters: { type: 'object', properties: { attendee_email: { type: 'string', description: 'כתובת המייל של המוזמן הראשי' }, attendee_name: { type: 'string', description: 'שם המוזמן (אופציונלי)' }, title: { type: 'string', description: 'שם הפגישה/האירוע' }, date: { type: 'string', description: 'תאריך בפורמט YYYY-MM-DD' }, time: { type: 'string', description: 'שעת התחלה בפורמט HH:MM' }, duration_minutes: { type: 'integer', description: 'משך בדקות (ברירת מחדל 60)' }, notes: { type: 'string', description: 'הערות / תיאור הפגישה (אופציונלי)' }, add_conference: { type: 'boolean', description: 'true = הוסף שיחת וידאו. ברירת מחדל Google Meet.' }, conference_type: { type: 'string', description: 'meet | zoom. zoom נופל ל-Meet אם Zoom לא מוגדר בטננט.' }, add_attendee_emails: { type: 'array', items: { type: 'string' }, description: 'מיילים נוספים למוזמנים' }, add_carmen: { type: 'boolean', description: 'הוסף את כרמן כמוזמנת (מייל) אם יש carmen_email / קמפיינר כרמן' }, carmen_email: { type: 'string', description: 'מייל כרמן כמוזמנת, אם ידוע' } }, required: ['attendee_email', 'title', 'date', 'time'] } },
   { name: 'list_calendar_events', description: 'רשימת אירועים ביומן הארגון בטווח תאריכים (ברירת מחדל: 14 הימים הקרובים). השתמשי כדי למצוא event_id לפני עדכון/ביטול פגישה, או כשנשאלת "מה יש ביומן".', parameters: { type: 'object', properties: { date_from: { type: 'string', description: 'YYYY-MM-DD (ברירת מחדל היום)' }, date_to: { type: 'string', description: 'YYYY-MM-DD (ברירת מחדל +14 ימים)' }, search: { type: 'string', description: 'סינון טקסט חופשי (שם פגישה/משתתף)' } } } },
-  { name: 'update_calendar_invite', description: 'עדכון פגישה/זימון קיים ביומן — הזזת מועד, שינוי כותרת או הערות. כל המשתתפים מקבלים מייל עדכון אוטומטי. חובה event_id (מ-list_calendar_events). לעדכון מועד ספקי date+time (שעון ישראל).', parameters: { type: 'object', properties: { event_id: { type: 'string' }, date: { type: 'string', description: 'YYYY-MM-DD' }, time: { type: 'string', description: 'HH:MM שעון ישראל' }, duration_minutes: { type: 'integer' }, title: { type: 'string' }, notes: { type: 'string' } }, required: ['event_id'] } },
+  { name: 'update_calendar_invite', description: 'עדכון פגישה קיימת לפי event_id: מועד/כותרת/הערות, הוספת Google Meet או Zoom, והוספת מוזמנים בלי למחוק קיימים. מחזיר event_link, conference_url ורשימת attendees. Zoom נופל ל-Meet אם האינטגרציה לא מוגדרת.', parameters: { type: 'object', properties: { event_id: { type: 'string' }, date: { type: 'string', description: 'YYYY-MM-DD' }, time: { type: 'string', description: 'HH:MM שעון ישראל' }, duration_minutes: { type: 'integer' }, title: { type: 'string' }, notes: { type: 'string' }, add_conference: { type: 'boolean', description: 'true = הוסף שיחת וידאו לאירוע הקיים' }, conference_type: { type: 'string', description: 'meet | zoom. zoom מנסה Zoom API ואם חסר — Google Meet + zoom_available=false' }, add_attendee_emails: { type: 'array', items: { type: 'string' }, description: 'מיילים להוספה; לא מחליפים מוזמנים קיימים' }, add_carmen: { type: 'boolean', description: 'הוסף את כרמן כמוזמנת מייל אם ניתן לזהות מייל' }, carmen_email: { type: 'string', description: 'מייל כרמן כמוזמנת' } }, required: ['event_id'] } },
   { name: 'cancel_calendar_invite', description: 'ביטול פגישה ביומן — המשתתפים מקבלים הודעת ביטול. חובה event_id (מ-list_calendar_events). חובה confirmed=true אחרי שהמשתמש אישר במפורש.', parameters: { type: 'object', properties: { event_id: { type: 'string' }, confirmed: { type: 'boolean', description: 'חובה true — רק אחרי אישור מפורש של המשתמש' } }, required: ['event_id', 'confirmed'] } },
   // ===========================
   // MEETING BOT (Zoom / Meet / Teams)
@@ -6346,42 +6398,82 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const cal = await resolveCalendarAccessToken(supabase, tenantId, callerCampaignerId, userId)
       if (cal.error || !cal.accessToken) return { error: cal.error }
       const accessToken = cal.accessToken
+      const extras = await resolveCalendarConferenceExtras(supabase, tenantId, args)
 
-      // Send naive wall-clock times with an explicit timeZone — Google interprets
-      // them in Asia/Jerusalem. toISOString() ('Z') marked Israel wall times as
-      // UTC, landing every event 3 hours late (08:00 request → 11:00 invite).
       const startNaive = `${date}T${time}:00`
       const endNaive = new Date(Date.parse(`${startNaive}Z`) + (duration_minutes || 60) * 60_000).toISOString().slice(0, 19)
-      const attendees = [{ email: attendee_email, ...(attendee_name ? { displayName: attendee_name } : {}) }]
+      const attendees = mergeNamedPrimaryAttendee(attendee_email, attendee_name, extras.extraEmails, extras.extraNamed)
+
+      const body: Record<string, unknown> = {
+        summary: title,
+        description: notes || '',
+        start: { dateTime: startNaive, timeZone: 'Asia/Jerusalem' },
+        end: { dateTime: endNaive, timeZone: 'Asia/Jerusalem' },
+        attendees,
+        guestsCanModify: false,
+      }
+      let zoom_available: boolean | null = null
+      let zoom_status: string | null = null
+      let conference_applied = 'none'
+      const qp = new URLSearchParams({ sendUpdates: 'all', sendNotifications: 'true' })
+      if (extras.conferenceType === 'zoom') {
+        const zoomAuth = await fetchZoomAccessToken(supabase, tenantId)
+        if (zoomAuth.accessToken) {
+          const zoom = await createZoomMeeting({
+            accessToken: zoomAuth.accessToken,
+            topic: title,
+            startDateTime: `${startNaive}+03:00`,
+            durationMinutes: duration_minutes || 60,
+          })
+          if (zoom.join_url) {
+            zoom_available = true
+            conference_applied = 'zoom'
+            Object.assign(body, applyZoomLinkToEvent({ description: notes || '' }, zoom.join_url))
+          } else {
+            zoom_available = zoomAuth.configured === false ? false : true
+            zoom_status = zoom.error
+            body.conferenceData = buildMeetConferenceData()
+            qp.set('conferenceDataVersion', '1')
+            conference_applied = 'meet'
+          }
+        } else {
+          zoom_available = false
+          zoom_status = zoomAuth.error
+          body.conferenceData = buildMeetConferenceData()
+          qp.set('conferenceDataVersion', '1')
+          conference_applied = 'meet'
+        }
+      } else if (extras.conferenceType === 'meet') {
+        body.conferenceData = buildMeetConferenceData()
+        qp.set('conferenceDataVersion', '1')
+        conference_applied = 'meet'
+      }
 
       const calResp = await fetch(
-        'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all&sendNotifications=true',
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?${qp}`,
         {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            summary: title,
-            description: notes || '',
-            start: { dateTime: startNaive, timeZone: 'Asia/Jerusalem' },
-            end: { dateTime: endNaive, timeZone: 'Asia/Jerusalem' },
-            attendees,
-            guestsCanModify: false,
-          }),
+          body: JSON.stringify(body),
         }
       )
       const evData = await calResp.json()
       if (!calResp.ok) return { error: `שגיאת Google Calendar: ${evData?.error?.message || calResp.status}` }
-      return {
-        success: true,
-        event_id: evData.id,
-        event_link: evData.htmlLink,
+      const summary = summarizeEventResult(evData, {
         attendee_email,
         attendee_name: attendee_name || null,
-        title,
         start_israel: startNaive,
         duration_minutes: duration_minutes || 60,
-        message: `זימון נשלח למייל ${attendee_email} — ${attendee_name || attendee_email} יקבל הזמנה עם כפתורי אישור/דחייה.`,
-      }
+        zoom_available,
+        zoom_status,
+        conference_applied,
+        carmen_attendee: extras.carmen_attendee,
+        carmen_meeting_bot: extractConferenceUrl(evData)
+          ? { tool: 'join_meeting_for_client', meeting_url: extractConferenceUrl(evData), note: 'לצירוף כרמן כבוט תמלול בזמן הפגישה — קראי ל-join_meeting_for_client עם conference_url.' }
+          : null,
+        message: `זימון נשלח למייל ${attendee_email}${conference_applied !== 'none' ? ` — נוסף ${conference_applied === 'zoom' ? 'Zoom' : 'Google Meet'}` : ''}.`,
+      })
+      return summary
     }
 
     case 'list_calendar_events': {
@@ -6411,6 +6503,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           end: e.end?.dateTime || e.end?.date,
           attendees: (e.attendees || []).map((a: any) => a.email),
           link: e.htmlLink,
+          conference_url: extractConferenceUrl(e),
+          conference_type: conferenceKindFromUrl(extractConferenceUrl(e)),
         })),
       }
     }
@@ -6420,26 +6514,43 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (!event_id) return { error: 'event_id נדרש — מצאי אותו קודם עם list_calendar_events' }
       const cal = await resolveCalendarAccessToken(supabase, tenantId, callerCampaignerId, userId)
       if (cal.error || !cal.accessToken) return { error: cal.error }
+      const extras = await resolveCalendarConferenceExtras(supabase, tenantId, args)
 
-      const patch: Record<string, unknown> = {}
-      if (title) patch.summary = title
-      if (notes) patch.description = notes
+      const fieldPatch: Record<string, unknown> = {}
+      if (title) fieldPatch.summary = title
+      if (notes) fieldPatch.description = notes
       if (date || time) {
         if (!date || !time) return { error: 'לעדכון מועד יש לספק גם date וגם time' }
         const startNaive = `${date}T${time}:00`
         const endNaive = new Date(Date.parse(`${startNaive}Z`) + (Number(duration_minutes) > 0 ? Number(duration_minutes) : 60) * 60_000).toISOString().slice(0, 19)
-        patch.start = { dateTime: startNaive, timeZone: 'Asia/Jerusalem' }
-        patch.end = { dateTime: endNaive, timeZone: 'Asia/Jerusalem' }
+        fieldPatch.start = { dateTime: startNaive, timeZone: 'Asia/Jerusalem' }
+        fieldPatch.end = { dateTime: endNaive, timeZone: 'Asia/Jerusalem' }
       }
-      if (Object.keys(patch).length === 0) return { error: 'לא סופק שום שדה לעדכון' }
 
-      const resp = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(String(event_id))}?sendUpdates=all`,
-        { method: 'PATCH', headers: { 'Authorization': `Bearer ${cal.accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }
-      )
-      const data = await resp.json()
-      if (!resp.ok) return { error: `שגיאת Google Calendar: ${data?.error?.message || resp.status}` }
-      return { success: true, event_id: data.id, title: data.summary, start: data.start?.dateTime, link: data.htmlLink, message: 'האירוע עודכן — כל המשתתפים קיבלו מייל עדכון.' }
+      const result = await updateExistingCalendarEvent({
+        accessToken: cal.accessToken,
+        eventId: String(event_id),
+        fieldPatch,
+        conferenceType: extras.conferenceType,
+        extraEmails: extras.extraEmails,
+        extraNamed: extras.extraNamed,
+        createZoomMeetingFn: extras.conferenceType === 'zoom'
+          ? await makeZoomMeetingCreator(supabase, tenantId, title)
+          : null,
+      })
+      if (result.error) return result
+      const conferenceUrl = result.conference_url
+      return {
+        ...result,
+        carmen_attendee: extras.carmen_attendee,
+        carmen_meeting_bot: conferenceUrl
+          ? {
+              tool: 'join_meeting_for_client',
+              meeting_url: conferenceUrl,
+              note: 'לצירוף כרמן כבוט תמלול בזמן הפגישה — קראי ל-join_meeting_for_client עם conference_url.',
+            }
+          : null,
+      }
     }
 
     case 'cancel_calendar_invite': {
@@ -7529,7 +7640,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         '\n\n📱 === משימות פיתוח מ-WhatsApp (מורשה) ===\n' +
         'כשמבקשים "תעבירי לפיתוח" / "שלחי לקרסר" / תיקון מערכת:\n' +
         '1) find_dev_task_duplicates → 2) create_dev_task (brief מובנה) → 3) אם הבקשה מפורשת ("שלחי"/"תעבירי") — approve_dev_task + dispatch_dev_task מיד.\n' +
-        '4) דווחי bc- session URL. אם dispatch נכשל — attach_dev_task_session או mcp_Cursor__request_dev_task.\n' +
+        '4) דווחי לפי delivered/userStatus + bc- URL. אם delivered=true — נשלח (גם עם dispatchToolError).\n' +
+        '5) אם timeout / delivery_unconfirmed / verificationFailed — אמרי שלא אומתה הגעה; אסור להגיד "קרסר לא קיבל". בדקי list_dev_tasks או attach_dev_task_session.\n' +
         'אל תבקשי אישור נוסף כשהמשתמש כבר אמר לשלוח.'
     }
 
