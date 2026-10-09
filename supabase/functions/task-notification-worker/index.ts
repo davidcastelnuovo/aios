@@ -38,6 +38,7 @@ type TaskRow = {
   completion_creator_notified_at: string | null
   overdue_notified_at: string | null
   overdue_creator_notified_at: string | null
+  recurrence_frequency: string | null
 }
 
 async function invokeNotification(task: TaskRow, triggerType: NotificationType) {
@@ -91,11 +92,16 @@ async function claimAndSend(
   triggerType: NotificationType,
 ) {
   const claimedAt = new Date().toISOString()
-  const { data: claimed, error: claimError } = await supabase
+  let claim = supabase
     .from('tasks')
     .update({ [marker]: claimedAt })
     .eq('id', task.id)
     .is(marker, null)
+  if (triggerType === 'task_high_priority_reminder') claim = claim.eq('status', 'open')
+  else if (triggerType === 'task_assigned' || triggerType === 'task_self_reminder' || triggerType === 'task_overdue') {
+    claim = claim.neq('status', 'done')
+  } else if (triggerType === 'task_completed') claim = claim.eq('status', 'done')
+  const { data: claimed, error: claimError } = await claim
     .select('id')
     .maybeSingle()
 
@@ -131,7 +137,7 @@ async function claimAndSend(
 async function fetchTask(supabase: ReturnType<typeof createClient>, taskId: string) {
   const { data, error } = await supabase
     .from('tasks')
-    .select('id,tenant_id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,sales_person_id,self_reminder_at,self_reminder_sent_at,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at,overdue_notified_at,overdue_creator_notified_at')
+    .select('id,tenant_id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,sales_person_id,self_reminder_at,self_reminder_sent_at,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at,overdue_notified_at,overdue_creator_notified_at,recurrence_frequency')
     .eq('id', taskId)
     .maybeSingle()
   if (error) throw error
@@ -337,7 +343,7 @@ Deno.serve(async (req) => {
       if (task) tasks = [task]
     } else {
       const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString()
-      const taskColumns = 'id,tenant_id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,sales_person_id,self_reminder_at,self_reminder_sent_at,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at,overdue_notified_at,overdue_creator_notified_at'
+      const taskColumns = 'id,tenant_id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,sales_person_id,self_reminder_at,self_reminder_sent_at,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at,overdue_notified_at,overdue_creator_notified_at,recurrence_frequency'
       const [assignments, reminders, reminderReceipts, overdueReceipts, completions, selfReminders, overdueTasks] = await Promise.all([
         supabase
           .from('tasks')
