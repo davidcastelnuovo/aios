@@ -89,7 +89,10 @@ Deno.serve(async (req) => {
     await supabase
       .from("agent_approval_queue")
       .update({
-        status: decision === "approved" ? "executed" : "rejected",
+        // A direct agent tool that failed keeps "failed" (carmen-approval-execute already wrote it).
+        status: decision !== "approved"
+          ? "rejected"
+          : approval.action_type === "agent_direct_tool" && executionResult?.ok === false ? "failed" : "executed",
         approved_by: reviewer_id ?? null,
         approved_at: new Date().toISOString(),
         executed_at: decision === "approved" ? new Date().toISOString() : null,
