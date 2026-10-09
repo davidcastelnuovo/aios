@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAuth } from "../_shared/security.ts";
 import { buildSkillsBlockBySlug } from "../_shared/skills/registry.ts";
 import { renderSeoGeoArticleHtml } from "../_shared/seo-geo-article-render.ts";
+import { extractSiteTheme, NEUTRAL_SITE_THEME } from "../_shared/seo-geo-site-theme.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -24,11 +25,14 @@ type GeneratedArticle = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  let entryIdForStatus: string | null = null;
   try {
     const auth = await requireAuth(req);
     if (!auth) return respond({ error: "Unauthorized" }, 401);
-    const { entry_id } = await req.json();
+    const body = await req.json();
+    const entry_id = body?.entry_id as string | undefined;
     if (!entry_id) return respond({ error: "entry_id required" }, 400);
+    entryIdForStatus = entry_id;
 
     const { data: entry } = await admin.from("seo_geo_calendar_entries").select("*").eq("id", entry_id).single();
     if (!entry) return respond({ error: "Entry not found" }, 404);
@@ -43,7 +47,7 @@ serve(async (req) => {
     await admin.from("seo_geo_calendar_entries").update({ generation_status: "generating" }).eq("id", entry_id);
 
     const [{ data: client }, { data: item }, skinBlock] = await Promise.all([
-      admin.from("clients").select("name,website,business_description,industry").eq("id", entry.client_id).maybeSingle(),
+      admin.from("clients").select("name,website,industry").eq("id", entry.client_id).maybeSingle(),
       admin.from("marketing_work_items").select("payload").eq("id", entry.work_item_id).maybeSingle(),
       buildSkillsBlockBySlug(["seo_geo", "seo", "content_writer"], entry.tenant_id),
     ]);
@@ -60,7 +64,15 @@ serve(async (req) => {
     const keyword = String(entry.primary_keyword ?? "").trim();
     const geoQuestions = Array.isArray(entry.geo_questions) ? entry.geo_questions : [];
 
-    const system = `${skinBlock}\n\nאת כרמן — כותבת מאמר SEO/GEO לעלייה באתר הלקוח (לא PBN). המאמר מעוצב כמו במגזין: LIST, TIP, FAQ, אינפוגרפיקה. החזירי JSON בלבד.`;
+    const { data: program } = await admin.from("seo_geo_programs").select("wordpress_site_id").eq("work_item_id", entry.work_item_id).maybeSingle();
+    let siteUrl = String(client?.website ?? "").trim();
+    if (program?.wordpress_site_id) {
+      const { data: site } = await admin.from("social_media_wordpress_sites").select("site_url").eq("id", program.wordpress_site_id).maybeSingle();
+      if (site?.site_url) siteUrl = String(site.site_url).trim();
+    }
+    const themePromise = siteUrl ? extractSiteTheme(siteUrl) : Promise.resolve(NEUTRAL_SITE_THEME);
+
+    const system = `${skinBlock}\n\nאת כרמן — כותבת מאמר SEO/GEO לעלייה באתר הלקוח (לא PBN). המאמר מעוצב כמו במגזין: LIST, TIP, FAQ, אינפוגרפיקה. הצבעים והפונט מגיעים מערכת האתר בזמן הרינדור — אל תמציאי צבעים. החזירי JSON בלבד.`;
     const user = `הקשר:
 ${JSON.stringify({
   client,
@@ -77,11 +89,16 @@ ${JSON.stringify({
 
 דרישות:
 - לפחות 850 מילים בעברית בגוף (מערך content).
-- 12+ פריטי content: פתיחה, כותרות ## , LIST:, TIP:, סיכום.
+- 12+ פריטי content: פתיחה, כותרות, רשימה, טיפ, סיכום.
+- כותרת משנה היא מחרוזת שמתחילה ב-"## " בלבד.
+- רשימה היא מחרוזת אחת: "LIST: פריט | פריט | פריט" — בלי סולמיות ובלי מספור.
+- טיפ הוא מחרוזת אחת שמתחילה ב-"TIP: ".
 - 4–6 FAQ; אינפוגרפיקה 3–5 פריטים.
 - הביטוי "${keyword}" פעם אחת בדיוק בפסקת גוף.
 - meta_description עד 160 תווים.
 - GEO: ענה על שאלות geo_questions בתוך התוכן/FAQ.
+- המאמר הוא לעמוד באתר הלקוח, לקהל שמופיע בבריף, על השירות שמתואר בבריף.
+- אסור להמציא חברות, סטטיסטיקות, או נתוני דירוג שלא נמסרו בהקשר.
 
 JSON:
 {"title":"","excerpt":"","meta_description":"","content":[],"faq":[{"question":"","answer":""}],"infographic":{"title":"","items":[{"value":"01","label":"","description":""}]}}`;
@@ -118,13 +135,14 @@ JSON:
     const title = String(parsed.title ?? entry.title).trim();
     const excerpt = String(parsed.excerpt ?? "").trim();
     const meta = String(parsed.meta_description ?? "").trim();
+    const theme = await themePromise;
     const html = renderSeoGeoArticleHtml({
       title,
       excerpt,
       content,
       faq,
       infographic: { title: parsed.infographic?.title, items: infoItems },
-    });
+    }, theme);
 
     await admin.from("seo_geo_calendar_entries").update({
       title_draft: title,
@@ -138,6 +156,10 @@ JSON:
     return respond({ ok: true, entry_id });
   } catch (error) {
     console.error("marketing-seo-generate-entry", error);
-    return respond({ error: error instanceof Error ? error.message : String(error) }, 500);
+    const message = error instanceof Error ? error.message : String(error);
+    if (entryIdForStatus) {
+      await admin.from("seo_geo_calendar_entries").update({ generation_status: "failed", publish_error: message }).eq("id", entryIdForStatus);
+    }
+    return respond({ error: message }, 500);
   }
 });

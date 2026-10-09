@@ -30,6 +30,7 @@ import {
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
 import { fireTaskPeerNotification } from '../_shared/notify-task-peers.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
+import { browseWeb, researchCompetitors } from '../_shared/web-research.ts'
 import { loadDevEscalationTierFromDb } from '../_shared/carmen-access-policy.ts'
 import {
   buildDevEscalationPromptRule,
@@ -586,6 +587,7 @@ const CORE_TOOLS = new Set([
   'execute_pending_approval', 'reject_pending_approval', 'list_pending_approvals',
   'join_meeting_for_client', 'get_meeting_bot_status',
   'get_latest_campaign_pulse',
+  'browse_web', 'research_competitors',
 ])
 
 // Rough per-model pricing (USD per 1M tokens in/out) for the usage panel.
@@ -687,6 +689,8 @@ const ALL_TOOLS = [
   { name: 'get_openai_billing_status', description: 'סטטוס חיוב/שימוש OpenAI לארגון (super_admin בלבד): עלות החודש הנוכחי, טוקנים אם זמינים, ומגבלות אם זמינות. יתרת קרדיט לא נחשפת ב-API הרשמי — מחזיר unavailable במקום להמציא. דורש OPENAI_ADMIN_KEY (או openai_admin_api_key באינטגרציית llm).', parameters: { type: 'object', properties: { include_tokens: { type: 'boolean', description: 'כלול גם סיכום טוקנים מ-usage/completions (ברירת מחדל true)' } } } },
   // SEARCH
   { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים, אנשי מכירות או לידים לפי שם. ללקוחות: מחפש גם aliases/אנגלית/עברית, שמות חשבונות מודעות Meta, טבלאות דוח, ולקוחות ended/paused — לא רק active. עבור קמפיינר WhatsApp התוצאות מוגבלות אלא אם all_scopes=true.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'sales_person', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' }, include_inactive: { type: 'boolean', description: 'ללקוחות: כלול ended/paused (ברירת מחדל true בחיפוש לפי שם)' } }, required: ['entity_type', 'search_term'] } },
+  { name: 'browse_web', description: 'גלישה לעמוד אינטרנט ציבורי אחד. מחזיר כותרת וטקסט מהעמוד עצמו. חובה לפני שמצטטים אתר. לא לגלוש לכתובות פנימיות.', parameters: { type: 'object', properties: { url: { type: 'string', description: 'כתובת http(s) ציבורית' } }, required: ['url'] } },
+  { name: 'research_competitors', description: 'מחקר מתחרים: גולש לאתר הלקוח, מחפש ברשת, וקורא עמודי תוצאה. שם מתחרה נשמר רק אם העמוד נקרא ומכיל את נושא החיפוש, או אם Ahrefs organic-competitors החזיר דומיין. אסור להמציא מתחרה שהכלי לא החזיר.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'נושא השוק, למשל סליקה פנסיונית' }, website: { type: 'string', description: 'אתר הלקוח' }, client_id: { type: 'string', description: 'אם אין website — יישלף אתר הלקוח' } }, required: ['query'] } },
   { name: 'query_system_graph', description: 'חיפוש לקריאה בלבד בגרף הארכיטקטורה של AIOS: קוד, Edge Functions, טבלאות SQL, מודולים וקשרים ביניהם. השתמשי רק לשאלות טכניות על מבנה המערכת, מיקום מימוש, תלות בין רכיבים או השפעת שינוי. הכלי זמין למנהלים בלבד ואינו מחזיר נתוני לקוחות.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מונחים טכניים לחיפוש, רצוי באנגלית ושמות רכיבים מדויקים' }, depth: { type: 'integer', minimum: 0, maximum: 3, description: 'עומק ניווט בקשרים, ברירת מחדל 2' }, limit: { type: 'integer', minimum: 1, maximum: 80, description: 'מספר צמתים מרבי, ברירת מחדל 40' } }, required: ['query'] } },
   // MANUS AI - Complex task delegation
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
@@ -2781,6 +2785,23 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         body: JSON.stringify({ action, tenant_id: targetTenantId, comment_row_id: args.comment_row_id, message: args.message }),
       })
       return await r.json()
+    }
+    case 'browse_web': {
+      if (!args.url) return { error: 'url נדרש' }
+      return await browseWeb(String(args.url))
+    }
+    case 'research_competitors': {
+      let website = args.website ? String(args.website) : ''
+      if (!website && args.client_id) {
+        const { data: clientRow } = await supabase.from('clients').select('website,name').eq('id', args.client_id).maybeSingle()
+        website = clientRow?.website || ''
+      }
+      if (!args.query) return { error: 'query נדרש' }
+      return await researchCompetitors({
+        website: website || undefined,
+        query: String(args.query),
+        ahrefsApiKey: Deno.env.get('AHREFS_API_KEY') ?? '',
+      })
     }
     case 'get_latest_campaign_pulse': {
       const PULSE_BASE_COLUMNS = 'tenant_id, calculated_at, data_fresh_through, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)'
