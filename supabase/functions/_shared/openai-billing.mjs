@@ -154,6 +154,11 @@ export function extractDailyUsageBuckets(payload) {
 
 /**
  * Build a safe structured status object. Never fabricates remaining credit.
+ * @param {{
+ *   costs?: unknown, usage?: unknown, spendLimits?: unknown,
+ *   costsError?: string | null, usageError?: string | null, spendLimitsError?: string | null,
+ *   period?: ReturnType<typeof monthUtcBounds> | null, authSource?: string | null
+ * }} [options]
  */
 export function buildOpenAiBillingStatus({
   costs = null,
