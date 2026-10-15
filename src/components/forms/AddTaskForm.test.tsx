@@ -14,6 +14,37 @@ import { withTestQuery } from "@/test/withTestQuery";
 import AddTaskForm from "./AddTaskForm";
 
 describe("AddTaskForm team-member assignment", () => {
+  it("keeps selector search open across parent-driven category changes", async () => {
+    const user = userEvent.setup();
+    const { rerender } = mountForm(<AddTaskForm />);
+    await openDialog(user);
+    await user.type(screen.getByLabelText("כותרת המשימה"), "כותרת קיימת");
+    await user.click(screen.getByLabelText("איש צוות אחראי"));
+    await user.type(
+      await screen.findByPlaceholderText("חפש איש צוות..."),
+      "מוכר",
+    );
+    rerender(<AddTaskForm leadId="lead-1" />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("סוג משימה")).toHaveTextContent(
+        "משימה לליד",
+      ),
+    );
+    expect(screen.getByLabelText("איש צוות אחראי")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByPlaceholderText("חפש איש צוות...")).toHaveValue("מוכר");
+    rerender(<AddTaskForm clientId="client-1" />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("סוג משימה")).toHaveTextContent(
+        "משימה ללקוח",
+      ),
+    );
+    expect(screen.getByPlaceholderText("חפש איש צוות...")).toHaveValue("מוכר");
+    expect(screen.getByLabelText("כותרת המשימה")).toHaveValue("כותרת קיימת");
+  });
+
   it.each([
     { name: "קמפיינר שני", campaignerId: "campaigner-2", salesId: null },
     { name: "מוכר שני", campaignerId: null, salesId: "sales-2" },
