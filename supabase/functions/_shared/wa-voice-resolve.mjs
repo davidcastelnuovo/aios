@@ -59,6 +59,14 @@ export function formatVoiceMessageText({ transcript, status, isVoice }) {
 
 /**
  * Build metadata Carmen / chat_messages can persist under raw_provider_data._voice.
+ * @param {{
+ *   status: string,
+ *   transcript?: string | null,
+ *   source?: string,
+ *   messageId?: string | null,
+ *   audioUrl?: string | null,
+ *   isVoice?: boolean
+ * }} options
  */
 export function buildVoiceMeta({
   status,

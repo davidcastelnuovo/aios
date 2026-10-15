@@ -32,6 +32,13 @@ import {
 } from "../_shared/carmen-private-routing.ts";
 import { observeManusGroupMember } from "../_shared/carmen-observe-group-member.ts";
 
+function createServiceClient() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+  );
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -63,13 +70,84 @@ function isUnresolvedGroupAuthor(
   return !isIsraeliMobileTail(authorPhone);
 }
 
+/** Inspect a JSON object without assuming the provider's envelope shape. */
+function pickObj(...candidates: unknown[]): Record<string, unknown> | null {
+  for (const candidate of candidates) {
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      !Array.isArray(candidate)
+    ) {
+      return candidate as Record<string, unknown>;
+    }
+  }
+  return null;
+}
+
+// Provider variants keep their original values until the consuming routing/media
+// code applies its existing coercion. Only the fields this webhook reads belong
+// to the contract; the original object is still retained for raw_provider_data.
+interface ManusPayload {
+  event?: unknown;
+  from?: unknown;
+  to?: unknown;
+  body?: unknown;
+  fromMe?: unknown;
+  direction?: unknown;
+  id?: unknown;
+  messageId?: unknown;
+  senderName?: unknown;
+  author?: unknown;
+  hasMedia?: unknown;
+  chatId?: unknown;
+  senderLid?: unknown;
+  senderPn?: unknown;
+  participantPn?: unknown;
+  senderPhone?: unknown;
+  senderNumber?: unknown;
+  quotedMsgId?: unknown;
+  quotedMessageId?: unknown;
+  quotedMsg?: unknown;
+  groupId?: unknown;
+  fromName?: unknown;
+  authorName?: unknown;
+  participant?: unknown;
+  groupName?: unknown;
+  chatName?: unknown;
+  subject?: unknown;
+  ack?: unknown;
+  type?: unknown;
+  messageType?: unknown;
+  mediaType?: unknown;
+  mimeType?: unknown;
+  mime_type?: unknown;
+  media?: unknown;
+  file?: unknown;
+  attachment?: unknown;
+  audio?: unknown;
+}
+interface ManusMessageContainer {
+  audioMessage?: unknown;
+  message?: unknown;
+  type?: unknown;
+  contextInfo?: unknown;
+  participant?: unknown;
+  author?: unknown;
+  conversation?: unknown;
+  text?: unknown;
+  body?: unknown;
+  imageMessage?: unknown;
+  videoMessage?: unknown;
+  documentMessage?: unknown;
+}
+
 // ── Incoming voice notes → transcript (OpenAI Whisper) ────────────────
 // Returns structured result: clear 🎤 transcript when available, otherwise an
 // explicit status (no_audio_url / transcription_failed / …) — never silent.
 type MediaAuth = {
   apiKey?: string;
   gateway?: string;
-  supabase?: any;
+  supabase?: ReturnType<typeof createServiceClient>;
   tenantId?: string;
 };
 type VoiceResolveResult = {
@@ -80,7 +158,10 @@ type VoiceResolveResult = {
 // Tracks URL-less Manus payloads that were positively matched to a Green API voice transcript.
 // WeakSet keeps the classification request-local without mutating the payload persisted to the database.
 const pairedVoicePayloads = new WeakSet<object>();
-function pickAudioUrl(payload: any, msgContainer: any): string | null {
+function pickAudioUrl(
+  payload: ManusPayload,
+  msgContainer: ManusMessageContainer,
+): string | null {
   return pickAudioUrlFromContainers([
     payload,
     payload?.media,
@@ -93,8 +174,8 @@ function pickAudioUrl(payload: any, msgContainer: any): string | null {
   ]);
 }
 function looksAudio(
-  payload: any,
-  msgContainer: any,
+  payload: ManusPayload,
+  msgContainer: ManusMessageContainer,
   url: string | null,
 ): boolean {
   return looksLikeAudioPayload({
@@ -107,8 +188,8 @@ function looksAudio(
     mime:
       payload?.mimeType ||
       payload?.mime_type ||
-      payload?.media?.mimetype ||
-      msgContainer?.audioMessage?.mimetype,
+      pickObj(payload?.media)?.mimetype ||
+      pickObj(msgContainer?.audioMessage)?.mimetype,
     url,
   });
 }
@@ -137,7 +218,7 @@ async function fetchMedia(url: string, auth?: MediaAuth): Promise<Blob | null> {
 // transcript by the provider message id — KEEP the 🎤 marker so Carmen knows
 // this is a voice transcript (stripping it caused her to deny she can read voice).
 async function findPairedGreenTranscript(
-  payload: any,
+  payload: ManusPayload,
   auth?: MediaAuth,
 ): Promise<string | null> {
   if (!auth?.supabase || !auth.tenantId) return null;
@@ -180,8 +261,8 @@ async function findPairedGreenTranscript(
 // shape so the exact Manus voice-note format can be pinned down. Best-effort.
 function logMediaDebug(
   auth: MediaAuth | undefined,
-  payload: any,
-  msgContainer: any,
+  payload: ManusPayload,
+  msgContainer: ManusMessageContainer,
   url: string | null,
   isAudio: boolean,
   status: string,
@@ -206,7 +287,7 @@ function logMediaDebug(
           looks_audio: isAudio,
           msg_keys: msgContainer ? Object.keys(msgContainer) : null,
           audioMessage_keys: msgContainer?.audioMessage
-            ? Object.keys(msgContainer.audioMessage)
+            ? Object.keys(Object(msgContainer.audioMessage))
             : null,
           preview: JSON.stringify(payload ?? {}).slice(0, 1500),
         },
@@ -220,8 +301,8 @@ function logMediaDebug(
   }
 }
 async function resolveMessageText(
-  payload: any,
-  msgContainer: any,
+  payload: ManusPayload,
+  msgContainer: ManusMessageContainer,
   auth?: MediaAuth,
 ): Promise<VoiceResolveResult> {
   const messageId =
@@ -281,12 +362,12 @@ async function resolveMessageText(
 
   const url = urlEarly;
   const isAudio = audioEarly;
-  let status = isAudio
+  let status: (typeof VOICE_STATUSES)[keyof typeof VOICE_STATUSES] = isAudio
     ? url
       ? VOICE_STATUSES.TRANSCRIPTION_FAILED
       : VOICE_STATUSES.NO_AUDIO_URL
     : VOICE_STATUSES.NOT_VOICE_MEDIA;
-  let source: string = "none";
+  let source: "none" | "direct_whisper" = "none";
   let transcript: string | null = null;
 
   if (url && isAudio) {
@@ -357,7 +438,7 @@ async function resolveMessageText(
   const meta = buildVoiceMeta({
     status,
     transcript,
-    source: source as any,
+    source,
     messageId,
     audioUrl: url,
     isVoice,
@@ -375,8 +456,8 @@ async function resolveMessageText(
 
 // Was the inbound message a voice note? (drives Carmen's voice-out mirroring)
 function messageIsVoice(
-  payload: any,
-  msgContainer: any,
+  payload: ManusPayload,
+  msgContainer: ManusMessageContainer,
   resolved?: VoiceResolveResult,
 ): boolean {
   if (resolved?.isVoice) return true;
@@ -427,13 +508,10 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
 
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    );
+    const supabase = createServiceClient();
 
     const url = new URL(req.url);
-    const rawPayload = await req.json();
+    const rawPayload: unknown = await req.json();
 
     // Diagnostic: log top-level shape so we can see exactly what Manus sends
     try {
@@ -449,14 +527,7 @@ Deno.serve(async (req) => {
 
     // Normalize Manus WA Gateway payload — it may be flat, or wrapped in
     // { data }, { message }, { payload }, { event, data: {...} }, etc.
-    function pickObj(...candidates: unknown[]): Record<string, any> | null {
-      for (const c of candidates) {
-        if (c && typeof c === "object" && !Array.isArray(c))
-          return c as Record<string, any>;
-      }
-      return null;
-    }
-    const outer = rawPayload as Record<string, any>;
+    const outer = pickObj(rawPayload) || {};
     const inner =
       pickObj(outer.data, outer.message, outer.payload, outer.body) || {};
     const key = pickObj(inner.key, outer.key) || {};
@@ -545,13 +616,16 @@ Deno.serve(async (req) => {
       );
 
     // Build a unified payload object that the rest of the code uses
-    const payload: Record<string, any> = {
+    const payload: ManusPayload = {
       ...outer,
       ...inner,
       event: normalizedEvent,
       from: fromField,
       to: toField,
-      body: typeof bodyField === "string" ? bodyField : (bodyField?.text ?? ""),
+      body:
+        typeof bodyField === "string"
+          ? bodyField
+          : (pickObj(bodyField)?.text ?? ""),
       fromMe: fromMeField,
       direction: directionField,
       id: idField,
@@ -606,8 +680,8 @@ Deno.serve(async (req) => {
       return ok({ error: "No active integration" }, 404);
     }
 
-    const settings = (integ.settings as any) || {};
-    const expectedSecret: string = settings.webhook_secret || "";
+    const settings = pickObj(integ.settings) || {};
+    const expectedSecret = settings.webhook_secret || "";
 
     // Auto-heal: if DB has no secret yet, accept the first webhook secret we see and persist it.
     if (!expectedSecret && headerSecret) {
@@ -625,7 +699,7 @@ Deno.serve(async (req) => {
         "— received headers:",
         JSON.stringify(Object.fromEntries(req.headers)),
         "received secret:",
-        headerSecret ? `${headerSecret.slice(0, 6)}…` : "(none)",
+        headerSecret ? `${String(headerSecret).slice(0, 6)}…` : "(none)",
       );
       return ok({ received: true, ignored: "secret_mismatch" }, 200);
     }
@@ -820,7 +894,7 @@ Deno.serve(async (req) => {
         });
       if (claimErr) {
         // 23505 = unique_violation → another invocation already processing this msg
-        if ((claimErr as any).code === "23505") {
+        if (claimErr.code === "23505") {
           console.log("[manus-wa] duplicate webhook dropped", {
             messageId,
             bodyPreview: String(messageText).slice(0, 60),
@@ -857,14 +931,17 @@ Deno.serve(async (req) => {
           .limit(10);
         if (pendings && pendings.length > 0) {
           const quotedId = String(
-            (payload as any).quotedMsgId ||
-              (payload as any).quotedMessageId ||
-              (payload as any)?.quotedMsg?.id ||
-              (msgContainer as any)?.contextInfo?.stanzaId ||
+            payload.quotedMsgId ||
+              payload.quotedMessageId ||
+              pickObj(payload.quotedMsg)?.id ||
+              pickObj(msgContainer.contextInfo)?.stanzaId ||
               "",
           );
           const hit = pendings.find(
-            (p: any) =>
+            (p: {
+              code: string | null;
+              activation_message_id: string | null;
+            }) =>
               (p.code &&
                 new RegExp(`(^|\\D)${p.code}(\\D|$)`).test(messageText)) ||
               (p.activation_message_id &&
@@ -1004,9 +1081,9 @@ Deno.serve(async (req) => {
         .limit(5);
       const pairedOutgoing =
         (greenMatches || []).find(
-          (m: any) =>
+          (m: { raw_provider_data: unknown }) =>
             !messageId ||
-            String(m.raw_provider_data?.idMessage || "") === messageId,
+            String(pickObj(m.raw_provider_data)?.idMessage || "") === messageId,
         ) || greenMatches?.[0];
       if (pairedOutgoing?.sender_phone) {
         isOutgoingFromPhone = true;
@@ -1084,7 +1161,7 @@ Deno.serve(async (req) => {
           ? [
               ...new Set(
                 cfg.carmen_allowed_phones
-                  .map((p: any) => String(p).replace(/\D/g, ""))
+                  .map((p: unknown) => String(p).replace(/\D/g, ""))
                   .filter(Boolean),
               ),
             ]
@@ -1216,7 +1293,7 @@ Deno.serve(async (req) => {
           ? [
               ...new Set(
                 cfg.carmen_allowed_phones
-                  .map((p: any) => String(p).replace(/\D/g, ""))
+                  .map((p: unknown) => String(p).replace(/\D/g, ""))
                   .filter(Boolean),
               ),
             ]
@@ -1283,7 +1360,7 @@ Deno.serve(async (req) => {
     if (isGroup) {
       // Prefer explicit group fields. `from` is often the sender's personal phone in groups,
       // and `to` may be empty — in which case we must fall back to chatId/groupId from the payload.
-      const groupIdRaw = String((payload as any).groupId || "");
+      const groupIdRaw = String(payload.groupId || "");
       const groupChatId = fromRaw.endsWith("@g.us")
         ? fromRaw
         : toRaw.endsWith("@g.us")
@@ -1306,7 +1383,9 @@ Deno.serve(async (req) => {
           .eq("group_chat_id", groupChatId)
           .limit(10);
         const rows = wgRows || [];
-        const ownRegistered = rows.some((r: any) => r.tenant_id === tenantId);
+        const ownRegistered = rows.some(
+          (r: { tenant_id: string }) => r.tenant_id === tenantId,
+        );
         if (!ownRegistered && rows.length > 0) {
           // The bot's own tenant has no whatsapp_groups claim here. A group is
           // often registered under ANOTHER tenant just because the operator's
@@ -1322,7 +1401,8 @@ Deno.serve(async (req) => {
             .eq("action_type", "carmen_whatsapp_session")
             .limit(10);
           const ownHasOpenMode = (ownSteps || []).some(
-            (s: any) => s?.configuration?.carmen_open_member_groups === true,
+            (s: { configuration: unknown }) =>
+              pickObj(s.configuration)?.carmen_open_member_groups === true,
           );
           if (!ownHasOpenMode) groupTenantId = rows[0].tenant_id as string;
         }
@@ -1355,11 +1435,9 @@ Deno.serve(async (req) => {
         payload.participant,
         payload.senderLid,
         key.participant,
-        (msgContainer as any)?.participant,
-        (msgContainer as any)?.author,
-      ].filter(
-        (v: any) => typeof v === "string" && v.includes("@"),
-      ) as string[];
+        msgContainer?.participant,
+        msgContainer?.author,
+      ].filter((v): v is string => typeof v === "string" && v.includes("@"));
       // Prefer a real @c.us participant over an anonymous @lid author when both exist.
       const authorRaw =
         authorCandidates.find((c) => c.endsWith("@c.us")) ||
@@ -1555,7 +1633,7 @@ Deno.serve(async (req) => {
           .select("id, created_at")
           .eq("tenant_id", tenantId)
           .eq("direction", "outbound")
-          .eq("group_id", null as any)
+          .eq("group_id", null)
           .in("provider", ["manus_wa", "green_api"])
           .eq("message_text", messageText)
           .gte("created_at", new Date(Date.now() - 2 * 60 * 1000).toISOString())
@@ -1618,7 +1696,7 @@ Deno.serve(async (req) => {
             tenant_id: groupTenantId,
             external_message_id: currentFingerprint,
           });
-        if ((fingerprintError as any)?.code === "23505") {
+        if (fingerprintError?.code === "23505") {
           console.log("[manus-wa group] semantic duplicate dropped", {
             groupChatId,
             authorPhone,
@@ -1654,9 +1732,9 @@ Deno.serve(async (req) => {
             wgId = wgRow.id;
           } else {
             const groupName = String(
-              (payload as any).groupName ||
-                (payload as any).chatName ||
-                (payload as any).subject ||
+              payload.groupName ||
+                payload.chatName ||
+                payload.subject ||
                 groupChatId,
             );
             const { data: upserted, error: upsertErr } = await supabase
@@ -1772,11 +1850,11 @@ Deno.serve(async (req) => {
           ),
           sendVoice: makeVoiceSender(groupTenantId),
           sendMessage: async (_chatId: string, message: string) => {
-            const settingsAny = (integ.settings as any) || {};
+            const gatewaySettings = settings;
             const baseUrl =
-              settingsAny.gateway_url ||
+              gatewaySettings.gateway_url ||
               "https://whatsappgw-pzpyrrww.manus.space";
-            const instanceId = settingsAny.instance_id;
+            const instanceId = gatewaySettings.instance_id;
             const apiKey = integ.api_key;
             if (!instanceId || !apiKey) return false;
             // IMPORTANT: bound the gateway call with a timeout. Without it, a stalled Manus
@@ -1810,9 +1888,9 @@ Deno.serve(async (req) => {
                 elapsedMs: Date.now() - started,
               });
               return res.ok;
-            } catch (err: any) {
+            } catch (err) {
               clearTimeout(timer);
-              const isAbort = err?.name === "AbortError";
+              const isAbort = pickObj(err)?.name === "AbortError";
               console.error(
                 "manus-wa Carmen group sendMessage error:",
                 isAbort
@@ -1829,8 +1907,8 @@ Deno.serve(async (req) => {
           authorPhone,
           isOutgoingFromPhone,
           handled: result.handled,
-          outcome: (result as any).outcome,
-          reason: (result as any).reason,
+          outcome: "outcome" in result ? result.outcome : undefined,
+          reason: "reason" in result ? result.reason : undefined,
           body: String(messageText).slice(0, 60),
         });
       } catch (err) {
@@ -2046,8 +2124,8 @@ Deno.serve(async (req) => {
         pairedFromGreenApi,
         isOutgoingFromPhone,
         handled: result.handled,
-        outcome: (result as any).outcome,
-        reason: (result as any).reason,
+        outcome: "outcome" in result ? result.outcome : undefined,
+        reason: "reason" in result ? result.reason : undefined,
         body: String(messageText).slice(0, 60),
       });
     } catch (err) {
