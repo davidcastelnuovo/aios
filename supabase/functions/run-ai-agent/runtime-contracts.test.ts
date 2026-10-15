@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  jsonObject,
-  isMetaNode,
-  readMetaResponse,
-} from "./runtime-contracts.ts";
+import { jsonObject } from "./json-config.ts";
+import { isMetaNode, readMetaResponse } from "./meta-response.ts";
 
 function response(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), { status });
