@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/agentAccessClient";
 
 // Owners who may use the ORG OpenAI key. Everyone else gets access by adding
 // a personal API key (user_api_keys) in their profile — bring-your-own-key.
@@ -22,7 +22,7 @@ export function useCommandCenterAccess(): {
           return;
         }
         // Any user with a personal key gets in (RLS: own row only)
-        const { data: keyRow } = await (supabase as any)
+        const { data: keyRow } = await supabase
           .from("user_api_keys")
           .select("user_id")
           .limit(1)
