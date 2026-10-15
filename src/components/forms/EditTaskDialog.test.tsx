@@ -1,5 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { QueryClient } from "@tanstack/react-query";
+import { withTestQuery } from "@/test/withTestQuery";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   afterAll,
@@ -11,6 +12,122 @@ import {
   vi,
 } from "vitest";
 import EditTaskDialog from "./EditTaskDialog";
+
+describe("EditTaskDialog team-member selector", () => {
+  it("searches real options, selects a salesperson by keyboard, closes, and submits only that assignment", async () => {
+    const { user } = mount();
+    expect(selector()).toHaveTextContent("Alpha Campaigner");
+    expect(selector()).toHaveAttribute("aria-expanded", "false");
+    const search = await openSelector(user);
+    expect(screen.getByText("Campaigners")).toBeInTheDocument();
+    expect(screen.getByText("Salespeople")).toBeInTheDocument();
+    await user.type(search, "Delta");
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("option", { name: "Alpha Campaigner" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("option", { name: "Delta Salesperson" }),
+    ).toBeVisible();
+    await user.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(
+        screen.queryByPlaceholderText("חפש איש צוות..."),
+      ).not.toBeInTheDocument(),
+    );
+    expect(selector()).toHaveTextContent("Delta Salesperson");
+    expect(selector()).toHaveAttribute("aria-expanded", "false");
+    await submit(user);
+    expect(backend.update).toHaveBeenCalledWith(
+      "tasks",
+      expect.objectContaining({ campaigner_id: null, sales_person_id: "s2" }),
+    );
+    expect(backend.eq).toHaveBeenCalledWith("tasks", "id", "task-1");
+  });
+
+  it("switches an existing salesperson to a campaigner and clears the salesperson in the submitted payload", async () => {
+    const { user } = mount({
+      ...initialTask,
+      campaigner_id: "",
+      sales_person_id: "s1",
+    });
+    expect(selector()).toHaveTextContent("Gamma Salesperson");
+    await openSelector(user);
+    await user.click(screen.getByRole("option", { name: "Beta Campaigner" }));
+    await waitFor(() =>
+      expect(selector()).toHaveTextContent("Beta Campaigner"),
+    );
+    expect(selector()).toHaveAttribute("aria-expanded", "false");
+    await submit(user);
+    expect(backend.update).toHaveBeenCalledWith(
+      "tasks",
+      expect.objectContaining({ campaigner_id: "c2", sales_person_id: null }),
+    );
+  });
+
+  it("preserves open/search state through form and parent rerenders and responds to Escape", async () => {
+    const { user, rerender } = mount();
+    await user.clear(screen.getByLabelText("כותרת משימה"));
+    await user.type(screen.getByLabelText("כותרת משימה"), "Changed title");
+    const search = await openSelector(user);
+    await user.type(search, "Beta");
+    rerender({ ...initialTask });
+    expect(selector()).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByPlaceholderText("חפש איש צוות...")).toHaveValue("Beta");
+    expect(screen.getByLabelText("כותרת משימה")).toHaveValue("Changed title");
+    await user.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(selector()).toHaveAttribute("aria-expanded", "false"),
+    );
+  });
+
+  it("preserves the existing mounted form and selector lifetime when the edited task prop changes", async () => {
+    const { user, rerender } = mount();
+    const search = await openSelector(user);
+    await user.type(search, "Alpha");
+    rerender({ ...initialTask, id: "task-2", campaigner_id: "c2" });
+    expect(selector()).toHaveAttribute("aria-expanded", "true");
+    expect(selector()).toHaveTextContent("Alpha Campaigner");
+    expect(screen.getByPlaceholderText("חפש איש צוות...")).toHaveValue("Alpha");
+  });
+
+  it("resets selector open/search state on actual details-tab unmount while preserving the form assignment", async () => {
+    const { user } = mount({
+      ...initialTask,
+      campaigner_id: "",
+      sales_person_id: "s1",
+    });
+    const search = await openSelector(user);
+    await user.type(search, "Delta");
+    await user.click(screen.getByRole("tab", { name: "עדכונים" }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText("איש צוות אחראי")).not.toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole("tab", { name: "פרטי משימה" }));
+    expect(selector()).toHaveTextContent("Gamma Salesperson");
+    expect(selector()).toHaveAttribute("aria-expanded", "false");
+    expect(await openSelector(user)).toHaveValue("");
+  });
+
+  it("resets selector open/search state when the real dialog closes and reopens without resetting form values", async () => {
+    const { user, rerender } = mount();
+    const search = await openSelector(user);
+    await user.type(search, "Beta");
+    rerender(initialTask, false);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "עריכת משימה" }),
+      ).not.toBeInTheDocument(),
+    );
+    rerender(initialTask, true);
+    await waitFor(() =>
+      expect(selector()).toHaveAttribute("aria-expanded", "false"),
+    );
+    expect(selector()).toHaveTextContent("Alpha Campaigner");
+    expect(await openSelector(user)).toHaveValue("");
+  });
+});
 
 const backend = vi.hoisted(() => ({ update: vi.fn(), eq: vi.fn() }));
 
@@ -117,17 +234,13 @@ const initialTask = {
 
 function mount(task = initialTask) {
   const user = userEvent.setup();
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
-  });
-  clients.push(client);
+  const { queryClient, wrapper } = withTestQuery();
+  clients.push(queryClient);
   const onOpenChange = vi.fn();
   const view = (nextTask = task, open = true) => (
-    <QueryClientProvider client={client}>
-      <EditTaskDialog task={nextTask} open={open} onOpenChange={onOpenChange} />
-    </QueryClientProvider>
+    <EditTaskDialog task={nextTask} open={open} onOpenChange={onOpenChange} />
   );
-  const result = render(view());
+  const result = render(view(), { wrapper });
   return {
     user,
     onOpenChange,
@@ -149,124 +262,3 @@ async function submit(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "עדכן משימה" }));
   await waitFor(() => expect(backend.update).toHaveBeenCalledOnce());
 }
-
-describe("EditTaskDialog team-member selector", () => {
-  it("searches real options, selects a salesperson by keyboard, closes, and submits only that assignment", async () => {
-    const { user } = mount();
-    expect(selector()).toHaveTextContent("Alpha Campaigner");
-    expect(selector()).toHaveAttribute("aria-expanded", "false");
-    const search = await openSelector(user);
-    expect(screen.getByText("Campaigners")).toBeInTheDocument();
-    expect(screen.getByText("Salespeople")).toBeInTheDocument();
-    await user.type(search, "Delta");
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("option", { name: "Alpha Campaigner" }),
-      ).not.toBeInTheDocument(),
-    );
-    expect(
-      screen.getByRole("option", { name: "Delta Salesperson" }),
-    ).toBeVisible();
-    await user.keyboard("{Enter}");
-    await waitFor(() =>
-      expect(
-        screen.queryByPlaceholderText("חפש איש צוות..."),
-      ).not.toBeInTheDocument(),
-    );
-    expect(selector()).toHaveTextContent("Delta Salesperson");
-    expect(selector()).toHaveAttribute("aria-expanded", "false");
-    await submit(user);
-    expect(backend.update).toHaveBeenCalledWith(
-      "tasks",
-      expect.objectContaining({ campaigner_id: null, sales_person_id: "s2" }),
-    );
-    expect(backend.eq).toHaveBeenCalledWith("tasks", "id", "task-1");
-  });
-
-  it("switches an existing salesperson to a campaigner and clears the salesperson in the submitted payload", async () => {
-    const { user } = mount({
-      ...initialTask,
-      campaigner_id: "",
-      sales_person_id: "s1",
-    });
-    expect(selector()).toHaveTextContent("Gamma Salesperson");
-    await openSelector(user);
-    await user.click(screen.getByRole("option", { name: "Beta Campaigner" }));
-    await waitFor(() =>
-      expect(selector()).toHaveTextContent("Beta Campaigner"),
-    );
-    expect(selector()).toHaveAttribute("aria-expanded", "false");
-    await submit(user);
-    expect(backend.update).toHaveBeenCalledWith(
-      "tasks",
-      expect.objectContaining({ campaigner_id: "c2", sales_person_id: null }),
-    );
-  });
-
-  it("preserves open/search state through form and parent rerenders and responds to Escape", async () => {
-    const { user, rerender } = mount();
-    const search = await openSelector(user);
-    await user.type(search, "Beta");
-    fireEvent.change(screen.getByLabelText("כותרת משימה"), {
-      target: { value: "Changed title" },
-    });
-    rerender({ ...initialTask });
-    expect(selector()).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByPlaceholderText("חפש איש צוות...")).toHaveValue("Beta");
-    expect(screen.getByLabelText("כותרת משימה")).toHaveValue("Changed title");
-    await user.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(selector()).toHaveAttribute("aria-expanded", "false"),
-    );
-  });
-
-  it("preserves the existing mounted form and selector lifetime when the edited task prop changes", async () => {
-    const { user, rerender } = mount();
-    const search = await openSelector(user);
-    await user.type(search, "Alpha");
-    rerender({ ...initialTask, id: "task-2", campaigner_id: "c2" });
-    expect(selector()).toHaveAttribute("aria-expanded", "true");
-    expect(selector()).toHaveTextContent("Alpha Campaigner");
-    expect(screen.getByPlaceholderText("חפש איש צוות...")).toHaveValue("Alpha");
-  });
-
-  it("resets selector open/search state on actual details-tab unmount while preserving the form assignment", async () => {
-    const { user } = mount({
-      ...initialTask,
-      campaigner_id: "",
-      sales_person_id: "s1",
-    });
-    const search = await openSelector(user);
-    await user.type(search, "Delta");
-    // Activate the real tab without an outside pointerdown closing the popover first.
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "עדכונים" }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    await waitFor(() =>
-      expect(screen.queryByLabelText("איש צוות אחראי")).not.toBeInTheDocument(),
-    );
-    await user.click(screen.getByRole("tab", { name: "פרטי משימה" }));
-    expect(selector()).toHaveTextContent("Gamma Salesperson");
-    expect(selector()).toHaveAttribute("aria-expanded", "false");
-    expect(await openSelector(user)).toHaveValue("");
-  });
-
-  it("resets selector open/search state when the real dialog closes and reopens without resetting form values", async () => {
-    const { user, rerender } = mount();
-    const search = await openSelector(user);
-    await user.type(search, "Beta");
-    rerender(initialTask, false);
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("dialog", { name: "עריכת משימה" }),
-      ).not.toBeInTheDocument(),
-    );
-    rerender(initialTask, true);
-    await waitFor(() =>
-      expect(selector()).toHaveAttribute("aria-expanded", "false"),
-    );
-    expect(selector()).toHaveTextContent("Alpha Campaigner");
-    expect(await openSelector(user)).toHaveValue("");
-  });
-});

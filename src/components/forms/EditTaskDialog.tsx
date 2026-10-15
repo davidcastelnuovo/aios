@@ -1,8 +1,5 @@
-import {
-  useForm,
-  type ControllerRenderProps,
-  type UseFormReturn,
-} from "react-hook-form";
+import { useForm } from "react-hook-form";
+import EditTaskTeamMemberSelector from "./EditTaskTeamMemberSelector";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -121,136 +118,6 @@ const formSchema = z
       path: ["campaigner_id"],
     },
   );
-
-type TaskFormValues = z.infer<typeof formSchema>;
-
-function TaskTeamMemberSelector({
-  field,
-  form,
-  campaigners,
-  salesPeople,
-  t,
-}: {
-  field: ControllerRenderProps<TaskFormValues, "campaigner_id">;
-  form: UseFormReturn<TaskFormValues>;
-  campaigners: ReturnType<typeof useCampaigners>["data"];
-  salesPeople: ReturnType<typeof useSalesPeople>["data"];
-  t: ReturnType<typeof useTerminology>["t"];
-}) {
-  const [teamMemberPopoverOpen, setTeamMemberPopoverOpen] = useState(false);
-
-  // Combine campaigners and sales people into one list
-  const allTeamMembers = [
-    ...(campaigners?.map((c) => ({
-      id: c.id,
-      name: c.full_name,
-      type: "campaigner" as const,
-    })) || []),
-    ...(salesPeople?.map((s) => ({
-      id: s.id,
-      name: s.full_name,
-      type: "sales" as const,
-    })) || []),
-  ];
-
-  // Find selected member
-  const selectedMember = allTeamMembers.find(
-    (m) =>
-      (m.type === "campaigner" && m.id === field.value) ||
-      (m.type === "sales" && m.id === form.getValues("sales_person_id")),
-  );
-
-  return (
-    <FormItem className="flex flex-col">
-      <FormLabel className="text-right block">איש צוות אחראי</FormLabel>
-      <Popover
-        open={teamMemberPopoverOpen}
-        onOpenChange={setTeamMemberPopoverOpen}
-      >
-        <PopoverTrigger asChild>
-          <FormControl>
-            <Button
-              variant="outline"
-              role="combobox"
-              className={cn(
-                "w-full justify-between",
-                !selectedMember && "text-muted-foreground",
-              )}
-            >
-              <span className="text-right flex-1">
-                {selectedMember ? selectedMember.name : "בחר איש צוות"}
-              </span>
-              <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </FormControl>
-        </PopoverTrigger>
-        <PopoverContent
-          className="w-[300px] p-0 bg-background"
-          align="end"
-          dir="rtl"
-        >
-          <Command>
-            <CommandInput placeholder="חפש איש צוות..." />
-            <CommandList>
-              <CommandEmpty>לא נמצאו אנשי צוות</CommandEmpty>
-              {campaigners && campaigners.length > 0 && (
-                <CommandGroup heading={t("campaigner", true)}>
-                  {campaigners.map((campaigner) => (
-                    <CommandItem
-                      key={`campaigner:${campaigner.id}`}
-                      value={campaigner.full_name}
-                      onSelect={() => {
-                        field.onChange(campaigner.id);
-                        form.setValue("sales_person_id", "");
-                        setTeamMemberPopoverOpen(false);
-                      }}
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 h-4 w-4",
-                          field.value === campaigner.id
-                            ? "opacity-100"
-                            : "opacity-0",
-                        )}
-                      />
-                      {campaigner.full_name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-              {salesPeople && salesPeople.length > 0 && (
-                <CommandGroup heading={t("sales_person", true)}>
-                  {salesPeople.map((salesPerson) => (
-                    <CommandItem
-                      key={`sales:${salesPerson.id}`}
-                      value={salesPerson.full_name}
-                      onSelect={() => {
-                        field.onChange("");
-                        form.setValue("sales_person_id", salesPerson.id);
-                        setTeamMemberPopoverOpen(false);
-                      }}
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 h-4 w-4",
-                          form.getValues("sales_person_id") === salesPerson.id
-                            ? "opacity-100"
-                            : "opacity-0",
-                        )}
-                      />
-                      {salesPerson.full_name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-      <FormMessage />
-    </FormItem>
-  );
-}
 
 // Component to handle async signed URL loading
 function AttachmentPreview({
@@ -755,8 +622,9 @@ export default function EditTaskDialog({
       const endOfDay = new Date(selectedDate);
       endOfDay.setHours(23, 59, 59, 999);
 
-      const { getCalendarEvents: fetchEvents } =
-        await import("@/lib/calendarApi");
+      const { getCalendarEvents: fetchEvents } = await import(
+        "@/lib/calendarApi"
+      );
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -1085,7 +953,7 @@ export default function EditTaskDialog({
                     control={form.control}
                     name="campaigner_id"
                     render={({ field }) => (
-                      <TaskTeamMemberSelector
+                      <EditTaskTeamMemberSelector
                         field={field}
                         form={form}
                         campaigners={campaigners}
