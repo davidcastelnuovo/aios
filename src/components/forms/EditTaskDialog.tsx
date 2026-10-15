@@ -622,9 +622,8 @@ export default function EditTaskDialog({
       const endOfDay = new Date(selectedDate);
       endOfDay.setHours(23, 59, 59, 999);
 
-      const { getCalendarEvents: fetchEvents } = await import(
-        "@/lib/calendarApi"
-      );
+      const { getCalendarEvents: fetchEvents } =
+        await import("@/lib/calendarApi");
       const {
         data: { user },
       } = await supabase.auth.getUser();
