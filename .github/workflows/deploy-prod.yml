@@ -28,6 +28,8 @@ concurrency:
 jobs:
   resolve:
     name: Resolve changes
+    # A manual run can pick any branch; Production only deploys from main.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       migrations: ${{ steps.filter.outputs.migrations || 'true' }}
