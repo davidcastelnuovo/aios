@@ -240,31 +240,30 @@ class RecoveryTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             credentials.digests([{'name': 'CURSOR_API_KEY', 'value': 'not-a-digest'}])
 
-    def test_source_attestation_requires_identical_function_files_and_live_versions(self):
+    def test_attestation_selects_only_changed_functions_without_git_history(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            def git(*args):
-                return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
-            git('init', '-q')
-            git('config', 'user.name', 'Test')
-            git('config', 'user.email', 'test@example.invalid')
-            function = root / 'supabase/functions/report/index.ts'
-            function.parent.mkdir(parents=True)
-            function.write_text('guarded source')
-            git('add', '.')
-            git('commit', '-qm', 'reviewed')
-            previous = git('rev-parse', 'HEAD')
-            (root / 'mirror.py').write_text('data-only change')
-            git('add', '.')
-            git('commit', '-qm', 'mirror change')
-            class API:
-                def query(self, sql): return [{'verified_at': 'timestamp', 'source_sha': previous, 'edge_versions': {'report': 1}}]
-            self.assertTrue(verify.verified_sources_unchanged(API(), {'report': 1}, root, git('rev-parse', 'HEAD')))
-            self.assertFalse(verify.verified_sources_unchanged(API(), {'report': 2}, root, git('rev-parse', 'HEAD')))
-            function.write_text('different runtime')
-            git('add', '.')
-            git('commit', '-qm', 'runtime change')
-            self.assertFalse(verify.verified_sources_unchanged(API(), {'report': 1}, root, git('rev-parse', 'HEAD')))
+            functions = root / 'supabase/functions'
+            (functions / '_shared').mkdir(parents=True)
+            (functions / '_shared/staging-outbound.mjs').write_text('guard')
+            for name in ['report', 'leads']:
+                (functions / name).mkdir()
+                (functions / name / 'index.ts').write_text(f'{name} source')
+            live = {'report': {'id': 'a', 'version': 1}, 'leads': {'id': 'b', 'version': 1}}
+            attested = verify.attested_state(live, verify.tracked_digests(root, live))
+            rows = [{'verified_at': 'timestamp', 'verified_state': attested}]
+            pending = lambda versions: verify.pending_functions(rows, versions, verify.tracked_digests(root, versions))
+            self.assertEqual(pending(live), [])
+            self.assertEqual(pending({**live, 'leads': {'id': 'b', 'version': 2}}), ['leads'])
+            (functions / 'report/index.ts').write_text('changed')
+            self.assertEqual(pending(live), ['report'])
+            self.assertEqual(pending({**live, 'new': {'id': 'c', 'version': 1}}), ['new', 'report'])
+            (functions / 'new').mkdir()
+            self.assertEqual(pending({**live, 'new': {'id': 'c', 'version': 1}}), ['new', 'report'])
+            (functions / '_shared/staging-outbound.mjs').write_text('new guard')
+            self.assertEqual(pending(live), ['leads', 'report'])
+            rows[0]['verified_at'] = None
+            self.assertEqual(pending(live), ['leads', 'report'])
 
     def test_download_retries_a_rate_limit_without_restart(self):
         calls, pauses = [], []

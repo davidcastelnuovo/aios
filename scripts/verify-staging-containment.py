@@ -1,5 +1,6 @@
 """Attest every live Staging Edge entrypoint before enabling data imports."""
 import argparse
+import hashlib
 import importlib.util
 import os
 import re
@@ -29,30 +30,45 @@ def download_function(name, target, destination, *, run=subprocess.run, pause=ti
         pause(delay)
 
 
-def record_state(api, versions, sha, *, verified=False):
+def record_state(api, versions, sha, *, verified=False, state=None):
     if not re.fullmatch(r'[0-9a-f]{40}', sha):
         raise RuntimeError('A complete source revision is required')
     flag, stamp = ('true', 'now()') if verified else ('false', 'NULL')
-    api.query(f"""INSERT INTO environment_sync.safety(singleton,guard_version,outbound_blocked,verified_at,source_sha,own_origin,edge_versions)
-VALUES(true,1,{flag},{stamp},{mirror.literal(sha)},{mirror.literal(f'https://{api.target}.supabase.co')},{mirror.json_sql(versions)})
-ON CONFLICT(singleton) DO UPDATE SET guard_version=1,outbound_blocked=EXCLUDED.outbound_blocked,verified_at=EXCLUDED.verified_at,source_sha=EXCLUDED.source_sha,own_origin=EXCLUDED.own_origin,edge_versions=EXCLUDED.edge_versions""")
+    # Per-function attestation is only replaced by a completed verification.
+    attested = mirror.json_sql(state or {})
+    api.query(f"""INSERT INTO environment_sync.safety(singleton,guard_version,outbound_blocked,verified_at,source_sha,own_origin,edge_versions,verified_state)
+VALUES(true,1,{flag},{stamp},{mirror.literal(sha)},{mirror.literal(f'https://{api.target}.supabase.co')},{mirror.json_sql(versions)},{attested})
+ON CONFLICT(singleton) DO UPDATE SET guard_version=1,outbound_blocked=EXCLUDED.outbound_blocked,verified_at=EXCLUDED.verified_at,source_sha=EXCLUDED.source_sha,own_origin=EXCLUDED.own_origin,edge_versions=EXCLUDED.edge_versions{',verified_state=EXCLUDED.verified_state' if verified else ''}""")
 
 
-def verified_sources_unchanged(api, versions, root, sha, *, run=subprocess.run):
-    rows = api.query('SELECT verified_at,source_sha,edge_versions FROM environment_sync.safety WHERE singleton AND guard_version=1')
-    if not rows or not rows[0]['verified_at'] or rows[0]['edge_versions'] != versions:
-        return False
-    previous = rows[0]['source_sha'] or ''
-    if not re.fullmatch(r'[0-9a-f]{40}', previous) or not re.fullmatch(r'[0-9a-f]{40}', sha):
-        return False
-    # A squash-merged or rebased PR leaves the previous revision outside this history.
-    if run(['git', 'cat-file', '-e', f'{previous}^{{commit}}'], cwd=root, capture_output=True).returncode != 0:
-        run(['git', 'fetch', '--no-tags', 'origin', previous], cwd=root, capture_output=True)
-    # A previous complete source review remains valid only when ALL function
-    # files are identical and the complete live version map is unchanged.
-    result = run(['git', 'diff', '--quiet', previous, sha, '--', 'supabase/functions'],
-                 cwd=root, capture_output=True, text=True)
-    return result.returncode == 0
+def file_digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+
+
+def tracked_digests(root, names):
+    # Content digests of exactly what verification compares, so attestation
+    # survives squashed or rebased history without consulting git.
+    functions = root / 'supabase/functions'
+    return {'guard': file_digest(functions / '_shared/staging-outbound.mjs'),
+            'functions': {name: file_digest(functions / name / 'index.ts') for name in names}}
+
+
+def attested_state(versions, digests):
+    return {'guard': digests['guard'],
+            'functions': {name: {'live': versions[name], 'digest': digests['functions'][name]} for name in versions}}
+
+
+def pending_functions(rows, versions, digests):
+    """Functions whose live copy must be downloaded and compared again."""
+    if not rows or not rows[0]['verified_at'] or not digests['guard']:
+        return sorted(versions)
+    state = rows[0].get('verified_state') or {}
+    if state.get('guard') != digests['guard']:
+        return sorted(versions)
+    attested = state.get('functions') or {}
+    return sorted(name for name in versions
+                  if not digests['functions'][name]
+                  or attested.get(name) != {'live': versions[name], 'digest': digests['functions'][name]})
 
 
 def main():
@@ -72,27 +88,31 @@ def main():
     versions = api.function_versions()
     if not versions: raise RuntimeError('No live Staging functions to verify')
     sha = os.environ.get('SOURCE_SHA', '')
-    reuse_verified_sources = verified_sources_unchanged(api, versions, root, sha)
+    digests = tracked_digests(root, versions)
+    rows = api.query('SELECT verified_at,verified_state FROM environment_sync.safety WHERE singleton AND guard_version=1')
+    pending = pending_functions(rows, versions, digests)
+    state = attested_state(versions, digests)
     if options.record_deployment:
-        if reuse_verified_sources:
+        if not pending:
             print('Reviewed sources and live versions are unchanged; preserving their attestation with imports closed')
             return
         record_state(api, versions, sha)
         print('Source deployment checkpoint recorded; imports remain blocked')
         return
-    if reuse_verified_sources:
+    if not pending:
         print('Reusing complete source attestation: all function files and live versions are unchanged')
-        finish_verification(api, versions, sha)
+        finish_verification(api, versions, sha, state)
         return
     help_result = subprocess.run(['supabase','functions','download','--help'], capture_output=True, text=True, check=True)
     if '--use-api' not in help_result.stdout:
         raise RuntimeError('Pinned CLI must support server-side source download')
+    print(f'Verifying {len(pending)} of {len(versions)} Staging entrypoints; the rest match their attested version and source', flush=True)
     with tempfile.TemporaryDirectory(prefix='aios-guard-verify-') as directory:
         destination = Path(directory)
         (destination / 'supabase').mkdir()
         (destination / 'supabase/config.toml').write_text('project_id = "aios-guard-verify"\n')
         base = destination / 'supabase/functions'
-        for index, name in enumerate(sorted(versions), 1):
+        for index, name in enumerate(pending, 1):
             download_function(name, api.target, destination)
             entry = base / name / 'index.ts'
             if not entry.exists(): raise RuntimeError(f'{name}: entrypoint missing from download')
@@ -106,17 +126,17 @@ def main():
             guard = base / '_shared/staging-outbound.mjs'
             if guard.read_text() != (root / 'supabase/functions/_shared/staging-outbound.mjs').read_text():
                 raise RuntimeError(f'{name}: deployed outbound guard differs from reviewed source')
-            if index % 20 == 0 or index == len(versions):
-                print(f'Verified {index}/{len(versions)} Staging entrypoints', flush=True)
-    finish_verification(api, versions, sha)
+            if index % 20 == 0 or index == len(pending):
+                print(f'Verified {index}/{len(pending)} Staging entrypoints', flush=True)
+    finish_verification(api, versions, sha, state)
 
 
-def finish_verification(api, versions, sha):
+def finish_verification(api, versions, sha, state):
     row = api.query("SELECT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid='net.http_request_queue'::regclass AND tgname='aios_staging_outbound_block' AND tgenabled='O') AS guarded")[0]
     if not row['guarded']: raise RuntimeError('Database webhook containment is missing')
     if api.function_versions() != versions:
         raise RuntimeError('Staging deployment changed during source verification')
-    record_state(api, versions, sha, verified=True)
+    record_state(api, versions, sha, verified=True, state=state)
     print(f'Verified {len(versions)} Staging entrypoints and database webhook containment')
 
 

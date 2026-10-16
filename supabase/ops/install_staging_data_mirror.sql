@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS environment_sync.safety (
 );
 ALTER TABLE environment_sync.safety ADD COLUMN IF NOT EXISTS own_origin text;
 ALTER TABLE environment_sync.safety ADD COLUMN IF NOT EXISTS edge_versions jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE environment_sync.safety ADD COLUMN IF NOT EXISTS verified_state jsonb NOT NULL DEFAULT '{}'::jsonb;
 CREATE TABLE IF NOT EXISTS environment_sync.managed_rows (
   table_name text NOT NULL,
   row_key jsonb NOT NULL,
