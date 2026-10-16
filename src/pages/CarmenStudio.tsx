@@ -1,6 +1,7 @@
+import type { AgentProfile } from "@/integrations/supabase/agentAccessClient";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/agentAccessClient";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,21 @@ import SkinsManager from "./SkinsManager";
 import CarmenAccess from "./CarmenAccess";
 import { CloneToOrgDialog } from "@/components/sharing/CloneToOrgDialog";
 
+type CoreForm = Pick<
+  AgentProfile,
+  | "id"
+  | "name"
+  | "engine"
+  | "personality"
+  | "soul"
+  | "talent"
+  | "writing_style"
+  | "response_length"
+  | "language"
+  | "mood"
+  | "active"
+>;
+
 // Unified Carmen Studio — the separate "agent-building" module. One screen for
 // who Carmen is (Core + mood), what she can use (Access), and the roles she
 // wears (Skins). Deep-link routes /skins and /carmen-access still work.
@@ -45,20 +61,20 @@ const MOODS: { value: string; label: string }[] = [
 function CoreTab() {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<any>(null);
+  const [form, setForm] = useState<CoreForm | null>(null);
   const [cloneOpen, setCloneOpen] = useState(false);
 
   const { data: agent, isLoading } = useQuery({
     queryKey: ["carmen-studio-core", tenantId],
     queryFn: async () => {
       const { data } = await supabase
-        .from("ai_agents" as any)
+        .from("ai_agents")
         .select(
           "id,name,engine,personality,soul,talent,writing_style,response_length,language,mood,active",
         )
-        .eq("tenant_id", tenantId)
+        .eq("tenant_id", tenantId!)
         .eq("active", true);
-      const list = (data as any[]) || [];
+      const list = data || [];
       return (
         list.find((a) => /כרמן|carmen/i.test(a.name || "")) || list[0] || null
       );
@@ -74,7 +90,7 @@ function CoreTab() {
     mutationFn: async () => {
       if (!form?.id) throw new Error("לא נמצא סוכן");
       const { error } = await supabase
-        .from("ai_agents" as any)
+        .from("ai_agents")
         .update({
           name: form.name,
           engine: form.engine,
@@ -94,7 +110,7 @@ function CoreTab() {
         queryKey: ["carmen-studio-core", tenantId],
       });
     },
-    onError: (e: any) => toast.error("שמירה נכשלה: " + (e?.message || e)),
+    onError: (e) => toast.error("שמירה נכשלה: " + (e?.message || e)),
   });
 
   if (isLoading)

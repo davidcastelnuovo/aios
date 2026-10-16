@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/agentAccessClient";
 import { Button } from "@/components/ui/button";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
@@ -28,14 +28,14 @@ export function CarmenWhatsAppAccess(props: Props) {
     enabled: !!tenantId && !!props.entityId,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("carmen_whatsapp_identities" as any)
+        .from("carmen_whatsapp_identities")
         .select("id, status, verified_at")
         .eq("tenant_id", tenantId!)
         .eq("entity_type", props.entityType)
         .eq("entity_id", props.entityId)
         .maybeSingle();
       if (error) throw error;
-      return data as any;
+      return data;
     },
   });
   const approved = identity?.status === "approved";
@@ -48,14 +48,14 @@ export function CarmenWhatsAppAccess(props: Props) {
       }
       if (approved) {
         const { error } = await supabase
-          .from("carmen_whatsapp_identities" as any)
+          .from("carmen_whatsapp_identities")
           .update({ status: "revoked", verified_at: null })
           .eq("id", identity.id);
         if (error) throw error;
         return;
       }
       const { error } = await supabase
-        .from("carmen_whatsapp_identities" as any)
+        .from("carmen_whatsapp_identities")
         .upsert(
           {
             tenant_id: tenantId,

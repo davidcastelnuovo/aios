@@ -1,6 +1,7 @@
+import type { AgentProfile } from "@/integrations/supabase/agentAccessClient";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/agentAccessClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,10 +23,17 @@ import { useTenant } from "@/contexts/TenantContext";
 import { formatDistanceToNow } from "date-fns";
 import { he } from "date-fns/locale";
 
-export function UserProfilesTab({ agent }: { agent: any }) {
+type ProfileDraft = {
+  id?: string;
+  contact_phone: string;
+  display_name: string | null;
+  profile: string;
+};
+
+export function UserProfilesTab({ agent }: { agent: AgentProfile }) {
   const { currentTenantId } = useTenant();
   const qc = useQueryClient();
-  const [editing, setEditing] = useState<any | null>(null);
+  const [editing, setEditing] = useState<ProfileDraft | null>(null);
   const [creating, setCreating] = useState(false);
 
   const { data: profiles = [], isLoading } = useQuery({
@@ -43,9 +51,9 @@ export function UserProfilesTab({ agent }: { agent: any }) {
   });
 
   const save = useMutation({
-    mutationFn: async (p: any) => {
+    mutationFn: async (p: ProfileDraft) => {
       const payload = {
-        tenant_id: currentTenantId,
+        tenant_id: currentTenantId!,
         agent_id: agent.id,
         contact_phone: p.contact_phone,
         display_name: p.display_name || null,
@@ -73,7 +81,7 @@ export function UserProfilesTab({ agent }: { agent: any }) {
       setCreating(false);
       toast.success("נשמר");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e) => toast.error(e.message),
   });
 
   const del = useMutation({
@@ -232,6 +240,7 @@ export function UserProfilesTab({ agent }: { agent: any }) {
             </Button>
             <Button
               onClick={() => {
+                if (!editing) return;
                 try {
                   JSON.parse(editing.profile || "{}");
                 } catch {

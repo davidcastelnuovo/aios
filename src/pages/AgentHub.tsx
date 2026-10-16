@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/agentAccessClient";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -83,7 +83,7 @@ export default function AgentHub() {
       setCreateOpen(false);
       toast.success("סוכן נוצר");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e) => toast.error(e.message),
   });
 
   const list: AgentListItem[] = agents.map((a) => ({

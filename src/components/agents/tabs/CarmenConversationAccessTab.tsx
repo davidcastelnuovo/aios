@@ -10,7 +10,7 @@ import {
   Save,
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/agentAccessClient";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   fetchCarmenManusGroups,
@@ -22,6 +22,7 @@ import {
   fetchCarmenAutomationConfig,
   mergePrivatePhoneAllowlist,
   type PrivatePhoneRow,
+  type ManusGroupRow,
 } from "@/lib/carmenAccessAutomation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -86,17 +87,19 @@ export function CarmenConversationAccessTab({
     enabled: !!tenantId && !!agent.id,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("carmen_access_policies" as any)
+        .from("carmen_access_policies")
         .select("*")
         .eq("tenant_id", tenantId!)
         .eq("agent_id", agent.id)
         .maybeSingle();
       if (error) throw error;
-      return data as any;
+      return data;
     },
   });
 
-  const { data: manusGroups, isLoading: groupsLoading } = useQuery({
+  const { data: manusGroups, isLoading: groupsLoading } = useQuery<
+    ManusGroupRow[]
+  >({
     queryKey: ["carmen-manus-groups", tenantId],
     enabled: !!tenantId,
     queryFn: () => fetchCarmenManusGroups(tenantId!),
@@ -131,10 +134,10 @@ export function CarmenConversationAccessTab({
     enabled: !!tenantId,
     queryFn: async () => {
       const { data } = await supabase
-        .from("carmen_client_group_access" as any)
+        .from("carmen_client_group_access")
         .select("*")
         .eq("tenant_id", tenantId!);
-      return (data as ClientGroupRow[]) || [];
+      return data || [];
     },
   });
 
@@ -143,7 +146,7 @@ export function CarmenConversationAccessTab({
     enabled: !!tenantId,
     queryFn: async () => {
       const { data } = await supabase
-        .from("carmen_whatsapp_identities" as any)
+        .from("carmen_whatsapp_identities")
         .select(
           "id, phone, display_name, status, surfaces, dev_escalation_tier, entity_type",
         )
@@ -163,15 +166,9 @@ export function CarmenConversationAccessTab({
     () =>
       mergePrivatePhoneAllowlist({
         policyPhones: Array.isArray(policy?.private_phones)
-          ? policy.private_phones
+          ? policy.private_phones.filter(isPrivatePhoneRow)
           : [],
-        identities: identities as Array<{
-          phone: string;
-          display_name?: string | null;
-          status?: string;
-          surfaces?: string[] | null;
-          dev_escalation_tier?: string | null;
-        }>,
+        identities,
         automationPhones: automationCfg?.carmen_allowed_phones,
       }),
     [policy?.private_phones, identities, automationCfg?.carmen_allowed_phones],
@@ -189,9 +186,9 @@ export function CarmenConversationAccessTab({
       manusGroupIdSet.has(id),
     );
     const payload = {
-      tenant_id: tenantId,
+      tenant_id: tenantId!,
       agent_id: agent.id,
-      private_phones: draft.phones,
+      private_phones: draft.phones.map((entry) => ({ ...entry })),
       allowed_group_ids: allowedManusGroups,
       require_direct_address: draft.requireDirect,
       open_member_groups: draft.openMemberGroups,
@@ -199,7 +196,7 @@ export function CarmenConversationAccessTab({
       updated_at: new Date().toISOString(),
     };
     const { error: pErr } = await supabase
-      .from("carmen_access_policies" as any)
+      .from("carmen_access_policies")
       .upsert(payload, { onConflict: "tenant_id,agent_id" });
     if (pErr) throw pErr;
 
@@ -207,14 +204,14 @@ export function CarmenConversationAccessTab({
       const phone = normalizePhone(entry.phone);
       if (phone.length < 9) continue;
       const { data: existing } = await supabase
-        .from("carmen_whatsapp_identities" as any)
+        .from("carmen_whatsapp_identities")
         .select("id")
         .eq("tenant_id", tenantId)
         .eq("phone", phone)
         .maybeSingle();
       if (existing?.id) {
         await supabase
-          .from("carmen_whatsapp_identities" as any)
+          .from("carmen_whatsapp_identities")
           .update({
             surfaces: entry.surfaces?.length
               ? entry.surfaces
@@ -263,13 +260,7 @@ export function CarmenConversationAccessTab({
       // with an empty automation-only list from a group-only trigger step.
       const phones = mergePrivatePhoneAllowlist({
         automationPhones: automationCfg.carmen_allowed_phones,
-        identities: identities as Array<{
-          phone: string;
-          display_name?: string | null;
-          status?: string;
-          surfaces?: string[] | null;
-          dev_escalation_tier?: string | null;
-        }>,
+        identities,
         policyPhones: built.phones,
       });
       const draft = {
@@ -304,7 +295,7 @@ export function CarmenConversationAccessTab({
     )
       return;
     if (!tenantId || !automationCfg) return;
-    const identityPrivateCount = (identities || []).filter((id: any) => {
+    const identityPrivateCount = (identities || []).filter((id) => {
       const surfaces = Array.isArray(id.surfaces)
         ? id.surfaces
         : ["whatsapp_private", "whatsapp_group"];
@@ -404,10 +395,10 @@ export function CarmenConversationAccessTab({
         if (!row.client_id || !row.whatsapp_group_id) continue;
         if (!manusGroupIdSet.has(row.whatsapp_group_id)) continue;
         const { error } = await supabase
-          .from("carmen_client_group_access" as any)
+          .from("carmen_client_group_access")
           .upsert(
             {
-              tenant_id: tenantId,
+              tenant_id: tenantId!,
               client_id: row.client_id,
               whatsapp_group_id: row.whatsapp_group_id,
               allow_client_contacts: row.allow_client_contacts,
@@ -479,8 +470,7 @@ export function CarmenConversationAccessTab({
 
   const addClientGroupRow = () => {
     const c = (clients || []).find(
-      (cl: any) =>
-        cl.whatsapp_group_id && manusGroupIdSet.has(cl.whatsapp_group_id),
+      (cl) => cl.whatsapp_group_id && manusGroupIdSet.has(cl.whatsapp_group_id),
     );
     setClientRows([
       ...clientRows,
@@ -495,10 +485,10 @@ export function CarmenConversationAccessTab({
   };
 
   const groupName = (id: string) =>
-    (manusGroups || []).find((g: any) => g.id === id)?.group_name || id;
+    (manusGroups || []).find((g) => g.id === id)?.group_name || id;
 
   const approvedCount = useMemo(
-    () => (identities || []).filter((i: any) => i.status === "approved").length,
+    () => (identities || []).filter((i) => i.status === "approved").length,
     [identities],
   );
 
@@ -839,7 +829,7 @@ export function CarmenConversationAccessTab({
               </p>
             </div>
           ) : (
-            (manusGroups || []).map((g: any) => {
+            (manusGroups || []).map((g) => {
               const allowed = openMemberGroups || groupIds.includes(g.id);
               return (
                 <label
@@ -902,7 +892,7 @@ export function CarmenConversationAccessTab({
               value={row.client_id}
               onValueChange={(v) => {
                 const next = [...clientRows];
-                const cl = (clients || []).find((c: any) => c.id === v);
+                const cl = (clients || []).find((c) => c.id === v);
                 const wg =
                   cl?.whatsapp_group_id &&
                   manusGroupIdSet.has(cl.whatsapp_group_id)
@@ -916,7 +906,7 @@ export function CarmenConversationAccessTab({
                 <SelectValue placeholder="לקוח" />
               </SelectTrigger>
               <SelectContent dir="rtl">
-                {(clients || []).map((c: any) => (
+                {(clients || []).map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.name}
                   </SelectItem>
@@ -935,7 +925,7 @@ export function CarmenConversationAccessTab({
                 <SelectValue placeholder="קבוצה Manus" />
               </SelectTrigger>
               <SelectContent dir="rtl">
-                {(manusGroups || []).map((g: any) => (
+                {(manusGroups || []).map((g) => (
                   <SelectItem key={g.id} value={g.id}>
                     {g.group_name}
                   </SelectItem>
@@ -983,5 +973,49 @@ export function CarmenConversationAccessTab({
         />
       </Card>
     </div>
+  );
+}
+
+function isPrivatePhoneRow(value: unknown): value is PrivatePhoneRow {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("phone" in value) ||
+    typeof value.phone !== "string"
+  )
+    return false;
+  if (
+    "label" in value &&
+    value.label !== undefined &&
+    typeof value.label !== "string"
+  )
+    return false;
+  if (
+    "status" in value &&
+    value.status !== undefined &&
+    typeof value.status !== "string"
+  )
+    return false;
+  if (
+    "source" in value &&
+    value.source !== undefined &&
+    value.source !== "policy" &&
+    value.source !== "identity" &&
+    value.source !== "automation"
+  )
+    return false;
+  if (
+    "dev_escalation_tier" in value &&
+    value.dev_escalation_tier !== undefined &&
+    value.dev_escalation_tier !== null &&
+    value.dev_escalation_tier !== "full" &&
+    value.dev_escalation_tier !== "bugfix"
+  )
+    return false;
+  return (
+    !("surfaces" in value) ||
+    value.surfaces === undefined ||
+    (Array.isArray(value.surfaces) &&
+      value.surfaces.every((surface) => typeof surface === "string"))
   );
 }
