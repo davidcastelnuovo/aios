@@ -37,6 +37,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # A manual run has no `github.event.before`, so the functions deploy needs this tag
+      # as its base. Fail now, before `migrate` applies anything.
+      - name: Require the edge deployment tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git ls-remote --exit-code --tags origin refs/tags/edge-deployed-production >/dev/null \
+            || { echo "::error::Tag edge-deployed-production is missing; a manual run cannot deploy functions."; exit 1; }
+
       - uses: dorny/paths-filter@v3
         id: filter
         # Without `base`, a push to main diffs against the default branch (`develop`),
