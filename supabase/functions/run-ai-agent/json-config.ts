@@ -1,4 +1,4 @@
-import type { Json } from "../../../src/integrations/supabase/types.ts";
+import type { Json } from "../_shared/database.types.ts";
 
 /** Narrow persisted JSON before reading configuration keys; retain unknown keys on writes. */
 export function jsonObject(value: Json | undefined): {

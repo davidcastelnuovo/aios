@@ -1,4 +1,4 @@
-import type { Json } from "../../../src/integrations/supabase/types.ts";
+import type { Json } from "../_shared/database.types.ts";
 import type { AgentRow } from "./database-contracts.ts";
 
 export type SearchClient = Pick<

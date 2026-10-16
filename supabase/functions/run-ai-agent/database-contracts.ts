@@ -1,7 +1,4 @@
-import type {
-  Database,
-  Json,
-} from "../../../src/integrations/supabase/types.ts";
+import type { Database, Json } from "../_shared/database.types.ts";
 import type { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 // Use generated row/query inference for helpers without migrating sibling dispatch slices.
