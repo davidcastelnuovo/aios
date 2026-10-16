@@ -156,6 +156,18 @@ import {
   RETENTION_BATCH_LIMIT,
 } from "../_shared/client-retention.ts";
 
+import { jsonObject, isObject } from "./json-config.ts";
+import { isMetaNode, readMetaResponse } from "./meta-response.ts";
+import type { AgentDatabaseClient, AgentRow } from "./database-contracts.ts";
+import type { MetaAction, MetaNode } from "./meta-response.ts";
+import type {
+  SearchClient,
+  MetaAdMetrics,
+  AccountInsights,
+  ConnectedClient,
+  DisconnectedClient,
+} from "./helper-results.ts";
+
 function scoreNameMatchSafe(fullName: string, query: string): number {
   return scoreNameMatch(fullName, query);
 }
@@ -171,7 +183,7 @@ function mapHumanTaskStatus(status: string): "open" | "in_progress" | "done" {
 
 /** Load campaigners / sales_people / tenant profiles as a unified staff roster. */
 async function loadStaffWhatsappRoster(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   accessibleTenantIds: string[],
   tenantId: string,
   entityType: string = "auto",
@@ -181,7 +193,7 @@ async function loadStaffWhatsappRoster(
     full_name: string;
     phone: string | null;
     entity_type: string;
-    role?: any;
+    role?: AgentRow<"campaigners">["role"];
     email?: string | null;
   }>
 > {
@@ -191,7 +203,7 @@ async function loadStaffWhatsappRoster(
     full_name: string;
     phone: string | null;
     entity_type: string;
-    role?: any;
+    role?: AgentRow<"campaigners">["role"];
     email?: string | null;
   }> = [];
 
@@ -239,7 +251,7 @@ async function loadStaffWhatsappRoster(
       .select("user_id")
       .eq("tenant_id", tenantId)
       .limit(200);
-    const userIds = (tus || []).map((t: any) => t.user_id).filter(Boolean);
+    const userIds = (tus || []).map((t) => t.user_id).filter(Boolean);
     if (userIds.length) {
       const { data: profiles } = await supabase
         .from("profiles")
@@ -277,7 +289,7 @@ async function loadStaffWhatsappRoster(
 
 /** Resolve OpenAI Admin API key (org costs/usage). Never log the value. */
 async function resolveOpenAiAdminKey(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
 ): Promise<{ key: string | null; source: string | null }> {
   const fromEnv =
@@ -315,7 +327,7 @@ async function resolveOpenAiAdminKey(
 async function openaiAdminGet(
   pathWithQuery: string,
   adminKey: string,
-): Promise<{ ok: boolean; status: number; json: any; error?: string }> {
+): Promise<{ ok: boolean; status: number; json: unknown; error?: string }> {
   try {
     const res = await fetch(`https://api.openai.com/v1${pathWithQuery}`, {
       method: "GET",
@@ -325,7 +337,7 @@ async function openaiAdminGet(
       },
     });
     const text = await res.text();
-    let json: any = null;
+    let json: unknown = null;
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
@@ -333,26 +345,34 @@ async function openaiAdminGet(
     }
     if (!res.ok) {
       const msg = redactSecretsFromText(
-        json?.error?.message || json?.message || text || `HTTP ${res.status}`,
+        (isObject(json) &&
+        "error" in json &&
+        isObject(json.error) &&
+        "message" in json.error
+          ? json.error.message
+          : undefined) ||
+          (isObject(json) && "message" in json ? json.message : undefined) ||
+          text ||
+          `HTTP ${res.status}`,
       );
       return { ok: false, status: res.status, json, error: msg };
     }
     return { ok: true, status: res.status, json };
-  } catch (e: any) {
+  } catch (e) {
     return {
       ok: false,
       status: 0,
       json: null,
-      error: redactSecretsFromText(e?.message || String(e)),
+      error: redactSecretsFromText(e instanceof Error ? e.message : String(e)),
     };
   }
 }
 
 async function fetchOpenAiBillingStatus(args: {
-  supabase: any;
+  supabase: AgentDatabaseClient;
   tenantId: string;
   includeTokens?: boolean;
-}): Promise<any> {
+}) {
   const { supabase, tenantId } = args;
   const includeTokens = args.includeTokens !== false;
   const { key, source } = await resolveOpenAiAdminKey(supabase, tenantId);
@@ -383,7 +403,7 @@ async function fetchOpenAiBillingStatus(args: {
   let usageRes: {
     ok: boolean;
     status: number;
-    json: any;
+    json: unknown;
     error?: string;
   } | null = null;
   if (includeTokens) {
@@ -421,7 +441,7 @@ async function fetchOpenAiBillingStatus(args: {
 }
 
 async function sendStaffWhatsappMessage(args: {
-  supabase: any;
+  supabase: AgentDatabaseClient;
   tenantId: string;
   phone: string;
   message: string;
@@ -429,7 +449,8 @@ async function sendStaffWhatsappMessage(args: {
   error?: string;
   integration_id?: string;
   provider?: string;
-  [k: string]: any;
+  success?: boolean;
+  messageId?: string;
 }> {
   const { supabase, tenantId, phone, message } = args;
   const normalized = normalizeStaffPhone(phone);
@@ -452,7 +473,7 @@ async function sendStaffWhatsappMessage(args: {
   }
 
   // Prefer Manus WA (Carmen's direct line), then Green API.
-  const ordered = [...integrations].sort((a: any, b: any) => {
+  const ordered = [...integrations].sort((a, b) => {
     const rank = (t: string) => (/manus/i.test(t) ? 0 : 1);
     return rank(a.integration_type) - rank(b.integration_type);
   });
@@ -531,8 +552,8 @@ async function sendStaffWhatsappMessage(args: {
         }
         errors.push(`${type}: ${data.error || res.status}`);
       }
-    } catch (e: any) {
-      errors.push(`${type}: ${e?.message || e}`);
+    } catch (e) {
+      errors.push(`${type}: ${e instanceof Error ? e.message : e}`);
     }
   }
   return { error: `שליחה נכשלה: ${errors.join(" | ") || "unknown"}` };
@@ -559,7 +580,7 @@ function resolveModel(engine: string): string {
 // Reads the org's own API keys from the "llm" integration and routes each
 // model to its provider's OpenAI-compatible endpoint.
 async function resolveLLMTarget(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
   model: string,
 ): Promise<{ url: string; key: string; model: string }> {
@@ -634,7 +655,7 @@ function providerOf(fullId: string): LLMProvider {
 }
 
 async function buildLLMChain(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
   primaryFullId: string,
 ): Promise<LLMTarget[]> {
@@ -724,7 +745,10 @@ const PRIORITY_TOOLS = new Set([
   ...NATIVE_DEV_TASK_TOOLS,
 ]);
 
-function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
+function capToolsForTarget<T extends { function?: { name?: string } }>(
+  target: LLMTarget,
+  tools: T[],
+): T[] {
   if (target.provider !== "openai" || tools.length <= OPENAI_MAX_TOOLS)
     return tools;
   // Escalation MCP + PRIORITY Meta/approval tools must never be truncated.
@@ -756,7 +780,7 @@ function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
 // Surface an automatic provider switch so David sees it (intel feed + WhatsApp).
 // Deduped to once per 30 min so a sustained outage doesn't spam the channel.
 async function recordProviderFailover(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
   fromLabel: string,
   toLabel: string,
@@ -875,7 +899,7 @@ function estimateLLMCostUSD(
 // explicit user → any campaigner with tokens → tenant owner/admin. Refreshes if
 // expired. Returns { accessToken } or { error } (Hebrew, user-facing).
 async function resolveCalendarAccessToken(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
   callerCampaignerId: string | null,
   userId: string | null,
@@ -981,7 +1005,7 @@ async function resolveCalendarAccessToken(
 }
 
 async function resolveCalendarConferenceExtras(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
   args: Record<string, unknown>,
 ) {
@@ -1016,11 +1040,11 @@ async function resolveCalendarConferenceExtras(
 }
 
 async function makeZoomMeetingCreator(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
   titleHint?: string,
 ) {
-  return async (existing: any) => {
+  return async (existing) => {
     const zoomAuth = await fetchZoomAccessToken(supabase, tenantId);
     if (!zoomAuth.accessToken) {
       return {
@@ -4484,7 +4508,7 @@ const ALL_TOOLS = [
 const FB_GRAPH_VERSION = "v21.0";
 
 async function fbResolveClientAdAccount(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
   clientId: string,
 ): Promise<string | null> {
@@ -4497,7 +4521,7 @@ async function fbResolveClientAdAccount(
     .in("integration_type", ["facebook_insights", "facebook_ecommerce"])
     .order("last_sync_at", { ascending: false, nullsFirst: false });
   for (const t of data || []) {
-    const s = t?.integration_settings || {};
+    const s = jsonObject(t?.integration_settings);
     const acc = s.ad_account_id || s.account_id || s.meta_account_id;
     if (acc) return String(acc).replace(/^act_/, "");
   }
@@ -4514,7 +4538,7 @@ async function fbResolveClientAdAccount(
 
 /** Resolve which tenant owns a client (for FB token / shared integrations). */
 async function resolveClientTenantId(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   clientId: string,
   fallbackTenantId: string,
 ): Promise<string> {
@@ -4570,7 +4594,7 @@ function expandClientSearchTerms(raw: string): string[] {
  * all statuses (including ended). Used by search_entities / list_clients name search.
  */
 async function searchClientsBroadly(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   accessibleTenantIds: string[],
   searchTerm: string,
   opts: {
@@ -4578,7 +4602,7 @@ async function searchClientsBroadly(
     agencyId?: string | null;
     clientIdsFilter?: string[] | null;
   } = {},
-): Promise<any[]> {
+) {
   const limit = Math.min(Math.max(opts.limit || 20, 1), 50);
   const terms = expandClientSearchTerms(searchTerm);
   if (!terms.length || !accessibleTenantIds.length) return [];
@@ -4629,7 +4653,7 @@ async function searchClientsBroadly(
     tablesQ = tablesQ.in("client_id", opts.clientIdsFilter);
   const { data: byTable } = await tablesQ;
 
-  const byId = new Map<string, any>();
+  const byId = new Map<string, SearchClient>();
   for (const c of byName || []) {
     byId.set(c.id, {
       id: c.id,
@@ -4642,14 +4666,14 @@ async function searchClientsBroadly(
       tenant_id: c.tenant_id,
       meta_ads_account_id: c.meta_ads_account_id,
       matched_via: ["client_name"],
-      ad_accounts: [] as any[],
+      ad_accounts: [],
     });
   }
   for (const t of byTable || []) {
-    const c: any = t.clients;
+    const c = t.clients;
     if (!c?.id) continue;
     if (opts.agencyId && c.agency_id !== opts.agencyId) continue;
-    const settings = t.integration_settings || {};
+    const settings = jsonObject(t.integration_settings);
     const adAccount = {
       table_id: t.id,
       table_name: t.name,
@@ -4702,11 +4726,11 @@ async function searchClientsBroadly(
 
 /** Deep single-campaign analysis + ad-level CPL (inline Graph; no edge-fn dependency). */
 async function fbAnalyzeCampaignInline(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
   clientId: string,
   campaignId: string,
-): Promise<any> {
+) {
   const tokenTenant = await resolveClientTenantId(supabase, clientId, tenantId);
   let token = await fbGetToken(supabase, tokenTenant);
   if (!token && tokenTenant !== tenantId)
@@ -4715,16 +4739,16 @@ async function fbAnalyzeCampaignInline(
 
   const fields =
     "spend,impressions,clicks,ctr,cpc,cpm,frequency,actions,cost_per_action_type";
-  const cplFrom = (ins: any) => {
+  const cplFrom = (ins) => {
     if (!ins) return null;
     const leadAction = (ins.cost_per_action_type || []).find(
-      (a: any) =>
+      (a) =>
         [
           "lead",
           "onsite_conversion.lead_grouped",
           "offsite_conversion.fb_pixel_lead",
           "leadgen.other",
-        ].includes(a.action_type) ||
+        ].includes(a.action_type || "") ||
         String(a.action_type || "").endsWith(".lead"),
     );
     if (leadAction) return Number(leadAction.value);
@@ -4736,21 +4760,21 @@ async function fbAnalyzeCampaignInline(
     const r = await fetch(
       `https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}/insights?fields=${fields}&date_preset=${date_preset}&access_token=${token}`,
     );
-    const j = await r.json();
+    const j = await readMetaResponse(r);
     return j?.data?.[0] || null;
   };
   const fetchAds = async () => {
     const r = await fetch(
       `https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}/ads?fields=id,name,effective_status,status&limit=200&access_token=${token}`,
     );
-    const j = await r.json();
+    const j = await readMetaResponse(r);
     if (!r.ok || j?.error || !Array.isArray(j?.data)) return [];
     const ads = j.data;
     // Ad-level insights for last_7d
     const insightsUrl = `https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}/insights?level=ad&date_preset=last_7d&fields=ad_id,ad_name,spend,actions,impressions,clicks&limit=200&access_token=${token}`;
     const ir = await fetch(insightsUrl);
-    const ij = await ir.json();
-    const byAd = new Map<string, any>();
+    const ij = await readMetaResponse(ir);
+    const byAd = new Map<string, MetaAdMetrics>();
     for (const row of ij?.data || []) {
       const leads = fbLeadsFromActions(row.actions || []);
       const spend = Number(row.spend || 0);
@@ -4763,7 +4787,7 @@ async function fbAnalyzeCampaignInline(
       });
     }
     return ads
-      .map((ad: any) => {
+      .map((ad) => {
         const m = byAd.get(String(ad.id)) || {
           spend: 0,
           leads: 0,
@@ -4783,13 +4807,13 @@ async function fbAnalyzeCampaignInline(
           clicks_7d: m.clicks,
         };
       })
-      .sort((a: any, b: any) => (a.cpl_7d ?? 999999) - (b.cpl_7d ?? 999999));
+      .sort((a, b) => (a.cpl_7d ?? 999999) - (b.cpl_7d ?? 999999));
   };
 
   const metaRes = await fetch(
     `https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}?fields=id,name,status,effective_status,daily_budget,lifetime_budget,objective,issues_info&access_token=${token}`,
   );
-  const meta = await metaRes.json();
+  const meta = await readMetaResponse(metaRes);
   if (meta?.error) return { error: "fb_api_error", fb_error: meta.error };
 
   const [today, last7, last30, ads] = await Promise.all([
@@ -4813,11 +4837,21 @@ async function fbAnalyzeCampaignInline(
       `CPL היום (${cplToday.toFixed(1)}) חורג ב-${((cplToday / cpl7 - 1) * 100).toFixed(0)}% מהממוצע השבועי`,
     );
   }
-  const lowCplAds = ads.filter((a: any) => a.cpl_7d != null && a.leads_7d > 0);
-  const recommendations: any[] = [];
+  const lowCplAds = ads.filter((a) => a.cpl_7d != null && a.leads_7d > 0);
+  const recommendations: Array<{
+    action: string;
+    reason: string;
+    severity: string;
+    candidate_ad_ids: Array<{
+      ad_id: string | null | undefined;
+      ad_name: string | null | undefined;
+      cpl_7d: number | null;
+      leads_7d: number;
+    }>;
+  }> = [];
   if (
     lowCplAds.length &&
-    ads.some((a: any) => a.effective_status === "PAUSED" && a.cpl_7d != null)
+    ads.some((a) => a.effective_status === "PAUSED" && a.cpl_7d != null)
   ) {
     recommendations.push({
       action: "enable_low_cpl_ads",
@@ -4825,14 +4859,14 @@ async function fbAnalyzeCampaignInline(
       severity: "medium",
       candidate_ad_ids: ads
         .filter(
-          (a: any) =>
+          (a) =>
             a.effective_status === "PAUSED" &&
             a.cpl_7d != null &&
             a.leads_7d > 0,
         )
-        .sort((a: any, b: any) => a.cpl_7d - b.cpl_7d)
+        .sort((a, b) => (a.cpl_7d ?? 0) - (b.cpl_7d ?? 0))
         .slice(0, 10)
-        .map((a: any) => ({
+        .map((a) => ({
           ad_id: a.ad_id,
           ad_name: a.ad_name,
           cpl_7d: a.cpl_7d,
@@ -4866,7 +4900,7 @@ async function fbAnalyzeCampaignInline(
 }
 
 async function fbGetToken(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
 ): Promise<string | null> {
   let { data } = await supabase
@@ -4929,9 +4963,9 @@ function assertHttpsUrl(value: unknown, field: string): string {
 }
 
 async function metaLeadIntegrations(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
-): Promise<any[]> {
+) {
   const { data, error } = await supabase
     .from("tenant_integrations")
     .select("id, api_key, settings, shared_from_integration_id")
@@ -4939,11 +4973,18 @@ async function metaLeadIntegrations(
     .eq("integration_type", "facebook_lead_ads")
     .eq("is_active", true);
   if (error) throw error;
-  const result: any[] = [];
+  const result: Array<
+    Pick<AgentRow<"tenant_integrations">, "id" | "settings"> & {
+      api_key: string;
+    }
+  > = [];
   for (const row of data || []) {
-    let source = row;
+    let source: Pick<
+      AgentRow<"tenant_integrations">,
+      "id" | "api_key" | "settings"
+    > = row;
     if (
-      (!row.api_key || !Array.isArray(row.settings?.pages)) &&
+      (!row.api_key || !Array.isArray(jsonObject(row.settings).pages)) &&
       row.shared_from_integration_id
     ) {
       const { data: shared } = await supabase
@@ -4953,27 +4994,31 @@ async function metaLeadIntegrations(
         .maybeSingle();
       if (shared) source = { ...shared, id: row.id };
     }
-    if (source.api_key) result.push({ ...source, id: row.id });
+    if (source.api_key)
+      result.push({ ...source, api_key: source.api_key, id: row.id });
   }
   return result;
 }
 
 async function metaLeadPages(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
 ): Promise<MetaLeadPage[]> {
   const integrations = await metaLeadIntegrations(supabase, tenantId);
   const pages: MetaLeadPage[] = [];
   for (const integration of integrations) {
-    let sourcePages = Array.isArray(integration.settings?.pages)
-      ? integration.settings.pages
+    const configuredPages = jsonObject(integration.settings).pages;
+    let sourcePages: MetaNode[] = Array.isArray(configuredPages)
+      ? configuredPages.filter((page): page is typeof page & MetaNode =>
+          isMetaNode(page),
+        )
       : [];
     if (sourcePages.length === 0) {
       let next: string | null =
         `https://graph.facebook.com/${FB_GRAPH_VERSION}/me/accounts?fields=id,name,access_token&limit=100&access_token=${encodeURIComponent(integration.api_key)}`;
       while (next) {
         const response = await fetch(next);
-        const json = await response.json();
+        const json = await readMetaResponse(response);
         if (!response.ok || json?.error)
           throw new Error(json?.error?.message || "Meta pages request failed");
         sourcePages = sourcePages.concat(json.data || []);
@@ -5002,7 +5047,7 @@ async function metaLeadFormsForPage(
     `https://graph.facebook.com/${FB_GRAPH_VERSION}/${page.id}/leadgen_forms?fields=id,name,status,questions&limit=100&access_token=${encodeURIComponent(page.access_token)}`;
   while (next) {
     const response = await fetch(next);
-    const json = await response.json();
+    const json = await readMetaResponse(response);
     if (!response.ok || json?.error)
       throw new Error(
         json?.error?.message || `Meta forms request failed for ${page.name}`,
@@ -5012,7 +5057,7 @@ async function metaLeadFormsForPage(
         id: String(form.id),
         name: String(form.name || form.id),
         status: form.status ? String(form.status) : null,
-        fields: (form.questions || []).map((q: any) => ({
+        fields: (form.questions || []).map((q) => ({
           key: String(q.key || q.type || ""),
           label: String(q.label || q.key || q.type || ""),
           type: String(q.type || ""),
@@ -5028,38 +5073,44 @@ async function metaLeadFormsForPage(
 }
 
 async function findAutomationForMetaForm(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantIds: string[],
   automationId?: unknown,
   automationName?: unknown,
-): Promise<any> {
+) {
   let query = supabase
     .from("automations")
     .select("id, name, active, tenant_id")
     .in("tenant_id", tenantIds)
     .eq("is_flow", true);
   if (automationId) query = query.eq("id", String(automationId));
-  const { data, error } = await query.order("name").limit(100);
+  const { data, error } = await query.order("name").limit(100).returns<
+    Array<
+      Pick<AgentRow<"automations">, "id" | "name" | "active"> & {
+        tenant_id: string;
+      }
+    >
+  >();
   if (error) throw error;
   let matches = data || [];
   if (automationName)
-    matches = matches.filter((a: any) =>
-      metaNameMatches(a.name, automationName),
-    );
+    matches = matches.filter((a) => metaNameMatches(a.name, automationName));
   if (matches.length === 0) throw new Error("לא נמצאה אוטומציה תואמת בארגון");
   if (matches.length > 1) {
     throw new Error(
-      `נמצאו כמה אוטומציות תואמות: ${matches.map((a: any) => `${a.name} (${a.id})`).join(", ")}. יש לציין שם מדויק או automation_id`,
+      `נמצאו כמה אוטומציות תואמות: ${matches.map((a) => `${a.name} (${a.id})`).join(", ")}. יש לציין שם מדויק או automation_id`,
     );
   }
   return matches[0];
 }
 
 async function connectMetaFormToAutomation(
-  supabase: any,
-  automation: any,
+  supabase: AgentDatabaseClient,
+  automation: Pick<AgentRow<"automations">, "id" | "name" | "active"> & {
+    tenant_id: string;
+  },
   form: MetaLeadForm,
-): Promise<any> {
+) {
   const { data: steps, error: stepsError } = await supabase
     .from("automation_flow_steps")
     .select("id, action_type, configuration")
@@ -5068,10 +5119,12 @@ async function connectMetaFormToAutomation(
     .eq("step_type", "trigger");
   if (stepsError) throw stepsError;
   const candidates = (steps || []).filter(
-    (step: any) =>
+    (step) =>
       step.action_type === "lead_created" &&
-      (!step.configuration?.lead_source ||
-        ["any", "facebook_form"].includes(step.configuration.lead_source)),
+      (!jsonObject(step.configuration).lead_source ||
+        ["any", "facebook_form"].includes(
+          String(jsonObject(step.configuration).lead_source),
+        )),
   );
   if (candidates.length !== 1) {
     throw new Error(
@@ -5082,7 +5135,7 @@ async function connectMetaFormToAutomation(
   }
   const step = candidates[0];
   const configuration = {
-    ...(step.configuration || {}),
+    ...jsonObject(step.configuration),
     lead_source: "facebook_form",
     facebook_integration_id: form.integration_id,
     facebook_page_id: form.page_id,
@@ -5107,16 +5160,16 @@ async function connectMetaFormToAutomation(
   if (integrationError) throw integrationError;
   if (!integration)
     throw new Error("אינטגרציית Meta של הטופס אינה שייכת לארגון האוטומציה");
-  const settings = integration.settings || {};
-  const formMappings = { ...(settings.form_mappings || {}) };
+  const settings = jsonObject(integration.settings);
+  const formMappings = { ...jsonObject(settings.form_mappings) };
   formMappings[form.id] = {
-    ...(formMappings[form.id] || {}),
+    ...jsonObject(formMappings[form.id]),
     form_name: form.name,
     page_id: form.page_id,
     page_name: form.page_name,
-    agency_id: formMappings[form.id]?.agency_id || null,
-    sales_person_ids: formMappings[form.id]?.sales_person_ids || [],
-    fields: formMappings[form.id]?.fields || {},
+    agency_id: jsonObject(formMappings[form.id]).agency_id || null,
+    sales_person_ids: jsonObject(formMappings[form.id]).sales_person_ids || [],
+    fields: jsonObject(formMappings[form.id]).fields || {},
   };
   const { error: mappingError } = await supabase
     .from("tenant_integrations")
@@ -5133,7 +5186,7 @@ async function connectMetaFormToAutomation(
 
 // Pull the lead count out of an insights row's `actions` array (Meta reports leads
 // under a few action types depending on the form/CAPI setup).
-function fbLeadsFromActions(actions: any[]): number {
+function fbLeadsFromActions(actions: MetaAction[] | null | undefined): number {
   if (!Array.isArray(actions)) return 0;
   let leads = 0;
   for (const a of actions) {
@@ -5152,19 +5205,19 @@ function fbLeadsFromActions(actions: any[]): number {
 
 /** Live campaign list (id/name/status/objective). Returns null on any failure. */
 async function fbLiveCampaignList(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
   clientId: string,
-): Promise<any[] | null> {
+) {
   try {
     const acct = await fbResolveClientAdAccount(supabase, tenantId, clientId);
     const token = await fbGetToken(supabase, tenantId);
     if (!acct || !token) return null;
     const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/act_${acct}/campaigns?fields=id,name,effective_status,objective&limit=300&access_token=${token}`;
     const r = await fetch(url);
-    const j = await r.json();
+    const j = await readMetaResponse(r);
     if (!r.ok || j?.error || !Array.isArray(j?.data)) return null;
-    return j.data.map((c: any) => ({
+    return j.data.map((c) => ({
       campaign_id: c.id,
       campaign_name: c.name,
       status: c.effective_status,
@@ -5178,11 +5231,11 @@ async function fbLiveCampaignList(
 
 /** Live campaign-level insights (spend/leads/etc.) over a day window. Null on failure. */
 async function fbLiveCampaignInsights(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
   clientId: string,
   days: number,
-): Promise<any[] | null> {
+) {
   try {
     const acct = await fbResolveClientAdAccount(supabase, tenantId, clientId);
     const token = await fbGetToken(supabase, tenantId);
@@ -5203,9 +5256,9 @@ async function fbLiveCampaignInsights(
       "campaign_id,campaign_name,impressions,clicks,spend,actions,cpc,cpm,ctr,reach";
     const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/act_${acct}/insights?level=campaign&date_preset=${preset}&fields=${fields}&limit=500&access_token=${token}`;
     const r = await fetch(url);
-    const j = await r.json();
+    const j = await readMetaResponse(r);
     if (!r.ok || j?.error || !Array.isArray(j?.data)) return null;
-    return j.data.map((d: any) => {
+    return j.data.map((d) => {
       const leads = fbLeadsFromActions(d.actions);
       const spend = Number(d.spend || 0);
       return {
@@ -5248,15 +5301,15 @@ async function fbListAccessibleAdAccounts(
   try {
     const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/me/adaccounts?fields=account_id,name,account_status&limit=500&access_token=${token}`;
     const r = await fetch(url);
-    const j = await r.json();
+    const j = await readMetaResponse(r);
     if (!r.ok || j?.error || !Array.isArray(j?.data)) return null;
     return j.data
-      .map((a: any) => ({
+      .map((a) => ({
         id: String(a.account_id || a.id || "").replace(/^act_/, ""),
         name: String(a.name || ""),
         status: a.account_status != null ? Number(a.account_status) : null,
       }))
-      .filter((a: any) => a.id);
+      .filter((a) => a.id);
   } catch {
     return null;
   }
@@ -5296,12 +5349,12 @@ async function fbAccountInsights(
   token: string,
   acct: string,
   days: number,
-): Promise<any | null> {
+): Promise<AccountInsights | null> {
   try {
     const preset = fbDatePreset(days);
     const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/act_${acct}/insights?level=account&date_preset=${preset}&fields=spend,impressions,clicks,actions,reach&limit=1&access_token=${token}`;
     const r = await fetch(url);
-    const j = await r.json();
+    const j = await readMetaResponse(r);
     if (!r.ok || j?.error || !Array.isArray(j?.data)) return null;
     const d = j.data[0];
     if (!d)
@@ -5334,7 +5387,7 @@ async function fbAccountInsights(
 // (strong match only, flagged matched_by:'name' for human verification). Returns
 // the clients we connected live vs the ones that still need manual linking.
 async function fbTryConnectClients(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
   notConnected: Array<{
     client_id: string;
@@ -5342,9 +5395,11 @@ async function fbTryConnectClients(
     reason: string;
   }>,
   days: number,
-): Promise<{ connected: any[]; stillNotConnected: any[] }> {
-  const connected: any[] = [];
-  const stillNotConnected: any[] = [];
+) {
+  const connected: ConnectedClient[] = [];
+  const stillNotConnected: Array<
+    DisconnectedClient & { connect_attempt: string }
+  > = [];
   const token = await fbGetToken(supabase, tenantId);
   let accounts: Array<{
     id: string;
@@ -5399,7 +5454,7 @@ async function fbTryConnectClients(
  * clients in a pulse snapshot, limited to clients with an active campaign table.
  */
 async function loadPulseCriticalIssues(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   accessibleTenantIds: string[],
   rows: Array<{ client_id: string; client_name?: string | null }>,
 ) {
@@ -5426,7 +5481,10 @@ async function loadPulseCriticalIssues(
     ]);
     if (tables.error || alerts.error) return [];
 
-    const activeTablesByClient = new Map<string, any[]>();
+    const activeTablesByClient = new Map<
+      string | null,
+      NonNullable<typeof tables.data>
+    >();
     for (const table of tables.data || []) {
       if (table.campaign_active === false) continue;
       activeTablesByClient.set(table.client_id, [
@@ -5441,7 +5499,12 @@ async function loadPulseCriticalIssues(
         return {
           clientId: row.client_id,
           clientName: row.client_name || null,
-          adAccountIds: clientAdAccountIds(activeTables),
+          adAccountIds: clientAdAccountIds(
+            activeTables.map((table) => ({
+              ...table,
+              integration_settings: jsonObject(table.integration_settings),
+            })),
+          ),
           hasActiveCampaignTable: activeTables.length > 0,
         };
       }),
@@ -5456,7 +5519,7 @@ async function loadPulseCriticalIssues(
 }
 
 async function getAccessibleTenantIds(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   tenantId: string,
 ): Promise<string[]> {
   try {
@@ -5464,9 +5527,7 @@ async function getAccessibleTenantIds(
       .from("agency_tenant_access")
       .select("source_tenant_id")
       .eq("accessing_tenant_id", tenantId);
-    const extra = (data || [])
-      .map((r: any) => r.source_tenant_id)
-      .filter(Boolean);
+    const extra = (data || []).map((r) => r.source_tenant_id).filter(Boolean);
     return Array.from(new Set([tenantId, ...extra]));
   } catch (_) {
     return [tenantId];
@@ -5476,7 +5537,7 @@ async function getAccessibleTenantIds(
 // Auto-create a Google Calendar event for a newly created task.
 // Silently no-ops when the campaigner's user has no connected calendar.
 async function tryCreateCalendarEventForTask(
-  supabase: any,
+  supabase: AgentDatabaseClient,
   taskId: string,
   title: string,
   dueDate: string,
@@ -5559,8 +5620,11 @@ async function tryCreateCalendarEventForTask(
         e?.error?.message,
       );
     }
-  } catch (e: any) {
-    console.warn("[create_task] calendar sync error:", e?.message);
+  } catch (e) {
+    console.warn(
+      "[create_task] calendar sync error:",
+      e instanceof Error ? e.message : undefined,
+    );
   }
 }
 
@@ -9425,7 +9489,9 @@ async function executeTool(
         page_name: page.name,
         integration_id: page.integration_id,
       };
-      let connected = null;
+      let connected: Awaited<
+        ReturnType<typeof connectMetaFormToAutomation>
+      > | null = null;
       if (args.automation_id || args.automation_name) {
         const automation = await findAutomationForMetaForm(
           supabase,
