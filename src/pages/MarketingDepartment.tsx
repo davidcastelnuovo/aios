@@ -38,6 +38,9 @@ const SeoGeoDepartment = lazy(() =>
     (module) => ({ default: module.SeoGeoDepartment }),
   ),
 );
+const CampaignsDepartment = lazy(() =>
+  import("@/components/marketing/departments/CampaignsDepartment").then((module) => ({ default: module.CampaignsDepartment })),
+);
 
 type DepartmentId = "copy" | "creative" | "seo" | "campaigns" | "analytics";
 
@@ -84,7 +87,7 @@ const DEPARTMENTS: Array<{
     description: "מבנה קמפיין, קהלים, מודעות, תקציב והכנה לפרסום",
     icon: Megaphone,
     gradient: "from-blue-500 to-indigo-700",
-    status: "next",
+    status: "active",
   },
   {
     id: "analytics",
@@ -257,6 +260,10 @@ export default function MarketingDepartment() {
           fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}
         >
           <SeoGeoDepartment clientFilter={clientFilter} tenantId={tenantId} />
+        </Suspense>
+      ) : department === "campaigns" && tenantId ? (
+        <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-blue-500" /></div>}>
+          <CampaignsDepartment clientId={clientId} tenantId={tenantId} />
         </Suspense>
       ) : (
         <ComingSoon
