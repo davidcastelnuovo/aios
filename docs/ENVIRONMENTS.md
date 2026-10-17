@@ -134,7 +134,7 @@ Branch protection on `main` / `develop` is a GitHub settings change; the freshne
 3. Open a PR **to `develop`**, following `AGENTS.md` and `docs/agents/releases.md`. Send the Vercel Preview URL and in-app path.
 4. After merge to `develop`, verify on Staging (`after-lead-git-develop` or `staging.aios.co.il`).
 5. Release PR **`develop` → `main`**, merged by a human (Production deploy via `deploy-prod.yml`).
-6. `Check develop has main` runs on `main` and `develop` pushes; `Branch up to date with base` accepts a `develop` → `main` PR when every `main` commit has a patch-equivalent in `develop` (`scripts/main-missing-from.sh`), since rebase-merges give equal patches different SHAs. A release PR is rebase-merged (or fast-forwarded by a bypass actor) and must contain the current main revision and the exact Staging changes approved for release; review its file diff before merge.
+6. `Check develop has main` runs on `main` and `develop` pushes; `Branch up to date with base` accepts a `develop` → `main` PR when every `main` commit has a patch-equivalent in `develop` (`scripts/main-missing-from.sh`), since rebase-merges give equal patches different SHAs. When a port was squash-merged, it falls back to content: merging `main` into the ref (ref side wins conflicts) must leave the ref's tree unchanged. A release PR is rebase-merged (or fast-forwarded by a bypass actor) and must contain the current main revision and the exact Staging changes approved for release; review its file diff before merge.
 7. Database fixes, including schema, are applied on Staging first. Do not run Production SQL before Staging verification.
 8. Do not resend old WhatsApp notifications while fixing delivery. David must explicitly approve that backfill.
 
