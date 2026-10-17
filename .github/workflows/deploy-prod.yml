@@ -28,12 +28,22 @@ concurrency:
 jobs:
   resolve:
     name: Resolve changes
+    # A manual run can pick any branch; Production only deploys from main.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       migrations: ${{ steps.filter.outputs.migrations || 'true' }}
       functions: ${{ steps.filter.outputs.functions || 'true' }}
     steps:
       - uses: actions/checkout@v4
+
+      # A manual run has no `github.event.before`, so the functions deploy needs this tag
+      # as its base. Fail now, before `migrate` applies anything.
+      - name: Require the edge deployment tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git ls-remote --exit-code --tags origin refs/tags/edge-deployed-production >/dev/null \
+            || { echo "::error::Tag edge-deployed-production is missing; a manual run cannot deploy functions."; exit 1; }
 
       - uses: dorny/paths-filter@v3
         id: filter
