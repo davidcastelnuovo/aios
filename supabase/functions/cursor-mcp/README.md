@@ -45,17 +45,17 @@ Optional secrets: `CURSOR_STICKY_AGENT_ID` (force a specific `bc-…`),
 
 ### 2. Supabase secrets (project `zvoijyneresvkadpprel`)
 
-| Secret                     | Required         | Value                                                                                                                  |
-| -------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `CURSOR_API_KEY`           | ✅               | Cursor API key                                                                                                         |
-| `CURSOR_MCP_BEARER`        | ✅               | Carmen only — Agent Editor → MCP Connections → Cursor                                                                  |
-| `GROK_CURSOR_MCP_BEARER`   | ✅ (Grok direct) | Grok Bot → Cursor direct channel only — **separate from Carmen**                                                       |
-| `CURSOR_CLOUD_ENV_NAME`    | recommended      | named cloud environment (same VM setup as David)                                                                       |
-| `CURSOR_STARTING_REF`      | optional         | default `main`                                                                                                         |
-| `CURSOR_DIRECT_AGENT_ID`   | recommended      | Fixed Cursor Direct chat bc-… (connection tests / Carmen Direct replies)                                               |
-| `CURSOR_MODEL_ID`          | optional         | default `composer-2.5` (fast). Set explicitly to override; omitting used to fall back to account default (often Grok). |
-| `CURSOR_AUTO_CREATE_PR`    | optional         | default `true`                                                                                                         |
-| `CURSOR_DEFAULT_TENANT_ID` | optional         | fallback tenant for teach-back skins                                                                                   |
+| Secret                     | Required         | Value                                                                                                                              |
+| -------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `CURSOR_API_KEY`           | ✅               | Cursor API key                                                                                                                     |
+| `CURSOR_MCP_BEARER`        | ✅               | Carmen only — Agent Editor → MCP Connections → Cursor                                                                              |
+| `GROK_CURSOR_MCP_BEARER`   | ✅ (Grok direct) | Grok Bot → Cursor direct channel only — **separate from Carmen**                                                                   |
+| `CURSOR_CLOUD_ENV_NAME`    | recommended      | named cloud environment (same VM setup as David)                                                                                   |
+| `CURSOR_STARTING_REF`      | optional         | default `develop`; ignored by Cursor when `CURSOR_CLOUD_ENV_NAME` is set (set the environment base branch in the Cursor dashboard) |
+| `CURSOR_DIRECT_AGENT_ID`   | recommended      | Fixed Cursor Direct chat bc-… (connection tests / Carmen Direct replies)                                                           |
+| `CURSOR_MODEL_ID`          | optional         | default `composer-2.5` (fast). Set explicitly to override; omitting used to fall back to account default (often Grok).             |
+| `CURSOR_AUTO_CREATE_PR`    | optional         | default `true`                                                                                                                     |
+| `CURSOR_DEFAULT_TENANT_ID` | optional         | fallback tenant for teach-back skins                                                                                               |
 
 ```bash
 supabase secrets set \
