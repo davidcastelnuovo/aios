@@ -20,7 +20,10 @@ export function applyRepeatInboundReopen(
     updated_at: nowIso,
   };
 
-  const incomingSource = incoming.source?.trim() || null;
+  // "other" means the sender gave no recognised source, so it must not
+  // overwrite a source the lead already has.
+  const trimmedSource = incoming.source?.trim() || null;
+  const incomingSource = trimmedSource === "other" ? null : trimmedSource;
   const currentSource = existing.source || null;
   const originalSource = existing.first_source || currentSource;
   if (originalSource) updates.first_source = originalSource;

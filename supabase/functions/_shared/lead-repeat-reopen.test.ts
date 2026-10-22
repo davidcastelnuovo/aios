@@ -52,6 +52,22 @@ test("does not overwrite an already stored first_created_at", () => {
   assert.equal(updates.source, "cold_call");
 });
 
+test("repeat inbound without a recognised source keeps the stored source", () => {
+  for (const source of ["other", "", null, undefined]) {
+    const updates = applyRepeatInboundReopen(
+      {
+        created_at: "2026-10-13T21:13:28.000Z",
+        source: "paid_ads",
+        first_source: "paid_ads",
+      },
+      { source },
+      "2026-10-13T21:13:30.000Z",
+    );
+    assert.equal(updates.source, undefined);
+    assert.equal(updates.first_source, "paid_ads");
+  }
+});
+
 test("fallback strip drops reopen columns so pre-migration updates still work", () => {
   const stripped = withoutNewLeadOriginColumns({
     notes: "x",
