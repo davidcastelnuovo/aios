@@ -37,6 +37,9 @@ GOAL_BRAIN_CALLBACK_SECRET = "env(GOAL_BRAIN_CALLBACK_SECRET)"
 AGENT_CHANNEL_CALLBACK_SECRET = "env(AGENT_CHANNEL_CALLBACK_SECRET)"
 WEBHOOK_LEAD_INTAKE_SECRET = "env(WEBHOOK_LEAD_INTAKE_SECRET)"
 WEBHOOK_TASK_INTAKE_SECRET = "env(WEBHOOK_TASK_INTAKE_SECRET)"
+GOOGLE_CLIENT_ID = "env(GOOGLE_CLIENT_ID)"
+GOOGLE_CLIENT_SECRET = "env(GOOGLE_CLIENT_SECRET)"
+
 
 # Production overrides. Every branch, including `develop`, uses the base config above;
 # Production keeps its live Auth values (read from the live project on 2026-10-22); its secrets come from .env.production.
