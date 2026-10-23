@@ -36,12 +36,13 @@ export function WorkshopSkinBar({
               }
               onChoose(skin.slug);
             }}
-            className="flex w-16 shrink-0 flex-col items-center gap-1"
+            className="flex w-[4.5rem] shrink-0 flex-col items-center gap-1"
           >
             <span
               className={cn(
-                "flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border bg-muted",
-                active && "ring-2 ring-pink-500",
+                "flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border bg-muted shadow-sm",
+                active &&
+                  "ring-2 ring-pink-500 ring-offset-2 ring-offset-background",
                 !skin && "opacity-40",
               )}
             >

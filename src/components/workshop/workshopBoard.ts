@@ -1,3 +1,40 @@
+export type FlowNode = {
+  id: string;
+  type: "workshop";
+  position: { x: number; y: number };
+  data: { label: string; kind: "project" | "step"; ready?: boolean };
+};
+
+export type FlowEdge = { id: string; source: string; target: string };
+
+/** Cards on the pannable board, spaced far enough apart to move between them. */
+export function workshopFlow(
+  title: string | null | undefined,
+  payload: Record<string, unknown> | null | undefined,
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const steps = boardSteps(payload);
+  const nodes: FlowNode[] = [
+    {
+      id: "project",
+      type: "workshop",
+      position: { x: 40, y: 220 },
+      data: { label: title?.trim() || "פרויקט", kind: "project" },
+    },
+    ...steps.map((step, index) => ({
+      id: step.id,
+      type: "workshop" as const,
+      position: { x: 380 + index * 340, y: index % 2 === 0 ? 80 : 360 },
+      data: { label: step.label, kind: "step" as const, ready: step.ready },
+    })),
+  ];
+  const edges: FlowEdge[] = steps.map((step, index) => ({
+    id: `to-${step.id}`,
+    source: index === 0 ? "project" : steps[index - 1].id,
+    target: step.id,
+  }));
+  return { nodes, edges };
+}
+
 export type BoardStepId = "images" | "copy" | "storyboard" | "animation";
 
 export type BoardStep = {

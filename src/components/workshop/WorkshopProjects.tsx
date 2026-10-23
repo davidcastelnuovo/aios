@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,28 +12,29 @@ export function WorkshopProjects({
   selectedId,
   loading,
   error,
-  newHref,
+  onCreate,
   onSelect,
 }: {
   projects: WorkshopProject[];
   selectedId: string | null;
   loading: boolean;
   error: boolean;
-  newHref: string | null;
+  onCreate: () => void;
   onSelect: (id: string) => void;
 }) {
   return (
     <aside className="flex w-72 shrink-0 flex-col border-l">
       <div className="flex items-center justify-between border-b px-3 py-2">
         <span className="text-sm font-medium">פרויקטים</span>
-        {newHref ? (
-          <Button size="sm" variant="outline" className="h-7 gap-1" asChild>
-            <Link to={newHref}>
-              <Plus className="h-3.5 w-3.5" />
-              חדש
-            </Link>
-          </Button>
-        ) : null}
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1"
+          onClick={onCreate}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          חדש
+        </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {loading ? (

@@ -1,18 +1,14 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCarmenSkins } from "@/hooks/useCarmenSkins";
 import { useCommandCenterSidecar } from "@/contexts/CommandCenterSidecarContext";
-import { WorkshopBoard } from "@/components/workshop/WorkshopBoard";
+import { WorkshopCanvas } from "@/components/workshop/WorkshopCanvas";
 import { WorkshopProjects } from "@/components/workshop/WorkshopProjects";
 import { WorkshopSkinBar } from "@/components/workshop/WorkshopSkinBar";
-import {
-  roleForSlug,
-  type WorkshopRoleId,
-} from "@/components/workshop/workshopRoles";
+import { roleForSlug } from "@/components/workshop/workshopRoles";
 
 type ProjectRow = {
   id: string;
@@ -20,20 +16,13 @@ type ProjectRow = {
   payload: Record<string, unknown> | null;
 };
 
-const toolDepartment = (role: WorkshopRoleId) => {
-  if (role === "copy") return "copy";
-  if (role === "seo") return "seo";
-  if (role === "design" || role === "video") return "creative";
-  return null;
-};
-
 export default function CarmenWorkshop() {
-  const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
   const skins = useCarmenSkins();
   const { setOpen } = useCommandCenterSidecar();
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [blank, setBlank] = useState(false);
   const activeRole = roleForSlug(skins.activeSlug)?.id ?? "copy";
 
   useEffect(() => {
@@ -56,14 +45,11 @@ export default function CarmenWorkshop() {
     },
   });
 
-  const selected =
-    projects.data?.find((item) => item.id === projectId) ??
-    projects.data?.[0] ??
-    null;
-  const department = toolDepartment(activeRole);
-  const toolsHref = department
-    ? `/t/${tenantSlug}/marketing/department/${department}`
-    : null;
+  const selected = blank
+    ? null
+    : (projects.data?.find((item) => item.id === projectId) ??
+      projects.data?.[0] ??
+      null);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col" dir="rtl">
@@ -71,7 +57,7 @@ export default function CarmenWorkshop() {
         <div className="min-w-0">
           <h1 className="text-lg font-semibold">הסדנה של כרמן</h1>
           <p className="text-xs text-muted-foreground">
-            אותו פרויקט, מחליפים סקין
+            מחליפים סקין, כרמן עושה את העבודה
           </p>
         </div>
         <WorkshopSkinBar
@@ -92,21 +78,24 @@ export default function CarmenWorkshop() {
           selectedId={selected?.id ?? null}
           loading={projects.isLoading}
           error={projects.isError}
-          newHref={toolsHref}
-          onSelect={setProjectId}
+          onCreate={() => {
+            setBlank(true);
+            setProjectId(null);
+          }}
+          onSelect={(id) => {
+            setBlank(false);
+            setProjectId(id);
+          }}
         />
-        <main className="min-w-0 flex-1 overflow-auto bg-muted/30 p-6">
-          {selected ? (
-            <WorkshopBoard
-              title={selected.title?.trim() || "ללא שם"}
-              payload={selected.payload}
-              toolsHref={toolsHref}
+        <main className="relative min-h-0 min-w-0 flex-1">
+          <div className="absolute inset-0">
+            <WorkshopCanvas
+              title={selected?.title ?? null}
+              payload={selected?.payload ?? null}
+              blank={blank || !selected}
+              quiet={projects.isLoading && !blank}
             />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              בחרו פרויקט מהרשימה, או התחילו חדש.
-            </p>
-          )}
+          </div>
         </main>
       </div>
     </div>
