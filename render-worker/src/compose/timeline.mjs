@@ -15,15 +15,17 @@ export const frameSize = (aspect) => FRAME_SIZE[aspect] ?? FRAME_SIZE["9:16"];
  */
 export function buildTimeline(
   scenes,
-  { aspect = "9:16", musicPath = null } = {},
+  { aspect = "9:16", musicPath = null, narrationPath = null } = {},
 ) {
+  const narration = narrationPath || null;
   const frames = [...scenes]
     .filter((scene) => scene.clipPath)
     .sort((a, b) => Number(a.position) - Number(b.position))
     .map((scene) => ({
       id: scene.id,
       clipPath: scene.clipPath,
-      voicePath: scene.voicePath || null,
+      // A continuous narration plays across the whole film, not inside each scene.
+      voicePath: narration ? null : scene.voicePath || null,
       overlayText: String(scene.overlayText ?? "").trim(),
       durationS: Math.min(120, Math.max(0.5, Number(scene.durationS) || 3)),
     }));
@@ -35,6 +37,7 @@ export function buildTimeline(
     width,
     height,
     musicPath,
+    narrationPath: narration,
     totalS: Math.round(totalS * 100) / 100,
     scenes: frames,
   };

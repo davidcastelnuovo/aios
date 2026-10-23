@@ -146,11 +146,15 @@ export function sceneEstimate(
  * Scenes that need a (new) voiceover: they have text, and no current voice or one spoken
  * from different text. Unchanged voiceovers are not paid for again.
  */
-export const framesToVoice = (frames: StoryboardFrame[]) =>
-  frames.filter((frame) => {
+export const framesToVoice = (frames: StoryboardFrame[]) => {
+  const spoken = frames.filter((frame) => frame.voiceover.trim());
+  const stale = spoken.some((frame) => {
     const text = frame.voiceover.trim();
-    return !!text && (!frame.voiceAssetId || frame.voiceText !== text);
+    return !frame.voiceAssetId || frame.voiceText !== text;
   });
+  // One changed line re-speaks the whole script, so the narration stays one take.
+  return stale ? spoken : [];
+};
 
 export function voiceEstimate(frames: StoryboardFrame[]): EngineEstimate {
   const spoken = framesToVoice(frames);

@@ -109,7 +109,9 @@ export function scenesToFrames(
       if (row.clip_stale) frame.clipStale = true;
       if (row.voice_asset_id) {
         frame.voiceAssetId = row.voice_asset_id;
-        const spoken = asRecord(assetsById.get(row.voice_asset_id)?.meta).text;
+        const voiceMeta = asRecord(assetsById.get(row.voice_asset_id)?.meta);
+        const line = asRecord(voiceMeta.lines)[row.id];
+        const spoken = typeof line === "string" ? line : voiceMeta.text;
         if (typeof spoken === "string") frame.voiceText = spoken;
       }
       const cost = generationCostOf(still?.meta);

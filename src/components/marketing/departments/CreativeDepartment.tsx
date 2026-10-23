@@ -1405,7 +1405,7 @@ export function CreativeDepartment({
       toast.success(
         queued > 0
           ? kind === "voice"
-            ? `${queued} קריינות נשלחו`
+            ? "הקריינות נשלחה"
             : "המוזיקה נשלחה"
           : "הסאונד כבר בעבודה",
       );
@@ -3965,8 +3965,10 @@ export function CreativeDepartment({
                       )}
                       {produceConfirm.voices.length > 0 && (
                         <li>
-                          קריינות ל־{produceConfirm.voices.length} סצנות ·{" "}
-                          {formatUsd(produceConfirm.usd.voice)}
+                          {produceConfirm.voices.length > 1
+                            ? `קריינות רציפה מ־${produceConfirm.voices.length} סצנות`
+                            : "קריינות"}{" "}
+                          · {formatUsd(produceConfirm.usd.voice)}
                         </li>
                       )}
                       {produceConfirm.music && (

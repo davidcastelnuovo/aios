@@ -5,6 +5,7 @@ import {
   loadRunScene,
   safeSegment,
 } from "../guard.mjs";
+import { joinNarration } from "../narration.mjs";
 import {
   MUSIC_MODEL,
   SPEECH_MODEL,
@@ -17,11 +18,30 @@ const BUCKET = "creative-video";
 const VOICE_USD_PER_1000_CHARS = 0.12;
 
 /** <item folder>/<scene or music>/<kind>-<run>.mp3: one file per run, stable across retries. */
-const assetPath = (run, folder, kind) =>
+const assetPath = (run, folder, kind, fallback = "music") =>
   assertTenantPath(
     run.tenant_id,
-    `${folder}/${safeSegment(run.scene_id, "music")}/${kind}-${safeSegment(run.id)}.mp3`,
+    `${folder}/${safeSegment(run.scene_id, fallback)}/${kind}-${safeSegment(run.id)}.mp3`,
   );
+
+/** Scenes this voice run speaks, in storyboard order. */
+async function narrationLines(db, run) {
+  const rows =
+    (await db.select(
+      "marketing_video_scenes",
+      `item_id=eq.${run.item_id}&tenant_id=eq.${run.tenant_id}&select=id,voiceover_text&order=position.asc`,
+    )) ?? [];
+  const wanted = new Set(
+    Array.isArray(run.input?.scene_ids) ? run.input.scene_ids : [],
+  );
+  const lines = {};
+  for (const row of rows) {
+    if (wanted.size && !wanted.has(row.id)) continue;
+    const text = String(row.voiceover_text ?? "").trim();
+    if (text) lines[row.id] = text;
+  }
+  return { text: joinNarration(Object.values(lines)), lines };
+}
 
 /**
  * Pays the provider at most once per run. The audio is stored and its path recorded on the
@@ -51,15 +71,25 @@ async function generateOnce({ db, run, path, generate }) {
   return meta;
 }
 
-/** Speaks one scene's voiceover and stores the mp3 plus word timestamps. */
+/** Speaks the storyboard as one continuous narration, or one scene for an older voice run. */
 export async function generateVoice({ db, run, apiKey, log = console.log }) {
-  if (!run.scene_id) throw finalError("voice run: scene_id is required");
+  const continuous = run.input?.continuous === true || !run.scene_id;
   const item = await loadRunItem(db, run);
-  // The text comes from the scene row, so the voice matches what the storyboard shows.
-  const scene = await loadRunScene(db, run, "id,voiceover_text");
-  const text = String(scene.voiceover_text ?? "").trim();
+  // The text comes from the scene rows, so the voice matches what the storyboard shows.
+  const spoken = continuous ? await narrationLines(db, run) : null;
+  const scene = continuous
+    ? null
+    : await loadRunScene(db, run, "id,voiceover_text");
+  const text = continuous
+    ? spoken.text
+    : String(scene.voiceover_text ?? "").trim();
   if (!text) throw finalError("voice run: voiceover_text is required");
-  const path = assetPath(run, item.folder, "voice");
+  const path = assetPath(
+    run,
+    item.folder,
+    "voice",
+    continuous ? "narration" : "music",
+  );
   const meta = await generateOnce({
     db,
     run,
@@ -76,22 +106,43 @@ export async function generateVoice({ db, run, apiKey, log = console.log }) {
       };
     },
   });
-  await db.rpc("attach_video_scene_asset", {
-    p_scene_id: run.scene_id,
-    p_kind: "voice",
-    p_url: path,
-    p_meta: {
-      bucket: BUCKET,
-      path,
-      provider: "elevenlabs",
-      model: SPEECH_MODEL(),
-      voice_id: meta.voice_id ?? null,
-      alignment: meta.alignment ?? null,
-      // The storyboard compares this with the scene text to skip unchanged voiceovers.
-      text,
-    },
-    p_run_id: run.id,
-  });
+  if (continuous) {
+    await db.rpc("attach_video_narration", {
+      p_item_id: run.item_id,
+      p_url: path,
+      p_meta: {
+        bucket: BUCKET,
+        path,
+        provider: "elevenlabs",
+        model: SPEECH_MODEL(),
+        voice_id: meta.voice_id ?? null,
+        alignment: meta.alignment ?? null,
+        continuous: true,
+        // The whole script, so a later produce does not pay for the same narration again.
+        text,
+        lines: spoken.lines,
+      },
+      p_run_id: run.id,
+      p_lines: spoken.lines,
+    });
+  } else {
+    await db.rpc("attach_video_scene_asset", {
+      p_scene_id: run.scene_id,
+      p_kind: "voice",
+      p_url: path,
+      p_meta: {
+        bucket: BUCKET,
+        path,
+        provider: "elevenlabs",
+        model: SPEECH_MODEL(),
+        voice_id: meta.voice_id ?? null,
+        alignment: meta.alignment ?? null,
+        // The storyboard compares this with the scene text to skip unchanged voiceovers.
+        text,
+      },
+      p_run_id: run.id,
+    });
+  }
   log(`[voice] ${run.id} stored ${path}`);
   return {
     output: { path, provider: "elevenlabs", voice_id: meta.voice_id ?? null },

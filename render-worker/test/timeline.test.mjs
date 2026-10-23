@@ -40,7 +40,22 @@ test("buildTimeline keeps approved clips in storyboard order", () => {
   assert.equal(timeline.totalS, 2.5);
   assert.deepEqual([timeline.width, timeline.height], [1280, 720]);
   assert.equal(timeline.musicPath, "bed.mp3");
+  assert.equal(timeline.narrationPath, null);
   assert.equal(timeline.fps, 25);
+  const narrated = buildTimeline(
+    [
+      {
+        id: "a",
+        position: 1,
+        clipPath: "a.mp4",
+        voicePath: "scene.mp3",
+        durationS: 2,
+      },
+    ],
+    { narrationPath: "narration.mp3" },
+  );
+  assert.equal(narrated.narrationPath, "narration.mp3");
+  assert.equal(narrated.scenes[0].voicePath, null);
 });
 
 const media = (args) => {
@@ -99,6 +114,63 @@ test(
       await assembleFilm(timeline, output);
       const file = await stat(output);
       assert.equal(file.size > 1000, true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "assembleFilm plays one narration across the whole picture",
+  { skip: !hasFfmpeg },
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "narration-"));
+    try {
+      const clip = join(dir, "clip.mp4");
+      const voice = join(dir, "voice.wav");
+      const output = join(dir, "film.mp4");
+      media([
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=blue:s=320x240:d=1",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        clip,
+      ]);
+      media([
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:duration=1",
+        voice,
+      ]);
+      await assembleFilm(
+        buildTimeline(
+          [{ id: "a", position: 1, clipPath: clip, durationS: 0.8 }],
+          { narrationPath: voice },
+        ),
+        output,
+      );
+      const detected = spawnSync(
+        "ffmpeg",
+        ["-i", output, "-af", "volumedetect", "-f", "null", "-"],
+        { encoding: "utf8" },
+      );
+      const mean = Number(
+        detected.stderr.match(/mean_volume:\s*(-?[0-9.]+) dB/)?.[1],
+      );
+      assert.ok(mean > -45, detected.stderr.slice(-400));
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { assembleFilm } from "../compose/assemble.mjs";
 import { buildTimeline } from "../compose/timeline.mjs";
 import { assertTenantPath, finalError, loadRunItem } from "../guard.mjs";
+import { joinNarration } from "../narration.mjs";
 
 const BUCKET = "creative-video";
 
@@ -48,18 +49,43 @@ export async function loadFilmSources(db, run) {
       "marketing_assets",
       `item_id=eq.${run.item_id}&tenant_id=eq.${run.tenant_id}&type=eq.music&url=not.is.null&select=url&order=created_at.desc&limit=1`,
     )) ?? [];
+  const [narration] =
+    (await db.select(
+      "marketing_assets",
+      `item_id=eq.${run.item_id}&tenant_id=eq.${run.tenant_id}&type=eq.narration&url=not.is.null&select=url,meta&order=created_at.desc&limit=1`,
+    )) ?? [];
+  const scriptRows =
+    (await db.select(
+      "marketing_video_scenes",
+      `item_id=eq.${run.item_id}&tenant_id=eq.${run.tenant_id}&select=voiceover_text&order=position`,
+    )) ?? [];
+  const script = joinNarration(scriptRows.map((scene) => scene.voiceover_text));
+  const narrationPath =
+    script && String(narration?.meta?.text ?? "") === script
+      ? narration.url
+      : null;
+  const mapped = scenes
+    .map((scene) => ({
+      id: scene.id,
+      position: scene.position,
+      overlayText: scene.overlay_text,
+      voiceoverText: scene.voiceover_text,
+      durationS: scene.duration_s,
+      clipPath: assets.get(scene.clip_asset_id) || null,
+      voicePath: narrationPath ? null : assets.get(voiceOf(scene)) || null,
+    }))
+    .filter((scene) => scene.clipPath);
+  const missingNarration = mapped.some(
+    (scene) =>
+      String(scene.voiceoverText ?? "").trim() &&
+      !narrationPath &&
+      !scene.voicePath,
+  );
+  if (missingNarration) throw finalError("render: narration missing");
   return {
-    scenes: scenes
-      .map((scene) => ({
-        id: scene.id,
-        position: scene.position,
-        overlayText: scene.overlay_text,
-        durationS: scene.duration_s,
-        clipPath: assets.get(scene.clip_asset_id) || null,
-        voicePath: assets.get(voiceOf(scene)) || null,
-      }))
-      .filter((scene) => scene.clipPath),
+    scenes: mapped,
     musicPath: music?.url || null,
+    narrationPath,
   };
 }
 
@@ -101,6 +127,7 @@ export async function renderFilm({ db, run, log = console.log }) {
     const timeline = buildTimeline(local, {
       aspect: run.input?.aspect || "9:16",
       musicPath,
+      narrationPath: sources.narrationPath,
     });
     const output = join(dir, "film.mp4");
     await assembleFilm(timeline, output);

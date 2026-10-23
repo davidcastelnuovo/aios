@@ -176,7 +176,7 @@ export async function assembleFilm(timeline, outputPath) {
     "copy",
     picture,
   ]);
-  if (!timeline.musicPath) {
+  if (!timeline.narrationPath && !timeline.musicPath) {
     await ffmpeg([
       "-hide_banner",
       "-loglevel",
@@ -190,17 +190,32 @@ export async function assembleFilm(timeline, outputPath) {
     ]);
     return outputPath;
   }
+  const duration = Number(timeline.totalS || 0).toFixed(3);
+  const inputs = ["-i", picture];
+  const filters = [];
+  const beds = [];
+  if (timeline.narrationPath) {
+    inputs.push("-i", timeline.narrationPath);
+    filters.push(
+      `[${beds.length + 1}:a]aformat=sample_rates=48000:channel_layouts=stereo,apad,atrim=0:${duration},volume=1[n]`,
+    );
+    beds.push("[n]");
+  }
+  if (timeline.musicPath) {
+    inputs.push("-i", timeline.musicPath);
+    filters.push(
+      `[${beds.length + 1}:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=0.18[m]`,
+    );
+    beds.push("[m]");
+  }
   await ffmpeg([
     "-hide_banner",
     "-loglevel",
     "error",
     "-y",
-    "-i",
-    picture,
-    "-i",
-    timeline.musicPath,
+    ...inputs,
     "-filter_complex",
-    "[1:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=0.18[m];[0:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]",
+    `${filters.join(";")};[0:a]${beds.join("")}amix=inputs=${beds.length + 1}:duration=first:dropout_transition=0:normalize=0[a]`,
     "-map",
     "0:v",
     "-map",

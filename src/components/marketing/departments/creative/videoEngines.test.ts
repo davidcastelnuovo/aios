@@ -10,6 +10,7 @@ import {
   sceneClipSeconds,
   sceneEstimate,
   soundRunsSeparately,
+  framesToVoice,
   voiceEstimate,
 } from "./videoEngines.ts";
 
@@ -71,6 +72,23 @@ test("voice bills the spoken characters and music bills the storyboard length", 
     frame({ voiceover: "   ", duration: 6 }),
   ];
   assert.equal(voiceEstimate(frames).count, 1);
+  assert.deepEqual(
+    framesToVoice([
+      frame({
+        id: "a",
+        voiceover: "אחת",
+        voiceAssetId: "v",
+        voiceText: "אחת",
+      }),
+      frame({
+        id: "b",
+        voiceover: "שתיים",
+        voiceAssetId: "v",
+        voiceText: "ישנה",
+      }),
+    ]).map((item) => item.id),
+    ["a", "b"],
+  );
   assert.equal(voiceEstimate(frames).usd, 0.12);
   assert.equal(musicEstimate(frames).seconds, 10);
   assert.equal(musicEstimate(frames).usd, 0.08);
