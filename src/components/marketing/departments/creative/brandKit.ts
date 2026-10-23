@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { sanitizeFileName } from "../../../../lib/sanitizeFileName.ts";
 
 export interface BrandBook {
   name?: string;
@@ -185,8 +186,17 @@ export const deriveBrandBook = ({
   };
 };
 
-const sanitizeFileName = (name: string) =>
-  name.replace(/[^\w.\u0590-\u05FF-]+/g, "_").slice(0, 80);
+export type CreativeAssetKind = "logo" | "reference" | "brandbook";
+
+/** Supabase Storage rejects non-ASCII keys, including Hebrew file names. */
+export const creativeAssetStoragePath = (
+  tenantId: string,
+  itemId: string,
+  kind: CreativeAssetKind,
+  fileName: string,
+  now: number,
+) =>
+  `${tenantId}/creative/${itemId}/${kind}/${now}_${sanitizeFileName(fileName)}`;
 
 export const uploadCreativeAsset = async ({
   supabase,
@@ -199,9 +209,15 @@ export const uploadCreativeAsset = async ({
   tenantId: string;
   itemId: string;
   file: File;
-  kind: "logo" | "reference" | "brandbook";
+  kind: CreativeAssetKind;
 }) => {
-  const path = `${tenantId}/creative/${itemId}/${kind}/${Date.now()}_${sanitizeFileName(file.name)}`;
+  const path = creativeAssetStoragePath(
+    tenantId,
+    itemId,
+    kind,
+    file.name,
+    Date.now(),
+  );
   const { error } = await supabase.storage
     .from("entity-attachments")
     .upload(path, file);
