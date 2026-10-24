@@ -1,5 +1,10 @@
 // redeploy trigger: Carmen sessions keyed by chat JID only; never speaker-phone fallback (2026-08-27b)
 import { resolveCarmenConnectionRole } from "../_shared/carmen-connection-role.ts";
+import {
+  exceedsRunBudget,
+  summarizeExecution,
+  WHATSAPP_RUN_BUDGET,
+} from "../_shared/automation-execution.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import { sendCarmenReplyViaActionStep } from "../_shared/carmen.ts";
 import {
@@ -1604,26 +1609,42 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Guard: cooldown - prevent same trigger+entity from firing again within 30 seconds
+    // No time-based cooldown here: it used to drop every group message that
+    // arrived within 30s of the previous one. Redelivered webhooks are now
+    // deduplicated at the source by provider message id (green-api-webhook),
+    // and the execution row is written only once automations have matched.
+    //
+    // Loop bound instead: webhook runs carry no _execution_chain, so the
+    // depth/loop guards above never fire for them. Cap recorded runs per
+    // group/contact per minute so a bot or a second connection replying to
+    // our own messages cannot loop us indefinitely.
     if (
       requestBody.trigger_type === "whatsapp_message_received" &&
-      entityKey !== "no-entity"
+      entityKey !== "no-entity" &&
+      requestBody.tenant_id
     ) {
-      const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
-      const { data: recentExec } = await supabase
+      const windowStart = new Date(
+        Date.now() - WHATSAPP_RUN_BUDGET.windowMs,
+      ).toISOString();
+      const { count: recentRuns } = await supabase
         .from("automation_executions")
-        .select("id")
+        .select("id", { count: "exact", head: true })
         .eq("tenant_id", requestBody.tenant_id)
         .eq("trigger_type", "whatsapp_message_received")
         .eq("entity_id", entityKey)
-        .gte("started_at", thirtySecondsAgo)
-        .eq("status", "running")
-        .limit(1)
-        .maybeSingle();
-
-      if (recentExec) {
+        .gte("started_at", windowStart);
+      if (exceedsRunBudget(recentRuns ?? 0)) {
+        console.warn("[trigger-automation] run budget exceeded, skipping", {
+          tenant_id: requestBody.tenant_id,
+          entity: entityKey,
+          recentRuns,
+        });
         return new Response(
-          JSON.stringify({ error: "Cooldown active", entity: entityKey }),
+          JSON.stringify({
+            error: "Run budget exceeded",
+            entity: entityKey,
+            recent_runs: recentRuns,
+          }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: 429,
@@ -1631,21 +1652,6 @@ Deno.serve(async (req) => {
         );
       }
     }
-
-    const { data: execRecord } = await supabase
-      .from("automation_executions")
-      .insert({
-        execution_id: executionId,
-        tenant_id: requestBody.tenant_id || null,
-        automation_id: requestBody.automationId || null,
-        trigger_type: requestBody.trigger_type || null,
-        entity_id: entityKey !== "no-entity" ? entityKey : null,
-        depth: executionDepth,
-        status: "running",
-        started_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
 
     // ===== END SAFETY GUARDS =====
 
@@ -3883,6 +3889,31 @@ Deno.serve(async (req) => {
         }
       }),
     );
+
+    // Record the run only if at least one automation actually ran (conditions
+    // met, not skipped), with its final status.
+    const summary = summarizeExecution(results);
+    if (summary.actions_count > 0) {
+      const { error: execInsertError } = await supabase
+        .from("automation_executions")
+        .insert({
+          execution_id: executionId,
+          tenant_id: requestBody.tenant_id || tenantId || null,
+          automation_id: requestBody.automationId || null,
+          trigger_type: requestBody.trigger_type || null,
+          entity_id: entityKey !== "no-entity" ? entityKey : null,
+          depth: executionDepth,
+          started_at: new Date(executionStartTime).toISOString(),
+          finished_at: new Date().toISOString(),
+          ...summary,
+        });
+      if (execInsertError) {
+        console.error(
+          "[trigger-automation] execution record insert failed:",
+          execInsertError,
+        );
+      }
+    }
 
     return new Response(
       JSON.stringify({
