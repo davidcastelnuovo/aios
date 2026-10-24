@@ -1,9 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { aiTranscribe, aiCleanTranscript, hasAiKey } from "../_shared/ai.ts";
 import { getCaller, getUserOpenAIKey } from "../_shared/userKey.ts";
-
-// Users with a personal key are billed on it; these owners may use the org key.
-const ORG_KEY_ALLOWLIST = ["david.castelnuovo@gmail.com"];
+import { orgVoiceKeyAllowed } from "../_shared/carmen/voice-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,10 +27,10 @@ serve(async (req) => {
       });
     }
 
-    // Personal-key users are billed on their own key; org key only for owners.
+    // Personal-key users are billed on their own key; see orgVoiceKeyAllowed.
     const caller = await getCaller(req.headers.get("Authorization") || "");
     const userKey = caller ? await getUserOpenAIKey(caller.id) : null;
-    const isOwner = !!caller && ORG_KEY_ALLOWLIST.includes(caller.email);
+    const isOwner = orgVoiceKeyAllowed(caller?.email, Deno.env.get("APP_ENV"));
     if (!userKey && !isOwner) {
       return new Response(
         JSON.stringify({

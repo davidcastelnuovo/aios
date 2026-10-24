@@ -11,6 +11,7 @@ The seed is synthetic: no production data, no secrets, no integrations. Emails u
 | `00_auth.sql`          | 5 login users and their email identities. `handle_new_user` creates the profiles.   |
 | `10_tenancy.sql`       | 3 tenants, tenant memberships and roles.                                            |
 | `20_demo_business.sql` | 3 agencies, 4 clients, 4 leads, 3 tasks, 1 campaigner with its assignments.         |
+| `30_carmen.sql`        | A Carmen agent (`ai_agents`, named כרמן) in each of the 3 tenants.                  |
 | `99_verify.sql`        | Fails the seed if any expected row is missing. Update the counts when you add rows. |
 
 ## Users

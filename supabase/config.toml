@@ -6,6 +6,7 @@ sql_paths = [
   "./seeds/00_auth.sql",
   "./seeds/10_tenancy.sql",
   "./seeds/20_demo_business.sql",
+  "./seeds/30_carmen.sql",
   "./seeds/99_verify.sql",
 ]
 

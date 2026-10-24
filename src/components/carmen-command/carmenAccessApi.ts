@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isNonProduction, resolveAppEnv } from "@/lib/appEnv";
 import {
   CARMEN_NAME_FILTER,
   carmenEnabledFor,
@@ -12,6 +13,21 @@ import {
  * Mirrored server-side in the carmen voice edge functions.
  */
 export const COMMAND_CENTER_ALLOWLIST = ["david.castelnuovo@gmail.com"];
+
+/**
+ * Outside Production, Carmen is open to every signed-in user so the team can
+ * test her on Staging and previews; a permissions row (הרשאות) still decides
+ * for the users who have one. Production keeps the allowlist and personal
+ * API key until the permissions screen takes over there too.
+ *
+ * Needs VITE_APP_ENV set to a non-production value: a local `pnpm dev`
+ * without it talks to Production, so it stays closed.
+ */
+export function carmenOpenToAll(
+  appEnv: string | undefined = import.meta.env.VITE_APP_ENV,
+): boolean {
+  return !!appEnv?.trim() && isNonProduction(resolveAppEnv(appEnv));
+}
 
 /** The tenant's Carmen, resolved like the edge functions' resolveCarmenAgent. */
 export async function fetchCarmenAgentId(
@@ -66,6 +82,7 @@ export async function resolveCommandCenterAccess(
     ]);
     if (row) return carmenEnabledFor(row);
     if (
+      carmenOpenToAll() ||
       COMMAND_CENTER_ALLOWLIST.includes(String(prof?.email ?? "").toLowerCase())
     )
       return true;
@@ -84,6 +101,8 @@ export async function resolveCommandCenterAccess(
     const row = await fetchCarmenAccessRow(tenantId, uid);
     if (row) return carmenEnabledFor(row);
   }
+  // Staging and previews: Carmen is open to every user without a row.
+  if (carmenOpenToAll()) return true;
   // Any user with a personal key gets in (RLS: own row only).
   const { data: keyRow } = await supabase
     .from("user_api_keys")

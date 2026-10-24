@@ -6,6 +6,7 @@
 // Response: { client_secret: string, model: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getCaller, getUserOpenAIKey } from "../_shared/userKey.ts";
+import { orgVoiceKeyAllowed } from "../_shared/carmen/voice-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,11 +27,6 @@ const REALTIME_VOICES = new Set([
   "marin",
   "cedar",
 ]);
-
-// Server-side gate for the Command Center's paid live-voice sessions.
-// Temporary allowlist (mirrored in src/components/carmen-command/access.ts)
-// until per-user API keys land — then each user consumes their own key.
-const COMMAND_CENTER_ALLOWLIST = ["david.castelnuovo@gmail.com"];
 
 // Mirrors resolveOpenAIKey in _shared/ai.ts (kept local so this function stays
 // single-file deployable): env var first, then the active llm integration row.
@@ -101,11 +97,11 @@ Deno.serve(async (req) => {
     if (!claims?.claims) return json(401, { error: "Unauthorized" });
 
     // Bring-your-own-key: a personal key grants access and gets billed;
-    // allowlisted owners may fall back to the org key.
+    // owners, and everyone outside Production, may fall back to the org key.
     const caller = await getCaller(authHeader);
     if (!caller) return json(401, { error: "Unauthorized" });
     const userKey = await getUserOpenAIKey(caller.id);
-    const isOwner = COMMAND_CENTER_ALLOWLIST.includes(caller.email);
+    const isOwner = orgVoiceKeyAllowed(caller.email, Deno.env.get("APP_ENV"));
     if (!userKey && !isOwner) {
       return json(403, {
         error: "personal_key_required",

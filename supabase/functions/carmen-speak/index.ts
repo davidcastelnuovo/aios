@@ -6,9 +6,8 @@
 // Response: audio/mpeg bytes (or JSON error).
 import { aiSpeak } from "../_shared/ai.ts";
 import { getCaller, getUserOpenAIKey } from "../_shared/userKey.ts";
+import { orgVoiceKeyAllowed } from "../_shared/carmen/voice-access.ts";
 
-// Users with a personal key are billed on it; these owners may use the org key.
-const ORG_KEY_ALLOWLIST = ["david.castelnuovo@gmail.com"];
 const OPENAI_VOICES = new Set([
   "alloy",
   "ash",
@@ -97,10 +96,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Personal-key users are billed on their own key; org key only for owners.
+    // Personal-key users are billed on their own key; see orgVoiceKeyAllowed.
     const caller = await getCaller(req.headers.get("Authorization") || "");
     const userKey = caller ? await getUserOpenAIKey(caller.id) : null;
-    if (!userKey && !(caller && ORG_KEY_ALLOWLIST.includes(caller.email))) {
+    if (
+      !userKey &&
+      !orgVoiceKeyAllowed(caller?.email, Deno.env.get("APP_ENV"))
+    ) {
       return new Response(
         JSON.stringify({
           error: "personal_key_required",
