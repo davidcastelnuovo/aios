@@ -39,7 +39,7 @@ export function CommandCenterSidecarShell({
   // In RTL the first flex child sits on the right, so the session column
   // docks on the right edge and the page content shrinks beside it.
   return (
-    <div className="carmen-session-layout">
+    <div className={`carmen-session-layout${onWorkshop ? " is-workshop" : ""}`}>
       {open && (
         <aside
           className="carmen-session"

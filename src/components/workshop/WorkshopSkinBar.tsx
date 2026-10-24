@@ -19,7 +19,7 @@ export function WorkshopSkinBar({
 }) {
   return (
     <nav
-      className="flex flex-1 items-end justify-center gap-4 overflow-x-auto"
+      className="flex w-full min-w-0 flex-1 items-end gap-2 overflow-x-auto md:justify-center md:gap-4"
       aria-label="סקינים"
     >
       {WORKSHOP_ROLES.map((role) => {
@@ -36,11 +36,11 @@ export function WorkshopSkinBar({
               }
               onChoose(skin.slug);
             }}
-            className="flex w-[4.5rem] shrink-0 flex-col items-center gap-1"
+            className="flex w-14 shrink-0 flex-col items-center gap-1 md:w-[4.5rem]"
           >
             <span
               className={cn(
-                "flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border bg-muted shadow-sm",
+                "flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border bg-muted shadow-sm md:h-14 md:w-14",
                 active &&
                   "ring-2 ring-pink-500 ring-offset-2 ring-offset-background",
                 !skin && "opacity-40",

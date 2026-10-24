@@ -23,8 +23,8 @@ export function WorkshopProjects({
   onSelect: (id: string) => void;
 }) {
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-l">
-      <div className="flex items-center justify-between border-b px-3 py-2">
+    <aside className="flex w-full shrink-0 flex-row items-center gap-2 border-b px-2 py-1.5 md:min-h-0 md:w-72 md:flex-col md:items-stretch md:gap-0 md:overflow-hidden md:border-b-0 md:border-l md:px-0 md:py-0">
+      <div className="flex shrink-0 items-center justify-between gap-2 md:border-b md:px-3 md:py-2">
         <span className="text-sm font-medium">פרויקטים</span>
         <Button
           size="sm"
@@ -36,7 +36,7 @@ export function WorkshopProjects({
           חדש
         </Button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto md:min-h-0 md:w-full md:flex-col md:overflow-y-auto md:p-2">
         {loading ? (
           <Loader2 className="mx-auto mt-6 h-4 w-4 animate-spin" />
         ) : error ? (
@@ -50,7 +50,7 @@ export function WorkshopProjects({
               type="button"
               onClick={() => onSelect(item.id)}
               className={cn(
-                "mb-1 w-full rounded-lg px-3 py-2 text-right text-sm hover:bg-muted",
+                "shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-right text-sm hover:bg-muted md:mb-1 md:w-full md:whitespace-normal",
                 selectedId === item.id && "bg-muted font-medium",
               )}
             >
@@ -58,7 +58,7 @@ export function WorkshopProjects({
             </button>
           ))
         ) : (
-          <p className="p-2 text-sm text-muted-foreground">
+          <p className="shrink-0 p-2 text-sm text-muted-foreground">
             אין פרויקטים עדיין
           </p>
         )}

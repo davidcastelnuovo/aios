@@ -117,7 +117,7 @@ export function WorkshopCanvas({
         <FitView fitKey={fitKey} />
         {blank && !quiet ? (
           <Panel position="top-center">
-            <p className="rounded-full border bg-background/90 px-4 py-2 text-sm text-muted-foreground shadow-sm">
+            <p className="max-w-[calc(100vw-2rem)] rounded-full border bg-background/90 px-3 py-1.5 text-center text-xs text-muted-foreground shadow-sm sm:px-4 sm:py-2 sm:text-sm">
               לוח חדש. דברו עם כרמן והיא מתחילה.
             </p>
           </Panel>
