@@ -25,6 +25,7 @@ const LeadIntegrations = lazy(() => import("@/pages/LeadIntegrations"));
 const Tenants = lazy(() => import("@/pages/Tenants"));
 const Automations = lazy(() => import("@/pages/Automations"));
 const MarketingDepartment = lazy(() => import("@/pages/MarketingDepartment"));
+const CarmenWorkshop = lazy(() => import("@/pages/CarmenWorkshop"));
 const CampaignAlerts = lazy(() => import("@/pages/CampaignAlerts"));
 const Broadcast = lazy(() => import("@/pages/Broadcast"));
 const Products = lazy(() => import("@/pages/Products"));
@@ -98,6 +99,14 @@ function TenantUnknownRoute() {
 export function tenantRoutes() {
   return (
     <>
+      <Route
+        path="/t/:tenantSlug/workshop"
+        element={
+          <ProtectedRoute>
+            <CarmenWorkshop />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/t/:tenantSlug/marketing"
         element={

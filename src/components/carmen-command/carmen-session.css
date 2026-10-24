@@ -132,6 +132,37 @@
     width: 140px;
   }
 }
+/* Workshop phones: the board stays on screen and the same session sits under it. */
+@media (max-width: 767px) {
+  .carmen-session-layout.is-workshop {
+    flex-direction: column;
+  }
+  .carmen-session-layout.is-workshop > .carmen-session {
+    position: relative;
+    inset: auto;
+    z-index: 30;
+    flex: 0 0 auto;
+    order: 2;
+    width: 100%;
+    height: clamp(240px, 42dvh, 380px);
+    border: 0;
+    border-top: 1px solid rgb(136 193 255 / 26%);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .carmen-session-layout.is-workshop > .carmen-session-content {
+    order: 1;
+    min-height: 0;
+  }
+  .carmen-session-layout.is-workshop .carmen-session-video {
+    position: absolute !important;
+    width: 72px !important;
+    top: 46px !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    inset-inline-start: 8px !important;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .carmen-session-character,
   .carmen-session-dot {

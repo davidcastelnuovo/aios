@@ -194,12 +194,12 @@ export const MENU_TABS: MenuTab[] = [
     icon: Share2,
     sections: [
       {
-        label: "מחלקת שיווק",
+        label: "הסדנה של כרמן",
         items: [
           {
             key: "marketing",
-            label: "מחלקת שיווק",
-            route: "/marketing",
+            label: "הסדנה של כרמן",
+            route: "/workshop",
             icon: Share2,
             permission: "social_media",
           },
@@ -661,6 +661,9 @@ export function tabIdForRoute(route: string): MenuTabId | undefined {
     if (normalized === item.route || normalized.startsWith(`${item.route}/`)) {
       return "admin";
     }
+  }
+  if (normalized === "/marketing" || normalized.startsWith("/marketing/")) {
+    return "marketing";
   }
   return undefined;
 }

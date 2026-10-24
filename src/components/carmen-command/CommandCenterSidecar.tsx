@@ -17,6 +17,8 @@ interface CommandCenterSidecarProps {
   onClose?: () => void;
   className?: string;
   session?: boolean;
+  /** A host that already chose a skin, such as the workshop, keeps that choice. */
+  keepSkin?: boolean;
 }
 
 /**
@@ -26,6 +28,7 @@ export function CommandCenterSidecar({
   onClose,
   className,
   session = false,
+  keepSkin = false,
 }: CommandCenterSidecarProps) {
   const identity = useCarmenIdentity();
   const contextMetadata = useSystemFixContext();
@@ -38,7 +41,7 @@ export function CommandCenterSidecar({
     x: 24,
     y: 88,
   });
-  useSidecarSessionDefaults(brain, session);
+  useSidecarSessionDefaults(brain, session, keepSkin);
 
   return (
     <div

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useCommandCenterSidecar } from "@/contexts/CommandCenterSidecarContext";
 import { CommandCenterSidecar } from "./CommandCenterSidecar";
 import { useCommandCenterAccess } from "./access";
@@ -22,6 +23,7 @@ export function CommandCenterSidecarShell({
 }: CommandCenterSidecarShellProps) {
   const ctx = useCommandCenterSidecar();
   const access = useCommandCenterAccess();
+  const onWorkshop = useLocation().pathname.includes("/workshop");
   const open = (embedded ? (openProp ?? false) : ctx.open) && access.allowed;
   const setOpen = embedded ? (onOpenChange ?? ignoreOpenChange) : ctx.setOpen;
 
@@ -37,14 +39,18 @@ export function CommandCenterSidecarShell({
   // In RTL the first flex child sits on the right, so the session column
   // docks on the right edge and the page content shrinks beside it.
   return (
-    <div className="carmen-session-layout">
+    <div className={`carmen-session-layout${onWorkshop ? " is-workshop" : ""}`}>
       {open && (
         <aside
           className="carmen-session"
           aria-label="פגישת עבודה עם כרמן"
           dir="rtl"
         >
-          <CommandCenterSidecar onClose={() => setOpen(false)} session />
+          <CommandCenterSidecar
+            onClose={() => setOpen(false)}
+            session
+            keepSkin={onWorkshop}
+          />
         </aside>
       )}
       <div className="carmen-session-content">{children}</div>

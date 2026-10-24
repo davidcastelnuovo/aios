@@ -7,6 +7,7 @@ import type { BrainChannel } from "./useBrainChannel";
 export function useSidecarSessionDefaults(
   brain: BrainChannel,
   session: boolean,
+  keepSkin = false,
 ) {
   // The session opens on Carmen's internal brain once, but only after the
   // user's real brain list loads: a user without the internal brain keeps the
@@ -24,8 +25,8 @@ export function useSidecarSessionDefaults(
   const carmenSkins = useCarmenSkins();
   const initialSkinApplied = useRef(false);
   useEffect(() => {
-    if (!session || initialSkinApplied.current) return;
+    if (!session || keepSkin || initialSkinApplied.current) return;
     initialSkinApplied.current = true;
     if (carmenSkins.activeSlug) carmenSkins.setActiveSkin(null).catch(() => {});
-  }, [session, carmenSkins]);
+  }, [session, keepSkin, carmenSkins]);
 }

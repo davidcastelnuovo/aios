@@ -1,0 +1,12 @@
+@media (max-width: 767px) {
+  [data-workshop] .react-flow__minimap {
+    display: none;
+  }
+  [data-workshop] .react-flow__controls {
+    transform: scale(0.8);
+    transform-origin: bottom left;
+  }
+  [data-workshop] .react-flow__panel.top-center {
+    max-width: calc(100vw - 1.5rem);
+  }
+}
